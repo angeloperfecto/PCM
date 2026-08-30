@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const { navigateTo, subscribeNewsletter, setStatementOfFaithModalOpen } = usePCM();
+  const { navigateTo, subscribeNewsletter, setStatementOfFaithModalOpen, siteConfig } = usePCM();
   const [footerEmail, setFooterEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
@@ -34,6 +34,10 @@ export const Footer: React.FC = () => {
     }
   };
 
+  const contact = siteConfig?.contactInfo;
+  const siteIdentity = siteConfig?.siteIdentity;
+  const footerConf = siteConfig?.footerConfig;
+
   return (
     <footer className="w-full bg-[#18392B] text-[#D0DED8] font-sans border-t-4 border-[#588B76]">
       {/* 1. TOP INSTITUTIONAL BARRIER */}
@@ -45,10 +49,10 @@ export const Footer: React.FC = () => {
             </div>
             <div>
               <h3 className="font-serif text-base font-bold text-white tracking-wide uppercase">
-                Philippine College of Ministry
+                {siteIdentity?.name || 'Philippine College of Ministry'}
               </h3>
               <p className="text-xs text-[#85AA9B] italic font-serif">
-                Equipping Servants. Transforming Lives. Advancing God&apos;s Kingdom.
+                {siteIdentity?.motto || 'Equipping Servants. Transforming Lives. Advancing God\'s Kingdom.'}
               </p>
             </div>
           </div>
@@ -82,21 +86,22 @@ export const Footer: React.FC = () => {
             Campus & Administration
           </h4>
           <p className="text-[#D0DED8] leading-relaxed">
-            Philippine College of Ministry (PCM) is a Christ-centered, non-denominational evangelical college affiliated with the Stone-Campbell Restoration Movement, dedicated to academic rigor, spiritual formation, and pastoral equipping in the Cordillera and across the nations.
+            {footerConf?.aboutText ||
+              'Philippine College of Ministry (PCM) is a Christ-centered, non-denominational evangelical college affiliated with the Stone-Campbell Restoration Movement, dedicated to academic rigor, spiritual formation, and pastoral equipping in the Cordillera and across the nations.'}
           </p>
 
           <div className="space-y-2 text-[#D0DED8]">
             <div className="flex items-start gap-2.5">
               <MapPin className="w-4 h-4 text-[#85AA9B] shrink-0 mt-0.5" />
-              <span>Lamtang, Puguis, La Trinidad, Benguet, Philippines (P.O. Box 298, Baguio City 2600)</span>
+              <span>{contact?.address || 'Lamtang, Puguis, La Trinidad, Benguet, Philippines (P.O. Box 298, Baguio City 2600)'}</span>
             </div>
             <div className="flex items-center gap-2.5">
               <Phone className="w-4 h-4 text-[#85AA9B] shrink-0" />
-              <span>+63 74 422 2577 / +63 917 582 1992</span>
+              <span>{contact?.phone || '+63 74 422 2577 / +63 917 582 1992'}</span>
             </div>
             <div className="flex items-center gap-2.5">
               <Mail className="w-4 h-4 text-[#85AA9B] shrink-0" />
-              <span>info@pcm.ph | pcmpresident1992@gmail.com | admissions@pcm.ph</span>
+              <span>{contact?.email || 'info@pcm.ph | pcmpresident1992@gmail.com | admissions@pcm.ph'}</span>
             </div>
           </div>
         </div>

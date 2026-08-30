@@ -13,13 +13,18 @@ import {
   Play,
 } from 'lucide-react';
 
-const HERO_SLIDES = [
+const DEFAULT_HERO_SLIDES = [
   {
     image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600&auto=format&fit=crop',
     tag: 'Accredited Theological Education',
     headline: 'EQUIPPING SERVANTS FOR KINGDOM IMPACT',
     subtext:
       'Philippine College of Ministry exists to equip men and women with biblical knowledge, spiritual maturity, and practical ministry skills for faithful service to Christ, the Church, and the community.',
+    primaryBtnText: 'APPLY NOW FOR 2026–2027',
+    primaryBtnLink: 'apply',
+    secondaryBtnText: 'EXPLORE PROGRAMS',
+    secondaryBtnLink: 'academics',
+    active: true,
   },
   {
     image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1600&auto=format&fit=crop',
@@ -27,6 +32,11 @@ const HERO_SLIDES = [
     headline: 'ROOTED IN TRUTH. PASSIONATE IN WORSHIP.',
     subtext:
       'Cultivating humble shepherd hearts through daily corporate chapel, intensive Greek & Hebrew exegesis, and intimate faculty discipleship mentorship.',
+    primaryBtnText: 'VIEW STATEMENT OF FAITH',
+    primaryBtnLink: 'about',
+    secondaryBtnText: 'FACULTY & STAFF',
+    secondaryBtnLink: 'about',
+    active: true,
   },
   {
     image: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?q=80&w=1600&auto=format&fit=crop',
@@ -34,31 +44,42 @@ const HERO_SLIDES = [
     headline: 'REAL-WORLD MINISTRY IN 85+ LOCAL CHURCHES',
     subtext:
       'Every PCM student participates in supervised weekly pulpit ministry, urban church planting, youth discipleship, and compassionate community missions.',
+    primaryBtnText: 'ADMISSIONS OVERVIEW',
+    primaryBtnLink: 'apply',
+    secondaryBtnText: 'CAMPUS RESOURCES',
+    secondaryBtnLink: 'resources',
+    active: true,
   },
 ];
 
 export const HeroSection: React.FC = () => {
-  const { navigateTo, setRequestInfoModalOpen, setSelectedSermon, sermons } = usePCM();
+  const { navigateTo, setRequestInfoModalOpen, setSelectedSermon, sermons, siteConfig } = usePCM();
   const [currentSlide, setCurrentSlide] = useState(0);
+
+  const rawSlides = siteConfig?.heroSlides && siteConfig.heroSlides.length > 0 ? siteConfig.heroSlides : DEFAULT_HERO_SLIDES;
+  const activeSlides = rawSlides.filter((s) => s.active !== false);
+  const slides = activeSlides.length > 0 ? activeSlides : DEFAULT_HERO_SLIDES;
 
   // Auto-advance slides every 7 seconds
   useEffect(() => {
+    if (slides.length <= 1) return;
     const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
+      setCurrentSlide((prev) => (prev + 1) % slides.length);
     }, 7000);
     return () => clearInterval(timer);
-  }, []);
+  }, [slides.length]);
 
-  const slide = HERO_SLIDES[currentSlide];
+  const slideIndex = currentSlide % slides.length;
+  const slide = slides[slideIndex] || slides[0];
 
   return (
     <section className="relative w-full min-h-[560px] lg:min-h-[640px] bg-[#18392B] text-white overflow-hidden flex items-center">
       {/* Background Slideshow with Smooth Crossfade */}
-      {HERO_SLIDES.map((s, idx) => (
+      {slides.map((s, idx) => (
         <div
           key={idx}
           className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-            idx === currentSlide ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+            idx === slideIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
           }`}
           style={{
             backgroundImage: `url(${s.image})`,
@@ -84,7 +105,7 @@ export const HeroSection: React.FC = () => {
           {/* Institutional Badge */}
           <div className="inline-flex items-center gap-2 bg-[#18392B]/90 border border-[#588B76]/60 px-3 py-1 rounded-sm text-xs font-semibold text-[#D0DED8] shadow-sm">
             <span className="w-2 h-2 rounded-full bg-[#85AA9B] animate-pulse" />
-            <span className="tracking-widest uppercase font-mono text-[11px]">{slide.tag}</span>
+            <span className="tracking-widest uppercase font-mono text-[11px]">{slide.tag || 'Philippine College of Ministry'}</span>
           </div>
 
           {/* Main Headline */}
@@ -101,20 +122,30 @@ export const HeroSection: React.FC = () => {
           <div className="pt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-3.5">
             <button
               id="hero-cta-apply"
-              onClick={() => navigateTo('apply')}
+              onClick={() => {
+                if (slide.primaryBtnLink === 'apply') navigateTo('apply');
+                else if (slide.primaryBtnLink === 'academics') navigateTo('academics');
+                else if (slide.primaryBtnLink === 'about') navigateTo('about');
+                else navigateTo('apply');
+              }}
               className="flex items-center justify-center gap-2 bg-[#588B76] text-white font-bold px-6 sm:px-7 py-3 sm:py-3.5 uppercase text-xs tracking-widest hover:bg-[#46705F] rounded-sm shadow-md transition cursor-pointer text-center"
             >
-              <span>APPLY NOW FOR 2026–2027</span>
+              <span>{slide.primaryBtnText || 'APPLY NOW FOR 2026–2027'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
 
             <button
               id="hero-cta-explore"
-              onClick={() => navigateTo('academics')}
+              onClick={() => {
+                if (slide.secondaryBtnLink === 'academics') navigateTo('academics');
+                else if (slide.secondaryBtnLink === 'about') navigateTo('about');
+                else if (slide.secondaryBtnLink === 'resources') navigateTo('resources');
+                else navigateTo('academics');
+              }}
               className="flex items-center justify-center gap-2 border border-[#D0DED8] text-white font-bold px-5 sm:px-6 py-3 sm:py-3.5 uppercase text-xs tracking-widest hover:bg-white hover:text-[#18392B] rounded-sm transition cursor-pointer text-center"
             >
               <BookOpen className="w-4 h-4 text-[#85AA9B]" />
-              <span>EXPLORE PROGRAMS</span>
+              <span>{slide.secondaryBtnText || 'EXPLORE PROGRAMS'}</span>
             </button>
 
             {sermons.length > 0 && (
@@ -159,38 +190,41 @@ export const HeroSection: React.FC = () => {
       </div>
 
       {/* Slider Controls */}
-      <div className="absolute bottom-6 right-6 z-20 flex items-center gap-2 bg-[#18392B]/90 p-1.5 rounded-sm border border-[#588B76]/40 backdrop-blur-md">
-        <button
-          onClick={() =>
-            setCurrentSlide((prev) => (prev === 0 ? HERO_SLIDES.length - 1 : prev - 1))
-          }
-          className="p-1.5 rounded-sm hover:bg-[#10261D] text-[#D0DED8] hover:text-white transition cursor-pointer"
-          aria-label="Previous Slide"
-        >
-          <ChevronLeft className="w-4 h-4" />
-        </button>
+      {slides.length > 1 && (
+        <div className="absolute bottom-6 right-6 z-20 flex items-center gap-2 bg-[#18392B]/90 p-1.5 rounded-sm border border-[#588B76]/40 backdrop-blur-md">
+          <button
+            onClick={() =>
+              setCurrentSlide((prev) => (prev === 0 ? slides.length - 1 : prev - 1))
+            }
+            className="p-1.5 rounded-sm hover:bg-[#10261D] text-[#D0DED8] hover:text-white transition cursor-pointer"
+            aria-label="Previous Slide"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
 
-        <div className="flex gap-1 px-1">
-          {HERO_SLIDES.map((_, idx) => (
-            <button
-              key={idx}
-              onClick={() => setCurrentSlide(idx)}
-              aria-label={`Slide ${idx + 1}`}
-              className={`h-1.5 rounded-sm transition-all duration-300 cursor-pointer ${
-                idx === currentSlide ? 'w-6 bg-[#588B76]' : 'w-2 bg-[#85AA9B]/40'
-              }`}
-            />
-          ))}
+          <div className="flex gap-1 px-1">
+            {slides.map((_, idx) => (
+              <button
+                key={idx}
+                onClick={() => setCurrentSlide(idx)}
+                aria-label={`Slide ${idx + 1}`}
+                className={`h-1.5 rounded-sm transition-all duration-300 cursor-pointer ${
+                  idx === slideIndex ? 'w-6 bg-[#588B76]' : 'w-2 bg-[#85AA9B]/40'
+                }`}
+              />
+            ))}
+          </div>
+
+          <button
+            onClick={() => setCurrentSlide((prev) => (prev + 1) % slides.length)}
+            className="p-1.5 rounded-sm hover:bg-[#10261D] text-[#D0DED8] hover:text-white transition cursor-pointer"
+            aria-label="Next Slide"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
         </div>
-
-        <button
-          onClick={() => setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length)}
-          className="p-1.5 rounded-sm hover:bg-[#10261D] text-[#D0DED8] hover:text-white transition cursor-pointer"
-          aria-label="Next Slide"
-        >
-          <ChevronRight className="w-4 h-4" />
-        </button>
-      </div>
+      )}
     </section>
   );
 };
+

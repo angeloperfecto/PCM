@@ -66,7 +66,7 @@ export const ApplicationView: React.FC = () => {
         ...prev,
         programId: p.id,
         programName: p.name,
-        programLevel: p.level,
+        programLevel: p.level || p.degreeLevel || 'undergraduate',
       }));
     }
   };
@@ -370,7 +370,7 @@ export const ApplicationView: React.FC = () => {
                         >
                           {programs.map((p) => (
                             <option key={p.id} value={p.id}>
-                              {p.name} ({p.code} — {p.level.toUpperCase()})
+                              {p.name} ({p.code} — {(p.level || p.degreeLevel || 'Program').toUpperCase()})
                             </option>
                           ))}
                         </select>

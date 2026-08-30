@@ -56,7 +56,7 @@ export const ResourcesView: React.FC = () => {
       s.passage.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleDownload = (title: string, format: string) => {
+  const handleDownload = (title: string, format: string = 'PDF') => {
     addToast('success', 'Download Initialized', `Downloading official document "${title}" (${format}).`);
   };
 

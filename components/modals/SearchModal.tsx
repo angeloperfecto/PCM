@@ -125,35 +125,35 @@ export const SearchModal: React.FC = () => {
   const filteredPrograms = programs.filter(
     (p) =>
       !q ||
-      p.name.toLowerCase().includes(q) ||
-      p.code.toLowerCase().includes(q) ||
-      p.shortDescription.toLowerCase().includes(q)
+      p.name?.toLowerCase().includes(q) ||
+      p.code?.toLowerCase().includes(q) ||
+      (p.shortDescription || p.description || '')?.toLowerCase().includes(q)
   );
 
   // Filtered News & Events
   const filteredNews = news.filter(
     (n) =>
       !q ||
-      n.title.toLowerCase().includes(q) ||
-      n.category.toLowerCase().includes(q) ||
-      n.excerpt.toLowerCase().includes(q)
+      n.title?.toLowerCase().includes(q) ||
+      n.category?.toLowerCase().includes(q) ||
+      (n.excerpt || '')?.toLowerCase().includes(q)
   );
 
   const filteredEvents = events.filter(
     (ev) =>
       !q ||
-      ev.title.toLowerCase().includes(q) ||
-      ev.location.toLowerCase().includes(q) ||
-      ev.description.toLowerCase().includes(q)
+      ev.title?.toLowerCase().includes(q) ||
+      ev.location?.toLowerCase().includes(q) ||
+      (ev.description || '')?.toLowerCase().includes(q)
   );
 
   // Filtered Faculty
   const filteredFaculty = faculty.filter(
     (f) =>
       !q ||
-      f.name.toLowerCase().includes(q) ||
-      f.role.toLowerCase().includes(q) ||
-      f.title.toLowerCase().includes(q)
+      f.name?.toLowerCase().includes(q) ||
+      f.role?.toLowerCase().includes(q) ||
+      (f.title || '')?.toLowerCase().includes(q)
   );
 
   // Filtered Sermons & Downloads
@@ -299,7 +299,7 @@ export const SearchModal: React.FC = () => {
                         {prog.name}
                       </h4>
                       <p className="text-xs text-slate-600 line-clamp-1 mt-0.5">
-                        {prog.shortDescription}
+                        {prog.shortDescription || prog.description || ''}
                       </p>
                     </div>
                     <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#588B76] shrink-0 ml-3" />

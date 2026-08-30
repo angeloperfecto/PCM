@@ -6,6 +6,8 @@ import Image from 'next/image';
 interface FacultyPortraitProps {
   name: string;
   imageUrl?: string;
+  imageSrc?: string;
+  image?: string;
   id?: string;
   className?: string;
   sizes?: string;
@@ -25,6 +27,8 @@ interface PortraitStyle {
 export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   name,
   imageUrl,
+  imageSrc,
+  image,
   id = 'faculty-portrait',
   className = '',
   sizes = '120px',
@@ -32,14 +36,15 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   priority = false,
 }) => {
   const [hasError, setHasError] = useState(false);
+  const resolvedImage = imageUrl || imageSrc || image;
 
   // If a valid custom photo is provided, render it
-  if (imageUrl && imageUrl.trim().length > 0 && !hasError) {
-    const isSvg = imageUrl.endsWith('.svg');
+  if (resolvedImage && resolvedImage.trim().length > 0 && !hasError) {
+    const isSvg = resolvedImage.endsWith('.svg');
     return (
       <div className={`relative w-full h-full overflow-hidden ${className}`}>
         <Image
-          src={imageUrl}
+          src={resolvedImage}
           alt={name}
           fill={fill}
           className="object-cover object-top"

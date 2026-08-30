@@ -305,9 +305,9 @@ export const AboutView: React.FC = () => {
               {[
                 { id: 'all', label: 'All Directory', count: faculty.length },
                 { id: 'Board of Trustees', label: 'Board of Trustees', count: faculty.filter(f => f.group === 'Board of Trustees').length },
-                { id: 'Administration', label: 'Administration', count: faculty.filter(f => f.group === 'Administration').length },
-                { id: 'Faculty', label: 'Faculty & Staff', count: faculty.filter(f => f.group === 'Faculty').length },
-                { id: 'Emeritus & Adjunct', label: 'Emeritus & Adjunct', count: faculty.filter(f => f.group === 'Emeritus & Adjunct').length },
+                { id: 'Key Administrators', label: 'Administration', count: faculty.filter(f => f.group === 'Key Administrators' || f.group === 'Administration').length },
+                { id: 'Resident Faculty', label: 'Faculty & Staff', count: faculty.filter(f => f.group === 'Resident Faculty' || f.group === 'Faculty' || f.group === 'Administrative Staff').length },
+                { id: 'Adjunct Faculty', label: 'Adjunct & Emeritus', count: faculty.filter(f => f.group === 'Adjunct Faculty' || f.group === 'Emeritus & Adjunct').length },
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -344,14 +344,19 @@ export const AboutView: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {faculty
               .filter((f) => {
-                if (activeCategory !== 'all' && f.group !== activeCategory) return false;
+                if (activeCategory === 'Key Administrators' && f.group !== 'Key Administrators' && f.group !== 'Administration') return false;
+                if (activeCategory === 'Resident Faculty' && f.group !== 'Resident Faculty' && f.group !== 'Faculty' && f.group !== 'Administrative Staff') return false;
+                if (activeCategory === 'Adjunct Faculty' && f.group !== 'Adjunct Faculty' && f.group !== 'Emeritus & Adjunct') return false;
+                if (activeCategory !== 'all' && activeCategory !== 'Key Administrators' && activeCategory !== 'Resident Faculty' && activeCategory !== 'Adjunct Faculty' && f.group !== activeCategory) return false;
+                
                 if (!searchQuery.trim()) return true;
                 const q = searchQuery.toLowerCase();
                 return (
-                  f.name.toLowerCase().includes(q) ||
-                  f.title.toLowerCase().includes(q) ||
-                  f.role.toLowerCase().includes(q) ||
-                  f.credentials.toLowerCase().includes(q) ||
+                  (f.name && f.name.toLowerCase().includes(q)) ||
+                  (f.title && f.title.toLowerCase().includes(q)) ||
+                  (f.role && f.role.toLowerCase().includes(q)) ||
+                  (f.department && f.department.toLowerCase().includes(q)) ||
+                  (f.credentials && f.credentials.toLowerCase().includes(q)) ||
                   (f.degrees || []).some((d) => d.toLowerCase().includes(q)) ||
                   (f.subjectTaught || []).some((s) => s.toLowerCase().includes(q)) ||
                   (f.coursesTaught || []).some((c) => c.toLowerCase().includes(q))
@@ -368,7 +373,7 @@ export const AboutView: React.FC = () => {
                       <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 border-[#588B76] shrink-0 bg-[#070e1c] flex items-center justify-center shadow-xs">
                         <FacultyPortrait
                           name={f.name}
-                          imageUrl={f.imageUrl}
+                          imageSrc={f.image || f.imageUrl}
                           id={`dir-${f.id}`}
                           sizes="80px"
                           className="group-hover:scale-105 transition-transform duration-300"
@@ -382,7 +387,7 @@ export const AboutView: React.FC = () => {
                           {f.name}
                         </h4>
                         <p className="text-xs text-slate-700 font-semibold leading-tight">
-                          {f.title}
+                          {f.role || f.title}
                         </p>
                       </div>
                     </div>

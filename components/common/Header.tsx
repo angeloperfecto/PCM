@@ -40,6 +40,7 @@ export const Header: React.FC = () => {
     setStatementOfFaithModalOpen,
     setTuitionCalculatorModalOpen,
     setRequestInfoModalOpen,
+    siteConfig,
   } = usePCM();
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -298,10 +299,10 @@ export const Header: React.FC = () => {
           </div>
           <div className="flex flex-col">
             <h1 className="text-[#18392B] font-serif text-lg sm:text-xl font-bold leading-tight group-hover:text-[#588B76] transition-colors">
-              Philippine College of Ministry
+              {siteConfig?.siteIdentity?.name || 'Philippine College of Ministry'}
             </h1>
             <p className="text-[10px] uppercase tracking-[0.2em] font-semibold text-[#588B76]">
-              Theological Excellence & Pastoral Formation
+              {siteConfig?.siteIdentity?.tagline || 'Theological Excellence & Pastoral Formation'}
             </p>
           </div>
         </div>

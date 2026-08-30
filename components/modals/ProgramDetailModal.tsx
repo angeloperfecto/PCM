@@ -19,6 +19,14 @@ export const ProgramDetailModal: React.FC = () => {
 
   if (!selectedProgram) return null;
 
+  const tuitionDisplay = selectedProgram.tuitionPerUnit
+    ? `₱${selectedProgram.tuitionPerUnit.toLocaleString()}/unit`
+    : 'Inquire with Admissions';
+
+  const creditsDisplay = selectedProgram.credits || selectedProgram.totalUnits || selectedProgram.units || 0;
+  const descriptionDisplay = selectedProgram.fullDescription || selectedProgram.description || selectedProgram.shortDescription || '';
+  const curriculumList = selectedProgram.curriculum || [];
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
       <div
@@ -29,15 +37,15 @@ export const ProgramDetailModal: React.FC = () => {
         <div className="sticky top-0 bg-[#18392B] text-white p-6 border-b border-[#588B76]/40 z-10 flex items-start justify-between">
           <div>
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-[#588B76] text-[#18392B] px-2 py-0.5 rounded">
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-[#588B76] text-white px-2 py-0.5 rounded">
                 {selectedProgram.code}
               </span>
               <span className="text-xs font-semibold text-[#85AA9B] capitalize">
-                {selectedProgram.level} Degree
+                {selectedProgram.level || selectedProgram.degreeLevel} Degree
               </span>
             </div>
             <h3 className="font-serif text-xl sm:text-2xl font-bold text-white">
-              {selectedProgram.name}
+              {selectedProgram.name || selectedProgram.title}
             </h3>
           </div>
 
@@ -60,72 +68,78 @@ export const ProgramDetailModal: React.FC = () => {
             </div>
             <div>
               <span className="text-slate-500 block text-[11px]">Total Units</span>
-              <strong className="text-[#18392B] font-bold text-sm">{selectedProgram.credits} Units</strong>
+              <strong className="text-[#18392B] font-bold text-sm">{creditsDisplay} Units</strong>
             </div>
             <div>
               <span className="text-slate-500 block text-[11px]">Study Mode</span>
-              <strong className="text-[#18392B] font-bold text-sm">{selectedProgram.studyMode}</strong>
+              <strong className="text-[#18392B] font-bold text-sm">{selectedProgram.studyMode || 'Full-time / Residential'}</strong>
             </div>
             <div>
               <span className="text-slate-500 block text-[11px]">Tuition Rate</span>
-              <strong className="text-emerald-700 font-bold text-sm">₱{selectedProgram.tuitionPerUnit.toLocaleString()}/unit</strong>
+              <strong className="text-emerald-700 font-bold text-sm">{tuitionDisplay}</strong>
             </div>
           </div>
 
           {/* Program Overview */}
-          <div className="space-y-2">
-            <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-[#588B76]" />
-              <span>Program Overview</span>
-            </h4>
-            <p className="text-slate-600 leading-relaxed text-xs sm:text-sm">
-              {selectedProgram.fullDescription}
-            </p>
-          </div>
+          {descriptionDisplay && (
+            <div className="space-y-2">
+              <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
+                <BookOpen className="w-4 h-4 text-[#588B76]" />
+                <span>Program Overview</span>
+              </h4>
+              <p className="text-slate-600 leading-relaxed text-xs sm:text-sm">
+                {descriptionDisplay}
+              </p>
+            </div>
+          )}
 
           {/* Core Curriculum Modules */}
-          <div className="space-y-3">
-            <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
-              <GraduationCap className="w-4 h-4 text-[#588B76]" />
-              <span>Core Curriculum & Course Highlights</span>
-            </h4>
-            <div className="space-y-3 text-xs">
-              {selectedProgram.curriculum.map((mod, idx) => (
-                <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                  <span className="font-mono font-bold text-[#588B76] block mb-2">{mod.yearOrModule}</span>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    {mod.courses.map((c, cIdx) => (
-                      <div key={cIdx} className="flex items-start gap-2 bg-white p-2 rounded border border-slate-200/80">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#588B76] shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="text-[#18392B] block">{c.code}: {c.title}</strong>
-                          <span className="text-[10px] text-slate-500 font-mono">{c.units} Units</span>
+          {curriculumList.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-[#588B76]" />
+                <span>Core Curriculum & Course Highlights</span>
+              </h4>
+              <div className="space-y-3 text-xs">
+                {curriculumList.map((mod, idx) => (
+                  <div key={idx} className="bg-slate-50 p-3 rounded-lg border border-slate-200">
+                    <span className="font-mono font-bold text-[#588B76] block mb-2">{mod.yearOrModule}</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {(mod.courses || []).map((c, cIdx) => (
+                        <div key={cIdx} className="flex items-start gap-2 bg-white p-2 rounded border border-slate-200/80">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-[#588B76] shrink-0 mt-0.5" />
+                          <div>
+                            <strong className="text-[#18392B] block">{c.code}: {c.title}</strong>
+                            <span className="text-[10px] text-slate-500 font-mono">{c.units} Units</span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Career & Ministry Opportunities */}
-          <div className="space-y-3">
-            <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
-              <Briefcase className="w-4 h-4 text-[#588B76]" />
-              <span>Ministry & Vocational Opportunities</span>
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              {(selectedProgram.careerOpportunities || []).map((career, idx) => (
-                <span
-                  key={idx}
-                  className="bg-[#18392B]/5 text-[#18392B] border border-slate-300 text-xs px-3 py-1 rounded-full font-medium"
-                >
-                  {career}
-                </span>
-              ))}
+          {selectedProgram.careerOpportunities && selectedProgram.careerOpportunities.length > 0 && (
+            <div className="space-y-3">
+              <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
+                <Briefcase className="w-4 h-4 text-[#588B76]" />
+                <span>Ministry & Vocational Opportunities</span>
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {selectedProgram.careerOpportunities.map((career, idx) => (
+                  <span
+                    key={idx}
+                    className="bg-[#18392B]/5 text-[#18392B] border border-slate-300 text-xs px-3 py-1 rounded-full font-medium"
+                  >
+                    {career}
+                  </span>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Admission Requirements for this degree */}
           <div className="space-y-2 bg-amber-50/70 p-4 rounded-xl border border-amber-200 text-xs">
@@ -134,7 +148,7 @@ export const ProgramDetailModal: React.FC = () => {
               <span>Key Admission Criteria:</span>
             </h5>
             <ul className="list-disc list-inside space-y-1 text-amber-900">
-              {selectedProgram.level === 'graduate' ? (
+              {selectedProgram.level === 'graduate' || selectedProgram.degreeLevel === 'graduate' ? (
                 <>
                   <li>Accredited Bachelor’s degree from a recognized institution</li>
                   <li>Minimum 2 years of active church ministry leadership experience</li>
@@ -168,7 +182,7 @@ export const ProgramDetailModal: React.FC = () => {
                 setSelectedProgram(null);
                 navigateTo('apply');
               }}
-              className="w-full sm:w-auto bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] text-xs font-bold px-6 py-3 rounded shadow transition flex items-center justify-center gap-2 uppercase tracking-wider cursor-pointer"
+              className="w-full sm:w-auto bg-[#588B76] hover:bg-[#46705F] text-white text-xs font-bold px-6 py-3 rounded shadow transition flex items-center justify-center gap-2 uppercase tracking-wider cursor-pointer"
             >
               <span>Apply for {selectedProgram.code}</span>
               <ArrowRight className="w-4 h-4" />

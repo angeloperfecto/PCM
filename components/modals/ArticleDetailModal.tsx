@@ -40,7 +40,7 @@ export const ArticleDetailModal: React.FC = () => {
         {/* Header Photo */}
         <div className="relative h-64 sm:h-72 w-full overflow-hidden bg-[#18392B]">
           <Image
-            src={selectedArticle.imageUrl}
+            src={selectedArticle.imageUrl || selectedArticle.image || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop'}
             alt={selectedArticle.title}
             fill
             className="object-cover"
@@ -104,23 +104,25 @@ export const ArticleDetailModal: React.FC = () => {
           </p>
 
           <div className="space-y-4 pt-2 text-slate-700">
-            {selectedArticle.content.split('\n\n').map((paragraph, idx) => (
+            {(selectedArticle.content || selectedArticle.excerpt || '').split('\n\n').map((paragraph, idx) => (
               <p key={idx}>{paragraph}</p>
             ))}
           </div>
 
           {/* Tags */}
-          <div className="pt-6 border-t border-slate-200 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-semibold text-slate-500">Filed under:</span>
-            {selectedArticle.tags.map((tag, idx) => (
-              <span
-                key={idx}
-                className="text-[11px] bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full border border-slate-200"
-              >
-                #{tag}
-              </span>
-            ))}
-          </div>
+          {selectedArticle.tags && selectedArticle.tags.length > 0 && (
+            <div className="pt-6 border-t border-slate-200 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold text-slate-500">Filed under:</span>
+              {selectedArticle.tags.map((tag, idx) => (
+                <span
+                  key={idx}
+                  className="text-[11px] bg-slate-100 text-slate-700 px-2.5 py-1 rounded-full border border-slate-200"
+                >
+                  #{tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Modal Footer */}

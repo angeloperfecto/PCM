@@ -49,7 +49,7 @@ export const NewsSection: React.FC = () => {
                 {/* Article Image */}
                 <div className="relative h-44 overflow-hidden">
                   <Image
-                    src={article.imageUrl}
+                    src={article.imageUrl || article.image || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop'}
                     alt={article.title}
                     fill
                     className="object-cover group-hover:scale-105 transition-transform duration-300"
