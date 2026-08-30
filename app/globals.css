@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+@theme {
+  --color-pcm-dark: #18392B;
+  --color-pcm-deep: #588B76;
+  --color-pcm-muted: #85AA9B;
+  --color-pcm-light: #D0DED8;
+  --color-pcm-white: #FFFFFF;
+}
+
+:root {
+  --pcm-dark: #18392B;
+  --pcm-deep: #588B76;
+  --pcm-muted: #85AA9B;
+  --pcm-light: #D0DED8;
+  --pcm-white: #FFFFFF;
+}

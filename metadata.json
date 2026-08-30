@@ -1,0 +1,6 @@
+{
+  "name": "PCM — Philippines College of Ministry",
+  "description": "Equipping Servants. Transforming Lives. Advancing God's Kingdom. Official website and academic portal of Philippines College of Ministry.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
