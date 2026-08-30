@@ -24,7 +24,22 @@ import {
 } from 'lucide-react';
 
 export const AboutView: React.FC = () => {
-  const { currentSubSection, faculty, setSelectedFaculty, setStatementOfFaithModalOpen, navigateTo } = usePCM();
+  const { activeSubSection, currentSubSection, faculty, setSelectedFaculty, setStatementOfFaithModalOpen, navigateTo } = usePCM();
+
+  React.useEffect(() => {
+    const sub = activeSubSection || currentSubSection;
+    if (sub === 'faith') {
+      setStatementOfFaithModalOpen(true);
+    } else if (sub) {
+      const targetId = sub === 'leadership' ? 'faculty' : sub;
+      const el = document.getElementById(targetId);
+      if (el) {
+        setTimeout(() => {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 100);
+      }
+    }
+  }, [activeSubSection, currentSubSection, setStatementOfFaithModalOpen]);
 
   return (
     <div className="w-full bg-[#FFFFFF] font-sans pb-20">

@@ -19,7 +19,21 @@ import {
 } from 'lucide-react';
 
 export const AdmissionsView: React.FC = () => {
-  const { navigateTo, setTuitionCalculatorModalOpen, setRequestInfoModalOpen } = usePCM();
+  const { navigateTo, setTuitionCalculatorModalOpen, setRequestInfoModalOpen, activeSubSection, currentSubSection } = usePCM();
+
+  React.useEffect(() => {
+    const sub = activeSubSection || currentSubSection;
+    if (!sub) return;
+
+    if (sub === 'why-pcm') {
+      navigateTo('why-choose-pcm');
+    } else {
+      const el = document.getElementById(sub);
+      if (el) {
+        setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
+      }
+    }
+  }, [activeSubSection, currentSubSection, navigateTo]);
 
   return (
     <div className="w-full bg-[#FFFFFF] font-sans pb-20">

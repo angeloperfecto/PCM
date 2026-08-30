@@ -32,6 +32,7 @@ import { SermonPlayerModal } from '@/components/modals/SermonPlayerModal';
 import { StatementOfFaithModal } from '@/components/modals/StatementOfFaithModal';
 import { RequestInfoModal } from '@/components/modals/RequestInfoModal';
 import { TuitionCalculatorModal } from '@/components/modals/TuitionCalculatorModal';
+import { SearchModal } from '@/components/modals/SearchModal';
 
 const AppContent: React.FC = () => {
   const { currentSection } = usePCM();
@@ -67,6 +68,7 @@ const AppContent: React.FC = () => {
       <ToastContainer />
 
       {/* Global Interactive Modals */}
+      <SearchModal />
       <ProgramDetailModal />
       <ArticleDetailModal />
       <EventDetailModal />

@@ -17,8 +17,30 @@ import {
 } from 'lucide-react';
 
 export const AcademicsView: React.FC = () => {
-  const { programs, setSelectedProgram, navigateTo } = usePCM();
-  const [selectedLevel, setSelectedLevel] = useState<'all' | ProgramLevel>('all');
+  const { programs, setSelectedProgram, navigateTo, activeSubSection, currentSubSection } = usePCM();
+  
+  const sub = activeSubSection || currentSubSection;
+  const initialLevel: 'all' | ProgramLevel = 
+    sub === 'shs' ? 'senior-high' :
+    sub === 'undergrad' ? 'undergraduate' :
+    sub === 'grad' ? 'graduate' :
+    (sub === 'assoc' || sub === 'certs') ? 'certificate' : 'all';
+
+  const [selectedLevel, setSelectedLevel] = useState<'all' | ProgramLevel>(initialLevel);
+
+  React.useEffect(() => {
+    if (!sub) return;
+    if (sub === 'chaplaincy') {
+      const chaplainProg = programs.find((p) => p.code === 'BTh-SCM' || p.name.includes('Chaplaincy'));
+      if (chaplainProg) setSelectedProgram(chaplainProg);
+    } else if (sub === 'calendar') {
+      const el = document.getElementById('calendar');
+      if (el) {
+        const timer = setTimeout(() => el.scrollIntoView({ behavior: 'smooth' }), 100);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [sub, programs, setSelectedProgram]);
 
   const filtered = programs.filter((p) => {
     if (selectedLevel === 'all') return true;
@@ -67,7 +89,7 @@ export const AcademicsView: React.FC = () => {
             {(
               [
                 { id: 'all', label: 'All Programs' },
-                { id: 'shs', label: 'Senior High School (GAS)' },
+                { id: 'senior-high', label: 'Senior High School (GAS)' },
                 { id: 'undergraduate', label: 'Undergraduate Degrees (B.Th.)' },
                 { id: 'graduate', label: 'Graduate School (Master’s)' },
                 { id: 'certificate', label: 'Certificates & Associate' },
