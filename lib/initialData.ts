@@ -802,7 +802,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     ],
     bio: 'Chairman, Board of Trustees. Practicing Lawyer in Zambales.',
     coursesTaught: ['Christian Philosophy & Jurisprudence', 'Institutional Governance & Ethics'],
-    imageUrl: '',
+    imageUrl: '/images/faculty/atty-laruta.svg',
     email: 'laruta.trustee@pcm.ph',
     featured: true,
   },

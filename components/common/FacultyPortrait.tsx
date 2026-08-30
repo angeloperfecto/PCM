@@ -35,6 +35,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
 
   // If a valid custom photo is provided, render it
   if (imageUrl && imageUrl.trim().length > 0 && !hasError) {
+    const isSvg = imageUrl.endsWith('.svg');
     return (
       <div className={`relative w-full h-full overflow-hidden ${className}`}>
         <Image
@@ -44,6 +45,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
           className="object-cover object-top"
           sizes={sizes}
           priority={priority}
+          unoptimized={isSvg}
           referrerPolicy="no-referrer"
           onError={() => setHasError(true)}
         />
