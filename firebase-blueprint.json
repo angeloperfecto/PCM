@@ -1,0 +1,200 @@
+{
+  "entities": {
+    "SiteConfig": {
+      "title": "Site Configuration",
+      "description": "Global institutional settings, contacts, SEO, branding, and content blocks.",
+      "type": "object",
+      "properties": {
+        "siteIdentity": { "type": "object", "description": "Names, abbreviations, tagline, logos." },
+        "contactInfo": { "type": "object", "description": "Phone numbers, emails, addresses, hours." },
+        "seoSettings": { "type": "object", "description": "Meta titles, descriptions, keywords." },
+        "homeAbout": { "type": "object", "description": "Welcome letter, president quote, campus highlights." },
+        "missionVisionValues": { "type": "object", "description": "Mission, vision, core pillars." },
+        "ctaSections": { "type": "object", "description": "Action banners." },
+        "admissionsConfig": { "type": "object", "description": "Tuition, calendar dates, steps." },
+        "footerConfig": { "type": "object", "description": "Footer copyright and accreditation." },
+        "navigationMenu": { "type": "array", "description": "Navbar structure." }
+      },
+      "required": ["siteIdentity", "contactInfo"]
+    },
+    "AcademicProgram": {
+      "title": "Academic Degree Program",
+      "description": "Degree, diploma, or certificate offerings.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 200 },
+        "code": { "type": "string", "maxLength": 50 },
+        "level": { "type": "string", "enum": ["Undergraduate", "Graduate", "Diploma", "Certificate"] },
+        "description": { "type": "string" },
+        "totalUnits": { "type": "number" },
+        "duration": { "type": "string" },
+        "tuitionEstimate": { "type": "string" },
+        "prerequisites": { "type": "array" },
+        "coreCourses": { "type": "array" },
+        "careerOutcomes": { "type": "array" },
+        "status": { "type": "string", "enum": ["Published", "Draft", "Archived"] }
+      },
+      "required": ["id", "name", "code", "level"]
+    },
+    "FacultyMember": {
+      "title": "Faculty Member",
+      "description": "Faculty profile, qualifications, and role.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "maxLength": 150 },
+        "group": { "type": "string", "enum": ["Administration", "Full-Time Faculty", "Adjunct Faculty", "Staff", "Board of Trustees"] },
+        "degrees": { "type": "array" },
+        "bio": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "role", "group"]
+    },
+    "AnnouncementItem": {
+      "title": "Announcement Banner",
+      "description": "Ticker announcement item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "category": { "type": "string" },
+        "active": { "type": "boolean" },
+        "link": { "type": "string" }
+      },
+      "required": ["id", "title", "message"]
+    },
+    "NewsArticle": {
+      "title": "News & Story",
+      "description": "College news, feature story, or press release.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 250 },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "author": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "featured": { "type": "boolean" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "title", "date", "content"]
+    },
+    "CollegeEvent": {
+      "title": "College Event",
+      "description": "Institutional calendar event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "registrationRequired": { "type": "boolean" },
+        "maxAttendees": { "type": "number" },
+        "registeredAttendees": { "type": "array" }
+      },
+      "required": ["id", "title", "date", "location"]
+    },
+    "AdmissionApplication": {
+      "title": "Admission Application",
+      "description": "Online prospective student admission application.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "referenceNumber": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "program": { "type": "string" },
+        "status": { "type": "string", "enum": ["Draft", "Submitted", "Under Review", "Approved", "Rejected"] },
+        "submissionDate": { "type": "string" },
+        "testimony": { "type": "string" },
+        "churchAffiliation": { "type": "string" }
+      },
+      "required": ["id", "referenceNumber", "fullName", "email", "program", "status"]
+    }
+  },
+  "firestore": {
+    "/siteConfig/{configId}": {
+      "schema": { "$ref": "#/entities/SiteConfig" },
+      "description": "Global institutional configuration documents."
+    },
+    "/programs/{programId}": {
+      "schema": { "$ref": "#/entities/AcademicProgram" },
+      "description": "Academic degree programs and curriculum."
+    },
+    "/faculty/{facultyId}": {
+      "schema": { "$ref": "#/entities/FacultyMember" },
+      "description": "Faculty, staff, and leadership directory."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/AnnouncementItem" },
+      "description": "Ticker announcement banner notices."
+    },
+    "/news/{newsId}": {
+      "schema": { "$ref": "#/entities/NewsArticle" },
+      "description": "News articles, press releases, and stories."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/CollegeEvent" },
+      "description": "Academic calendar and campus events."
+    },
+    "/applications/{applicationId}": {
+      "schema": { "$ref": "#/entities/AdmissionApplication" },
+      "description": "Online student admission applications."
+    },
+    "/downloads/{downloadId}": {
+      "schema": "DownloadableResource",
+      "description": "Student handbook, application forms, and catalogs."
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": "Testimonial",
+      "description": "Alumni, student, and ministry partner quotes."
+    },
+    "/stats/{statId}": {
+      "schema": "ImpactStat",
+      "description": "Key institutional metrics and alumni milestones."
+    },
+    "/faqs/{faqId}": {
+      "schema": "FAQItem",
+      "description": "Frequently asked questions for admissions and campus life."
+    },
+    "/sermons/{sermonId}": {
+      "schema": "SermonLecture",
+      "description": "Chapel messages and audio recordings."
+    },
+    "/scrapbook/{scrapbookId}": {
+      "schema": "ScrapbookItem",
+      "description": "Historical milestones and archive photographs."
+    },
+    "/mediaItems/{mediaId}": {
+      "schema": "MediaItem",
+      "description": "Media library assets and images."
+    },
+    "/galleryAlbums/{albumId}": {
+      "schema": "GalleryAlbum",
+      "description": "Photo gallery albums."
+    },
+    "/adminUsers/{adminId}": {
+      "schema": "AdminUser",
+      "description": "Administrative users and roles."
+    },
+    "/studentProfiles/{studentId}": {
+      "schema": "StudentProfile",
+      "description": "Student portal grades, enrollment, and tuition."
+    },
+    "/activityLogs/{logId}": {
+      "schema": "ActivityLogItem",
+      "description": "Audit log for admin modifications."
+    }
+  }
+}
