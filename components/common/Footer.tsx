@@ -40,8 +40,8 @@ export const Footer: React.FC = () => {
       <div className="bg-[#10261D] border-b border-[#588B76]/25 py-6 px-4 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 bg-[#18392B] flex items-center justify-center rounded-sm border border-[#588B76]/50 shadow-sm">
-              <span className="text-[#D0DED8] font-serif text-xl font-bold">PCM</span>
+            <div className="w-11 h-11 flex items-center justify-center shrink-0">
+              <Emblem id="footer-pcm-logo" size={44} className="w-11 h-11" />
             </div>
             <div>
               <h3 className="font-serif text-base font-bold text-white tracking-wide uppercase">

@@ -260,8 +260,8 @@ export const Header: React.FC = () => {
           role="button"
           tabIndex={0}
         >
-          <div className="w-12 h-12 bg-[#18392B] flex items-center justify-center rounded-sm shrink-0 shadow-sm border border-[#588B76]/40">
-            <span className="text-[#D0DED8] font-serif text-2xl font-bold tracking-tight">PCM</span>
+          <div className="w-12 h-12 flex items-center justify-center shrink-0">
+            <Emblem id="header-pcm-logo" size={48} className="w-12 h-12 transition-transform duration-200 group-hover:scale-105" />
           </div>
           <div className="flex flex-col">
             <h1 className="text-[#18392B] font-serif text-lg sm:text-xl font-bold leading-tight group-hover:text-[#588B76] transition-colors">

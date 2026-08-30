@@ -4,215 +4,324 @@ interface EmblemProps {
   className?: string;
   size?: number;
   variant?: 'full' | 'shield-only' | 'monochrome' | 'gold-accent';
+  id?: string;
 }
 
 export const Emblem: React.FC<EmblemProps> = ({
   className = '',
   size = 48,
   variant = 'full',
+  id = 'pcm-official-seal',
 }) => {
-  const isGold = variant === 'gold-accent';
-  const isMono = variant === 'monochrome';
+  // 12 outer scallops positioned around a 1000x1000 coordinate plane
+  const cx = 500;
+  const cy = 500;
+  const numPetals = 12;
+  const rCenter = 395;
+  const rPetal = 115;
+
+  const petals = Array.from({ length: numPetals }, (_, i) => {
+    const angleDeg = i * (360 / numPetals) - 90;
+    const angleRad = (angleDeg * Math.PI) / 180;
+    const px = cx + rCenter * Math.cos(angleRad);
+    const py = cy + rCenter * Math.sin(angleRad);
+    return { px, py, key: i };
+  });
 
   return (
     <svg
+      id={id}
       width={size}
       height={size}
-      viewBox="0 0 120 120"
+      viewBox="0 0 1000 1000"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
       className={`select-none shrink-0 ${className}`}
-      aria-label="Philippines College of Ministry Official Seal"
+      aria-label="Philippine College of Ministry Official Logo"
       role="img"
     >
       <defs>
-        {/* Gradients for institutional depth */}
-        <linearGradient id="pcmDarkGrad" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#10261D" />
-          <stop offset="0.5" stopColor="#18392B" />
-          <stop offset="1" stopColor="#234D3B" />
-        </linearGradient>
+        <style>
+          {`
+            .pcm-seal-font {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Arial Black", Arial, sans-serif;
+              font-weight: 900;
+            }
+            .pcm-roman-font {
+              font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+              font-weight: 800;
+            }
+          `}
+        </style>
 
-        <linearGradient id="pcmSageGrad" x1="0" y1="0" x2="120" y2="120" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#D0DED8" />
-          <stop offset="0.4" stopColor="#85AA9B" />
-          <stop offset="0.8" stopColor="#588B76" />
-          <stop offset="1" stopColor="#3C6654" />
-        </linearGradient>
+        {/* Top arched text path for PHILIPPINE COLLEGE */}
+        <path
+          id="pcmTopTextArc"
+          d="M 152 500 A 348 348 0 0 1 848 500"
+          fill="none"
+        />
 
-        <linearGradient id="pcmFlameGrad" x1="60" y1="35" x2="60" y2="15" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#D0DED8" />
-          <stop offset="0.6" stopColor="#85AA9B" />
-          <stop offset="1" stopColor="#588B76" />
-        </linearGradient>
+        {/* Bottom arched text path for OF MINISTRY, INC */}
+        <path
+          id="pcmBottomTextArc"
+          d="M 848 500 A 348 348 0 0 1 152 500"
+          fill="none"
+        />
 
-        <filter id="pcmShadow" x="-10%" y="-10%" width="120%" height="120%" filterUnits="userSpaceOnUse">
-          <feDropShadow dx="0" dy="2" stdDeviation="2" floodColor="#000" floodOpacity="0.25" />
-        </filter>
+        {/* Arched path for Roman Numerals MCMXCII at bottom inside black circle */}
+        <path
+          id="pcmRomanArc"
+          d="M 330 735 A 260 260 0 0 0 670 735"
+          fill="none"
+        />
       </defs>
 
-      {/* Outer Forest Green Ring */}
-      <circle
-        cx="60"
-        cy="60"
-        r="56"
-        fill={isMono ? 'currentColor' : 'url(#pcmDarkGrad)'}
-        stroke={isMono ? 'currentColor' : 'url(#pcmSageGrad)'}
-        strokeWidth="3.5"
-      />
-
-      {/* Decorative Beaded Inner Ring */}
-      <circle
-        cx="60"
-        cy="60"
-        r="51"
-        fill="none"
-        stroke={isGold || isMono ? 'currentColor' : '#85AA9B'}
-        strokeWidth="1"
-        strokeDasharray="2.5 2.5"
-        opacity="0.8"
-      />
-
-      {/* Institutional Circular Text Path */}
-      <path
-        id="textPathTop"
-        d="M 18 60 A 42 42 0 0 1 102 60"
-        fill="none"
-      />
-      <path
-        id="textPathBottom"
-        d="M 102 60 A 42 42 0 0 1 18 60"
-        fill="none"
-      />
-
-      <text
-        fill={isMono ? 'currentColor' : '#FFFFFF'}
-        fontSize="6.8"
-        fontWeight="bold"
-        letterSpacing="1.2"
-        fontFamily="serif"
-      >
-        <textPath href="#textPathTop" startOffset="50%" textAnchor="middle">
-          PHILIPPINES COLLEGE OF MINISTRY
-        </textPath>
-      </text>
-
-      <text
-        fill={isMono ? 'currentColor' : '#D0DED8'}
-        fontSize="5.8"
-        fontWeight="600"
-        letterSpacing="1"
-        fontFamily="sans-serif"
-      >
-        <textPath href="#textPathBottom" startOffset="50%" textAnchor="middle">
-          ★ EST. 1992 • VERITAS ET MINISTERIUM ★
-        </textPath>
-      </text>
-
-      {/* Central Heraldic Shield */}
-      <g filter="url(#pcmShadow)">
-        {/* Shield outline */}
-        <path
-          d="M 36 34 Q 60 30 84 34 Q 84 56 60 84 Q 36 56 36 34 Z"
-          fill={isMono ? 'none' : '#10261D'}
-          stroke={isMono ? 'currentColor' : 'url(#pcmSageGrad)'}
-          strokeWidth="2.5"
-        />
-
-        {/* Shield Inner Inset */}
-        <path
-          d="M 39 37 Q 60 33 81 37 Q 81 54 60 79 Q 39 54 39 37 Z"
-          fill={isMono ? 'currentColor' : '#18392B'}
-          opacity="0.95"
-        />
-
-        {/* Rays of Divine Light / Glory behind cross */}
-        <g stroke={isMono ? 'currentColor' : '#D0DED8'} strokeWidth="0.8" opacity="0.6">
-          <line x1="60" y1="46" x2="60" y2="38" />
-          <line x1="60" y1="46" x2="68" y2="40" />
-          <line x1="60" y1="46" x2="52" y2="40" />
-          <line x1="60" y1="46" x2="72" y2="46" />
-          <line x1="60" y1="46" x2="48" y2="46" />
-        </g>
-
-        {/* Latin Cross */}
-        <g fill={isMono ? '#fff' : 'url(#pcmSageGrad)'}>
-          {/* Vertical beam */}
-          <rect x="58" y="38" width="4" height="20" rx="0.5" />
-          {/* Horizontal crossbar */}
-          <rect x="52" y="42" width="16" height="4" rx="0.5" />
-        </g>
-
-        {/* Holy Spirit Flame above Cross */}
-        <path
-          d="M 60 32 C 58 35, 56 37, 56 39 C 56 41, 58 42, 60 42 C 62 42, 64 41, 64 39 C 64 37, 62 35, 60 32 Z"
-          fill={isMono ? 'currentColor' : 'url(#pcmFlameGrad)'}
-        />
-
-        {/* Open Holy Bible at the base of the shield */}
-        <g transform="translate(0, 1)">
-          {/* Left Page */}
-          <path
-            d="M 44 58 Q 52 56 60 59 L 60 69 Q 52 66 44 68 Z"
-            fill={isMono ? 'none' : '#FFFFFF'}
-            stroke={isMono ? 'currentColor' : '#85AA9B'}
-            strokeWidth="1"
+      {/* 1. OUTER SCALLOPED 12-PETAL ROSETTE BORDER */}
+      <g id="pcm-seal-scallops">
+        {petals.map((petal) => (
+          <circle
+            key={petal.key}
+            cx={petal.px}
+            cy={petal.py}
+            r={rPetal}
+            fill="#FFFFFF"
+            stroke="#000000"
+            strokeWidth="26"
           />
-          {/* Right Page */}
+        ))}
+        {/* Inner fill to unify the rosette disc */}
+        <circle cx={cx} cy={cy} r="435" fill="#FFFFFF" />
+      </g>
+
+      {/* 2. OUTER BLACK CIRCULAR RING */}
+      <circle
+        cx={cx}
+        cy={cy}
+        r="438"
+        fill="none"
+        stroke="#000000"
+        strokeWidth="24"
+      />
+
+      {/* 3. INNER BLACK CIRCLE (CENTRAL DISC) */}
+      <circle
+        cx={cx}
+        cy={cy}
+        r="275"
+        fill="#000000"
+        stroke="#000000"
+        strokeWidth="20"
+      />
+
+      {/* 4. CIRCULAR TEXT IN WHITE ANNULAR BAND */}
+      <g id="pcm-seal-typography">
+        {/* Upper Arch: PHILIPPINE COLLEGE */}
+        <text
+          className="pcm-seal-font"
+          fontSize="64"
+          fill="#000000"
+          letterSpacing="4"
+        >
+          <textPath href="#pcmTopTextArc" startOffset="50%" textAnchor="middle">
+            PHILIPPINE COLLEGE
+          </textPath>
+        </text>
+
+        {/* Lower Arch: OF MINISTRY, INC */}
+        <text
+          className="pcm-seal-font"
+          fontSize="64"
+          fill="#000000"
+          letterSpacing="4"
+        >
+          <textPath href="#pcmBottomTextArc" startOffset="50%" textAnchor="middle">
+            OF MINISTRY, INC
+          </textPath>
+        </text>
+
+        {/* Left and Right Separator Dots */}
+        <circle cx="170" cy="542" r="18" fill="#000000" />
+        <circle cx="830" cy="542" r="18" fill="#000000" />
+      </g>
+
+      {/* 5. CENTRAL EMBLEM (OPEN BIBLE, 3D CROSS & MCMXCII) */}
+      <g id="pcm-seal-center">
+        {/* Roman Numerals: MCMXCII (1992) */}
+        <text
+          className="pcm-roman-font"
+          fontSize="35"
+          fill="#FFFFFF"
+          letterSpacing="3"
+        >
+          <textPath href="#pcmRomanArc" startOffset="50%" textAnchor="middle">
+            MCMXCII
+          </textPath>
+        </text>
+
+        {/* OPEN HOLY BIBLE */}
+        <g id="pcm-seal-bible">
+          {/* Left Page Block */}
           <path
-            d="M 76 58 Q 68 56 60 59 L 60 69 Q 68 66 76 68 Z"
-            fill={isMono ? 'none' : '#FFFFFF'}
-            stroke={isMono ? 'currentColor' : '#85AA9B'}
-            strokeWidth="1"
+            d="M 488 375 C 410 360 300 375 250 400 L 245 580 C 300 550 420 540 488 565 Z"
+            fill="#FFFFFF"
+            stroke="#000000"
+            strokeWidth="8"
+            strokeLinejoin="round"
+          />
+          {/* Right Page Block */}
+          <path
+            d="M 512 375 C 590 360 700 375 750 400 L 755 580 C 700 550 580 540 512 565 Z"
+            fill="#FFFFFF"
+            stroke="#000000"
+            strokeWidth="8"
+            strokeLinejoin="round"
           />
 
-          {/* Book spine line */}
-          <line x1="60" y1="59" x2="60" y2="70" stroke={isMono ? 'currentColor' : '#588B76'} strokeWidth="1.2" />
+          {/* Spine Seam Center */}
+          <path
+            d="M 488 375 L 500 380 L 512 375 L 512 565 L 500 572 L 488 565 Z"
+            fill="#FFFFFF"
+            stroke="#000000"
+            strokeWidth="4"
+          />
 
-          {/* Greek Scripture initials on pages: Alpha & Omega */}
-          <text
-            x="51"
-            y="65"
-            fill="#18392B"
-            fontSize="5"
-            fontWeight="bold"
-            fontFamily="serif"
-            textAnchor="middle"
-          >
-            Α
-          </text>
-          <text
-            x="69"
-            y="65"
-            fill="#18392B"
-            fontSize="5"
-            fontWeight="bold"
-            fontFamily="serif"
-            textAnchor="middle"
-          >
-            Ω
-          </text>
+          {/* Scripture lines Left Page (2 columns) */}
+          {[410, 423, 436, 449, 462, 475, 488, 501, 514, 527].map((y, idx) => (
+            <React.Fragment key={`left-lines-${idx}`}>
+              <line
+                x1="285"
+                y1={y - 8}
+                x2="370"
+                y2={y - 12}
+                stroke="#000000"
+                strokeWidth="3.2"
+                strokeLinecap="round"
+              />
+              <line
+                x1="390"
+                y1={y - 13}
+                x2="475"
+                y2={y - 8}
+                stroke="#000000"
+                strokeWidth="3.2"
+                strokeLinecap="round"
+              />
+            </React.Fragment>
+          ))}
+
+          {/* Scripture lines Right Page (2 columns) */}
+          {[410, 423, 436, 449, 462, 475, 488, 501, 514, 527].map((y, idx) => (
+            <React.Fragment key={`right-lines-${idx}`}>
+              <line
+                x1="525"
+                y1={y - 8}
+                x2="610"
+                y2={y - 13}
+                stroke="#000000"
+                strokeWidth="3.2"
+                strokeLinecap="round"
+              />
+              <line
+                x1="630"
+                y1={y - 12}
+                x2="715"
+                y2={y - 8}
+                stroke="#000000"
+                strokeWidth="3.2"
+                strokeLinecap="round"
+              />
+            </React.Fragment>
+          ))}
+
+          {/* Bible Bottom Thickness Edge */}
+          <path
+            d="M 245 580 C 270 595 380 575 488 600 L 488 565"
+            fill="#FFFFFF"
+            stroke="#000000"
+            strokeWidth="5"
+          />
+          <path
+            d="M 755 580 C 730 595 620 575 512 600 L 512 565"
+            fill="#FFFFFF"
+            stroke="#000000"
+            strokeWidth="5"
+          />
+
+          {/* Bookmark Tag on Left Page Bottom with Latin Cross */}
+          <rect
+            x="355"
+            y="560"
+            width="40"
+            height="42"
+            fill="#FFFFFF"
+            stroke="#000000"
+            strokeWidth="4"
+            rx="2"
+          />
+          <line
+            x1="375"
+            y1="566"
+            x2="375"
+            y2="594"
+            stroke="#000000"
+            strokeWidth="4"
+            strokeLinecap="square"
+          />
+          <line
+            x1="364"
+            y1="575"
+            x2="386"
+            y2="575"
+            stroke="#000000"
+            strokeWidth="4"
+            strokeLinecap="square"
+          />
+
+          {/* Curved Looping Arrow on Right Page */}
+          <path
+            d="M 575 515 C 610 520 625 490 615 460 C 605 440 580 445 570 470 C 563 490 570 515 595 518 L 585 528"
+            fill="none"
+            stroke="#000000"
+            strokeWidth="6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+          <path
+            d="M 595 518 L 582 505"
+            stroke="#000000"
+            strokeWidth="6"
+            strokeLinecap="round"
+          />
         </g>
 
-        {/* Sage Laurel Branches flanking shield bottom */}
-        <g stroke={isMono ? 'currentColor' : '#85AA9B'} strokeWidth="1.2" fill="none">
-          {/* Left Laurel */}
-          <path d="M 33 55 C 31 66, 38 78, 48 85" strokeLinecap="round" />
-          {/* Leaves Left */}
-          <ellipse cx="32" cy="60" rx="2" ry="1" transform="rotate(-30 32 60)" fill={isMono ? 'currentColor' : '#D0DED8'} />
-          <ellipse cx="34" cy="68" rx="2" ry="1" transform="rotate(-15 34 68)" fill={isMono ? 'currentColor' : '#D0DED8'} />
-          <ellipse cx="39" cy="76" rx="2" ry="1" transform="rotate(15 39 76)" fill={isMono ? 'currentColor' : '#D0DED8'} />
-          <ellipse cx="46" cy="83" rx="2" ry="1" transform="rotate(35 46 83)" fill={isMono ? 'currentColor' : '#D0DED8'} />
+        {/* 3D TILTED CHRISTIAN CROSS (Tilted ~14° to the right) */}
+        <g id="pcm-seal-cross" transform="translate(485, 470) rotate(14)">
+          {/* 3D Deep Shadow Silhouette (Extruded back & left) */}
+          <path
+            d="M -56 -212 L 42 -212 L 42 -102 L 122 -102 L 122 -10 L 42 -10 L 42 212 L -56 212 L -56 -10 L -138 -10 L -138 -102 L -56 -102 Z"
+            fill="#000000"
+          />
 
-          {/* Right Laurel */}
-          <path d="M 87 55 C 89 66, 82 78, 72 85" strokeLinecap="round" />
-          {/* Leaves Right */}
-          <ellipse cx="88" cy="60" rx="2" ry="1" transform="rotate(30 88 60)" fill={isMono ? 'currentColor' : '#D0DED8'} />
-          <ellipse cx="86" cy="68" rx="2" ry="1" transform="rotate(15 86 68)" fill={isMono ? 'currentColor' : '#D0DED8'} />
-          <ellipse cx="81" cy="76" rx="2" ry="1" transform="rotate(-15 81 76)" fill={isMono ? 'currentColor' : '#D0DED8'} />
-          <ellipse cx="74" cy="83" rx="2" ry="1" transform="rotate(-35 74 83)" fill={isMono ? 'currentColor' : '#D0DED8'} />
+          {/* Front Pure White Cross Face with Black Outline */}
+          <path
+            d="M -40 -200 L 40 -200 L 40 -90 L 120 -90 L 120 -30 L 40 -30 L 40 195 L -40 195 L -40 -30 L -120 -30 L -120 -90 L -40 -90 Z"
+            fill="#FFFFFF"
+            stroke="#000000"
+            strokeWidth="8"
+            strokeLinejoin="miter"
+          />
+
+          {/* Crisp dimensional inner accent */}
+          <path
+            d="M -36 -196 L 36 -196 L 36 -86 L 116 -86 L 116 -34 L 36 -34 L 36 191 L -36 191 L -36 -34 L -116 -34 L -116 -86 L -36 -86 Z"
+            fill="none"
+            stroke="#E2E8F0"
+            strokeWidth="2"
+            opacity="0.4"
+          />
         </g>
       </g>
     </svg>
   );
 };
+
