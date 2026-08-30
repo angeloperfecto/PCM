@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { usePCM } from '@/lib/store';
-import { FacultyMember } from '@/lib/types';
+import { FacultyMember, MediaItem } from '@/lib/types';
 import { FacultyPortrait } from '@/components/common/FacultyPortrait';
 import {
   Users,
@@ -15,6 +15,17 @@ import {
   Shield,
   Building,
   Image as ImageIcon,
+  Upload,
+  Camera,
+  FolderOpen,
+  X,
+  Check,
+  RotateCcw,
+  Sparkles,
+  Link as LinkIcon,
+  Eye,
+  CheckCircle2,
+  Info,
 } from 'lucide-react';
 
 export const AdminFacultyTab: React.FC = () => {
@@ -23,6 +34,8 @@ export const AdminFacultyTab: React.FC = () => {
     addFacultyMember,
     updateFacultyMember,
     deleteFacultyMember,
+    mediaLibrary,
+    addMediaItem,
     addToast,
     canPerformAction,
   } = usePCM();
@@ -44,6 +57,12 @@ export const AdminFacultyTab: React.FC = () => {
   const [formPhone, setFormPhone] = useState('');
   const [formImage, setFormImage] = useState('');
 
+  // Media picker & photo upload state
+  const [showMediaPicker, setShowMediaPicker] = useState(false);
+  const [mediaPickerSearch, setMediaPickerSearch] = useState('');
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   const openNewModal = () => {
     setEditingFaculty(null);
     setFormName('');
@@ -55,6 +74,7 @@ export const AdminFacultyTab: React.FC = () => {
     setFormEmail('');
     setFormPhone('');
     setFormImage('');
+    setShowMediaPicker(false);
     setIsModalOpen(true);
   };
 
@@ -69,7 +89,83 @@ export const AdminFacultyTab: React.FC = () => {
     setFormEmail(fac.email || '');
     setFormPhone(fac.phone || '');
     setFormImage(fac.image || fac.imageUrl || '');
+    setShowMediaPicker(false);
     setIsModalOpen(true);
+  };
+
+  // Photo upload handling
+  const handlePhotoFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      addToast({
+        title: 'Invalid File Type',
+        message: 'Please upload an image file (.jpg, .png, .webp, .svg).',
+        type: 'error',
+      });
+      return;
+    }
+
+    // Size warning if > 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      addToast({
+        title: 'File Too Large',
+        message: 'Image size should ideally be under 5MB for fast loading.',
+        type: 'warning',
+      });
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      if (typeof event.target?.result === 'string') {
+        const dataUrl = event.target.result;
+        setFormImage(dataUrl);
+
+        // Optionally register asset to media library for future re-use
+        const assetTitle = `${formName || 'Faculty'} Portrait`;
+        addMediaItem({
+          title: assetTitle,
+          url: dataUrl,
+          category: 'Faculty',
+          altText: `Portrait of ${formName || 'Faculty Member'}`,
+          fileSize: `${Math.round(file.size / 1024)} KB`,
+          dimensions: 'Portrait',
+        });
+
+        addToast({
+          title: 'Photo Uploaded',
+          message: 'Portrait image updated and saved to Media Library.',
+          type: 'success',
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handlePhotoFile(file);
+    }
+    // reset input value so user can re-upload same file if desired
+    e.target.value = '';
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDraggingOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      handlePhotoFile(file);
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -155,6 +251,17 @@ export const AdminFacultyTab: React.FC = () => {
     return matchesSearch && matchesGroup;
   });
 
+  // Filter media items for the in-modal media picker
+  const filteredMediaItems = mediaLibrary.filter((m) => {
+    if (!mediaPickerSearch.trim()) return true;
+    const q = mediaPickerSearch.toLowerCase();
+    return (
+      m.title.toLowerCase().includes(q) ||
+      m.category.toLowerCase().includes(q) ||
+      m.altText.toLowerCase().includes(q)
+    );
+  });
+
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
@@ -216,7 +323,7 @@ export const AdminFacultyTab: React.FC = () => {
           >
             <div className="flex items-start gap-3.5">
               {/* Portrait */}
-              <div className="w-14 h-18 rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-xs">
+              <div className="w-14 h-18 rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-xs bg-[#18392B]">
                 <FacultyPortrait
                   name={fac.name}
                   imageSrc={fac.image}
@@ -248,14 +355,14 @@ export const AdminFacultyTab: React.FC = () => {
               <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={() => openEditModal(fac)}
-                  className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer"
+                  className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition"
                   title="Edit Profile"
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
                 <button
                   onClick={() => handleDelete(fac.id, fac.name)}
-                  className="p-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer"
+                  className="p-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer transition"
                   title="Delete Profile"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -268,11 +375,26 @@ export const AdminFacultyTab: React.FC = () => {
 
       {/* Add/Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 max-h-[90vh] overflow-y-auto">
-            <h3 className="font-serif text-base font-bold text-[#18392B]">
-              {editingFaculty ? 'Edit Directory Profile' : 'Add New Faculty / Staff Member'}
-            </h3>
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto font-sans">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-[#18392B] flex items-center gap-2">
+                  <Users className="w-5 h-5 text-[#588B76]" />
+                  {editingFaculty ? 'Edit Directory Profile' : 'Add New Faculty / Staff Member'}
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Update directory listing credentials, biographical profile, and portrait photo.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 rounded-lg transition cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
             <form onSubmit={handleSave} className="space-y-4 text-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -285,7 +407,7 @@ export const AdminFacultyTab: React.FC = () => {
                     required
                     value={formName}
                     onChange={(e) => setFormName(e.target.value)}
-                    placeholder="e.g. Dr. Teodoro B. Balasong"
+                    placeholder="e.g. Atty. Joseph Michael Laruta"
                     className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                   />
                 </div>
@@ -299,7 +421,7 @@ export const AdminFacultyTab: React.FC = () => {
                     required
                     value={formRole}
                     onChange={(e) => setFormRole(e.target.value)}
-                    placeholder="e.g. President / Professor of Theology"
+                    placeholder="e.g. Board of Trustees / Professor"
                     className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                   />
                 </div>
@@ -331,7 +453,7 @@ export const AdminFacultyTab: React.FC = () => {
                     type="text"
                     value={formDept}
                     onChange={(e) => setFormDept(e.target.value)}
-                    placeholder="e.g. Biblical Studies & Hermeneutics"
+                    placeholder="e.g. Theology & Pastoral Studies"
                     className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                   />
                 </div>
@@ -345,25 +467,206 @@ export const AdminFacultyTab: React.FC = () => {
                   type="text"
                   value={formDegrees}
                   onChange={(e) => setFormDegrees(e.target.value)}
-                  placeholder="e.g. B.Th., M.Div., D.Min."
+                  placeholder="e.g. Bachelor of Arts in Classical Philosophy, Master of Arts"
                   className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                 />
               </div>
 
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Custom Portrait Image URL / Path (Optional)
-                </label>
-                <input
-                  type="text"
-                  value={formImage}
-                  onChange={(e) => setFormImage(e.target.value)}
-                  placeholder="e.g. /images/faculty/atty-laruta.svg or https://..."
-                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
-                />
-                <p className="text-[10px] text-slate-400 mt-1">
-                  Leave empty to automatically use the official stylistically-consistent PCM faculty portrait.
-                </p>
+              {/* ENHANCED PHOTO UPLOAD & MANAGEMENT SECTION */}
+              <div className="p-3.5 bg-slate-50 rounded-xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <label className="text-slate-800 font-bold flex items-center gap-1.5">
+                    <Camera className="w-4 h-4 text-[#588B76]" />
+                    <span>Faculty Portrait & Photo</span>
+                  </label>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowMediaPicker(!showMediaPicker)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer border ${
+                        showMediaPicker
+                          ? 'bg-[#18392B] text-white border-[#18392B]'
+                          : 'bg-white text-slate-700 hover:bg-slate-100 border-slate-300'
+                      }`}
+                    >
+                      <FolderOpen className="w-3.5 h-3.5" />
+                      <span>{showMediaPicker ? 'Hide Media Library' : 'Choose from Media Library'}</span>
+                    </button>
+
+                    {formImage && (
+                      <button
+                        type="button"
+                        onClick={() => setFormImage('')}
+                        title="Revert to official PCM stylized vector portrait"
+                        className="flex items-center gap-1 text-[11px] font-medium text-amber-700 hover:text-amber-900 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2 py-1 rounded-md transition cursor-pointer"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Use Default Portrait</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Photo Preview & Dropzone */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                  {/* Portrait Live Preview Box */}
+                  <div className="sm:col-span-4 flex flex-col items-center justify-center p-2.5 bg-white rounded-lg border border-slate-200 shadow-xs">
+                    <div className="w-20 h-24 rounded-lg overflow-hidden border-2 border-[#588B76]/30 shadow-xs bg-[#18392B] relative">
+                      <FacultyPortrait
+                        name={formName || 'Faculty Member'}
+                        imageSrc={formImage}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <span className="text-[10px] font-medium mt-1.5 text-center text-slate-500">
+                      {formImage ? (
+                        <span className="text-emerald-700 font-semibold flex items-center gap-1 justify-center">
+                          <CheckCircle2 className="w-3 h-3" />
+                          Custom Photo Set
+                        </span>
+                      ) : (
+                        <span className="text-slate-500 flex items-center gap-1 justify-center">
+                          <Sparkles className="w-3 h-3 text-[#588B76]" />
+                          PCM Stylized Portrait
+                        </span>
+                      )}
+                    </span>
+                  </div>
+
+                  {/* Dropzone & Upload Button */}
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={`sm:col-span-8 p-3 rounded-lg border-2 border-dashed transition flex flex-col items-center justify-center text-center space-y-1.5 bg-white ${
+                      isDraggingOver
+                        ? 'border-[#588B76] bg-emerald-50/50'
+                        : 'border-slate-300 hover:border-[#588B76]'
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileInputChange}
+                      accept="image/png,image/jpeg,image/jpg,image/webp,image/svg+xml"
+                      className="hidden"
+                    />
+
+                    <div className="w-8 h-8 rounded-full bg-[#588B76]/10 flex items-center justify-center text-[#588B76]">
+                      <Upload className="w-4 h-4" />
+                    </div>
+
+                    <div className="space-y-0.5">
+                      <p className="font-semibold text-slate-700 text-xs">
+                        Drag & drop a new photo here, or
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex items-center gap-1.5 bg-[#588B76] hover:bg-[#46705F] text-white px-3 py-1.5 rounded text-xs font-bold transition cursor-pointer shadow-xs"
+                      >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Browse / Upload Photo</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-slate-400">
+                      Supports JPG, PNG, WebP, SVG (Max 5MB)
+                    </p>
+                  </div>
+                </div>
+
+                {/* Direct URL / Path field */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-[11px] font-bold text-slate-600 flex items-center gap-1">
+                      <LinkIcon className="w-3 h-3 text-slate-400" />
+                      <span>Custom Portrait Image URL / Path (Optional)</span>
+                    </label>
+                    {formImage && (
+                      <button
+                        type="button"
+                        onClick={() => setFormImage('')}
+                        className="text-[10px] text-slate-400 hover:text-red-600 transition cursor-pointer"
+                      >
+                        Clear field
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="text"
+                    value={formImage}
+                    onChange={(e) => setFormImage(e.target.value)}
+                    placeholder="e.g. /images/faculty/atty-laruta.svg, data:image/..., or https://..."
+                    className="w-full p-2 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none bg-white"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Leave empty to automatically use the official stylistically-consistent PCM faculty portrait.
+                  </p>
+                </div>
+
+                {/* Media Library Picker Drawer */}
+                {showMediaPicker && (
+                  <div className="pt-3 border-t border-slate-200 space-y-2 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-700 text-xs flex items-center gap-1.5">
+                        <FolderOpen className="w-3.5 h-3.5 text-[#588B76]" />
+                        <span>Select Existing Photo from PCM Media Library</span>
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="Search media..."
+                        value={mediaPickerSearch}
+                        onChange={(e) => setMediaPickerSearch(e.target.value)}
+                        className="p-1 px-2.5 rounded border border-slate-200 text-[11px] focus:outline-none focus:border-[#588B76] w-40"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 gap-2 max-h-40 overflow-y-auto p-1 bg-white rounded-lg border border-slate-200">
+                      {filteredMediaItems.length > 0 ? (
+                        filteredMediaItems.map((item) => (
+                          <div
+                            key={item.id}
+                            onClick={() => {
+                              setFormImage(item.url);
+                              setShowMediaPicker(false);
+                              addToast({
+                                title: 'Photo Selected',
+                                message: `Selected "${item.title}" from media library.`,
+                                type: 'success',
+                              });
+                            }}
+                            className={`group relative rounded-lg border p-1 cursor-pointer transition hover:border-[#588B76] hover:shadow-xs flex flex-col items-center text-center ${
+                              formImage === item.url
+                                ? 'border-[#588B76] bg-emerald-50/40 ring-2 ring-[#588B76]/30'
+                                : 'border-slate-200 bg-slate-50'
+                            }`}
+                          >
+                            <div className="w-full h-12 rounded overflow-hidden relative bg-slate-200 mb-1">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img
+                                src={item.url}
+                                alt={item.altText || item.title}
+                                className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                              />
+                            </div>
+                            <span className="text-[10px] font-medium text-slate-700 truncate w-full line-clamp-1">
+                              {item.title}
+                            </span>
+                            <span className="text-[9px] text-slate-400 uppercase font-mono">
+                              {item.category}
+                            </span>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="col-span-full py-4 text-center text-slate-400 text-xs">
+                          No matching media assets found.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -375,7 +678,7 @@ export const AdminFacultyTab: React.FC = () => {
                     type="email"
                     value={formEmail}
                     onChange={(e) => setFormEmail(e.target.value)}
-                    placeholder="name@pcm.ph"
+                    placeholder="laruta.trustee@pcm.ph"
                     className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                   />
                 </div>
@@ -402,8 +705,8 @@ export const AdminFacultyTab: React.FC = () => {
                   rows={3}
                   value={formBio}
                   onChange={(e) => setFormBio(e.target.value)}
-                  placeholder="Summary of ministry experience, publications, and teaching subjects..."
-                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                  placeholder="Chairman, Board of Trustees. Practicing Lawyer in Zambales."
+                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none leading-relaxed"
                 />
               </div>
 
@@ -411,13 +714,13 @@ export const AdminFacultyTab: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium cursor-pointer"
+                  className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium cursor-pointer transition text-xs"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-[#588B76] hover:bg-[#46705F] text-white font-bold cursor-pointer shadow-sm"
+                  className="px-5 py-2 rounded-lg bg-[#588B76] hover:bg-[#46705F] text-white font-bold cursor-pointer shadow-sm transition text-xs"
                 >
                   Save Profile
                 </button>
