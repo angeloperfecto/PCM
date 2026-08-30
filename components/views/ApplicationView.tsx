@@ -72,7 +72,7 @@ export const ApplicationView: React.FC = () => {
   };
 
   // Submit Application
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.fullName || !formData.email || !formData.testimony) {
       addToast({
@@ -83,7 +83,7 @@ export const ApplicationView: React.FC = () => {
       return;
     }
 
-    const ref = submitApplication(formData);
+    const ref = await submitApplication(formData);
     setSubmittedRef(ref);
   };
 

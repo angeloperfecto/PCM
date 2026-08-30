@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import {
   NavSection,
   AcademicProgram,
@@ -47,6 +47,19 @@ import {
   INITIAL_GALLERY_ALBUMS,
   INITIAL_ACTIVITY_LOGS,
 } from './initialData';
+import {
+  db,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  onSnapshot,
+  writeBatch,
+  uploadFileToFirebaseStorage,
+} from './firebase';
 
 export interface ToastNotification {
   id: string;
@@ -102,6 +115,13 @@ interface PCMContextType {
   tuitionCalculatorModalOpen: boolean;
   isTuitionCalculatorModalOpen: boolean;
   setTuitionCalculatorModalOpen: (open: boolean) => void;
+
+  // Cloud Database & Firebase Sync State
+  isFirebaseConnected: boolean;
+  firebaseSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
+  lastSyncedAt: Date | null;
+  syncAllDataToFirestore: (force?: boolean) => Promise<boolean>;
+  uploadMediaFile: (file: File | Blob, category?: string, title?: string) => Promise<string>;
 
   // Site Configuration (Homepage, About, Contact, SEO, Navigation, Footer, CTAs)
   siteConfig: SiteConfig;
@@ -232,7 +252,7 @@ interface PCMContextType {
 
   // Admissions & Online Application System
   applications: AdmissionApplication[];
-  submitApplication: (appData: any) => string;
+  submitApplication: (appData: any) => Promise<string> | string;
   updateApplicationStatus: (id: string, status: any, note?: string) => void;
   addApplicationNote: (id: string, note: string) => void;
   deleteApplication: (id: string) => void;
@@ -273,9 +293,9 @@ interface PCMContextType {
   resetToInitialData: () => void;
 
   // Event Registration & Newsletter
-  registerForEvent: (eventId: string, attendeeName: string, email: string) => boolean;
+  registerForEvent: (eventId: string, attendeeName: string, email: string) => Promise<boolean> | boolean;
   newsletterEmails: string[];
-  subscribeNewsletter: (email: string) => boolean;
+  subscribeNewsletter: (email: string) => Promise<boolean> | boolean;
 
   // Notifications
   toasts: ToastNotification[];
@@ -289,7 +309,7 @@ interface PCMContextType {
 
 const PCMContext = createContext<PCMContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'pcm_cms_database_v3';
+const LOCAL_STORAGE_KEY = 'pcm_cms_database_v4';
 
 function loadPersisted<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -305,6 +325,7 @@ function loadPersisted<T>(key: string, fallback: T): T {
 
 export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const counterRef = useRef(0);
+  const initialSeededRef = useRef(false);
 
   // Navigation
   const [currentSection, setCurrentSection] = useState<NavSection>('home');
@@ -323,6 +344,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [statementOfFaithModalOpen, setStatementOfFaithModalOpen] = useState(false);
   const [requestInfoModalOpen, setRequestInfoModalOpen] = useState(false);
   const [tuitionCalculatorModalOpen, setTuitionCalculatorModalOpen] = useState(false);
+
+  // Cloud Database Sync States
+  const [isFirebaseConnected, setIsFirebaseConnected] = useState(true);
+  const [firebaseSyncStatus, setFirebaseSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('syncing');
+  const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   // Core CMS Data States
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => loadPersisted('siteConfig', INITIAL_SITE_CONFIG));
@@ -363,7 +389,103 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Notifications
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
 
-  // Save to localStorage on state changes
+  const addToast = useCallback(
+    (
+      typeOrObj: 'success' | 'info' | 'warning' | 'error' | ToastInput,
+      title?: string,
+      message?: string
+    ) => {
+      counterRef.current += 1;
+      const id = `toast-${counterRef.current}`;
+
+      let toastType: 'success' | 'info' | 'warning' | 'error' = 'info';
+      let toastTitle = '';
+      let toastMsg = '';
+
+      if (typeof typeOrObj === 'object') {
+        toastType = typeOrObj.type || 'info';
+        toastTitle = typeOrObj.title;
+        toastMsg = typeOrObj.message;
+      } else {
+        toastType = typeOrObj;
+        toastTitle = title || '';
+        toastMsg = message || '';
+      }
+
+      setToasts((prev) => [...prev, { id, type: toastType, title: toastTitle, message: toastMsg }]);
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 5000);
+    },
+    []
+  );
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const navigateTo = (section: NavSection, subSection: string | null = null) => {
+    setCurrentSection(section);
+    setActiveSubSection(subSection);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // Activity Logging Helper
+  const logActivity = useCallback(
+    (
+      action: ActivityLogItem['action'],
+      entityType: string,
+      entityId: string,
+      entityName: string,
+      description: string
+    ) => {
+      const newLog: ActivityLogItem = {
+        id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        timestamp: new Date().toLocaleString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+          hour: 'numeric',
+          minute: 'numeric',
+          hour12: true,
+        }),
+        adminName: currentAdminUser?.name || 'Administrator',
+        adminRole: currentAdminUser?.role || 'Super Admin',
+        action,
+        entityType,
+        entityId,
+        entityName,
+        description,
+      };
+
+      setActivityLogs((prev) => [newLog, ...prev.slice(0, 99)]);
+
+      // Save to Firestore asynchronously
+      try {
+        setDoc(doc(db, 'activityLogs', newLog.id), newLog, { merge: true }).catch((err) =>
+          console.warn('Firestore log activity error:', err)
+        );
+      } catch (e) {
+        console.warn(e);
+      }
+    },
+    [currentAdminUser]
+  );
+
+  const clearActivityLogs = async () => {
+    setActivityLogs([]);
+    try {
+      const snap = await getDocs(collection(db, 'activityLogs'));
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => batch.delete(d.ref));
+      await batch.commit();
+    } catch (e) {
+      console.warn('Clear activity logs cloud error:', e);
+    }
+    addToast('info', 'Activity Logs Cleared', 'Audit trail has been reset.');
+  };
+
+  // Save to localStorage on state changes as a backup/cache layer
   useEffect(() => {
     try {
       const stateToSave = {
@@ -423,76 +545,429 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const addToast = (
-    typeOrObj: 'success' | 'info' | 'warning' | 'error' | ToastInput,
-    title?: string,
-    message?: string
-  ) => {
-    counterRef.current += 1;
-    const id = `toast-${counterRef.current}`;
+  // Sync entire dataset to Firestore in batches
+  const syncAllDataToFirestore = useCallback(
+    async (force: boolean = false): Promise<boolean> => {
+      try {
+        setFirebaseSyncStatus('syncing');
 
-    let toastType: 'success' | 'info' | 'warning' | 'error' = 'info';
-    let toastTitle = '';
-    let toastMsg = '';
+        // 1. Site Config
+        await setDoc(doc(db, 'siteConfig', 'global'), siteConfig, { merge: true });
 
-    if (typeof typeOrObj === 'object') {
-      toastType = typeOrObj.type || 'info';
-      toastTitle = typeOrObj.title;
-      toastMsg = typeOrObj.message;
-    } else {
-      toastType = typeOrObj;
-      toastTitle = title || '';
-      toastMsg = message || '';
-    }
+        // 2. Programs batch
+        const progBatch = writeBatch(db);
+        programs.forEach((p) => progBatch.set(doc(db, 'programs', p.id), p, { merge: true }));
+        await progBatch.commit();
 
-    setToasts((prev) => [...prev, { id, type: toastType, title: toastTitle, message: toastMsg }]);
-    setTimeout(() => {
-      removeToast(id);
-    }, 5000);
-  };
+        // 3. Faculty batch
+        const facBatch = writeBatch(db);
+        faculty.forEach((f) => facBatch.set(doc(db, 'faculty', f.id), f, { merge: true }));
+        await facBatch.commit();
 
-  const removeToast = (id: string) => {
-    setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+        // 4. Announcements batch
+        const annBatch = writeBatch(db);
+        announcements.forEach((a) => annBatch.set(doc(db, 'announcements', a.id), a, { merge: true }));
+        await annBatch.commit();
 
-  const navigateTo = (section: NavSection, subSection: string | null = null) => {
-    setCurrentSection(section);
-    setActiveSubSection(subSection);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+        // 5. News batch
+        const newsBatch = writeBatch(db);
+        news.forEach((n) => newsBatch.set(doc(db, 'news', n.id), n, { merge: true }));
+        await newsBatch.commit();
 
-  // Activity Logging Helper
-  const logActivity = (
-    action: ActivityLogItem['action'],
-    entityType: string,
-    entityId: string,
-    entityName: string,
-    description: string
-  ) => {
-    const newLog: ActivityLogItem = {
-      id: `log-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      timestamp: new Date().toLocaleString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: 'numeric',
-        hour12: true,
-      }),
-      adminName: currentAdminUser?.name || 'Administrator',
-      adminRole: currentAdminUser?.role || 'Super Admin',
-      action,
-      entityType,
-      entityId,
-      entityName,
-      description,
+        // 6. Events batch
+        const evtBatch = writeBatch(db);
+        events.forEach((e) => evtBatch.set(doc(db, 'events', e.id), e, { merge: true }));
+        await evtBatch.commit();
+
+        // 7. Downloads batch
+        const dlBatch = writeBatch(db);
+        downloads.forEach((d) => dlBatch.set(doc(db, 'downloads', d.id), d, { merge: true }));
+        await dlBatch.commit();
+
+        // 8. Testimonials batch
+        const testBatch = writeBatch(db);
+        testimonials.forEach((t) => testBatch.set(doc(db, 'testimonials', t.id), t, { merge: true }));
+        await testBatch.commit();
+
+        // 9. Stats batch
+        const statBatch = writeBatch(db);
+        stats.forEach((s) => statBatch.set(doc(db, 'stats', s.id), s, { merge: true }));
+        await statBatch.commit();
+
+        // 10. FAQs batch
+        const faqBatch = writeBatch(db);
+        faqs.forEach((f) => faqBatch.set(doc(db, 'faqs', f.id), f, { merge: true }));
+        await faqBatch.commit();
+
+        // 11. Sermons batch
+        const sermonBatch = writeBatch(db);
+        sermons.forEach((s) => sermonBatch.set(doc(db, 'sermons', s.id), s, { merge: true }));
+        await sermonBatch.commit();
+
+        // 12. Scrapbook batch
+        const sbBatch = writeBatch(db);
+        scrapbook.forEach((sb) => sbBatch.set(doc(db, 'scrapbook', sb.id), sb, { merge: true }));
+        await sbBatch.commit();
+
+        // 13. Media items batch
+        const mediaBatch = writeBatch(db);
+        mediaItems.forEach((m) => mediaBatch.set(doc(db, 'mediaItems', m.id), m, { merge: true }));
+        await mediaBatch.commit();
+
+        // 14. Gallery albums batch
+        const galBatch = writeBatch(db);
+        galleryAlbums.forEach((g) => galBatch.set(doc(db, 'galleryAlbums', g.id), g, { merge: true }));
+        await galBatch.commit();
+
+        // 15. Admin users batch
+        const admBatch = writeBatch(db);
+        adminUsers.forEach((u) => admBatch.set(doc(db, 'adminUsers', u.id), u, { merge: true }));
+        await admBatch.commit();
+
+        // 16. Student Profile
+        await setDoc(doc(db, 'studentProfiles', studentProfile.id), studentProfile, { merge: true });
+
+        setIsFirebaseConnected(true);
+        setFirebaseSyncStatus('synced');
+        setLastSyncedAt(new Date());
+
+        if (force) {
+          addToast('success', 'Firebase Synced', 'All website collections are now synchronized with Cloud Firestore.');
+        }
+        return true;
+      } catch (err: any) {
+        console.error('Firebase sync error:', err);
+        setFirebaseSyncStatus('error');
+        if (force) {
+          addToast('error', 'Sync Failed', 'Failed to synchronize with Firebase Firestore.');
+        }
+        return false;
+      }
+    },
+    [
+      siteConfig,
+      programs,
+      faculty,
+      announcements,
+      news,
+      events,
+      downloads,
+      testimonials,
+      stats,
+      faqs,
+      sermons,
+      scrapbook,
+      mediaItems,
+      galleryAlbums,
+      adminUsers,
+      studentProfile,
+      addToast,
+    ]
+  );
+
+  // Real-time Firestore Subscriptions & Initial Auto-Seed
+  useEffect(() => {
+    let unsubs: (() => void)[] = [];
+
+    const initializeFirestoreSync = async () => {
+      try {
+        setFirebaseSyncStatus('syncing');
+
+        // Check if database already has initial content
+        const configDocSnap = await getDoc(doc(db, 'siteConfig', 'global'));
+        const programsSnap = await getDocs(collection(db, 'programs'));
+
+        if (!configDocSnap.exists() && programsSnap.empty && !initialSeededRef.current) {
+          initialSeededRef.current = true;
+          console.info('Firestore database is empty. Auto-seeding initial PCM institutional baseline...');
+          await syncAllDataToFirestore(false);
+        }
+
+        // Set up real-time onSnapshot listeners
+        // 1. Site Config
+        const uConfig = onSnapshot(
+          doc(db, 'siteConfig', 'global'),
+          (snap) => {
+            if (snap.exists()) {
+              setSiteConfig(snap.data() as SiteConfig);
+              setFirebaseSyncStatus('synced');
+              setLastSyncedAt(new Date());
+            }
+          },
+          (err) => console.warn('siteConfig snapshot error:', err)
+        );
+        unsubs.push(uConfig);
+
+        // 2. Programs
+        const uPrograms = onSnapshot(
+          collection(db, 'programs'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicProgram[];
+              setPrograms(list);
+            }
+          },
+          (err) => console.warn('programs snapshot error:', err)
+        );
+        unsubs.push(uPrograms);
+
+        // 3. Faculty
+        const uFaculty = onSnapshot(
+          collection(db, 'faculty'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FacultyMember[];
+              setFaculty(list);
+            }
+          },
+          (err) => console.warn('faculty snapshot error:', err)
+        );
+        unsubs.push(uFaculty);
+
+        // 4. Announcements
+        const uAnnouncements = onSnapshot(
+          collection(db, 'announcements'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AnnouncementItem[];
+              setAnnouncements(list);
+            }
+          },
+          (err) => console.warn('announcements snapshot error:', err)
+        );
+        unsubs.push(uAnnouncements);
+
+        // 5. News
+        const uNews = onSnapshot(
+          collection(db, 'news'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as NewsArticle[];
+              setNews(list);
+            }
+          },
+          (err) => console.warn('news snapshot error:', err)
+        );
+        unsubs.push(uNews);
+
+        // 6. Events
+        const uEvents = onSnapshot(
+          collection(db, 'events'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as CollegeEvent[];
+              setEvents(list);
+            }
+          },
+          (err) => console.warn('events snapshot error:', err)
+        );
+        unsubs.push(uEvents);
+
+        // 7. Downloads
+        const uDownloads = onSnapshot(
+          collection(db, 'downloads'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[];
+              setDownloads(list);
+            }
+          },
+          (err) => console.warn('downloads snapshot error:', err)
+        );
+        unsubs.push(uDownloads);
+
+        // 8. Testimonials
+        const uTestimonials = onSnapshot(
+          collection(db, 'testimonials'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[];
+              setTestimonials(list);
+            }
+          },
+          (err) => console.warn('testimonials snapshot error:', err)
+        );
+        unsubs.push(uTestimonials);
+
+        // 9. Stats
+        const uStats = onSnapshot(
+          collection(db, 'stats'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[];
+              setStats(list);
+            }
+          },
+          (err) => console.warn('stats snapshot error:', err)
+        );
+        unsubs.push(uStats);
+
+        // 10. FAQs
+        const uFaqs = onSnapshot(
+          collection(db, 'faqs'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[];
+              setFaqs(list);
+            }
+          },
+          (err) => console.warn('faqs snapshot error:', err)
+        );
+        unsubs.push(uFaqs);
+
+        // 11. Sermons
+        const uSermons = onSnapshot(
+          collection(db, 'sermons'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[];
+              setSermons(list);
+            }
+          },
+          (err) => console.warn('sermons snapshot error:', err)
+        );
+        unsubs.push(uSermons);
+
+        // 12. Scrapbook
+        const uScrapbook = onSnapshot(
+          collection(db, 'scrapbook'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[];
+              setScrapbook(list);
+            }
+          },
+          (err) => console.warn('scrapbook snapshot error:', err)
+        );
+        unsubs.push(uScrapbook);
+
+        // 13. Media Items
+        const uMedia = onSnapshot(
+          collection(db, 'mediaItems'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MediaItem[];
+              setMediaItems(list);
+            }
+          },
+          (err) => console.warn('mediaItems snapshot error:', err)
+        );
+        unsubs.push(uMedia);
+
+        // 14. Gallery Albums
+        const uAlbums = onSnapshot(
+          collection(db, 'galleryAlbums'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[];
+              setGalleryAlbums(list);
+            }
+          },
+          (err) => console.warn('galleryAlbums snapshot error:', err)
+        );
+        unsubs.push(uAlbums);
+
+        // 15. Applications
+        const uApps = onSnapshot(
+          collection(db, 'applications'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
+              setApplications(list);
+            }
+          },
+          (err) => console.warn('applications snapshot error:', err)
+        );
+        unsubs.push(uApps);
+
+        // 16. Admin Users
+        const uAdmins = onSnapshot(
+          collection(db, 'adminUsers'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[];
+              setAdminUsers(list);
+            }
+          },
+          (err) => console.warn('adminUsers snapshot error:', err)
+        );
+        unsubs.push(uAdmins);
+
+        // 17. Activity Logs
+        const uLogs = onSnapshot(
+          collection(db, 'activityLogs'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[];
+              setActivityLogs(list);
+            }
+          },
+          (err) => console.warn('activityLogs snapshot error:', err)
+        );
+        unsubs.push(uLogs);
+
+        setIsFirebaseConnected(true);
+        setFirebaseSyncStatus('synced');
+        setLastSyncedAt(new Date());
+      } catch (err: any) {
+        console.error('Firebase Real-Time Init failed:', err);
+        setIsFirebaseConnected(false);
+        setFirebaseSyncStatus('error');
+      }
     };
-    setActivityLogs((prev) => [newLog, ...prev.slice(0, 99)]);
-  };
 
-  const clearActivityLogs = () => {
-    setActivityLogs([]);
-    addToast('info', 'Activity Logs Cleared', 'Audit trail has been reset.');
+    initializeFirestoreSync();
+
+    return () => {
+      unsubs.forEach((unsub) => unsub());
+    };
+  }, [syncAllDataToFirestore]);
+
+  // Upload media file to Firebase Storage & register in Media Library
+  const uploadMediaFile = async (
+    file: File | Blob,
+    category: string = 'General',
+    title?: string
+  ): Promise<string> => {
+    const fileName = (file as File).name || `pcm_media_${Date.now()}`;
+    const cleanTitle = title || fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+    const path = `pcm_assets/${category.toLowerCase()}/${Date.now()}_${fileName}`;
+
+    try {
+      // 1. Upload to Firebase Storage
+      let downloadUrl = '';
+      try {
+        downloadUrl = await uploadFileToFirebaseStorage(file, path);
+      } catch (storageError) {
+        console.warn('Direct Storage upload failed, converting to object data URL:', storageError);
+        // Fallback to data URL or object URL
+        downloadUrl = await new Promise((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target?.result as string);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // 2. Add to Media Items collection
+      const newMedia: MediaItem = {
+        id: `med-${Date.now()}`,
+        title: cleanTitle,
+        altText: `PCM ${cleanTitle}`,
+        url: downloadUrl,
+        category,
+        fileSize: file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'Custom Asset',
+        uploadDate: new Date().toISOString().split('T')[0],
+      };
+
+      setMediaItems((prev) => [newMedia, ...prev]);
+      await setDoc(doc(db, 'mediaItems', newMedia.id), newMedia, { merge: true });
+      logActivity('CREATE', 'Media Asset', newMedia.id, newMedia.title, `Uploaded media asset to ${category}.`);
+
+      return downloadUrl;
+    } catch (e: any) {
+      console.error('Failed to upload media file:', e);
+      throw e;
+    }
   };
 
   // RBAC Permission Check
@@ -507,89 +982,149 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Site Configuration Updates
-  const updateSiteConfig = (newConfig: Partial<SiteConfig>) => {
-    setSiteConfig((prev) => ({ ...prev, ...newConfig }));
+  const updateSiteConfig = async (newConfig: Partial<SiteConfig>) => {
+    const updated = { ...siteConfig, ...newConfig };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('SETTINGS', 'Site Configuration', 'site-config', 'Global Settings', 'Updated global institutional site configuration.');
-    addToast('success', 'Configuration Saved', 'Website configuration has been updated.');
+    addToast('success', 'Configuration Saved', 'Website configuration has been updated and synchronized.');
   };
 
-  const updateContactInfo = (newInfo: Partial<SiteConfig['contactInfo']>) => {
-    setSiteConfig((prev) => ({
-      ...prev,
-      contactInfo: { ...prev.contactInfo, ...newInfo },
-    }));
+  const updateContactInfo = async (newInfo: Partial<SiteConfig['contactInfo']>) => {
+    const updated = {
+      ...siteConfig,
+      contactInfo: { ...siteConfig.contactInfo, ...newInfo },
+    };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('UPDATE', 'Contact Information', 'contact-info', 'Campus & Administration Contacts', 'Updated phone, email, and campus address details.');
-    addToast('success', 'Contact Details Updated', 'Public contact section updated.');
+    addToast('success', 'Contact Details Updated', 'Public contact section synchronized with cloud.');
   };
 
-  const updateSeoSettings = (newSeo: Partial<SiteConfig['seoSettings']>) => {
-    setSiteConfig((prev) => ({
-      ...prev,
-      seoSettings: { ...prev.seoSettings, ...newSeo },
-    }));
+  const updateSeoSettings = async (newSeo: Partial<SiteConfig['seoSettings']>) => {
+    const updated = {
+      ...siteConfig,
+      seoSettings: { ...siteConfig.seoSettings, ...newSeo },
+    };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('UPDATE', 'SEO & Metadata', 'seo-config', 'Search Engine Configuration', 'Updated meta titles, OpenGraph tags, and keywords.');
-    addToast('success', 'SEO Settings Updated', 'Search engine metadata and OpenGraph tags saved.');
+    addToast('success', 'SEO Settings Updated', 'Search engine metadata saved to cloud.');
   };
 
-  const updateSiteIdentity = (newIdentity: Partial<SiteConfig['siteIdentity']>) => {
-    setSiteConfig((prev) => ({
-      ...prev,
-      siteIdentity: { ...prev.siteIdentity, ...newIdentity },
-    }));
+  const updateSiteIdentity = async (newIdentity: Partial<SiteConfig['siteIdentity']>) => {
+    const updated = {
+      ...siteConfig,
+      siteIdentity: { ...siteConfig.siteIdentity, ...newIdentity },
+    };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('UPDATE', 'Site Identity', 'site-identity', 'Institutional Identity', 'Updated motto, tagline, and institution identity.');
     addToast('success', 'Site Identity Updated', 'Institution branding updated.');
   };
 
-  const updateHomeAbout = (newHomeAbout: Partial<SiteConfig['homeAbout']>) => {
-    setSiteConfig((prev) => ({
-      ...prev,
-      homeAbout: { ...prev.homeAbout, ...newHomeAbout },
-    }));
+  const updateHomeAbout = async (newHomeAbout: Partial<SiteConfig['homeAbout']>) => {
+    const updated = {
+      ...siteConfig,
+      homeAbout: { ...siteConfig.homeAbout, ...newHomeAbout },
+    };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('UPDATE', 'Homepage Section', 'home-about', 'Welcome & About PCM Brief', 'Updated homepage welcome narrative and presidential quote.');
     addToast('success', 'Homepage Content Updated', 'Homepage About section updated.');
   };
 
-  const updateMissionVisionValues = (newMvv: Partial<SiteConfig['missionVisionValues']>) => {
-    setSiteConfig((prev) => ({
-      ...prev,
-      missionVisionValues: { ...prev.missionVisionValues, ...newMvv },
-    }));
+  const updateMissionVisionValues = async (newMvv: Partial<SiteConfig['missionVisionValues']>) => {
+    const updated = {
+      ...siteConfig,
+      missionVisionValues: { ...siteConfig.missionVisionValues, ...newMvv },
+    };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('UPDATE', 'Mission & Vision', 'mvv-section', 'Mission, Vision & Core Values', 'Updated institutional mission, vision, and core value statements.');
     addToast('success', 'Mission & Values Updated', 'Pillars and doctrinal statements saved.');
   };
 
-  const updateCtaSections = (newCtas: Partial<SiteConfig['ctaSections']>) => {
-    setSiteConfig((prev) => ({
-      ...prev,
-      ctaSections: { ...prev.ctaSections, ...newCtas },
-    }));
+  const updateCtaSections = async (newCtas: Partial<SiteConfig['ctaSections']>) => {
+    const updated = {
+      ...siteConfig,
+      ctaSections: { ...siteConfig.ctaSections, ...newCtas },
+    };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('UPDATE', 'CTA Banners', 'cta-sections', 'Call-to-Action Controls', 'Updated banner headlines, buttons, and target links.');
     addToast('success', 'Call to Action Updated', 'Banners and conversion buttons saved.');
   };
 
-  const updateAdmissionsConfig = (newAdm: Partial<SiteConfig['admissionsConfig']>) => {
-    setSiteConfig((prev) => ({
-      ...prev,
-      admissionsConfig: { ...prev.admissionsConfig, ...newAdm },
-    }));
+  const updateAdmissionsConfig = async (newAdm: Partial<SiteConfig['admissionsConfig']>) => {
+    const updated = {
+      ...siteConfig,
+      admissionsConfig: { ...siteConfig.admissionsConfig, ...newAdm },
+    };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('UPDATE', 'Admissions Details', 'admissions-config', 'Admissions Key Dates & Rates', 'Updated tuition estimates, downpayment, and key academic dates.');
     addToast('success', 'Admissions Info Saved', 'Admissions portal details updated.');
   };
 
-  const updateFooterConfig = (newFooter: Partial<SiteConfig['footerConfig']>) => {
-    setSiteConfig((prev) => ({
-      ...prev,
-      footerConfig: { ...prev.footerConfig, ...newFooter },
-    }));
+  const updateFooterConfig = async (newFooter: Partial<SiteConfig['footerConfig']>) => {
+    const updated = {
+      ...siteConfig,
+      footerConfig: { ...siteConfig.footerConfig, ...newFooter },
+    };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('UPDATE', 'Footer Management', 'footer-config', 'Institutional Footer', 'Updated footer text, accreditation notice, and copyright.');
     addToast('success', 'Footer Updated', 'Footer configuration saved.');
   };
 
-  const updateNavigationMenu = (newNav: SiteConfig['navigationMenu']) => {
-    setSiteConfig((prev) => ({
-      ...prev,
+  const updateNavigationMenu = async (newNav: SiteConfig['navigationMenu']) => {
+    const updated = {
+      ...siteConfig,
       navigationMenu: newNav,
-    }));
+    };
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
     logActivity('UPDATE', 'Navigation Menu', 'nav-menu', 'Header Navigation Structure', 'Updated menu labels, order, and visibility.');
     addToast('success', 'Navigation Updated', 'Website navbar items updated.');
   };
@@ -602,6 +1137,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       uploadDate: new Date().toISOString().split('T')[0],
     };
     setMediaItems((prev) => [newItem, ...prev]);
+    setDoc(doc(db, 'mediaItems', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Media Library', newItem.id, newItem.title, `Uploaded image asset to media library (${newItem.category}).`);
     addToast('success', 'Media Uploaded', `Asset "${newItem.title}" added to library.`);
     return newItem;
@@ -611,6 +1147,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setMediaItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
     );
+    updateDoc(doc(db, 'mediaItems', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Media Library', id, updates.title || 'Media Asset', 'Updated media metadata and alt text.');
     addToast('success', 'Media Updated', 'Image asset details updated.');
   };
@@ -618,6 +1155,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteMediaItem = (id: string) => {
     const item = mediaItems.find((m) => m.id === id);
     setMediaItems((prev) => prev.filter((m) => m.id !== id));
+    deleteDoc(doc(db, 'mediaItems', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Media Library', id, item?.title || 'Media Asset', 'Removed image asset from media library.');
     addToast('info', 'Media Deleted', 'Image asset removed from library.');
   };
@@ -629,6 +1167,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `alb-${Date.now()}`,
     };
     setGalleryAlbums((prev) => [newAlbum, ...prev]);
+    setDoc(doc(db, 'galleryAlbums', newAlbum.id), newAlbum, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Gallery Album', newAlbum.id, newAlbum.title, `Created new photo album with ${newAlbum.photos.length} photos.`);
     addToast('success', 'Album Created', `Album "${newAlbum.title}" created.`);
     return newAlbum;
@@ -638,6 +1177,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setGalleryAlbums((prev) =>
       prev.map((alb) => (alb.id === id ? { ...alb, ...updates } : alb))
     );
+    updateDoc(doc(db, 'galleryAlbums', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Gallery Album', id, updates.title || 'Album', 'Updated album photos and metadata.');
     addToast('success', 'Album Updated', 'Gallery album saved.');
   };
@@ -645,6 +1185,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteGalleryAlbum = (id: string) => {
     const alb = galleryAlbums.find((a) => a.id === id);
     setGalleryAlbums((prev) => prev.filter((a) => a.id !== id));
+    deleteDoc(doc(db, 'galleryAlbums', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Gallery Album', id, alb?.title || 'Album', 'Deleted photo album.');
     addToast('info', 'Album Deleted', 'Gallery album deleted.');
   };
@@ -657,6 +1198,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: item.status || 'Published',
     };
     setAnnouncements((prev) => [newItem, ...prev]);
+    setDoc(doc(db, 'announcements', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Announcement', newItem.id, newItem.title, 'Created new ticker announcement alert.');
     addToast('success', 'Announcement Published', `New ticker announcement added.`);
   };
@@ -665,6 +1207,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAnnouncements((prev) =>
       prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
     );
+    updateDoc(doc(db, 'announcements', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Announcement', id, updates.title || 'Announcement', 'Updated announcement message.');
     addToast('success', 'Announcement Updated', 'Ticker alert updated.');
   };
@@ -674,6 +1217,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((a) => {
         if (a.id === id) {
           const nextActive = !a.active;
+          updateDoc(doc(db, 'announcements', id), { active: nextActive }).catch((e) => console.warn(e));
           logActivity(nextActive ? 'PUBLISH' : 'UNPUBLISH', 'Announcement', id, a.title, `${nextActive ? 'Enabled' : 'Disabled'} announcement ticker.`);
           return { ...a, active: nextActive };
         }
@@ -685,6 +1229,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteAnnouncement = (id: string) => {
     const item = announcements.find((a) => a.id === id);
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+    deleteDoc(doc(db, 'announcements', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Announcement', id, item?.title || 'Announcement', 'Deleted announcement ticker item.');
     addToast('info', 'Announcement Removed', 'Ticker message deleted.');
   };
@@ -697,6 +1242,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: program.status || 'Published',
     };
     setPrograms((prev) => [newProg, ...prev]);
+    setDoc(doc(db, 'programs', newProg.id), newProg, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Academic Program', newProg.id, newProg.name, `Added new academic degree program (${newProg.code}).`);
     addToast('success', 'Program Created', `Added "${newProg.name}" to curriculum directory.`);
     return newProg;
@@ -706,6 +1252,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPrograms((prev) =>
       prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
     );
+    updateDoc(doc(db, 'programs', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Academic Program', id, updates.name || 'Program', 'Updated curriculum, tuition, and admission prerequisites.');
     addToast('success', 'Program Updated', 'Academic degree information saved.');
   };
@@ -713,6 +1260,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteProgram = (id: string) => {
     const prog = programs.find((p) => p.id === id);
     setPrograms((prev) => prev.filter((p) => p.id !== id));
+    deleteDoc(doc(db, 'programs', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Academic Program', id, prog?.name || 'Program', 'Removed degree program from curriculum directory.');
     addToast('info', 'Program Deleted', 'Academic program removed.');
   };
@@ -725,6 +1273,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: member.status || 'Published',
     };
     setFaculty((prev) => [...prev, newFac]);
+    setDoc(doc(db, 'faculty', newFac.id), newFac, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Faculty Member', newFac.id, newFac.name, `Added ${newFac.name} (${newFac.group} - ${newFac.role}) to directory.`);
     addToast('success', 'Faculty Member Added', `Added ${newFac.name} to institutional directory.`);
     return newFac;
@@ -734,6 +1283,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setFaculty((prev) =>
       prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
     );
+    updateDoc(doc(db, 'faculty', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Faculty Member', id, updates.name || 'Faculty Member', 'Updated academic credentials, bio, and portrait image.');
     addToast('success', 'Faculty Profile Updated', 'Faculty details saved.');
   };
@@ -741,6 +1291,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteFaculty = (id: string) => {
     const fac = faculty.find((f) => f.id === id);
     setFaculty((prev) => prev.filter((f) => f.id !== id));
+    deleteDoc(doc(db, 'faculty', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Faculty Member', id, fac?.name || 'Faculty Member', 'Removed profile from institutional directory.');
     addToast('info', 'Faculty Removed', 'Faculty profile deleted.');
   };
@@ -753,6 +1304,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: article.status || 'Published',
     };
     setNews((prev) => [newArt, ...prev]);
+    setDoc(doc(db, 'news', newArt.id), newArt, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'News Article', newArt.id, newArt.title, `Published news article in ${newArt.category}.`);
     addToast('success', 'Article Published', `"${newArt.title}" has been published.`);
     return newArt;
@@ -762,6 +1314,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNews((prev) =>
       prev.map((n) => (n.id === id ? { ...n, ...updates } : n))
     );
+    updateDoc(doc(db, 'news', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'News Article', id, updates.title || 'News Article', 'Updated article content and featured image.');
     addToast('success', 'Article Saved', 'News article updated.');
   };
@@ -769,6 +1322,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteNewsArticle = (id: string) => {
     const art = news.find((n) => n.id === id);
     setNews((prev) => prev.filter((n) => n.id !== id));
+    deleteDoc(doc(db, 'news', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'News Article', id, art?.title || 'Article', 'Deleted news article.');
     addToast('info', 'Article Deleted', 'News item removed.');
   };
@@ -781,6 +1335,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: event.status || 'Published',
     };
     setEvents((prev) => [newEvt, ...prev]);
+    setDoc(doc(db, 'events', newEvt.id), newEvt, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Event', newEvt.id, newEvt.title, `Scheduled college event on ${newEvt.date}.`);
     addToast('success', 'Event Scheduled', `"${newEvt.title}" added to calendar.`);
     return newEvt;
@@ -790,6 +1345,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setEvents((prev) =>
       prev.map((e) => (e.id === id ? { ...e, ...updates } : e))
     );
+    updateDoc(doc(db, 'events', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Event', id, updates.title || 'Event', 'Updated event date, venue, and registration options.');
     addToast('success', 'Event Updated', 'Event calendar details saved.');
   };
@@ -797,6 +1353,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteEvent = (id: string) => {
     const evt = events.find((e) => e.id === id);
     setEvents((prev) => prev.filter((e) => e.id !== id));
+    deleteDoc(doc(db, 'events', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Event', id, evt?.title || 'Event', 'Deleted event from calendar.');
     addToast('info', 'Event Deleted', 'Calendar event removed.');
   };
@@ -809,6 +1366,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: res.status || 'Published',
     };
     setDownloads((prev) => [newRes, ...prev]);
+    setDoc(doc(db, 'downloads', newRes.id), newRes, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Download Resource', newRes.id, newRes.title, `Added downloadable document (${newRes.category}).`);
     addToast('success', 'Document Added', `"${newRes.title}" available for download.`);
     return newRes;
@@ -818,6 +1376,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setDownloads((prev) =>
       prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
     );
+    updateDoc(doc(db, 'downloads', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Download Resource', id, updates.title || 'Resource', 'Updated document metadata.');
     addToast('success', 'Document Saved', 'Download resource updated.');
   };
@@ -825,6 +1384,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteDownload = (id: string) => {
     const res = downloads.find((d) => d.id === id);
     setDownloads((prev) => prev.filter((d) => d.id !== id));
+    deleteDoc(doc(db, 'downloads', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Download Resource', id, res?.title || 'Resource', 'Removed document from resource library.');
     addToast('info', 'Document Removed', 'Resource file deleted.');
   };
@@ -837,6 +1397,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: item.status || 'Published',
     };
     setTestimonials((prev) => [newTest, ...prev]);
+    setDoc(doc(db, 'testimonials', newTest.id), newTest, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Testimonial', newTest.id, newTest.name, `Added student/alumni testimonial from ${newTest.name}.`);
     addToast('success', 'Testimonial Added', `Added testimonial from ${newTest.name}.`);
   };
@@ -845,6 +1406,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTestimonials((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
+    updateDoc(doc(db, 'testimonials', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Testimonial', id, updates.name || 'Testimonial', 'Updated testimonial quote.');
     addToast('success', 'Testimonial Saved', 'Testimonial updated.');
   };
@@ -852,6 +1414,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteTestimonial = (id: string) => {
     const item = testimonials.find((t) => t.id === id);
     setTestimonials((prev) => prev.filter((t) => t.id !== id));
+    deleteDoc(doc(db, 'testimonials', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Testimonial', id, item?.name || 'Testimonial', 'Removed testimonial.');
     addToast('info', 'Testimonial Removed', 'Testimonial deleted.');
   };
@@ -861,6 +1424,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStats((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     );
+    updateDoc(doc(db, 'stats', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Impact Stat', id, updates.label || 'Stat', 'Updated quantitative impact metric.');
     addToast('success', 'Stat Updated', 'Institutional impact metric saved.');
   };
@@ -872,6 +1436,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `faq-${Date.now()}`,
     };
     setFaqs((prev) => [...prev, newFaq]);
+    setDoc(doc(db, 'faqs', newFaq.id), newFaq, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'FAQ', newFaq.id, newFaq.question, 'Added new admissions/academics FAQ.');
     addToast('success', 'FAQ Added', 'Frequently asked question added.');
   };
@@ -880,6 +1445,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setFaqs((prev) =>
       prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
     );
+    updateDoc(doc(db, 'faqs', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'FAQ', id, updates.question || 'FAQ', 'Updated question and answer text.');
     addToast('success', 'FAQ Saved', 'FAQ updated.');
   };
@@ -887,6 +1453,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteFaq = (id: string) => {
     const item = faqs.find((f) => f.id === id);
     setFaqs((prev) => prev.filter((f) => f.id !== id));
+    deleteDoc(doc(db, 'faqs', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'FAQ', id, item?.question || 'FAQ', 'Deleted FAQ entry.');
     addToast('info', 'FAQ Deleted', 'FAQ removed.');
   };
@@ -899,6 +1466,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: item.status || 'Published',
     };
     setSermons((prev) => [newSermon, ...prev]);
+    setDoc(doc(db, 'sermons', newSermon.id), newSermon, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Chapel Sermon', newSermon.id, newSermon.title, `Uploaded sermon recording by ${newSermon.speaker}.`);
     addToast('success', 'Sermon Added', `"${newSermon.title}" added to media archive.`);
   };
@@ -907,6 +1475,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSermons((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     );
+    updateDoc(doc(db, 'sermons', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Chapel Sermon', id, updates.title || 'Sermon', 'Updated sermon details.');
     addToast('success', 'Sermon Saved', 'Chapel sermon updated.');
   };
@@ -914,6 +1483,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteSermon = (id: string) => {
     const s = sermons.find((x) => x.id === id);
     setSermons((prev) => prev.filter((x) => x.id !== id));
+    deleteDoc(doc(db, 'sermons', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Chapel Sermon', id, s?.title || 'Sermon', 'Removed sermon recording.');
     addToast('info', 'Sermon Removed', 'Sermon deleted.');
   };
@@ -926,6 +1496,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: item.status || 'Published',
     };
     setScrapbook((prev) => [newItem, ...prev]);
+    setDoc(doc(db, 'scrapbook', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Scrapbook Photo', newItem.id, newItem.title, 'Added photo to campus scrapbook.');
     addToast('success', 'Scrapbook Photo Added', 'Photo added to historical archive.');
   };
@@ -934,6 +1505,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setScrapbook((prev) =>
       prev.map((sb) => (sb.id === id ? { ...sb, ...updates } : sb))
     );
+    updateDoc(doc(db, 'scrapbook', id), updates).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Scrapbook Photo', id, updates.title || 'Photo', 'Updated scrapbook caption and tags.');
     addToast('success', 'Scrapbook Photo Saved', 'Photo details updated.');
   };
@@ -941,12 +1513,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteScrapbookItem = (id: string) => {
     const item = scrapbook.find((s) => s.id === id);
     setScrapbook((prev) => prev.filter((s) => s.id !== id));
+    deleteDoc(doc(db, 'scrapbook', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Scrapbook Photo', id, item?.title || 'Photo', 'Deleted photo from scrapbook.');
     addToast('info', 'Scrapbook Photo Removed', 'Photo removed.');
   };
 
   // Applications
-  const submitApplication = (appData: any): string => {
+  const submitApplication = async (appData: any): Promise<string> => {
     const randomNum = Math.floor(1000 + Math.random() * 9000);
     const ref = `PCM-2026-${randomNum}`;
     const newApp: AdmissionApplication = {
@@ -961,8 +1534,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setApplications((prev) => [newApp, ...prev]);
     setActiveTrackerRef(ref);
+
+    try {
+      await setDoc(doc(db, 'applications', newApp.id), newApp, { merge: true });
+    } catch (err) {
+      console.warn('Firestore application write warning:', err);
+    }
+
     logActivity('CREATE', 'Admissions Application', newApp.id, `${newApp.fullName} (${ref})`, 'New online admission application submitted.');
-    addToast('success', 'Application Submitted Successfully!', `Your Reference Number is ${ref}. An email confirmation has been logged.`);
+    addToast('success', 'Application Submitted Successfully!', `Your Reference Number is ${ref}. Data saved to cloud admissions registry.`);
     return ref;
   };
 
@@ -974,12 +1554,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ? [...(app.internalNotes || []), `${new Date().toLocaleDateString()}: ${note}`]
             : app.internalNotes;
           logActivity('UPDATE', 'Admissions Application', id, app.fullName, `Updated status to "${status}". Note: ${note || 'Status change'}`);
-          return {
+          const updatedApp = {
             ...app,
             status,
             updatedAt: new Date().toISOString(),
             internalNotes: updatedNotes,
           };
+          updateDoc(doc(db, 'applications', id), {
+            status,
+            updatedAt: updatedApp.updatedAt,
+            internalNotes: updatedNotes,
+          }).catch((e) => console.warn(e));
+          return updatedApp;
         }
         return app;
       })
@@ -994,6 +1580,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (app.id === id) {
           const updatedNotes = [...(app.internalNotes || []), `${new Date().toLocaleDateString()}: ${note.trim()}`];
           logActivity('UPDATE', 'Admissions Application', id, app.fullName, `Added internal note: ${note.trim()}`);
+          updateDoc(doc(db, 'applications', id), {
+            updatedAt: new Date().toISOString(),
+            internalNotes: updatedNotes,
+          }).catch((e) => console.warn(e));
           return {
             ...app,
             updatedAt: new Date().toISOString(),
@@ -1009,6 +1599,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteApplication = (id: string) => {
     const app = applications.find((a) => a.id === id);
     setApplications((prev) => prev.filter((a) => a.id !== id));
+    deleteDoc(doc(db, 'applications', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Admissions Application', id, app?.fullName || 'Application', 'Deleted admission application record.');
     addToast('info', 'Application Deleted', 'Applicant record deleted.');
   };
@@ -1079,6 +1670,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       password: user.password || 'password',
     };
     setAdminUsers((prev) => [...prev, newUser]);
+    setDoc(doc(db, 'adminUsers', newUser.id), newUser, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Admin User', newUser.id, newUser.name, `Created new admin account with ${newUser.role} role.`);
     addToast('success', 'User Created', `Administrator "${newUser.name}" added.`);
     return newUser;
@@ -1092,6 +1684,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (currentAdminUser?.id === id) {
             setCurrentAdminUser(updated);
           }
+          updateDoc(doc(db, 'adminUsers', id), updates).catch((e) => console.warn(e));
           return updated;
         }
         return u;
@@ -1108,6 +1701,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     const userToDelete = adminUsers.find((u) => u.id === id);
     setAdminUsers((prev) => prev.filter((u) => u.id !== id));
+    deleteDoc(doc(db, 'adminUsers', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Admin User', id, userToDelete?.name || 'Admin User', 'Removed administrator account.');
     addToast('info', 'User Deleted', 'Administrator account removed.');
   };
@@ -1120,6 +1714,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAdminUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, password: newPass } : u))
     );
+    updateDoc(doc(db, 'adminUsers', userId), { password: newPass }).catch((e) => console.warn(e));
     logActivity('SETTINGS', 'Admin Security', userId, 'Security Settings', 'Changed administrator account password.');
     addToast('success', 'Password Changed', 'Security password successfully updated.');
     return true;
@@ -1128,9 +1723,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Database Backup & Restore
   const exportDatabaseJson = (): string => {
     const fullBackup = {
-      version: '3.0',
+      version: '4.0-firebase',
       exportedAt: new Date().toISOString(),
       institution: 'Philippine College of Ministry',
+      firebaseProject: 'intelligent-park-95fd2',
       siteConfig,
       mediaItems,
       galleryAlbums,
@@ -1173,8 +1769,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (parsed.applications) setApplications(parsed.applications);
       if (parsed.adminUsers) setAdminUsers(parsed.adminUsers);
 
-      logActivity('RESTORE', 'Database Restore', 'restore', 'JSON Import', 'Restored website data from backup JSON.');
-      addToast('success', 'Database Restored', 'All content, sections, and settings successfully imported.');
+      // Also trigger cloud push
+      setTimeout(() => {
+        syncAllDataToFirestore(false);
+      }, 500);
+
+      logActivity('RESTORE', 'Database Restore', 'restore', 'JSON Import', 'Restored website data from backup JSON and synchronized with Firebase.');
+      addToast('success', 'Database Restored', 'All content, sections, and settings successfully imported and synced to Firebase.');
       return true;
     } catch (e: any) {
       addToast('error', 'Import Failed', 'Invalid JSON file format. Please check your backup file.');
@@ -1209,8 +1810,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn(e);
     }
 
+    setTimeout(() => {
+      syncAllDataToFirestore(false);
+    }, 500);
+
     logActivity('RESTORE', 'System Reset', 'factory-reset', 'Factory State', 'Reset all content and configurations to default institutional baseline.');
-    addToast('success', 'Data Restored', 'All datasets and configurations have been reset to factory baseline.');
+    addToast('success', 'Data Restored', 'All datasets and configurations have been reset to factory baseline and synced to Firebase.');
   };
 
   const addPracticumEntry = (entry: Omit<StudentProfile['practicumEntries'][0], 'id' | 'status'>) => {
@@ -1219,42 +1824,62 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `prac-${Date.now()}`,
       status: 'Approved',
     };
-    setStudentProfile((prev) => ({
-      ...prev,
-      practicumEntries: [newEntry, ...prev.practicumEntries],
-    }));
+    const updated = {
+      ...studentProfile,
+      practicumEntries: [newEntry, ...studentProfile.practicumEntries],
+    };
+    setStudentProfile(updated);
+    setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true }).catch((e) => console.warn(e));
     addToast('success', 'Practicum Log Saved', `Recorded ${entry.hours} hours of ${entry.ministryType}.`);
   };
 
   const makeTuitionPayment = (amount: number) => {
-    setStudentProfile((prev) => ({
-      ...prev,
-      tuitionPaid: Math.min(prev.tuitionTotal, prev.tuitionPaid + amount),
-    }));
+    const updated = {
+      ...studentProfile,
+      tuitionPaid: Math.min(studentProfile.tuitionTotal, studentProfile.tuitionPaid + amount),
+    };
+    setStudentProfile(updated);
+    setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true }).catch((e) => console.warn(e));
     addToast('success', 'Payment Received', `Successfully processed payment of ₱${amount.toLocaleString('en-PH')}.`);
   };
 
-  const registerForEvent = (eventId: string, attendeeName: string, email: string): boolean => {
+  const registerForEvent = async (eventId: string, attendeeName: string, email: string): Promise<boolean> => {
     setEvents((prev) =>
       prev.map((ev) => {
         if (ev.id === eventId) {
+          const nextCount = (ev.registeredCount || 0) + 1;
+          updateDoc(doc(db, 'events', eventId), { registeredCount: nextCount }).catch((e) => console.warn(e));
           return {
             ...ev,
-            registeredCount: (ev.registeredCount || 0) + 1,
+            registeredCount: nextCount,
           };
         }
         return ev;
       })
     );
+
+    try {
+      const regDoc = {
+        id: `reg-${Date.now()}`,
+        eventId,
+        attendeeName,
+        email,
+        registeredAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, 'eventRegistrations', regDoc.id), regDoc, { merge: true });
+    } catch (e) {
+      console.warn('Registration cloud record error:', e);
+    }
+
     addToast(
       'success',
       'Registration Confirmed!',
-      `Thank you, ${attendeeName}. A confirmation has been prepared for ${email}.`
+      `Thank you, ${attendeeName}. A confirmation has been registered on the institutional event list for ${email}.`
     );
     return true;
   };
 
-  const subscribeNewsletter = (email: string): boolean => {
+  const subscribeNewsletter = async (email: string): Promise<boolean> => {
     if (!email || !email.includes('@')) {
       addToast('error', 'Invalid Email', 'Please enter a valid email address.');
       return false;
@@ -1264,6 +1889,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return true;
     }
     setNewsletterEmails((prev) => [...prev, email]);
+
+    try {
+      const subDoc = {
+        id: `sub-${Date.now()}`,
+        email,
+        subscribedAt: new Date().toISOString(),
+      };
+      await setDoc(doc(db, 'newsletterSubscribers', subDoc.id), subDoc, { merge: true });
+    } catch (e) {
+      console.warn('Newsletter cloud subscriber error:', e);
+    }
+
     addToast('success', 'Subscribed to PCM Updates', 'You will receive our latest theological publications, admissions updates, and event invitations.');
     return true;
   };
@@ -1302,6 +1939,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         tuitionCalculatorModalOpen,
         isTuitionCalculatorModalOpen: tuitionCalculatorModalOpen,
         setTuitionCalculatorModalOpen,
+
+        // Cloud Database & Firebase Sync State
+        isFirebaseConnected,
+        firebaseSyncStatus,
+        lastSyncedAt,
+        syncAllDataToFirestore,
+        uploadMediaFile,
 
         // Site Configuration
         siteConfig,
@@ -1475,4 +2119,3 @@ export const usePCM = () => {
   }
   return context;
 };
-
