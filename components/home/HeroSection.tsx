@@ -98,11 +98,11 @@ export const HeroSection: React.FC = () => {
           </p>
 
           {/* Action CTAs */}
-          <div className="pt-3 flex flex-wrap items-center gap-3.5">
+          <div className="pt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-3.5">
             <button
               id="hero-cta-apply"
               onClick={() => navigateTo('apply')}
-              className="flex items-center gap-2 bg-[#588B76] text-white font-bold px-7 py-3 uppercase text-xs tracking-widest hover:bg-[#46705F] rounded-sm shadow-md transition cursor-pointer"
+              className="flex items-center justify-center gap-2 bg-[#588B76] text-white font-bold px-6 sm:px-7 py-3 sm:py-3.5 uppercase text-xs tracking-widest hover:bg-[#46705F] rounded-sm shadow-md transition cursor-pointer text-center"
             >
               <span>APPLY NOW FOR 2026–2027</span>
               <ArrowRight className="w-4 h-4" />
@@ -111,7 +111,7 @@ export const HeroSection: React.FC = () => {
             <button
               id="hero-cta-explore"
               onClick={() => navigateTo('academics')}
-              className="flex items-center gap-2 border border-[#D0DED8] text-white font-bold px-6 py-3 uppercase text-xs tracking-widest hover:bg-white hover:text-[#18392B] rounded-sm transition cursor-pointer"
+              className="flex items-center justify-center gap-2 border border-[#D0DED8] text-white font-bold px-5 sm:px-6 py-3 sm:py-3.5 uppercase text-xs tracking-widest hover:bg-white hover:text-[#18392B] rounded-sm transition cursor-pointer text-center"
             >
               <BookOpen className="w-4 h-4 text-[#85AA9B]" />
               <span>EXPLORE PROGRAMS</span>

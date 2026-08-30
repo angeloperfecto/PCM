@@ -225,72 +225,74 @@ export const AdminView: React.FC = () => {
             </h3>
 
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[#18392B] text-white">
-                    <th className="p-3.5 font-bold">Ref #</th>
-                    <th className="p-3.5 font-bold">Candidate Name</th>
-                    <th className="p-3.5 font-bold">Program</th>
-                    <th className="p-3.5 font-bold hidden sm:table-cell">Church / Pastor</th>
-                    <th className="p-3.5 font-bold">Status</th>
-                    <th className="p-3.5 font-bold text-right">Committee Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 text-slate-700">
-                  {applications.map((app) => (
-                    <tr key={app.id} className="hover:bg-slate-50">
-                      <td className="p-3.5 font-mono font-bold text-[#18392B]">{app.referenceNumber}</td>
-                      <td className="p-3.5">
-                        <strong className="block text-slate-900">{app.fullName}</strong>
-                        <span className="text-[10px] text-slate-500 font-mono">{app.email}</span>
-                      </td>
-                      <td className="p-3.5">{app.programName}</td>
-                      <td className="p-3.5 hidden sm:table-cell">
-                        <span className="block">{app.homeChurch}</span>
-                        <span className="text-[10px] text-slate-400">Pastor: {app.pastorName}</span>
-                      </td>
-                      <td className="p-3.5">
-                        <span
-                          className={`text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full ${
-                            app.status === 'Accepted' || app.status === 'Enrolled'
-                              ? 'bg-emerald-100 text-emerald-800'
-                              : app.status === 'Under Review'
-                              ? 'bg-blue-100 text-blue-800'
-                              : app.status === 'Rejected'
-                              ? 'bg-rose-100 text-rose-800'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}
-                        >
-                          {app.status}
-                        </span>
-                      </td>
-                      <td className="p-3.5 text-right space-x-1.5">
-                        <button
-                          onClick={() => updateApplicationStatus(app.id, 'Under Review', 'Scheduled for admissions faculty interview')}
-                          title="Mark Under Review"
-                          className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2 py-1 rounded transition cursor-pointer"
-                        >
-                          Review
-                        </button>
-                        <button
-                          onClick={() => updateApplicationStatus(app.id, 'Accepted', 'Approved for enrollment')}
-                          title="Accept Candidate"
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2 py-1 rounded transition cursor-pointer"
-                        >
-                          Accept
-                        </button>
-                        <button
-                          onClick={() => updateApplicationStatus(app.id, 'Rejected', 'Application does not meet criteria')}
-                          title="Reject Application"
-                          className="bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold px-2 py-1 rounded transition cursor-pointer"
-                        >
-                          Reject
-                        </button>
-                      </td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse min-w-[640px]">
+                  <thead>
+                    <tr className="bg-[#18392B] text-white">
+                      <th className="p-3.5 font-bold">Ref #</th>
+                      <th className="p-3.5 font-bold">Candidate Name</th>
+                      <th className="p-3.5 font-bold">Program</th>
+                      <th className="p-3.5 font-bold">Church / Pastor</th>
+                      <th className="p-3.5 font-bold">Status</th>
+                      <th className="p-3.5 font-bold text-right">Committee Actions</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-slate-700">
+                    {applications.map((app) => (
+                      <tr key={app.id} className="hover:bg-slate-50">
+                        <td className="p-3.5 font-mono font-bold text-[#18392B]">{app.referenceNumber}</td>
+                        <td className="p-3.5">
+                          <strong className="block text-slate-900">{app.fullName}</strong>
+                          <span className="text-[10px] text-slate-500 font-mono">{app.email}</span>
+                        </td>
+                        <td className="p-3.5">{app.programName}</td>
+                        <td className="p-3.5">
+                          <span className="block">{app.homeChurch}</span>
+                          <span className="text-[10px] text-slate-400">Pastor: {app.pastorName}</span>
+                        </td>
+                        <td className="p-3.5">
+                          <span
+                            className={`text-[10px] font-mono font-bold uppercase px-2.5 py-1 rounded-full ${
+                              app.status === 'Accepted' || app.status === 'Enrolled'
+                                ? 'bg-emerald-100 text-emerald-800'
+                                : app.status === 'Under Review'
+                                ? 'bg-blue-100 text-blue-800'
+                                : app.status === 'Rejected'
+                                ? 'bg-rose-100 text-rose-800'
+                                : 'bg-amber-100 text-amber-800'
+                            }`}
+                          >
+                            {app.status}
+                          </span>
+                        </td>
+                        <td className="p-3.5 text-right space-x-1.5 whitespace-nowrap">
+                          <button
+                            onClick={() => updateApplicationStatus(app.id, 'Under Review', 'Scheduled for admissions faculty interview')}
+                            title="Mark Under Review"
+                            className="bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-bold px-2 py-1 rounded transition cursor-pointer"
+                          >
+                            Review
+                          </button>
+                          <button
+                            onClick={() => updateApplicationStatus(app.id, 'Accepted', 'Approved for enrollment')}
+                            title="Accept Candidate"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold px-2 py-1 rounded transition cursor-pointer"
+                          >
+                            Accept
+                          </button>
+                          <button
+                            onClick={() => updateApplicationStatus(app.id, 'Rejected', 'Application does not meet criteria')}
+                            title="Reject Application"
+                            className="bg-rose-600 hover:bg-rose-700 text-white text-[10px] font-bold px-2 py-1 rounded transition cursor-pointer"
+                          >
+                            Reject
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

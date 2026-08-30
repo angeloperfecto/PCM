@@ -223,42 +223,44 @@ export const AdmissionsView: React.FC = () => {
           </div>
 
           <div className="bg-white rounded-sm border border-slate-200 overflow-hidden shadow-xs">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="bg-[#18392B] text-white font-serif font-bold text-xs uppercase tracking-wider">
-                  <th className="p-3.5">Academic Level / Item</th>
-                  <th className="p-3.5">Tuition Rate (PHP)</th>
-                  <th className="p-3.5 hidden sm:table-cell">Details / Voucher Coverage</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 text-slate-700">
-                <tr>
-                  <td className="p-3.5 font-semibold text-[#18392B]">Senior High School (GAS Strand)</td>
-                  <td className="p-3.5 font-mono font-bold text-emerald-700">100% DepEd Voucher Covered</td>
-                  <td className="p-3.5 text-slate-500 hidden sm:table-cell">No out-of-pocket tuition for qualified public Junior High completers</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-semibold text-[#18392B]">Undergraduate Tuition (B.Th. / SCM / Assoc.)</td>
-                  <td className="p-3.5 font-mono font-bold">₱650 – ₱850 / unit</td>
-                  <td className="p-3.5 text-slate-500 hidden sm:table-cell">Standard full-load is 18–21 units per semester</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-semibold text-[#18392B]">Graduate School Tuition (M.Div. / M.C.L.)</td>
-                  <td className="p-3.5 font-mono font-bold">₱1,200 – ₱1,400 / unit</td>
-                  <td className="p-3.5 text-slate-500 hidden sm:table-cell">Standard full-load is 9–12 units per semester</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-semibold text-[#18392B]">Registration & Basic Miscellaneous</td>
-                  <td className="p-3.5 font-mono font-bold">₱2,500 / semester</td>
-                  <td className="p-3.5 text-slate-500 hidden sm:table-cell">Includes library catalog, campus facilities, and student insurance</td>
-                </tr>
-                <tr>
-                  <td className="p-3.5 font-semibold text-[#18392B]">On-Campus Dormitory & Board</td>
-                  <td className="p-3.5 font-mono font-bold">₱3,500 / month</td>
-                  <td className="p-3.5 text-slate-500 hidden sm:table-cell">Includes student dormitory bedspace and dining utilities</td>
-                </tr>
-              </tbody>
-            </table>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse min-w-[540px]">
+                <thead>
+                  <tr className="bg-[#18392B] text-white font-serif font-bold text-xs uppercase tracking-wider">
+                    <th className="p-3.5">Academic Level / Item</th>
+                    <th className="p-3.5">Tuition Rate (PHP)</th>
+                    <th className="p-3.5">Details / Voucher Coverage</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  <tr>
+                    <td className="p-3.5 font-semibold text-[#18392B]">Senior High School (GAS Strand)</td>
+                    <td className="p-3.5 font-mono font-bold text-emerald-700">100% DepEd Voucher Covered</td>
+                    <td className="p-3.5 text-slate-500">No out-of-pocket tuition for qualified public Junior High completers</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3.5 font-semibold text-[#18392B]">Undergraduate Tuition (B.Th. / SCM / Assoc.)</td>
+                    <td className="p-3.5 font-mono font-bold">₱650 – ₱850 / unit</td>
+                    <td className="p-3.5 text-slate-500">Standard full-load is 18–21 units per semester</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3.5 font-semibold text-[#18392B]">Graduate School Tuition (M.Div. / M.C.L.)</td>
+                    <td className="p-3.5 font-mono font-bold">₱1,200 – ₱1,400 / unit</td>
+                    <td className="p-3.5 text-slate-500">Standard full-load is 9–12 units per semester</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3.5 font-semibold text-[#18392B]">Registration & Basic Miscellaneous</td>
+                    <td className="p-3.5 font-mono font-bold">₱2,500 / semester</td>
+                    <td className="p-3.5 text-slate-500">Includes library catalog, campus facilities, and student insurance</td>
+                  </tr>
+                  <tr>
+                    <td className="p-3.5 font-semibold text-[#18392B]">On-Campus Dormitory & Board</td>
+                    <td className="p-3.5 font-mono font-bold">₱3,500 / month</td>
+                    <td className="p-3.5 text-slate-500">Includes student dormitory bedspace and dining utilities</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         </section>
 

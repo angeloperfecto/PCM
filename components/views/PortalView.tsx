@@ -241,30 +241,32 @@ export const PortalView: React.FC = () => {
             </div>
 
             <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="bg-[#18392B] text-white">
-                    <th className="p-3.5 font-bold">Course Code</th>
-                    <th className="p-3.5 font-bold">Subject Title</th>
-                    <th className="p-3.5 font-bold">Units</th>
-                    <th className="p-3.5 font-bold">Class Schedule</th>
-                    <th className="p-3.5 font-bold hidden sm:table-cell">Room</th>
-                    <th className="p-3.5 font-bold hidden md:table-cell">Faculty Instructor</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200 text-slate-700">
-                  {studentProfile.courses.map((c) => (
-                    <tr key={c.id} className="hover:bg-slate-50">
-                      <td className="p-3.5 font-mono font-bold text-[#18392B]">{c.code}</td>
-                      <td className="p-3.5 font-semibold text-slate-900">{c.title}</td>
-                      <td className="p-3.5 font-mono">{c.units} Units</td>
-                      <td className="p-3.5">{c.schedule}</td>
-                      <td className="p-3.5 hidden sm:table-cell text-slate-600">{c.room}</td>
-                      <td className="p-3.5 hidden md:table-cell text-slate-500">{c.instructor}</td>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse min-w-[600px]">
+                  <thead>
+                    <tr className="bg-[#18392B] text-white">
+                      <th className="p-3.5 font-bold">Course Code</th>
+                      <th className="p-3.5 font-bold">Subject Title</th>
+                      <th className="p-3.5 font-bold">Units</th>
+                      <th className="p-3.5 font-bold">Class Schedule</th>
+                      <th className="p-3.5 font-bold">Room</th>
+                      <th className="p-3.5 font-bold">Faculty Instructor</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 text-slate-700">
+                    {studentProfile.courses.map((c) => (
+                      <tr key={c.id} className="hover:bg-slate-50">
+                        <td className="p-3.5 font-mono font-bold text-[#18392B]">{c.code}</td>
+                        <td className="p-3.5 font-semibold text-slate-900">{c.title}</td>
+                        <td className="p-3.5 font-mono">{c.units} Units</td>
+                        <td className="p-3.5">{c.schedule}</td>
+                        <td className="p-3.5 text-slate-600">{c.room}</td>
+                        <td className="p-3.5 text-slate-500">{c.instructor}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}

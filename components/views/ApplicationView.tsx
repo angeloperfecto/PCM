@@ -619,17 +619,17 @@ export const ApplicationView: React.FC = () => {
                   )}
 
                   {/* Navigation Buttons */}
-                  <div className="pt-6 border-t border-slate-200 flex items-center justify-between">
+                  <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     {step > 1 ? (
                       <button
                         type="button"
                         onClick={() => setStep(step - 1)}
-                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded text-xs font-semibold flex items-center gap-2 transition cursor-pointer"
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-3 rounded text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer order-2 sm:order-1"
                       >
                         <ArrowLeft className="w-3.5 h-3.5" />
                         <span>Previous Step</span>
                       </button>
-                    ) : <div />}
+                    ) : <div className="hidden sm:block" />}
 
                     {step < 4 ? (
                       <button
@@ -645,7 +645,7 @@ export const ApplicationView: React.FC = () => {
                           }
                           setStep(step + 1);
                         }}
-                        className="bg-[#18392B] hover:bg-[#14234b] text-white px-6 py-2.5 rounded text-xs font-bold flex items-center gap-2 transition cursor-pointer"
+                        className="bg-[#18392B] hover:bg-[#14234b] text-white px-6 py-3 rounded text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer order-1 sm:order-2"
                       >
                         <span>Next Step</span>
                         <ArrowRight className="w-3.5 h-3.5 text-[#588B76]" />
@@ -653,7 +653,7 @@ export const ApplicationView: React.FC = () => {
                     ) : (
                       <button
                         type="submit"
-                        className="bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] px-8 py-3 rounded text-xs font-bold uppercase tracking-wider flex items-center gap-2 transition cursor-pointer shadow-lg"
+                        className="bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] px-8 py-3.5 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-lg order-1 sm:order-2"
                       >
                         <span>SUBMIT OFFICIAL APPLICATION</span>
                         <Send className="w-3.5 h-3.5" />
