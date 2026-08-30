@@ -2,10 +2,10 @@ import type {Metadata} from 'next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'PCM — Philippines College of Ministry | Equipping Servants for Kingdom Impact',
-  description: 'Philippines College of Ministry provides Christ-centered theological and ministry education designed to equip faithful servants, ministry leaders, and Christian workers for Kingdom impact.',
+  title: 'PCM — Philippine College of Ministry | Equipping Servants for Kingdom Impact',
+  description: 'Philippine College of Ministry provides Christ-centered theological and ministry education designed to equip faithful servants, ministry leaders, and Christian workers for Kingdom impact.',
   keywords: [
-    'Philippines College of Ministry',
+    'Philippine College of Ministry',
     'Theological Seminary Philippines',
     'Bible College Manila',
     'Bachelor of Theology',
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
     'Pastoral Education Philippines',
     'Biblical Studies'
   ],
-  authors: [{ name: 'Philippines College of Ministry' }],
+  authors: [{ name: 'Philippine College of Ministry' }],
   icons: {
     icon: [
       { url: '/pcm-logo.svg', type: 'image/svg+xml' },
@@ -24,15 +24,15 @@ export const metadata: Metadata = {
     apple: '/pcm-logo.svg',
   },
   openGraph: {
-    title: 'PCM — Philippines College of Ministry | Equipping Servants for Kingdom Impact',
-    description: 'Philippines College of Ministry provides Christ-centered theological and ministry education designed to equip faithful servants, ministry leaders, and Christian workers for Kingdom impact.',
+    title: 'PCM — Philippine College of Ministry | Equipping Servants for Kingdom Impact',
+    description: 'Philippine College of Ministry provides Christ-centered theological and ministry education designed to equip faithful servants, ministry leaders, and Christian workers for Kingdom impact.',
     type: 'website',
-    siteName: 'Philippines College of Ministry',
+    siteName: 'Philippine College of Ministry',
     locale: 'en_PH',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'PCM — Philippines College of Ministry | Equipping Servants for Kingdom Impact',
+    title: 'PCM — Philippine College of Ministry | Equipping Servants for Kingdom Impact',
     description: 'Equipping Servants. Transforming Lives. Advancing God\'s Kingdom. Faithful Christ-centered theological education in the Philippines.',
   },
 };

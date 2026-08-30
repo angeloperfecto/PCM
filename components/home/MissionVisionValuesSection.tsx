@@ -31,7 +31,7 @@ export const MissionVisionValuesSection: React.FC = () => {
             MISSION, VISION & CORE VALUES
           </h2>
           <p className="text-xs sm:text-sm text-[#D0DED8]">
-            The theological pillars, spiritual compass, and guiding principles of Philippines College of Ministry.
+            The theological pillars, spiritual compass, and guiding principles of Philippine College of Ministry.
           </p>
         </div>
 

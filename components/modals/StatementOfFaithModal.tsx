@@ -104,7 +104,7 @@ export const StatementOfFaithModal: React.FC = () => {
         {/* Preamble */}
         <div className="p-6 sm:p-8 space-y-6 text-slate-800 text-sm">
           <div className="bg-[#FFFFFF] p-4 rounded-xl border border-slate-200 text-xs text-slate-700 leading-relaxed italic">
-            &ldquo;Philippines College of Ministry subscribes without mental reservation to the historic, orthodox evangelical faith. All trustees, faculty, and graduating candidates affirm the following doctrinal tenets as the bedrock of our theological instruction.&rdquo;
+            &ldquo;Philippine College of Ministry subscribes without mental reservation to the historic, orthodox evangelical faith. All trustees, faculty, and graduating candidates affirm the following doctrinal tenets as the bedrock of our theological instruction.&rdquo;
           </div>
 
           {/* Articles */}

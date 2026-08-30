@@ -25,7 +25,7 @@ export const StudentLifeView: React.FC = () => {
             Community & Spiritual Formation
           </span>
           <h1 className="font-serif text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white">
-            LIFE AT PHILIPPINES COLLEGE OF MINISTRY
+            LIFE AT PHILIPPINE COLLEGE OF MINISTRY
           </h1>
           <p className="text-xs sm:text-sm text-slate-300 max-w-2xl mx-auto leading-relaxed font-sans">
             A sanctified environment where scholarship is nourished by prayer, fellowship, and sacrificial service.

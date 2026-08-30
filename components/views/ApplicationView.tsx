@@ -612,7 +612,7 @@ export const ApplicationView: React.FC = () => {
                           <span>Applicant Declaration & Doctrinal Respect</span>
                         </div>
                         <p>
-                          By submitting this application, I certify that all information given is true, accurate, and complete. I express my willingness to respect and abide by the institutional standards, Statement of Faith, and community covenant of Philippines College of Ministry.
+                          By submitting this application, I certify that all information given is true, accurate, and complete. I express my willingness to respect and abide by the institutional standards, Statement of Faith, and community covenant of Philippine College of Ministry.
                         </p>
                       </div>
                     </div>

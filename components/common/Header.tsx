@@ -265,7 +265,7 @@ export const Header: React.FC = () => {
           </div>
           <div className="flex flex-col">
             <h1 className="text-[#18392B] font-serif text-lg sm:text-xl font-bold leading-tight group-hover:text-[#588B76] transition-colors">
-              Philippines College of Ministry
+              Philippine College of Ministry
             </h1>
             <p className="text-[10px] uppercase tracking-[0.2em] font-semibold text-[#588B76]">
               Theological Excellence & Pastoral Formation
@@ -430,7 +430,7 @@ export const Header: React.FC = () => {
           </div>
 
           <div className="pt-4 border-t border-[#588B76]/30 text-xs text-[#D0DED8]/80 space-y-2">
-            <p className="font-semibold text-white">Philippines College of Ministry</p>
+            <p className="font-semibold text-white">Philippine College of Ministry</p>
             <p>Lamtang, Puguis, La Trinidad, Benguet (P.O. Box 298, Baguio City)</p>
             <p>Tel: +63 74 422 2577 | info@pcm.ph</p>
           </div>

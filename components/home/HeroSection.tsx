@@ -19,7 +19,7 @@ const HERO_SLIDES = [
     tag: 'Accredited Theological Education',
     headline: 'EQUIPPING SERVANTS FOR KINGDOM IMPACT',
     subtext:
-      'Philippines College of Ministry exists to equip men and women with biblical knowledge, spiritual maturity, and practical ministry skills for faithful service to Christ, the Church, and the community.',
+      'Philippine College of Ministry exists to equip men and women with biblical knowledge, spiritual maturity, and practical ministry skills for faithful service to Christ, the Church, and the community.',
   },
   {
     image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1600&auto=format&fit=crop',

@@ -206,7 +206,7 @@ export const ResourcesView: React.FC = () => {
                 </span>
                 <h3 className="font-serif text-2xl font-bold">Veritas et Ministerium Academic Journal</h3>
                 <p className="text-xs sm:text-sm text-slate-300 max-w-xl leading-relaxed">
-                  The flagship theological journal of Philippines College of Ministry, publishing scholarly articles on Reformed theology, biblical hermeneutics, Southeast Asian church history, and urban missiology.
+                  The flagship theological journal of Philippine College of Ministry, publishing scholarly articles on Reformed theology, biblical hermeneutics, Southeast Asian church history, and urban missiology.
                 </p>
               </div>
               <button

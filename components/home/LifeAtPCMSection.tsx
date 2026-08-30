@@ -81,7 +81,7 @@ export const LifeAtPCMSection: React.FC = () => {
             LIFE AT PCM
           </h2>
           <p className="text-xs sm:text-sm text-[#18392B]/80">
-            Education at Philippines College of Ministry extends far beyond the lecture hall. Experience a vibrant, Christ-centered campus community where minds are sharpened and hearts are ignited for kingdom service.
+            Education at Philippine College of Ministry extends far beyond the lecture hall. Experience a vibrant, Christ-centered campus community where minds are sharpened and hearts are ignited for kingdom service.
           </p>
         </div>
 

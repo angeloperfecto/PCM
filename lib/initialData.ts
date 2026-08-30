@@ -67,7 +67,7 @@ export const INITIAL_PROGRAMS: AcademicProgram[] = [
     shortDescription:
       'DepEd-accredited Senior High School program with Christian values integration, preparation for college theological and liberal arts courses, and full Government ESC Voucher support.',
     fullDescription:
-      'Philippines College of Ministry offers the General Academic Strand (GAS) for Senior High School students seeking quality, Christ-centered education in the Cordillera and Baguio-La Trinidad area. Qualified Grade 10 completers from public schools and ESC participating private schools can study with zero to minimal tuition through DepEd vouchers.',
+      'Philippine College of Ministry offers the General Academic Strand (GAS) for Senior High School students seeking quality, Christ-centered education in the Cordillera and Baguio-La Trinidad area. Qualified Grade 10 completers from public schools and ESC participating private schools can study with zero to minimal tuition through DepEd vouchers.',
     objectives: [
       'Provide a solid academic foundation across humanities, social sciences, and natural sciences.',
       'Instill Christian character, moral integrity, and biblical discernment in adolescent youth.',
@@ -615,9 +615,9 @@ export const INITIAL_NEWS: NewsArticle[] = [
     author: 'Office of the Registrar & Admissions',
     readTime: '4 min read',
     excerpt:
-      'Philippines College of Ministry has officially launched its online application portal for incoming undergraduate and graduate students for the 2026–2027 academic year, offering full and partial tuition scholarships for pastoral candidates.',
+      'Philippine College of Ministry has officially launched its online application portal for incoming undergraduate and graduate students for the 2026–2027 academic year, offering full and partial tuition scholarships for pastoral candidates.',
     content:
-      'QUEZON CITY, PHILIPPINES — Philippines College of Ministry (PCM) is pleased to announce that applications for Academic Year 2026–2027 are now open. As part of PCM’s continuing commitment to equip servants for Kingdom impact across the archipelago, the Board of Trustees has approved an expanded ministerial scholarship grant allocating support for prospective pastors, church planters, and children of full-time ministry workers.\n\nProspective students may now complete the entire admissions process through the newly launched PCM Online Admissions Portal, which includes direct document uploading, recommendation tracking, and interview scheduling. Degree offerings include the flagship Bachelor of Theology (B.Th.), Bachelor of Christian Ministry (B.C.M.), Master of Divinity (M.Div.), and Master of Christian Leadership (M.C.L.). Modular formats are available for bi-vocational workers.\n\n"Our nation and the global harvest field are in urgent need of shepherds who are deeply grounded in the infallible Word of God, spiritually vibrant, and culturally effective," said Academic Dean Dr. Emmanuel Santos. "PCM is ready to welcome the next generation of gospel servants."',
+      'QUEZON CITY, PHILIPPINES — Philippine College of Ministry (PCM) is pleased to announce that applications for Academic Year 2026–2027 are now open. As part of PCM’s continuing commitment to equip servants for Kingdom impact across the archipelago, the Board of Trustees has approved an expanded ministerial scholarship grant allocating support for prospective pastors, church planters, and children of full-time ministry workers.\n\nProspective students may now complete the entire admissions process through the newly launched PCM Online Admissions Portal, which includes direct document uploading, recommendation tracking, and interview scheduling. Degree offerings include the flagship Bachelor of Theology (B.Th.), Bachelor of Christian Ministry (B.C.M.), Master of Divinity (M.Div.), and Master of Christian Leadership (M.C.L.). Modular formats are available for bi-vocational workers.\n\n"Our nation and the global harvest field are in urgent need of shepherds who are deeply grounded in the infallible Word of God, spiritually vibrant, and culturally effective," said Academic Dean Dr. Emmanuel Santos. "PCM is ready to welcome the next generation of gospel servants."',
     imageUrl: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop',
     featured: true,
     tags: ['Admissions', 'Scholarships', 'Enrollment', 'Academic Year 2026'],
@@ -886,7 +886,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     role: 'Leadership',
     credentials: 'Ph.D. in Theological Studies (Dallas Theological Seminary), M.Div. (Asian Theological Seminary), B.Th. (PCM)',
     degrees: ['Ph.D. Theological Studies', 'Master of Divinity', 'Bachelor of Theology'],
-    bio: 'Dr. Villanueva has served as President of Philippines College of Ministry since 2014. With over 30 years of pastoral ministry and seminary teaching experience, he has authored multiple books on biblical leadership, Christian stewardship, and the history of evangelical faith in the Philippines.',
+    bio: 'Dr. Villanueva has served as President of Philippine College of Ministry since 2014. With over 30 years of pastoral ministry and seminary teaching experience, he has authored multiple books on biblical leadership, Christian stewardship, and the history of evangelical faith in the Philippines.',
     coursesTaught: ['Theological Foundations of Leadership', 'Pastoral Theology & Governance', 'Contemporary Apologetics'],
     imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=800&auto=format&fit=crop',
     email: 'president@pcm.edu.ph',
@@ -986,7 +986,7 @@ export const INITIAL_TESTIMONIALS: Testimonial[] = [
     role: 'General Overseer, Alliance of Evangelical Churches',
     category: 'Ministry Leader',
     quote:
-      'Whenever our denomination receives graduates from Philippines College of Ministry, we know they come with doctrinal soundness, humble servanthood, and genuine practical competence. PCM remains one of the most trusted theological institutions in the nation.',
+      'Whenever our denomination receives graduates from Philippine College of Ministry, we know they come with doctrinal soundness, humble servanthood, and genuine practical competence. PCM remains one of the most trusted theological institutions in the nation.',
     programOrMinistry: 'Partner Denominational Leader',
     avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=400&auto=format&fit=crop',
   },

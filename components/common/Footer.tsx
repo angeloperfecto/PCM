@@ -45,7 +45,7 @@ export const Footer: React.FC = () => {
             </div>
             <div>
               <h3 className="font-serif text-base font-bold text-white tracking-wide uppercase">
-                Philippines College of Ministry
+                Philippine College of Ministry
               </h3>
               <p className="text-xs text-[#85AA9B] italic font-serif">
                 Equipping Servants. Transforming Lives. Advancing God&apos;s Kingdom.

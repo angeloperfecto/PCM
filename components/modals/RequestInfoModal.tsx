@@ -66,7 +66,7 @@ export const RequestInfoModal: React.FC = () => {
                 Inquiry Received!
               </h4>
               <p className="text-slate-600 leading-relaxed text-xs">
-                Thank you, <strong>{name}</strong>. An admissions mentor from the Philippines College of Ministry will reach out to you within 24 hours at <strong>{email}</strong>.
+                Thank you, <strong>{name}</strong>. An admissions mentor from the Philippine College of Ministry will reach out to you within 24 hours at <strong>{email}</strong>.
               </p>
               <button
                 onClick={() => {

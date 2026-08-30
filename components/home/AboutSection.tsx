@@ -99,12 +99,12 @@ export const AboutSection: React.FC = () => {
                 </h2>
               </div>
               <p className="text-xs text-[#588B76] font-bold uppercase tracking-widest font-mono pl-4">
-                About Philippines College of Ministry
+                About Philippine College of Ministry
               </p>
             </div>
 
             <p className="text-xs sm:text-sm text-[#18392B]/90 leading-relaxed">
-              Founded in 2002, <strong>Philippines College of Ministry (PCM)</strong> stands as a premier theological institution in Northern Luzon and Metro Manila networks, committed to the historic Christian faith, the inerrancy of Holy Scripture, and the urgent imperative of the Great Commission.
+              Founded in 2002, <strong>Philippine College of Ministry (PCM)</strong> stands as a premier theological institution in Northern Luzon and Metro Manila networks, committed to the historic Christian faith, the inerrancy of Holy Scripture, and the urgent imperative of the Great Commission.
             </p>
 
             <p className="text-xs text-[#18392B]/75 leading-relaxed">

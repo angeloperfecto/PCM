@@ -47,7 +47,7 @@ export const NewsletterSection: React.FC = () => {
             <div className="text-left text-xs">
               <p className="font-bold text-sm text-white">Thank You for Subscribing!</p>
               <p className="text-[#D0DED8] mt-0.5">
-                You are now subscribed to Philippines College of Ministry dispatches.
+                You are now subscribed to Philippine College of Ministry dispatches.
               </p>
             </div>
           </div>
