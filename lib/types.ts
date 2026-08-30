@@ -83,11 +83,13 @@ export interface FacultyMember {
   id: string;
   name: string;
   title: string;
-  role: 'Leadership' | 'Biblical Studies' | 'Theology & Church History' | 'Pastoral Ministry' | 'Missions & Outreach' | 'Adjunct' | 'Administration';
+  group: 'Board of Trustees' | 'Administration' | 'Faculty' | 'Emeritus & Adjunct';
+  role: string;
   credentials: string;
   degrees: string[];
-  bio: string;
+  subjectTaught?: string[];
   coursesTaught: string[];
+  bio: string;
   imageUrl: string;
   email: string;
   featured?: boolean;

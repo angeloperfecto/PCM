@@ -1,9 +1,9 @@
 'use client';
 
 import React from 'react';
-import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { Mail, GraduationCap, ArrowRight, Sparkles, BookOpen } from 'lucide-react';
+import { FacultyPortrait } from '@/components/common/FacultyPortrait';
 
 export const FacultySection: React.FC = () => {
   const { faculty, setSelectedFaculty, navigateTo } = usePCM();
@@ -48,16 +48,15 @@ export const FacultySection: React.FC = () => {
             >
               <div>
                 {/* Photo */}
-                <div className="h-64 overflow-hidden relative">
-                  <Image
-                    src={member.imageUrl}
-                    alt={member.name}
-                    fill
-                    className="object-cover object-top group-hover:scale-105 transition-transform duration-500"
+                <div className="h-64 overflow-hidden relative bg-[#070e1c]">
+                  <FacultyPortrait
+                    name={member.name}
+                    imageUrl={member.imageUrl}
+                    id={`featured-${member.id}`}
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
-                    referrerPolicy="no-referrer"
+                    className="group-hover:scale-105 transition-transform duration-500"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#18392B]/90 via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#18392B]/90 via-transparent to-transparent opacity-80 group-hover:opacity-60 transition-opacity pointer-events-none" />
                   
                   <div className="absolute bottom-3 left-3 right-3">
                     <span className="text-[10px] font-mono font-bold uppercase tracking-wider bg-[#18392B]/90 text-[#D0DED8] px-2 py-0.5 rounded border border-[#588B76]/50 shadow">
