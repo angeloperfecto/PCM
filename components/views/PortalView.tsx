@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
+import { Emblem } from '@/components/common/Emblem';
 import {
   GraduationCap,
   Calendar,
@@ -89,9 +90,9 @@ export const PortalView: React.FC = () => {
     return (
       <div className="w-full min-h-[80vh] bg-[#070e1c] py-16 px-4 flex items-center justify-center font-sans">
         <div className="max-w-md w-full bg-[#18392B] rounded-2xl border border-slate-700 shadow-2xl p-8 space-y-6 text-white">
-          <div className="text-center space-y-2">
-            <div className="w-16 h-16 bg-[#588B76]/10 border border-[#588B76]/30 rounded-2xl flex items-center justify-center mx-auto text-[#85AA9B]">
-              <GraduationCap className="w-8 h-8" />
+          <div className="text-center space-y-3">
+            <div className="w-20 h-20 bg-white/10 p-2.5 rounded-2xl border border-[#588B76]/40 flex items-center justify-center mx-auto shadow-xl backdrop-blur-xs">
+              <Emblem id="student-portal-pcm-logo" size={64} className="w-16 h-16 drop-shadow-md" />
             </div>
             <h2 className="font-serif text-2xl font-bold text-white">MyPCM Student Portal</h2>
             <p className="text-xs text-slate-400">

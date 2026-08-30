@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
+import { Emblem } from '@/components/common/Emblem';
 import {
   Lock,
   LogOut,
@@ -78,9 +79,9 @@ export const AdminView: React.FC = () => {
     return (
       <div className="w-full min-h-[70vh] bg-[#070e1c] py-16 px-4 flex items-center justify-center font-sans">
         <div className="max-w-md w-full bg-[#18392B] rounded-2xl border border-slate-700 shadow-2xl p-8 space-y-6 text-white">
-          <div className="text-center space-y-2">
-            <div className="w-14 h-14 rounded-2xl bg-[#588B76] text-[#18392B] flex items-center justify-center mx-auto shadow-lg">
-              <Lock className="w-7 h-7" />
+          <div className="text-center space-y-3">
+            <div className="w-20 h-20 bg-white/10 p-2.5 rounded-2xl border border-[#588B76]/40 flex items-center justify-center mx-auto shadow-xl backdrop-blur-xs">
+              <Emblem id="admin-login-pcm-logo" size={64} className="w-16 h-16 drop-shadow-md" />
             </div>
             <h2 className="font-serif text-2xl font-bold text-white">
               PCM Admin CMS Console
@@ -139,13 +140,18 @@ export const AdminView: React.FC = () => {
       {/* Top Header */}
       <div className="bg-[#18392B] text-white py-6 px-4 sm:px-8 border-b-4 border-[#588B76]">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div>
-            <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#85AA9B]">
-              PCM Institutional Content & Admissions Management System
-            </span>
-            <h1 className="font-serif text-2xl font-bold text-white">
-              Administrator Control Console
-            </h1>
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-white/10 p-1 border border-[#588B76]/30 flex items-center justify-center shrink-0">
+              <Emblem id="admin-header-logo" size={40} className="w-10 h-10" />
+            </div>
+            <div>
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#85AA9B]">
+                PCM Institutional Content & Admissions Management System
+              </span>
+              <h1 className="font-serif text-2xl font-bold text-white">
+                Administrator Control Console
+              </h1>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
