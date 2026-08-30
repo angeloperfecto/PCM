@@ -15,6 +15,14 @@ export const metadata: Metadata = {
     'Biblical Studies'
   ],
   authors: [{ name: 'Philippines College of Ministry' }],
+  icons: {
+    icon: [
+      { url: '/pcm-logo.svg', type: 'image/svg+xml' },
+      { url: '/images/pcm-logo.svg', type: 'image/svg+xml' },
+    ],
+    shortcut: '/pcm-logo.svg',
+    apple: '/pcm-logo.svg',
+  },
   openGraph: {
     title: 'PCM — Philippines College of Ministry | Equipping Servants for Kingdom Impact',
     description: 'Philippines College of Ministry provides Christ-centered theological and ministry education designed to equip faithful servants, ministry leaders, and Christian workers for Kingdom impact.',
@@ -32,6 +40,11 @@ export const metadata: Metadata = {
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
     <html lang="en" className="scroll-smooth">
+      <head>
+        <link rel="icon" href="/pcm-logo.svg" type="image/svg+xml" />
+        <link rel="alternate icon" href="/images/pcm-logo.svg" type="image/svg+xml" />
+        <link rel="apple-touch-icon" href="/pcm-logo.svg" />
+      </head>
       <body suppressHydrationWarning className="bg-white text-[#18392B] font-sans antialiased selection:bg-[#588B76]/25 selection:text-[#18392B]">
         {children}
       </body>
