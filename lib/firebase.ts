@@ -19,8 +19,10 @@ import firebaseConfig from '../firebase-applet-config.json';
 // Initialize Firebase App instance singleton
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with custom database ID
-export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+// Initialize Firestore with custom database ID if specified
+export const db = firebaseConfig.firestoreDatabaseId
+  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+  : getFirestore(app);
 
 // Initialize Auth
 export const auth = getAuth(app);
@@ -54,7 +56,12 @@ export async function uploadFileToFirebaseStorage(
     const downloadUrl = await getDownloadURL(snapshot.ref);
     return downloadUrl;
   } catch (error) {
-    console.error('Firebase storage upload failed:', error);
-    throw error;
+    console.warn('Firebase storage upload fallback to data URL:', error);
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 }

@@ -309,7 +309,7 @@ interface PCMContextType {
 
 const PCMContext = createContext<PCMContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'pcm_cms_database_v4';
+const LOCAL_STORAGE_KEY = 'pcm_cms_database_v5';
 
 function loadPersisted<T>(key: string, fallback: T): T {
   if (typeof window === 'undefined') return fallback;
@@ -674,13 +674,17 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setFirebaseSyncStatus('syncing');
 
         // Check if database already has initial content
-        const configDocSnap = await getDoc(doc(db, 'siteConfig', 'global'));
-        const programsSnap = await getDocs(collection(db, 'programs'));
+        try {
+          const configDocSnap = await getDoc(doc(db, 'siteConfig', 'global'));
+          const programsSnap = await getDocs(collection(db, 'programs'));
 
-        if (!configDocSnap.exists() && programsSnap.empty && !initialSeededRef.current) {
-          initialSeededRef.current = true;
-          console.info('Firestore database is empty. Auto-seeding initial PCM institutional baseline...');
-          await syncAllDataToFirestore(false);
+          if (!configDocSnap.exists() && programsSnap.empty && !initialSeededRef.current) {
+            initialSeededRef.current = true;
+            console.info('Firestore database is empty. Auto-seeding initial PCM institutional baseline...');
+            await syncAllDataToFirestore(false);
+          }
+        } catch (seedErr) {
+          console.warn('Initial seed check notice:', seedErr);
         }
 
         // Set up real-time onSnapshot listeners
@@ -940,7 +944,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         downloadUrl = await uploadFileToFirebaseStorage(file, path);
       } catch (storageError) {
         console.warn('Direct Storage upload failed, converting to object data URL:', storageError);
-        // Fallback to data URL or object URL
         downloadUrl = await new Promise((resolve) => {
           const reader = new FileReader();
           reader.onload = (e) => resolve(e.target?.result as string);
@@ -1292,21 +1295,21 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fac = faculty.find((f) => f.id === id);
     setFaculty((prev) => prev.filter((f) => f.id !== id));
     deleteDoc(doc(db, 'faculty', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'Faculty Member', id, fac?.name || 'Faculty Member', 'Removed profile from institutional directory.');
-    addToast('info', 'Faculty Removed', 'Faculty profile deleted.');
+    logActivity('DELETE', 'Faculty Member', id, fac?.name || 'Faculty Member', 'Removed faculty record from directory.');
+    addToast('info', 'Faculty Removed', 'Faculty profile removed.');
   };
 
-  // News Articles CRUD
+  // News CRUD
   const addNewsArticle = (article: Omit<NewsArticle, 'id'>): NewsArticle => {
     const newArt: NewsArticle = {
       ...article,
-      id: `art-${Date.now()}`,
+      id: `news-${Date.now()}`,
       status: article.status || 'Published',
     };
     setNews((prev) => [newArt, ...prev]);
     setDoc(doc(db, 'news', newArt.id), newArt, { merge: true }).catch((e) => console.warn(e));
-    logActivity('CREATE', 'News Article', newArt.id, newArt.title, `Published news article in ${newArt.category}.`);
-    addToast('success', 'Article Published', `"${newArt.title}" has been published.`);
+    logActivity('CREATE', 'News Article', newArt.id, newArt.title, 'Published college news/feature article.');
+    addToast('success', 'Article Published', `"${newArt.title}" published.`);
     return newArt;
   };
 
@@ -1315,16 +1318,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((n) => (n.id === id ? { ...n, ...updates } : n))
     );
     updateDoc(doc(db, 'news', id), updates).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'News Article', id, updates.title || 'News Article', 'Updated article content and featured image.');
-    addToast('success', 'Article Saved', 'News article updated.');
+    logActivity('UPDATE', 'News Article', id, updates.title || 'News Article', 'Updated article content and cover image.');
+    addToast('success', 'Article Updated', 'News article updated.');
   };
 
   const deleteNewsArticle = (id: string) => {
     const art = news.find((n) => n.id === id);
     setNews((prev) => prev.filter((n) => n.id !== id));
     deleteDoc(doc(db, 'news', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'News Article', id, art?.title || 'Article', 'Deleted news article.');
-    addToast('info', 'Article Deleted', 'News item removed.');
+    logActivity('DELETE', 'News Article', id, art?.title || 'News Article', 'Deleted news article.');
+    addToast('info', 'Article Deleted', 'News article removed.');
   };
 
   // Events CRUD
@@ -1332,11 +1335,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newEvt: CollegeEvent = {
       ...event,
       id: `evt-${Date.now()}`,
-      status: event.status || 'Published',
+      registeredAttendees: event.registeredAttendees || [],
     };
     setEvents((prev) => [newEvt, ...prev]);
     setDoc(doc(db, 'events', newEvt.id), newEvt, { merge: true }).catch((e) => console.warn(e));
-    logActivity('CREATE', 'Event', newEvt.id, newEvt.title, `Scheduled college event on ${newEvt.date}.`);
+    logActivity('CREATE', 'Event', newEvt.id, newEvt.title, `Scheduled college calendar event for ${newEvt.date}.`);
     addToast('success', 'Event Scheduled', `"${newEvt.title}" added to calendar.`);
     return newEvt;
   };
@@ -1346,15 +1349,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((e) => (e.id === id ? { ...e, ...updates } : e))
     );
     updateDoc(doc(db, 'events', id), updates).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'Event', id, updates.title || 'Event', 'Updated event date, venue, and registration options.');
-    addToast('success', 'Event Updated', 'Event calendar details saved.');
+    logActivity('UPDATE', 'Event', id, updates.title || 'Event', 'Updated event date, venue, and description.');
+    addToast('success', 'Event Updated', 'Calendar event saved.');
   };
 
   const deleteEvent = (id: string) => {
     const evt = events.find((e) => e.id === id);
     setEvents((prev) => prev.filter((e) => e.id !== id));
     deleteDoc(doc(db, 'events', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'Event', id, evt?.title || 'Event', 'Deleted event from calendar.');
+    logActivity('DELETE', 'Event', id, evt?.title || 'Event', 'Cancelled calendar event.');
     addToast('info', 'Event Deleted', 'Calendar event removed.');
   };
 
@@ -1362,13 +1365,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addDownload = (res: Omit<DownloadableResource, 'id'>): DownloadableResource => {
     const newRes: DownloadableResource = {
       ...res,
-      id: `res-${Date.now()}`,
-      status: res.status || 'Published',
+      id: `dl-${Date.now()}`,
+      downloadsCount: 0,
     };
     setDownloads((prev) => [newRes, ...prev]);
     setDoc(doc(db, 'downloads', newRes.id), newRes, { merge: true }).catch((e) => console.warn(e));
-    logActivity('CREATE', 'Download Resource', newRes.id, newRes.title, `Added downloadable document (${newRes.category}).`);
-    addToast('success', 'Document Added', `"${newRes.title}" available for download.`);
+    logActivity('CREATE', 'Resource / Form', newRes.id, newRes.title, `Added downloadable document (${newRes.category}).`);
+    addToast('success', 'Resource Added', `"${newRes.title}" is now available for download.`);
     return newRes;
   };
 
@@ -1377,29 +1380,25 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
     );
     updateDoc(doc(db, 'downloads', id), updates).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'Download Resource', id, updates.title || 'Resource', 'Updated document metadata.');
-    addToast('success', 'Document Saved', 'Download resource updated.');
+    logActivity('UPDATE', 'Resource / Form', id, updates.title || 'Resource', 'Updated downloadable resource metadata.');
+    addToast('success', 'Resource Updated', 'Downloadable document saved.');
   };
 
   const deleteDownload = (id: string) => {
-    const res = downloads.find((d) => d.id === id);
-    setDownloads((prev) => prev.filter((d) => d.id !== id));
+    const d = downloads.find((item) => item.id === id);
+    setDownloads((prev) => prev.filter((item) => item.id !== id));
     deleteDoc(doc(db, 'downloads', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'Download Resource', id, res?.title || 'Resource', 'Removed document from resource library.');
-    addToast('info', 'Document Removed', 'Resource file deleted.');
+    logActivity('DELETE', 'Resource / Form', id, d?.title || 'Resource', 'Deleted downloadable document.');
+    addToast('info', 'Resource Removed', 'Document removed from downloads.');
   };
 
   // Testimonials CRUD
   const addTestimonial = (item: Omit<Testimonial, 'id'>) => {
-    const newTest: Testimonial = {
-      ...item,
-      id: `test-${Date.now()}`,
-      status: item.status || 'Published',
-    };
-    setTestimonials((prev) => [newTest, ...prev]);
-    setDoc(doc(db, 'testimonials', newTest.id), newTest, { merge: true }).catch((e) => console.warn(e));
-    logActivity('CREATE', 'Testimonial', newTest.id, newTest.name, `Added student/alumni testimonial from ${newTest.name}.`);
-    addToast('success', 'Testimonial Added', `Added testimonial from ${newTest.name}.`);
+    const newItem: Testimonial = { ...item, id: `test-${Date.now()}` };
+    setTestimonials((prev) => [newItem, ...prev]);
+    setDoc(doc(db, 'testimonials', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
+    logActivity('CREATE', 'Testimonial', newItem.id, newItem.name, `Added testimony quote from ${newItem.name} (${newItem.role}).`);
+    addToast('success', 'Testimonial Added', `Added testimonial from ${newItem.name}.`);
   };
 
   const updateTestimonial = (id: string, updates: Partial<Testimonial>) => {
@@ -1407,38 +1406,35 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
     updateDoc(doc(db, 'testimonials', id), updates).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'Testimonial', id, updates.name || 'Testimonial', 'Updated testimonial quote.');
-    addToast('success', 'Testimonial Saved', 'Testimonial updated.');
+    logActivity('UPDATE', 'Testimonial', id, updates.name || 'Testimonial', 'Updated testimonial quote and role.');
+    addToast('success', 'Testimonial Updated', 'Testimonial saved.');
   };
 
   const deleteTestimonial = (id: string) => {
-    const item = testimonials.find((t) => t.id === id);
-    setTestimonials((prev) => prev.filter((t) => t.id !== id));
+    const t = testimonials.find((item) => item.id === id);
+    setTestimonials((prev) => prev.filter((item) => item.id !== id));
     deleteDoc(doc(db, 'testimonials', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'Testimonial', id, item?.name || 'Testimonial', 'Removed testimonial.');
+    logActivity('DELETE', 'Testimonial', id, t?.name || 'Testimonial', 'Deleted testimonial quote.');
     addToast('info', 'Testimonial Removed', 'Testimonial deleted.');
   };
 
-  // Impact Stats CRUD
+  // Stats CRUD
   const updateStat = (id: string, updates: Partial<ImpactStat>) => {
     setStats((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     );
     updateDoc(doc(db, 'stats', id), updates).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'Impact Stat', id, updates.label || 'Stat', 'Updated quantitative impact metric.');
-    addToast('success', 'Stat Updated', 'Institutional impact metric saved.');
+    logActivity('UPDATE', 'Institutional Stat', id, updates.label || 'Stat', 'Updated institutional metric values.');
+    addToast('success', 'Metric Updated', 'Institutional impact statistic saved.');
   };
 
   // FAQs CRUD
   const addFaq = (item: Omit<FAQItem, 'id'>) => {
-    const newFaq: FAQItem = {
-      ...item,
-      id: `faq-${Date.now()}`,
-    };
-    setFaqs((prev) => [...prev, newFaq]);
-    setDoc(doc(db, 'faqs', newFaq.id), newFaq, { merge: true }).catch((e) => console.warn(e));
-    logActivity('CREATE', 'FAQ', newFaq.id, newFaq.question, 'Added new admissions/academics FAQ.');
-    addToast('success', 'FAQ Added', 'Frequently asked question added.');
+    const newItem: FAQItem = { ...item, id: `faq-${Date.now()}` };
+    setFaqs((prev) => [...prev, newItem]);
+    setDoc(doc(db, 'faqs', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
+    logActivity('CREATE', 'FAQ', newItem.id, newItem.question, 'Added new FAQ entry.');
+    addToast('success', 'FAQ Added', 'New question & answer added.');
   };
 
   const updateFaq = (id: string, updates: Partial<FAQItem>) => {
@@ -1446,29 +1442,25 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
     );
     updateDoc(doc(db, 'faqs', id), updates).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'FAQ', id, updates.question || 'FAQ', 'Updated question and answer text.');
-    addToast('success', 'FAQ Saved', 'FAQ updated.');
+    logActivity('UPDATE', 'FAQ', id, updates.question || 'FAQ', 'Updated question and response.');
+    addToast('success', 'FAQ Updated', 'FAQ item saved.');
   };
 
   const deleteFaq = (id: string) => {
-    const item = faqs.find((f) => f.id === id);
-    setFaqs((prev) => prev.filter((f) => f.id !== id));
+    const f = faqs.find((item) => item.id === id);
+    setFaqs((prev) => prev.filter((item) => item.id !== id));
     deleteDoc(doc(db, 'faqs', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'FAQ', id, item?.question || 'FAQ', 'Deleted FAQ entry.');
-    addToast('info', 'FAQ Deleted', 'FAQ removed.');
+    logActivity('DELETE', 'FAQ', id, f?.question || 'FAQ', 'Deleted FAQ entry.');
+    addToast('info', 'FAQ Removed', 'FAQ item deleted.');
   };
 
   // Sermons CRUD
   const addSermon = (item: Omit<SermonLecture, 'id'>) => {
-    const newSermon: SermonLecture = {
-      ...item,
-      id: `sermon-${Date.now()}`,
-      status: item.status || 'Published',
-    };
-    setSermons((prev) => [newSermon, ...prev]);
-    setDoc(doc(db, 'sermons', newSermon.id), newSermon, { merge: true }).catch((e) => console.warn(e));
-    logActivity('CREATE', 'Chapel Sermon', newSermon.id, newSermon.title, `Uploaded sermon recording by ${newSermon.speaker}.`);
-    addToast('success', 'Sermon Added', `"${newSermon.title}" added to media archive.`);
+    const newItem: SermonLecture = { ...item, id: `sermon-${Date.now()}` };
+    setSermons((prev) => [newItem, ...prev]);
+    setDoc(doc(db, 'sermons', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
+    logActivity('CREATE', 'Sermon / Chapel', newItem.id, newItem.title, `Added chapel audio lecture by ${newItem.speaker}.`);
+    addToast('success', 'Sermon Added', `"${newItem.title}" added to chapel archive.`);
   };
 
   const updateSermon = (id: string, updates: Partial<SermonLecture>) => {
@@ -1476,29 +1468,25 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     );
     updateDoc(doc(db, 'sermons', id), updates).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'Chapel Sermon', id, updates.title || 'Sermon', 'Updated sermon details.');
-    addToast('success', 'Sermon Saved', 'Chapel sermon updated.');
+    logActivity('UPDATE', 'Sermon / Chapel', id, updates.title || 'Sermon', 'Updated sermon details and audio link.');
+    addToast('success', 'Sermon Updated', 'Chapel archive item saved.');
   };
 
   const deleteSermon = (id: string) => {
-    const s = sermons.find((x) => x.id === id);
-    setSermons((prev) => prev.filter((x) => x.id !== id));
+    const s = sermons.find((item) => item.id === id);
+    setSermons((prev) => prev.filter((item) => item.id !== id));
     deleteDoc(doc(db, 'sermons', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'Chapel Sermon', id, s?.title || 'Sermon', 'Removed sermon recording.');
-    addToast('info', 'Sermon Removed', 'Sermon deleted.');
+    logActivity('DELETE', 'Sermon / Chapel', id, s?.title || 'Sermon', 'Deleted chapel sermon entry.');
+    addToast('info', 'Sermon Removed', 'Chapel sermon removed from archive.');
   };
 
   // Scrapbook CRUD
   const addScrapbookItem = (item: Omit<ScrapbookItem, 'id'>) => {
-    const newItem: ScrapbookItem = {
-      ...item,
-      id: `sb-${Date.now()}`,
-      status: item.status || 'Published',
-    };
+    const newItem: ScrapbookItem = { ...item, id: `sb-${Date.now()}` };
     setScrapbook((prev) => [newItem, ...prev]);
     setDoc(doc(db, 'scrapbook', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
-    logActivity('CREATE', 'Scrapbook Photo', newItem.id, newItem.title, 'Added photo to campus scrapbook.');
-    addToast('success', 'Scrapbook Photo Added', 'Photo added to historical archive.');
+    logActivity('CREATE', 'Historical Scrapbook', newItem.id, newItem.title, `Added heritage milestone (${newItem.year}).`);
+    addToast('success', 'Historical Item Added', `"${newItem.title}" added to heritage archive.`);
   };
 
   const updateScrapbookItem = (id: string, updates: Partial<ScrapbookItem>) => {
@@ -1506,102 +1494,106 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((sb) => (sb.id === id ? { ...sb, ...updates } : sb))
     );
     updateDoc(doc(db, 'scrapbook', id), updates).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'Scrapbook Photo', id, updates.title || 'Photo', 'Updated scrapbook caption and tags.');
-    addToast('success', 'Scrapbook Photo Saved', 'Photo details updated.');
+    logActivity('UPDATE', 'Historical Scrapbook', id, updates.title || 'Heritage Item', 'Updated heritage archive record.');
+    addToast('success', 'Heritage Item Updated', 'Scrapbook milestone saved.');
   };
 
   const deleteScrapbookItem = (id: string) => {
-    const item = scrapbook.find((s) => s.id === id);
-    setScrapbook((prev) => prev.filter((s) => s.id !== id));
+    const sb = scrapbook.find((item) => item.id === id);
+    setScrapbook((prev) => prev.filter((item) => item.id !== id));
     deleteDoc(doc(db, 'scrapbook', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'Scrapbook Photo', id, item?.title || 'Photo', 'Deleted photo from scrapbook.');
-    addToast('info', 'Scrapbook Photo Removed', 'Photo removed.');
+    logActivity('DELETE', 'Historical Scrapbook', id, sb?.title || 'Heritage Item', 'Deleted scrapbook historical record.');
+    addToast('info', 'Historical Item Removed', 'Scrapbook record deleted.');
   };
 
-  // Applications
+  // Admissions Application Workflow
   const submitApplication = async (appData: any): Promise<string> => {
-    const randomNum = Math.floor(1000 + Math.random() * 9000);
-    const ref = `PCM-2026-${randomNum}`;
+    const year = new Date().getFullYear();
+    const randDigits = Math.floor(1000 + Math.random() * 9000);
+    const refNumber = `PCM-${year}-${randDigits}`;
+
     const newApp: AdmissionApplication = {
-      ...appData,
       id: `app-${Date.now()}`,
-      referenceNumber: ref,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      referenceNumber: refNumber,
+      fullName: appData.fullName,
+      email: appData.email,
+      phone: appData.phone || '',
+      dateOfBirth: appData.dob || '',
+      gender: appData.gender || 'Prefer not to say',
+      address: appData.address || '',
+      program: appData.program || 'Bachelor of Theology (B.Th.)',
       status: 'Submitted',
-      internalNotes: ['Application submitted via PCM Online Portal.'],
+      submissionDate: new Date().toISOString().split('T')[0],
+      christianTestimony: appData.testimony || '',
+      churchAffiliation: appData.church || '',
+      pastorName: appData.pastorName || '',
+      pastorContact: appData.pastorContact || '',
+      highSchool: appData.highSchool || '',
+      previousCollege: appData.previousCollege || '',
+      adminNotes: 'Application received online. Queued for initial Admissions Committee review.',
     };
 
     setApplications((prev) => [newApp, ...prev]);
-    setActiveTrackerRef(ref);
-
     try {
       await setDoc(doc(db, 'applications', newApp.id), newApp, { merge: true });
-    } catch (err) {
-      console.warn('Firestore application write warning:', err);
+    } catch (e) {
+      console.warn('Firestore application save warning:', e);
     }
 
-    logActivity('CREATE', 'Admissions Application', newApp.id, `${newApp.fullName} (${ref})`, 'New online admission application submitted.');
-    addToast('success', 'Application Submitted Successfully!', `Your Reference Number is ${ref}. Data saved to cloud admissions registry.`);
-    return ref;
+    logActivity('CREATE', 'Admission Application', newApp.id, `${newApp.fullName} (${refNumber})`, `New online admission application submitted for ${newApp.program}.`);
+    addToast('success', 'Application Submitted', `Your application has been received. Reference: ${refNumber}`);
+    return refNumber;
   };
 
-  const updateApplicationStatus = (id: string, status: any, note?: string) => {
+  const updateApplicationStatus = async (id: string, status: ApplicationStatus, note?: string) => {
+    const targetApp = applications.find((a) => a.id === id);
+    const updatedNote = note
+      ? `${targetApp?.adminNotes || ''}\n[${new Date().toLocaleDateString()} - ${currentAdminUser.name}]: ${note}`
+      : targetApp?.adminNotes;
+
     setApplications((prev) =>
-      prev.map((app) => {
-        if (app.id === id) {
-          const updatedNotes = note
-            ? [...(app.internalNotes || []), `${new Date().toLocaleDateString()}: ${note}`]
-            : app.internalNotes;
-          logActivity('UPDATE', 'Admissions Application', id, app.fullName, `Updated status to "${status}". Note: ${note || 'Status change'}`);
-          const updatedApp = {
-            ...app,
-            status,
-            updatedAt: new Date().toISOString(),
-            internalNotes: updatedNotes,
-          };
-          updateDoc(doc(db, 'applications', id), {
-            status,
-            updatedAt: updatedApp.updatedAt,
-            internalNotes: updatedNotes,
-          }).catch((e) => console.warn(e));
-          return updatedApp;
-        }
-        return app;
-      })
+      prev.map((app) => (app.id === id ? { ...app, status, adminNotes: updatedNote } : app))
     );
-    addToast('info', 'Application Status Updated', `Applicant status set to "${status}".`);
+
+    try {
+      await updateDoc(doc(db, 'applications', id), { status, adminNotes: updatedNote });
+    } catch (e) {
+      console.warn(e);
+    }
+
+    logActivity('UPDATE', 'Admission Application', id, targetApp?.fullName || 'Applicant', `Application status changed to "${status}".`);
+    addToast('success', 'Applicant Status Updated', `Status updated to ${status}.`);
   };
 
-  const addApplicationNote = (id: string, note: string) => {
-    if (!note.trim()) return;
+  const addApplicationNote = async (id: string, note: string) => {
+    const targetApp = applications.find((a) => a.id === id);
+    const newNotes = `${targetApp?.adminNotes || ''}\n[${new Date().toLocaleDateString()} - ${currentAdminUser.name}]: ${note}`;
+
     setApplications((prev) =>
-      prev.map((app) => {
-        if (app.id === id) {
-          const updatedNotes = [...(app.internalNotes || []), `${new Date().toLocaleDateString()}: ${note.trim()}`];
-          logActivity('UPDATE', 'Admissions Application', id, app.fullName, `Added internal note: ${note.trim()}`);
-          updateDoc(doc(db, 'applications', id), {
-            updatedAt: new Date().toISOString(),
-            internalNotes: updatedNotes,
-          }).catch((e) => console.warn(e));
-          return {
-            ...app,
-            updatedAt: new Date().toISOString(),
-            internalNotes: updatedNotes,
-          };
-        }
-        return app;
-      })
+      prev.map((app) => (app.id === id ? { ...app, adminNotes: newNotes } : app))
     );
-    addToast('success', 'Note Added', 'Internal admissions note saved.');
+
+    try {
+      await updateDoc(doc(db, 'applications', id), { adminNotes: newNotes });
+    } catch (e) {
+      console.warn(e);
+    }
+
+    addToast('info', 'Internal Note Logged', 'Application review note saved.');
   };
 
-  const deleteApplication = (id: string) => {
-    const app = applications.find((a) => a.id === id);
+  const deleteApplication = async (id: string) => {
+    const targetApp = applications.find((a) => a.id === id);
     setApplications((prev) => prev.filter((a) => a.id !== id));
-    deleteDoc(doc(db, 'applications', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'Admissions Application', id, app?.fullName || 'Application', 'Deleted admission application record.');
-    addToast('info', 'Application Deleted', 'Applicant record deleted.');
+
+    try {
+      await deleteDoc(doc(db, 'applications', id));
+    } catch (e) {
+      console.warn(e);
+    }
+
+    logActivity('DELETE', 'Admission Application', id, targetApp?.fullName || 'Applicant', 'Deleted admission application record.');
+    addToast('info', 'Application Removed', 'Application record deleted.');
   };
 
   const getApplicationByRef = (ref: string): AdmissionApplication | undefined => {
@@ -1610,298 +1602,268 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  // Student Auth
-  const studentLogin = (id: string, pass: string): boolean => {
-    if (id.trim().toUpperCase() === 'PCM-2024-0192' || id.trim().length > 3) {
+  // Student Portal Actions
+  const studentLogin = (studentId: string, pass: string): boolean => {
+    if (
+      studentId.trim().toUpperCase() === studentProfile.studentId.toUpperCase() &&
+      pass === 'pcm1966'
+    ) {
       setIsStudentLoggedIn(true);
-      addToast('success', 'Portal Access Granted', `Welcome back, ${studentProfile.fullName}.`);
+      addToast('success', 'Student Authenticated', `Welcome back, ${studentProfile.name}!`);
       return true;
     }
+    addToast('error', 'Authentication Failed', 'Invalid Student ID or Password.');
     return false;
   };
 
   const studentLogout = () => {
     setIsStudentLoggedIn(false);
-    addToast('info', 'Signed Out', 'You have been signed out of MyPCM Student Portal.');
+    addToast('info', 'Logged Out', 'Student session ended.');
   };
 
-  // Admin Auth
-  const adminLogin = (user: string, pass: string): boolean => {
-    const foundUser = adminUsers.find(
-      (u) =>
-        (u.username.toLowerCase() === user.trim().toLowerCase() || u.email.toLowerCase() === user.trim().toLowerCase()) &&
-        (u.password === pass || pass === 'pcm2026' || pass === 'password')
-    );
-
-    if (foundUser) {
-      setIsAdminLoggedIn(true);
-      setCurrentAdminUser(foundUser);
-      logActivity('UPDATE', 'Admin Session', foundUser.id, foundUser.name, `Admin signed in successfully (${foundUser.role}).`);
-      addToast('success', 'Administrator Session Active', `Welcome, ${foundUser.name} (${foundUser.role}).`);
-      return true;
-    }
-
-    // Default fallback check
-    if ((user === 'admin' || user === 'administrator') && (pass === 'pcm2026' || pass === 'password' || pass === 'admin')) {
-      setIsAdminLoggedIn(true);
-      setCurrentAdminUser(adminUsers[0]);
-      logActivity('UPDATE', 'Admin Session', adminUsers[0].id, adminUsers[0].name, 'Super Admin signed into PCM CMS.');
-      addToast('success', 'Administrator Session Active', 'Signed into PCM Institutional Control System.');
-      return true;
-    }
-
-    return false;
-  };
-
-  const adminLogout = () => {
-    if (currentAdminUser) {
-      logActivity('UPDATE', 'Admin Session', currentAdminUser.id, currentAdminUser.name, 'Admin logged out.');
-    }
-    setIsAdminLoggedIn(false);
-    addToast('info', 'Admin Signed Out', 'Admin session closed securely.');
-  };
-
-  // Admin User Management
-  const addAdminUser = (user: Omit<AdminUser, 'id' | 'createdAt'>): AdminUser => {
-    const newUser: AdminUser = {
-      ...user,
-      id: `adm-${Date.now()}`,
-      createdAt: new Date().toISOString().split('T')[0],
-      password: user.password || 'password',
-    };
-    setAdminUsers((prev) => [...prev, newUser]);
-    setDoc(doc(db, 'adminUsers', newUser.id), newUser, { merge: true }).catch((e) => console.warn(e));
-    logActivity('CREATE', 'Admin User', newUser.id, newUser.name, `Created new admin account with ${newUser.role} role.`);
-    addToast('success', 'User Created', `Administrator "${newUser.name}" added.`);
-    return newUser;
-  };
-
-  const updateAdminUser = (id: string, updates: Partial<AdminUser>) => {
-    setAdminUsers((prev) =>
-      prev.map((u) => {
-        if (u.id === id) {
-          const updated = { ...u, ...updates };
-          if (currentAdminUser?.id === id) {
-            setCurrentAdminUser(updated);
-          }
-          updateDoc(doc(db, 'adminUsers', id), updates).catch((e) => console.warn(e));
-          return updated;
-        }
-        return u;
-      })
-    );
-    logActivity('UPDATE', 'Admin User', id, updates.name || 'Admin User', 'Updated administrator profile & role permissions.');
-    addToast('success', 'User Updated', 'Administrator profile updated.');
-  };
-
-  const deleteAdminUser = (id: string) => {
-    if (adminUsers.length <= 1) {
-      addToast('error', 'Cannot Delete', 'At least one Super Admin must remain in the system.');
-      return;
-    }
-    const userToDelete = adminUsers.find((u) => u.id === id);
-    setAdminUsers((prev) => prev.filter((u) => u.id !== id));
-    deleteDoc(doc(db, 'adminUsers', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'Admin User', id, userToDelete?.name || 'Admin User', 'Removed administrator account.');
-    addToast('info', 'User Deleted', 'Administrator account removed.');
-  };
-
-  const changeAdminPassword = (userId: string, newPass: string): boolean => {
-    if (!newPass || newPass.length < 4) {
-      addToast('error', 'Password Too Short', 'Password must be at least 4 characters long.');
-      return false;
-    }
-    setAdminUsers((prev) =>
-      prev.map((u) => (u.id === userId ? { ...u, password: newPass } : u))
-    );
-    updateDoc(doc(db, 'adminUsers', userId), { password: newPass }).catch((e) => console.warn(e));
-    logActivity('SETTINGS', 'Admin Security', userId, 'Security Settings', 'Changed administrator account password.');
-    addToast('success', 'Password Changed', 'Security password successfully updated.');
-    return true;
-  };
-
-  // Database Backup & Restore
-  const exportDatabaseJson = (): string => {
-    const fullBackup = {
-      version: '4.0-firebase',
-      exportedAt: new Date().toISOString(),
-      institution: 'Philippine College of Ministry',
-      firebaseProject: 'intelligent-park-95fd2',
-      siteConfig,
-      mediaItems,
-      galleryAlbums,
-      activityLogs,
-      announcements,
-      programs,
-      news,
-      events,
-      faculty,
-      testimonials,
-      stats,
-      faqs,
-      downloads,
-      sermons,
-      scrapbook,
-      applications,
-      adminUsers,
-    };
-    logActivity('SETTINGS', 'Database Backup', 'backup', 'System Snapshot', 'Exported complete website database JSON backup.');
-    return JSON.stringify(fullBackup, null, 2);
-  };
-
-  const importDatabaseJson = (jsonString: string): boolean => {
-    try {
-      const parsed = JSON.parse(jsonString);
-      if (parsed.siteConfig) setSiteConfig(parsed.siteConfig);
-      if (parsed.mediaItems) setMediaItems(parsed.mediaItems);
-      if (parsed.galleryAlbums) setGalleryAlbums(parsed.galleryAlbums);
-      if (parsed.announcements) setAnnouncements(parsed.announcements);
-      if (parsed.programs) setPrograms(parsed.programs);
-      if (parsed.news) setNews(parsed.news);
-      if (parsed.events) setEvents(parsed.events);
-      if (parsed.faculty) setFaculty(parsed.faculty);
-      if (parsed.testimonials) setTestimonials(parsed.testimonials);
-      if (parsed.stats) setStats(parsed.stats);
-      if (parsed.faqs) setFaqs(parsed.faqs);
-      if (parsed.downloads) setDownloads(parsed.downloads);
-      if (parsed.sermons) setSermons(parsed.sermons);
-      if (parsed.scrapbook) setScrapbook(parsed.scrapbook);
-      if (parsed.applications) setApplications(parsed.applications);
-      if (parsed.adminUsers) setAdminUsers(parsed.adminUsers);
-
-      // Also trigger cloud push
-      setTimeout(() => {
-        syncAllDataToFirestore(false);
-      }, 500);
-
-      logActivity('RESTORE', 'Database Restore', 'restore', 'JSON Import', 'Restored website data from backup JSON and synchronized with Firebase.');
-      addToast('success', 'Database Restored', 'All content, sections, and settings successfully imported and synced to Firebase.');
-      return true;
-    } catch (e: any) {
-      addToast('error', 'Import Failed', 'Invalid JSON file format. Please check your backup file.');
-      return false;
-    }
-  };
-
-  const resetToInitialData = () => {
-    setSiteConfig(INITIAL_SITE_CONFIG);
-    setMediaItems(INITIAL_MEDIA_ITEMS);
-    setGalleryAlbums(INITIAL_GALLERY_ALBUMS);
-    setActivityLogs(INITIAL_ACTIVITY_LOGS);
-    setAnnouncements(INITIAL_ANNOUNCEMENTS);
-    setPrograms(INITIAL_PROGRAMS);
-    setNews(INITIAL_NEWS);
-    setEvents(INITIAL_EVENTS);
-    setFaculty(INITIAL_FACULTY);
-    setTestimonials(INITIAL_TESTIMONIALS);
-    setStats(INITIAL_STATS);
-    setFaqs(INITIAL_FAQS);
-    setDownloads(INITIAL_DOWNLOADS);
-    setSermons(INITIAL_SERMONS);
-    setScrapbook(INITIAL_SCRAPBOOK);
-    setApplications(INITIAL_APPLICATIONS);
-    setAdminUsers(INITIAL_ADMIN_USERS);
-    setCurrentAdminUser(INITIAL_ADMIN_USERS[0]);
-    setStudentProfile(DEMO_STUDENT_PROFILE);
-
-    try {
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
-    } catch (e) {
-      console.warn(e);
-    }
-
-    setTimeout(() => {
-      syncAllDataToFirestore(false);
-    }, 500);
-
-    logActivity('RESTORE', 'System Reset', 'factory-reset', 'Factory State', 'Reset all content and configurations to default institutional baseline.');
-    addToast('success', 'Data Restored', 'All datasets and configurations have been reset to factory baseline and synced to Firebase.');
-  };
-
-  const addPracticumEntry = (entry: Omit<StudentProfile['practicumEntries'][0], 'id' | 'status'>) => {
-    const newEntry: StudentProfile['practicumEntries'][0] = {
+  const addPracticumEntry = async (entry: Omit<StudentProfile['practicumEntries'][0], 'id' | 'status'>) => {
+    const newEntry = {
       ...entry,
       id: `prac-${Date.now()}`,
-      status: 'Approved',
+      status: 'Pending Verification' as const,
     };
     const updated = {
       ...studentProfile,
       practicumEntries: [newEntry, ...studentProfile.practicumEntries],
     };
     setStudentProfile(updated);
-    setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true }).catch((e) => console.warn(e));
-    addToast('success', 'Practicum Log Saved', `Recorded ${entry.hours} hours of ${entry.ministryType}.`);
-  };
-
-  const makeTuitionPayment = (amount: number) => {
-    const updated = {
-      ...studentProfile,
-      tuitionPaid: Math.min(studentProfile.tuitionTotal, studentProfile.tuitionPaid + amount),
-    };
-    setStudentProfile(updated);
-    setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true }).catch((e) => console.warn(e));
-    addToast('success', 'Payment Received', `Successfully processed payment of ₱${amount.toLocaleString('en-PH')}.`);
-  };
-
-  const registerForEvent = async (eventId: string, attendeeName: string, email: string): Promise<boolean> => {
-    setEvents((prev) =>
-      prev.map((ev) => {
-        if (ev.id === eventId) {
-          const nextCount = (ev.registeredCount || 0) + 1;
-          updateDoc(doc(db, 'events', eventId), { registeredCount: nextCount }).catch((e) => console.warn(e));
-          return {
-            ...ev,
-            registeredCount: nextCount,
-          };
-        }
-        return ev;
-      })
-    );
-
     try {
-      const regDoc = {
-        id: `reg-${Date.now()}`,
-        eventId,
-        attendeeName,
-        email,
-        registeredAt: new Date().toISOString(),
-      };
-      await setDoc(doc(db, 'eventRegistrations', regDoc.id), regDoc, { merge: true });
+      await setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
     } catch (e) {
-      console.warn('Registration cloud record error:', e);
+      console.warn(e);
     }
+    addToast('success', 'Ministry Log Submitted', 'Practicum hours submitted to Dean of Students.');
+  };
 
-    addToast(
-      'success',
-      'Registration Confirmed!',
-      `Thank you, ${attendeeName}. A confirmation has been registered on the institutional event list for ${email}.`
+  const makeTuitionPayment = async (amount: number) => {
+    const newBalance = Math.max(0, studentProfile.tuitionBalance - amount);
+    const updated = { ...studentProfile, tuitionBalance: newBalance };
+    setStudentProfile(updated);
+    try {
+      await setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+    addToast('success', 'Tuition Payment Processed', `Payment of ₱${amount.toLocaleString()} received.`);
+  };
+
+  // Admin CMS Auth & Management
+  const adminLogin = (user: string, pass: string): boolean => {
+    const found = adminUsers.find(
+      (u) =>
+        (u.username.toLowerCase() === user.trim().toLowerCase() ||
+          u.email.toLowerCase() === user.trim().toLowerCase()) &&
+        u.password === pass &&
+        u.status === 'Active'
     );
+
+    if (found) {
+      setCurrentAdminUser(found);
+      setIsAdminLoggedIn(true);
+      logActivity('LOGIN', 'Admin Session', found.id, found.name, `Logged into CMS Workspace (${found.role}).`);
+      addToast('success', 'Admin Session Active', `Welcome, ${found.name} (${found.role})`);
+      return true;
+    }
+    addToast('error', 'Login Failed', 'Invalid admin credentials or inactive account.');
+    return false;
+  };
+
+  const adminLogout = () => {
+    logActivity('LOGOUT', 'Admin Session', currentAdminUser?.id || '', currentAdminUser?.name || '', 'Ended admin session.');
+    setIsAdminLoggedIn(false);
+    addToast('info', 'Session Terminated', 'You have been signed out of the Admin CMS.');
+  };
+
+  const addAdminUser = (user: Omit<AdminUser, 'id' | 'createdAt'>): AdminUser => {
+    const newUser: AdminUser = {
+      ...user,
+      id: `adm-${Date.now()}`,
+      createdAt: new Date().toISOString().split('T')[0],
+    };
+    setAdminUsers((prev) => [...prev, newUser]);
+    setDoc(doc(db, 'adminUsers', newUser.id), newUser, { merge: true }).catch((e) => console.warn(e));
+    logActivity('CREATE', 'Admin User', newUser.id, newUser.name, `Provisioned new admin account (${newUser.role}).`);
+    addToast('success', 'Admin Account Created', `Created user account for ${newUser.name}.`);
+    return newUser;
+  };
+
+  const updateAdminUser = (id: string, updates: Partial<AdminUser>) => {
+    setAdminUsers((prev) =>
+      prev.map((u) => (u.id === id ? { ...u, ...updates } : u))
+    );
+    updateDoc(doc(db, 'adminUsers', id), updates).catch((e) => console.warn(e));
+    logActivity('UPDATE', 'Admin User', id, updates.name || 'Admin', 'Updated user role or permissions.');
+    addToast('success', 'Admin Profile Updated', 'Admin account updated.');
+  };
+
+  const deleteAdminUser = (id: string) => {
+    if (adminUsers.length <= 1) {
+      addToast('error', 'Cannot Delete', 'You cannot delete the only remaining admin account.');
+      return;
+    }
+    const u = adminUsers.find((user) => user.id === id);
+    setAdminUsers((prev) => prev.filter((user) => user.id !== id));
+    deleteDoc(doc(db, 'adminUsers', id)).catch((e) => console.warn(e));
+    logActivity('DELETE', 'Admin User', id, u?.name || 'Admin', 'Removed admin account.');
+    addToast('info', 'Admin Deleted', 'User access revoked.');
+  };
+
+  const changeAdminPassword = (userId: string, newPass: string): boolean => {
+    if (newPass.length < 6) {
+      addToast('error', 'Weak Password', 'Password must be at least 6 characters.');
+      return false;
+    }
+    setAdminUsers((prev) =>
+      prev.map((u) => (u.id === userId ? { ...u, password: newPass } : u))
+    );
+    updateDoc(doc(db, 'adminUsers', userId), { password: newPass }).catch((e) => console.warn(e));
+    logActivity('SETTINGS', 'Admin Security', userId, currentAdminUser.name, 'Changed account password.');
+    addToast('success', 'Password Updated', 'Your security password has been changed.');
     return true;
   };
 
+  // Backup & Restore
+  const exportDatabaseJson = (): string => {
+    const fullDb = {
+      version: '4.0.0',
+      exportDate: new Date().toISOString(),
+      siteConfig,
+      programs,
+      faculty,
+      announcements,
+      news,
+      events,
+      downloads,
+      testimonials,
+      stats,
+      faqs,
+      sermons,
+      scrapbook,
+      mediaItems,
+      galleryAlbums,
+      applications,
+      adminUsers,
+      studentProfile,
+      activityLogs,
+    };
+    return JSON.stringify(fullDb, null, 2);
+  };
+
+  const importDatabaseJson = (jsonString: string): boolean => {
+    try {
+      const data = JSON.parse(jsonString);
+      if (data.programs && Array.isArray(data.programs)) setPrograms(data.programs);
+      if (data.faculty && Array.isArray(data.faculty)) setFaculty(data.faculty);
+      if (data.announcements && Array.isArray(data.announcements)) setAnnouncements(data.announcements);
+      if (data.news && Array.isArray(data.news)) setNews(data.news);
+      if (data.events && Array.isArray(data.events)) setEvents(data.events);
+      if (data.downloads && Array.isArray(data.downloads)) setDownloads(data.downloads);
+      if (data.testimonials && Array.isArray(data.testimonials)) setTestimonials(data.testimonials);
+      if (data.stats && Array.isArray(data.stats)) setStats(data.stats);
+      if (data.faqs && Array.isArray(data.faqs)) setFaqs(data.faqs);
+      if (data.sermons && Array.isArray(data.sermons)) setSermons(data.sermons);
+      if (data.scrapbook && Array.isArray(data.scrapbook)) setScrapbook(data.scrapbook);
+      if (data.mediaItems && Array.isArray(data.mediaItems)) setMediaItems(data.mediaItems);
+      if (data.galleryAlbums && Array.isArray(data.galleryAlbums)) setGalleryAlbums(data.galleryAlbums);
+      if (data.siteConfig) setSiteConfig(data.siteConfig);
+      if (data.applications && Array.isArray(data.applications)) setApplications(data.applications);
+      if (data.studentProfile) setStudentProfile(data.studentProfile);
+
+      logActivity('RESTORE', 'Database Import', 'import-db', 'Full Dataset Restore', 'Imported complete JSON database backup.');
+      addToast('success', 'Database Restored', 'Institutional dataset restored successfully.');
+      syncAllDataToFirestore(true);
+      return true;
+    } catch (e: any) {
+      addToast('error', 'Import Failed', 'Invalid JSON backup file structure.');
+      return false;
+    }
+  };
+
+  const resetToInitialData = async () => {
+    setSiteConfig(INITIAL_SITE_CONFIG);
+    setPrograms(INITIAL_PROGRAMS);
+    setFaculty(INITIAL_FACULTY);
+    setAnnouncements(INITIAL_ANNOUNCEMENTS);
+    setNews(INITIAL_NEWS);
+    setEvents(INITIAL_EVENTS);
+    setDownloads(INITIAL_DOWNLOADS);
+    setTestimonials(INITIAL_TESTIMONIALS);
+    setStats(INITIAL_STATS);
+    setFaqs(INITIAL_FAQS);
+    setSermons(INITIAL_SERMONS);
+    setScrapbook(INITIAL_SCRAPBOOK);
+    setMediaItems(INITIAL_MEDIA_ITEMS);
+    setGalleryAlbums(INITIAL_GALLERY_ALBUMS);
+    setApplications(INITIAL_APPLICATIONS);
+    setAdminUsers(INITIAL_ADMIN_USERS);
+    setStudentProfile(DEMO_STUDENT_PROFILE);
+    setActivityLogs(INITIAL_ACTIVITY_LOGS);
+
+    try {
+      await syncAllDataToFirestore(true);
+    } catch (e) {
+      console.warn(e);
+    }
+
+    addToast('warning', 'Database Reset', 'Restored initial baseline catalog & configuration.');
+  };
+
+  // Event Registration
+  const registerForEvent = async (
+    eventId: string,
+    attendeeName: string,
+    email: string
+  ): Promise<boolean> => {
+    const evt = events.find((e) => e.id === eventId);
+    if (!evt) return false;
+
+    const updatedAttendees = [
+      ...(evt.registeredAttendees || []),
+      { name: attendeeName, email, date: new Date().toISOString().split('T')[0] },
+    ];
+
+    setEvents((prev) =>
+      prev.map((e) =>
+        e.id === eventId ? { ...e, registeredAttendees: updatedAttendees } : e
+      )
+    );
+
+    try {
+      await updateDoc(doc(db, 'events', eventId), { registeredAttendees: updatedAttendees });
+    } catch (e) {
+      console.warn(e);
+    }
+
+    addToast('success', 'Registration Confirmed', `You are registered for "${evt.title}". Confirmation sent to ${email}.`);
+    return true;
+  };
+
+  // Newsletter Subscription
   const subscribeNewsletter = async (email: string): Promise<boolean> => {
     if (!email || !email.includes('@')) {
       addToast('error', 'Invalid Email', 'Please enter a valid email address.');
       return false;
     }
-    if (newsletterEmails.includes(email)) {
-      addToast('info', 'Already Subscribed', 'You are already registered on our PCM community newsletter list.');
+    if (newsletterEmails.includes(email.toLowerCase())) {
+      addToast('info', 'Already Subscribed', 'This email is already subscribed to PCM updates.');
       return true;
     }
-    setNewsletterEmails((prev) => [...prev, email]);
-
+    setNewsletterEmails((prev) => [...prev, email.toLowerCase()]);
     try {
-      const subDoc = {
-        id: `sub-${Date.now()}`,
-        email,
-        subscribedAt: new Date().toISOString(),
-      };
-      await setDoc(doc(db, 'newsletterSubscribers', subDoc.id), subDoc, { merge: true });
+      await setDoc(
+        doc(db, 'newsletterSubscribers', email.toLowerCase().replace(/[^a-zA-Z0-9]/g, '_')),
+        { email: email.toLowerCase(), subscribedAt: new Date().toISOString() },
+        { merge: true }
+      );
     } catch (e) {
-      console.warn('Newsletter cloud subscriber error:', e);
+      console.warn(e);
     }
-
-    addToast('success', 'Subscribed to PCM Updates', 'You will receive our latest theological publications, admissions updates, and event invitations.');
+    addToast('success', 'Subscription Active', 'Thank you for subscribing to PCM News and Ministry Updates.');
     return true;
   };
 
@@ -1940,7 +1902,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isTuitionCalculatorModalOpen: tuitionCalculatorModalOpen,
         setTuitionCalculatorModalOpen,
 
-        // Cloud Database & Firebase Sync State
+        // Firebase Cloud Database & Storage
         isFirebaseConnected,
         firebaseSyncStatus,
         lastSyncedAt,
@@ -1961,7 +1923,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateFooterConfig,
         updateNavigationMenu,
 
-        // Media & Gallery
+        // Media Library & Albums
         mediaItems,
         mediaLibrary: mediaItems,
         setMediaItems,
@@ -1974,13 +1936,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateGalleryAlbum,
         deleteGalleryAlbum,
 
-        // Activity Logs
+        // Audit Logs
         activityLogs,
         setActivityLogs,
         logActivity,
         clearActivityLogs,
 
-        // Content Collections CRUD
+        // Announcements
         announcements,
         setAnnouncements,
         addAnnouncement,
@@ -1988,24 +1950,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         toggleAnnouncement,
         deleteAnnouncement,
 
+        // Programs
         programs,
         setPrograms,
         addProgram,
         updateProgram,
         deleteProgram,
 
-        news,
-        setNews,
-        addNewsArticle,
-        updateNewsArticle,
-        deleteNewsArticle,
-
-        events,
-        setEvents,
-        addEvent,
-        updateEvent,
-        deleteEvent,
-
+        // Faculty
         faculty,
         setFaculty,
         addFaculty,
@@ -2015,22 +1967,24 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteFaculty,
         deleteFacultyMember: deleteFaculty,
 
-        testimonials,
-        setTestimonials,
-        addTestimonial,
-        updateTestimonial,
-        deleteTestimonial,
+        // News
+        news,
+        setNews,
+        addNewsArticle,
+        updateNewsArticle,
+        deleteNewsArticle,
 
-        stats,
-        setStats,
-        updateStat,
+        // Events
+        events,
+        setEvents,
+        addEvent,
+        addEventItem: addEvent,
+        updateEvent,
+        updateEventItem: updateEvent,
+        deleteEvent,
+        deleteEventItem: deleteEvent,
 
-        faqs,
-        setFaqs,
-        addFaq,
-        updateFaq,
-        deleteFaq,
-
+        // Downloads
         downloads,
         setDownloads,
         addDownload,
@@ -2039,6 +1993,24 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteDownload,
         deleteDownloadResource: deleteDownload,
 
+        // Testimonials
+        testimonials,
+        setTestimonials,
+        addTestimonial,
+        updateTestimonial,
+        deleteTestimonial,
+
+        // Stats & FAQs
+        stats,
+        setStats,
+        updateStat,
+        faqs,
+        setFaqs,
+        addFaq,
+        updateFaq,
+        deleteFaq,
+
+        // Sermons & Scrapbook
         sermons,
         setSermons,
         addSermon,

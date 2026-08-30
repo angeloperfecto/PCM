@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef } from 'react';
 import { usePCM } from '@/lib/store';
 import { Emblem } from '@/components/common/Emblem';
 import {
@@ -12,10 +12,6 @@ import {
   Sparkles,
   ExternalLink,
   UserCheck,
-  Cloud,
-  CloudCheck,
-  RefreshCw,
-  Database,
 } from 'lucide-react';
 
 interface AdminHeaderProps {
@@ -39,27 +35,17 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
     exportDatabaseJson,
     importDatabaseJson,
     resetToInitialData,
+    addToast,
     isFirebaseConnected,
     firebaseSyncStatus,
     syncAllDataToFirestore,
-    addToast,
   } = usePCM();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
 
   const pendingApps = applications.filter(
     (a) => a.status === 'Submitted' || a.status === 'Under Review'
   ).length;
-
-  const handleSyncCloud = async () => {
-    setIsSyncing(true);
-    try {
-      await syncAllDataToFirestore(true);
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const handleExport = () => {
     if (onExportDB) {
@@ -142,36 +128,6 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                 <Shield className="w-2.5 h-2.5" />
                 {currentAdminUser?.role || 'Super Admin'}
               </span>
-
-              {/* Firebase Live Cloud Status Badge */}
-              <span
-                title="Connected to Firebase Cloud Firestore: intelligent-park-95fd2"
-                className={`text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1.5 border ${
-                  firebaseSyncStatus === 'synced'
-                    ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60'
-                    : firebaseSyncStatus === 'syncing'
-                    ? 'bg-amber-950/60 text-amber-300 border-amber-700/60'
-                    : 'bg-red-950/60 text-red-300 border-red-700/60'
-                }`}
-              >
-                <span
-                  className={`w-1.5 h-1.5 rounded-full ${
-                    firebaseSyncStatus === 'synced'
-                      ? 'bg-emerald-400 animate-pulse'
-                      : firebaseSyncStatus === 'syncing'
-                      ? 'bg-amber-400 animate-spin'
-                      : 'bg-red-400'
-                  }`}
-                />
-                <Database className="w-2.5 h-2.5" />
-                <span>
-                  {firebaseSyncStatus === 'synced'
-                    ? 'Firebase Live'
-                    : firebaseSyncStatus === 'syncing'
-                    ? 'Syncing...'
-                    : 'Offline Mode'}
-                </span>
-              </span>
             </div>
             <h1 className="font-serif text-xl sm:text-2xl font-bold text-white tracking-wide">
               Administrator CMS Workspace
@@ -184,24 +140,52 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
         {/* Right: Quick Global Controls */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
+          {/* Cloud Sync Status Badge */}
+          <div
+            id="admin-firebase-status-badge"
+            className={`px-2.5 py-1 rounded-sm flex items-center gap-1.5 font-medium border ${
+              firebaseSyncStatus === 'synced'
+                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
+                : firebaseSyncStatus === 'syncing'
+                ? 'bg-amber-950/60 text-amber-300 border-amber-700/50'
+                : 'bg-red-950/60 text-red-300 border-red-700/50'
+            }`}
+            title={`Firebase Status: ${firebaseSyncStatus}`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                firebaseSyncStatus === 'synced'
+                  ? 'bg-emerald-400'
+                  : firebaseSyncStatus === 'syncing'
+                  ? 'bg-amber-400 animate-spin'
+                  : 'bg-red-400'
+              }`}
+            />
+            <span className="capitalize">
+              {firebaseSyncStatus === 'synced'
+                ? 'Firebase Live'
+                : firebaseSyncStatus === 'syncing'
+                ? 'Syncing...'
+                : 'Cloud Disconnected'}
+            </span>
+          </div>
+
+          <button
+            id="admin-btn-sync-cloud"
+            onClick={() => syncAllDataToFirestore(true)}
+            title="Force synchronization with Firebase Cloud Firestore"
+            className="flex items-center gap-1.5 bg-[#10261D] hover:bg-[#0A1812] text-[#85AA9B] hover:text-white px-3 py-1.5 rounded-sm border border-[#588B76]/50 transition cursor-pointer font-medium"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-[#85AA9B]" />
+            <span>Sync Cloud</span>
+          </button>
+
           {pendingApps > 0 && (
             <div className="bg-[#85AA9B]/20 text-[#D0DED8] border border-[#85AA9B]/40 px-2.5 py-1 rounded-sm flex items-center gap-1.5 font-medium">
               <span className="w-2 h-2 rounded-full bg-[#85AA9B] animate-pulse" />
               <span>{pendingApps} Pending Applications</span>
             </div>
           )}
-
-          {/* Sync Cloud Button */}
-          <button
-            id="admin-btn-sync-cloud"
-            onClick={handleSyncCloud}
-            disabled={isSyncing}
-            title="Force push and synchronize all datasets to Firebase Cloud Firestore"
-            className="flex items-center gap-1.5 bg-[#588B76]/20 hover:bg-[#588B76]/40 text-[#D0DED8] hover:text-white px-3 py-1.5 rounded-sm border border-[#588B76]/60 transition cursor-pointer font-medium disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-[#85AA9B] ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Syncing...' : 'Sync Cloud'}</span>
-          </button>
 
           <button
             id="admin-btn-export-db"
