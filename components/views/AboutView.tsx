@@ -21,11 +21,12 @@ import {
   ArrowRight,
   ExternalLink,
   Phone,
+  Compass,
 } from 'lucide-react';
 import { FacultyPortrait } from '@/components/common/FacultyPortrait';
 
 export const AboutView: React.FC = () => {
-  const { activeSubSection, currentSubSection, faculty, setSelectedFaculty, setStatementOfFaithModalOpen, navigateTo } = usePCM();
+  const { activeSubSection, currentSubSection, faculty, setSelectedFaculty, setStatementOfFaithModalOpen, navigateTo, siteConfig } = usePCM();
   const [activeCategory, setActiveCategory] = React.useState('all');
   const [searchQuery, setSearchQuery] = React.useState('');
 
@@ -147,9 +148,13 @@ export const AboutView: React.FC = () => {
             <div className="w-12 h-12 rounded-sm bg-[#588B76] text-[#18392B] flex items-center justify-center font-bold">
               <Target className="w-6 h-6" />
             </div>
-            <h3 className="font-serif text-2xl font-bold text-white">OUR MISSION</h3>
+            <h3 className="font-serif text-2xl font-bold text-white">
+              {siteConfig?.missionVisionValues?.missionTitle || 'OUR MISSION'}
+            </h3>
             <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans font-light">
-              To equip servant leaders through biblically sound, culturally relevant, and spirit-empowered training for pastoral leadership, church planting, and holistic ministry in the Cordillera, throughout the Philippines, and to the ends of the earth.
+              {siteConfig?.missionVisionValues?.missionStatement ||
+                siteConfig?.missionVisionValues?.mission ||
+                'To equip servant leaders through biblically sound, culturally relevant, and spirit-empowered training for pastoral leadership, church planting, and holistic ministry in the Cordillera, throughout the Philippines, and to the ends of the earth.'}
             </p>
           </div>
 
@@ -157,9 +162,13 @@ export const AboutView: React.FC = () => {
             <div className="w-12 h-12 rounded-sm bg-white text-[#18392B] flex items-center justify-center font-bold">
               <Eye className="w-6 h-6" />
             </div>
-            <h3 className="font-serif text-2xl font-bold text-white">OUR VISION</h3>
+            <h3 className="font-serif text-2xl font-bold text-white">
+              {siteConfig?.missionVisionValues?.visionTitle || 'OUR VISION'}
+            </h3>
             <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-sans font-light">
-              A premier theological institution producing godly, competent, and visionary Christian leaders who transform churches and communities for the glory of Jesus Christ.
+              {siteConfig?.missionVisionValues?.visionStatement ||
+                siteConfig?.missionVisionValues?.vision ||
+                'A premier theological institution producing godly, competent, and visionary Christian leaders who transform churches and communities for the glory of Jesus Christ.'}
             </p>
           </div>
         </section>
@@ -171,37 +180,38 @@ export const AboutView: React.FC = () => {
               Institutional Pillars
             </span>
             <h2 className="font-serif text-2xl sm:text-3xl font-extrabold text-[#18392B]">
-              CORE VALUES OF PCM
+              {siteConfig?.missionVisionValues?.valuesTitle || 'CORE VALUES OF PCM'}
             </h2>
             <p className="text-xs text-slate-600">
-              The foundational convictions that guide our academic instruction, community life, and ministerial apprenticeship.
+              {siteConfig?.missionVisionValues?.valuesSubtitle ||
+                'The foundational convictions that guide our academic instruction, community life, and ministerial apprenticeship.'}
             </p>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[
-              {
-                title: 'Christ-Centeredness',
-                desc: 'Exalting Jesus Christ as Lord and Savior in all curricula, community worship, and personal life.',
-                icon: Heart,
-              },
-              {
-                title: 'Biblical Authority',
-                desc: 'Uncompromising adherence to the inerrant Word of God as the supreme guide for faith, doctrine, and practice.',
-                icon: BookOpen,
-              },
-              {
-                title: 'Servant Leadership',
-                desc: 'Cultivating humility, integrity, and sacrificial devotion to shepherding the flock of God.',
-                icon: Users,
-              },
-              {
-                title: 'Evangelistic Zeal',
-                desc: 'Active passion for soul-winning, aggressive church planting, and global cross-cultural missions.',
-                icon: Flame,
-              },
-            ].map((val, idx) => {
-              const Icon = val.icon;
+            {(siteConfig?.missionVisionValues?.coreValues && siteConfig.missionVisionValues.coreValues.length > 0
+              ? siteConfig.missionVisionValues.coreValues
+              : [
+                  {
+                    title: 'Christ-Centeredness',
+                    description: 'Exalting Jesus Christ as Lord and Savior in all curricula, community worship, and personal life.',
+                  },
+                  {
+                    title: 'Biblical Authority',
+                    description: 'Uncompromising adherence to the inerrant Word of God as the supreme guide for faith, doctrine, and practice.',
+                  },
+                  {
+                    title: 'Servant Leadership',
+                    description: 'Cultivating humility, integrity, and sacrificial devotion to shepherding the flock of God.',
+                  },
+                  {
+                    title: 'Evangelistic Zeal',
+                    description: 'Active passion for soul-winning, aggressive church planting, and global cross-cultural missions.',
+                  },
+                ]
+            ).map((val, idx) => {
+              const icons = [Heart, BookOpen, Users, Flame, ShieldCheck, Target, Sparkles, Compass];
+              const Icon = icons[idx % icons.length];
               return (
                 <div
                   key={idx}
@@ -215,7 +225,7 @@ export const AboutView: React.FC = () => {
                       {val.title}
                     </h3>
                     <p className="text-xs text-slate-600 leading-relaxed">
-                      {val.desc}
+                      {val.description || (val as any).desc}
                     </p>
                   </div>
                 </div>

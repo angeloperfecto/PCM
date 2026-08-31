@@ -5,9 +5,11 @@ import { usePCM } from '@/lib/store';
 import { Target, Eye, ShieldCheck, Heart, Sparkles, BookOpen, Users, Compass } from 'lucide-react';
 
 export const MissionVisionValuesSection: React.FC = () => {
-  const { navigateTo } = usePCM();
+  const { navigateTo, siteConfig } = usePCM();
 
-  const coreValues = [
+  const mvv = siteConfig?.missionVisionValues;
+
+  const defaultCoreValues = [
     { title: 'Biblical Faithfulness', desc: 'Unwavering commitment to the inerrancy and authority of Scripture.' },
     { title: 'Christ-Centeredness', desc: 'Exalting Jesus Christ in all doctrine, preaching, worship, and living.' },
     { title: 'Academic Excellence', desc: 'Rigorous exegesis, scholarship, and intellectual discipline.' },
@@ -17,6 +19,11 @@ export const MissionVisionValuesSection: React.FC = () => {
     { title: 'Great Commission', desc: 'Passionate evangelism, urban church planting, and global missions.' },
     { title: 'Covenant Community', desc: 'Warm fellowship, accountability, and love in the body of Christ.' },
   ];
+
+  const coreValues =
+    mvv?.coreValues && mvv.coreValues.length > 0
+      ? mvv.coreValues.map((v) => ({ title: v.title, desc: v.description }))
+      : defaultCoreValues;
 
   return (
     <section className="w-full bg-[#18392B] text-white py-12 lg:py-16 border-b border-[#10261D]">
@@ -28,10 +35,10 @@ export const MissionVisionValuesSection: React.FC = () => {
             <span>Institutional Foundations</span>
           </div>
           <h2 className="font-serif text-2xl sm:text-3xl font-bold text-white">
-            MISSION, VISION & CORE VALUES
+            {mvv?.valuesTitle || 'MISSION, VISION & CORE VALUES'}
           </h2>
           <p className="text-xs sm:text-sm text-[#D0DED8]">
-            The theological pillars, spiritual compass, and guiding principles of Philippine College of Ministry.
+            {mvv?.valuesSubtitle || 'The theological pillars, spiritual compass, and guiding principles of Philippine College of Ministry.'}
           </p>
         </div>
 
@@ -46,10 +53,14 @@ export const MissionVisionValuesSection: React.FC = () => {
               <span className="text-[10px] font-mono font-bold tracking-widest text-[#85AA9B] uppercase block">
                 Our Sacred Mandate
               </span>
-              <h3 className="font-serif text-xl font-bold text-white">OUR MISSION</h3>
+              <h3 className="font-serif text-xl font-bold text-white">
+                {mvv?.missionTitle || 'OUR MISSION'}
+              </h3>
               <div className="w-10 h-0.5 bg-[#588B76]" />
               <p className="text-xs sm:text-sm text-[#D0DED8] leading-relaxed font-sans">
-                To provide Christ-centered theological and ministry education that equips faithful servants with biblical truth, spiritual maturity, and practical competence for effective leadership, discipleship, and evangelistic service in the Church and society.
+                {mvv?.missionStatement ||
+                  mvv?.mission ||
+                  'To provide Christ-centered theological and ministry education that equips faithful servants with biblical truth, spiritual maturity, and practical competence for effective leadership, discipleship, and evangelistic service in the Church and society.'}
               </p>
             </div>
             <div className="mt-6 pt-3 border-t border-[#588B76]/40 text-xs text-[#85AA9B] font-bold">
@@ -66,10 +77,14 @@ export const MissionVisionValuesSection: React.FC = () => {
               <span className="text-[10px] font-mono font-bold tracking-widest text-[#85AA9B] uppercase block">
                 Our Future Horizon
               </span>
-              <h3 className="font-serif text-xl font-bold text-white">OUR VISION</h3>
+              <h3 className="font-serif text-xl font-bold text-white">
+                {mvv?.visionTitle || 'OUR VISION'}
+              </h3>
               <div className="w-10 h-0.5 bg-[#588B76]" />
               <p className="text-xs sm:text-sm text-[#D0DED8] leading-relaxed font-sans">
-                To become a premier and globally trusted center for evangelical biblical education, spiritual formation, and kingdom leadership in the Philippines and Southeast Asia, raising up shepherds who transform generations for the glory of Jesus Christ.
+                {mvv?.visionStatement ||
+                  mvv?.vision ||
+                  'To become a premier and globally trusted center for evangelical biblical education, spiritual formation, and kingdom leadership in the Philippines and Southeast Asia, raising up shepherds who transform generations for the glory of Jesus Christ.'}
               </p>
             </div>
             <div className="mt-6 pt-3 border-t border-[#588B76]/40 text-xs text-[#85AA9B] font-bold">
@@ -86,11 +101,13 @@ export const MissionVisionValuesSection: React.FC = () => {
               <span className="text-[10px] font-mono font-bold tracking-widest text-[#85AA9B] uppercase block">
                 Our Guiding Standards
               </span>
-              <h3 className="font-serif text-xl font-bold text-white">OUR VALUES</h3>
+              <h3 className="font-serif text-xl font-bold text-white">
+                {mvv?.valuesTitle ? 'OUR CORE VALUES' : 'OUR VALUES'}
+              </h3>
               <div className="w-10 h-0.5 bg-[#588B76]" />
               
               <div className="grid grid-cols-2 gap-2 text-xs text-[#D0DED8] pt-1">
-                {coreValues.map((v, i) => (
+                {coreValues.slice(0, 8).map((v, i) => (
                   <div key={i} className="flex items-center gap-1.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-[#85AA9B]" />
                     <span className="font-medium text-[#D0DED8] text-[11px]">{v.title}</span>
