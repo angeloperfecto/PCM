@@ -284,6 +284,28 @@ export interface StudentProfile {
 
 export type AdminRole = 'Super Admin' | 'Content Admin' | 'Editor';
 
+export type UserRole = 'Admin' | 'Student' | 'Member';
+
+export interface UserAccount {
+  id: string; // Firebase UID
+  uid: string;
+  email: string;
+  name: string;
+  displayName: string;
+  photoURL?: string;
+  avatarUrl?: string;
+  role: UserRole;
+  adminRole?: AdminRole;
+  studentId?: string;
+  department?: string;
+  homeChurch?: string;
+  status: 'Active' | 'Pending' | 'Inactive' | string;
+  provider: string; // 'google.com' | 'password'
+  emailVerified?: boolean;
+  createdAt: string;
+  lastLogin: string;
+}
+
 export interface AdminUser {
   id: string;
   name: string;

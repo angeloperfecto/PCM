@@ -33,6 +33,7 @@ import { StatementOfFaithModal } from '@/components/modals/StatementOfFaithModal
 import { RequestInfoModal } from '@/components/modals/RequestInfoModal';
 import { TuitionCalculatorModal } from '@/components/modals/TuitionCalculatorModal';
 import { SearchModal } from '@/components/modals/SearchModal';
+import { UserAccountModal } from '@/components/modals/UserAccountModal';
 
 const AppContent: React.FC = () => {
   const { currentSection } = usePCM();
@@ -77,6 +78,7 @@ const AppContent: React.FC = () => {
       <StatementOfFaithModal />
       <RequestInfoModal />
       <TuitionCalculatorModal />
+      <UserAccountModal />
     </div>
   );
 };

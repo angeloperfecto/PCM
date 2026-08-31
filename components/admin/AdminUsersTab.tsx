@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
-import { AdminUser, AdminRole } from '@/lib/types';
+import { AdminUser, AdminRole, UserRole, UserAccount } from '@/lib/types';
 import {
   ShieldCheck,
   UserPlus,
@@ -13,6 +13,10 @@ import {
   CheckCircle2,
   FileText,
   UserCheck,
+  Users,
+  GraduationCap,
+  Sparkles,
+  Mail,
 } from 'lucide-react';
 
 export const AdminUsersTab: React.FC = () => {
@@ -22,6 +26,9 @@ export const AdminUsersTab: React.FC = () => {
     addAdminUser,
     updateAdminUser,
     deleteAdminUser,
+    userAccounts,
+    updateUserAccountRole,
+    currentUserAccount,
     activityLogs,
     addToast,
     canPerformAction,
@@ -183,6 +190,135 @@ export const AdminUsersTab: React.FC = () => {
             Can publish articles, calendar events, upload media, and post urgent notices.
           </p>
         </div>
+      </div>
+
+      {/* Google / Firestore User Accounts & Live Identity Directory */}
+      <div className="space-y-4 pt-2">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
+              <Users className="w-5 h-5 text-[#588B76]" />
+              Google & Firestore User Accounts Directory ({userAccounts.length})
+            </h3>
+            <p className="text-xs text-slate-500">
+              Real-time synchronization with Firebase Authentication & Firestore <code className="text-emerald-700 font-mono">/users</code> collection.
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            Firestore Real-time Active
+          </span>
+        </div>
+
+        <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto bg-white">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 text-slate-600 font-serif border-b border-slate-200">
+                <th className="py-3 px-4 font-bold">User Identity</th>
+                <th className="py-3 px-4 font-bold">Google / Gmail Address</th>
+                <th className="py-3 px-4 font-bold">System Role</th>
+                <th className="py-3 px-4 font-bold">Admin Privileges</th>
+                <th className="py-3 px-4 font-bold">Linked Student ID</th>
+                <th className="py-3 px-4 font-bold">Last Active</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-slate-700">
+              {userAccounts.map((account) => (
+                <tr key={account.uid || account.id} className="hover:bg-slate-50 transition">
+                  <td className="py-3 px-4">
+                    <div className="flex items-center gap-3">
+                      {account.photoURL ? (
+                        <img
+                          src={account.photoURL}
+                          alt={account.name}
+                          className="w-8 h-8 rounded-full object-cover border border-slate-200"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-[#18392B] text-white flex items-center justify-center font-bold text-xs">
+                          {account.name.charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                      <div>
+                        <div className="font-bold text-[#18392B] flex items-center gap-1.5">
+                          {account.name}
+                          {account.emailVerified && (
+                            <span title="Google Verified Account">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" />
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-400">
+                          UID: {account.uid?.substring(0, 10)}...
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="py-3 px-4 text-slate-600 font-medium">
+                    <div className="flex items-center gap-1.5">
+                      <Mail className="w-3.5 h-3.5 text-slate-400" />
+                      {account.email}
+                    </div>
+                  </td>
+                  <td className="py-3 px-4">
+                    <select
+                      value={account.role}
+                      onChange={(e) =>
+                        updateUserAccountRole(
+                          account.uid || account.id,
+                          e.target.value as UserRole,
+                          account.adminRole
+                        )
+                      }
+                      className="p-1.5 rounded-lg border border-slate-200 font-bold text-[11px] bg-white text-[#18392B] focus:border-[#588B76] focus:outline-none"
+                    >
+                      <option value="Admin">Admin</option>
+                      <option value="Student">Student</option>
+                      <option value="Faculty">Faculty</option>
+                      <option value="Alumni">Alumni</option>
+                      <option value="Member">Member</option>
+                    </select>
+                  </td>
+                  <td className="py-3 px-4">
+                    {account.role === 'Admin' ? (
+                      <select
+                        value={account.adminRole || 'Super Admin'}
+                        onChange={(e) =>
+                          updateUserAccountRole(
+                            account.uid || account.id,
+                            'Admin',
+                            e.target.value as AdminRole
+                          )
+                        }
+                        className="p-1 rounded border border-amber-300 font-semibold text-[10px] bg-amber-50 text-amber-900 focus:outline-none"
+                      >
+                        <option value="Super Admin">Super Admin</option>
+                        <option value="Content Admin">Content Admin</option>
+                        <option value="Editor">Editor</option>
+                      </select>
+                    ) : (
+                      <span className="text-slate-400 text-[11px] italic">N/A</span>
+                    )}
+                  </td>
+                  <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
+                    {account.studentId || <span className="text-slate-400 italic">None</span>}
+                  </td>
+                  <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
+                    {account.lastLogin ? new Date(account.lastLogin).toLocaleDateString() : 'Active'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Legacy Admin Users Section Divider */}
+      <div className="pt-4 border-t border-slate-200">
+        <h3 className="font-serif text-sm font-bold text-[#18392B] mb-2 flex items-center gap-2">
+          <Shield className="w-4 h-4 text-[#588B76]" />
+          Internal Staff Credentials & CMS Logins
+        </h3>
       </div>
 
       {/* Users Table */}

@@ -104,6 +104,30 @@
       },
       "required": ["id", "title", "date", "location"]
     },
+    "UserAccount": {
+      "title": "User Account",
+      "description": "User profile with Google / Firebase authentication and role mapping.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "Student", "Member"] },
+        "adminRole": { "type": "string" },
+        "studentId": { "type": "string" },
+        "department": { "type": "string" },
+        "homeChurch": { "type": "string" },
+        "status": { "type": "string" },
+        "provider": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastLogin": { "type": "string" }
+      },
+      "required": ["id", "uid", "email", "role"]
+    },
     "AdmissionApplication": {
       "title": "Admission Application",
       "description": "Online prospective student admission application.",
@@ -195,6 +219,10 @@
     "/activityLogs/{logId}": {
       "schema": "ActivityLogItem",
       "description": "Audit log for admin modifications."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Authenticated user accounts and Google profiles."
     }
   }
 }

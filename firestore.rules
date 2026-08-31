@@ -1,8 +1,125 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "angeloperfecto.epc@gmail.com" ||
+        request.auth.token.email == "president@pcm.edu.ph" ||
+        request.auth.token.email == "admin@pcm.ph" ||
+        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin")
+      );
+    }
+
+    // Public readable content collections (Website CMS)
+    match /siteConfig/{configId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /programs/{programId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /faculty/{facultyId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /news/{newsId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /events/{eventId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /downloads/{downloadId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /testimonials/{testimonialId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /stats/{statId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /faqs/{faqId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /sermons/{sermonId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /scrapbook/{scrapbookId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /mediaItems/{mediaId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    match /galleryAlbums/{albumId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    // Authenticated Users and Profiles
+    match /users/{userId} {
+      allow read: if true;
+      allow write: if isSignedIn() || isAdmin();
+    }
+
+    match /studentProfiles/{studentId} {
+      allow read: if true;
+      allow write: if isSignedIn() || isAdmin();
+    }
+
+    match /adminUsers/{adminId} {
+      allow read: if true;
+      allow write: if isAdmin() || (isSignedIn() && request.auth.uid == adminId);
+    }
+
+    match /applications/{applicationId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isAdmin() || true;
+    }
+
+    match /activityLogs/{logId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    // Default fallback
     match /{document=**} {
-      allow read, write: if true;
+      allow read: if true;
+      allow write: if isSignedIn() || isAdmin() || true;
     }
   }
 }
+

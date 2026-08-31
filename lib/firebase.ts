@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import {
   getFirestore,
   doc,
@@ -31,6 +31,7 @@ export const db = firebaseConfig.firestoreDatabaseId
 // Initialize Auth
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: 'select_account' });
 
 // Initialize Storage
 export const storage = getStorage(app);
@@ -52,7 +53,9 @@ export {
   limit,
   signInWithPopup,
   signOut,
+  onAuthStateChanged,
 };
+export type { FirebaseUser };
 
 export enum OperationType {
   CREATE = 'create',

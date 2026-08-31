@@ -17,6 +17,8 @@ import {
   FAQItem,
   AdminRole,
   AdminUser,
+  UserAccount,
+  UserRole,
   ApplicationStatus,
   ScrapbookItem,
   MigrationAuditItem,
@@ -49,6 +51,12 @@ import {
 } from './initialData';
 import {
   db,
+  auth,
+  googleProvider,
+  signInWithPopup,
+  signOut,
+  onAuthStateChanged,
+  FirebaseUser,
   collection,
   doc,
   getDoc,
@@ -264,6 +272,18 @@ interface PCMContextType {
   activeTrackerRef: string;
   setActiveTrackerRef: (ref: string) => void;
 
+  // Google / Firebase User Accounts & Multi-Role Authentication
+  currentUserAccount: UserAccount | null;
+  setCurrentUserAccount: (acc: UserAccount | null) => void;
+  firebaseAuthUser: FirebaseUser | null;
+  userAccounts: UserAccount[];
+  userAccountModalOpen: boolean;
+  setUserAccountModalOpen: (open: boolean) => void;
+  signInWithGoogle: () => Promise<{ success: boolean; role?: string; user?: UserAccount }>;
+  signOutUser: () => Promise<void>;
+  updateUserAccountRole: (userId: string, role: UserRole, adminRole?: AdminRole) => Promise<void>;
+  linkStudentIdToUser: (studentId: string) => Promise<void>;
+
   // Student Portal State
   isStudentLoggedIn: boolean;
   setIsStudentLoggedIn: (loggedIn: boolean) => void;
@@ -334,11 +354,17 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [statementOfFaithModalOpen, setStatementOfFaithModalOpen] = useState(false);
   const [requestInfoModalOpen, setRequestInfoModalOpen] = useState(false);
   const [tuitionCalculatorModalOpen, setTuitionCalculatorModalOpen] = useState(false);
+  const [userAccountModalOpen, setUserAccountModalOpen] = useState(false);
 
   // Cloud Database Sync States
   const [isFirebaseConnected, setIsFirebaseConnected] = useState(true);
   const [firebaseSyncStatus, setFirebaseSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('syncing');
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
+
+  // User Accounts & Multi-Role Auth
+  const [currentUserAccount, setCurrentUserAccount] = useState<UserAccount | null>(null);
+  const [firebaseAuthUser, setFirebaseAuthUser] = useState<FirebaseUser | null>(null);
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
 
   // Core CMS Data States (initialized identically on SSR and client to prevent hydration mismatch)
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(INITIAL_SITE_CONFIG);
@@ -972,6 +998,148 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         );
         unsubs.push(uStudent);
+
+        // 19. Google / Authenticated User Accounts
+        const uUsers = onSnapshot(
+          collection(db, 'users'),
+          (snap) => {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[];
+            setUserAccounts(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
+
+            // If user is currently signed in, ensure currentUserAccount stays synchronized
+            const currentUid = auth.currentUser?.uid;
+            if (currentUid) {
+              const matched = list.find((u) => u.uid === currentUid || u.id === currentUid);
+              if (matched) {
+                setCurrentUserAccount(matched);
+                if (matched.role === 'Admin') {
+                  setIsAdminLoggedIn(true);
+                  setCurrentAdminUser((prev) => ({
+                    ...prev,
+                    id: matched.uid,
+                    name: matched.name || matched.displayName,
+                    email: matched.email,
+                    username: matched.email.split('@')[0] || 'admin',
+                    role: matched.adminRole || 'Super Admin',
+                    avatarUrl: matched.photoURL || matched.avatarUrl,
+                  }));
+                } else if (matched.role === 'Student') {
+                  setIsStudentLoggedIn(true);
+                  setStudentProfile((prev) => ({
+                    ...prev,
+                    fullName: matched.name || matched.displayName,
+                    email: matched.email,
+                    avatarUrl: matched.photoURL || prev.avatarUrl,
+                  }));
+                }
+              }
+            }
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'users');
+            setFirebaseSyncStatus('error');
+          }
+        );
+        unsubs.push(uUsers);
+
+        // 20. Listen to Firebase Auth state
+        const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
+          setFirebaseAuthUser(fbUser);
+          if (fbUser) {
+            try {
+              const userDocRef = doc(db, 'users', fbUser.uid);
+              const snap = await getDoc(userDocRef);
+              const isBootstrapAdmin =
+                fbUser.email === 'angeloperfecto.epc@gmail.com' ||
+                fbUser.email === 'president@pcm.edu.ph' ||
+                fbUser.email === 'admin@pcm.ph';
+
+              if (snap.exists()) {
+                const acc = snap.data() as UserAccount;
+                acc.lastLogin = new Date().toISOString();
+                if (isBootstrapAdmin && acc.role !== 'Admin') {
+                  acc.role = 'Admin';
+                  acc.adminRole = 'Super Admin';
+                }
+                await setDoc(userDocRef, acc, { merge: true });
+                setCurrentUserAccount(acc);
+
+                if (acc.role === 'Admin') {
+                  setIsAdminLoggedIn(true);
+                  setCurrentAdminUser({
+                    id: acc.uid,
+                    name: acc.name || acc.displayName,
+                    email: acc.email,
+                    username: acc.email.split('@')[0] || 'admin',
+                    role: acc.adminRole || 'Super Admin',
+                    department: acc.department || 'Administration & Executive Leadership',
+                    status: 'Active',
+                    createdAt: acc.createdAt,
+                    avatarUrl: acc.photoURL,
+                  });
+                } else if (acc.role === 'Student') {
+                  setIsStudentLoggedIn(true);
+                  setStudentProfile((prev) => ({
+                    ...prev,
+                    fullName: acc.name,
+                    email: acc.email,
+                    avatarUrl: acc.photoURL || prev.avatarUrl,
+                  }));
+                }
+              } else {
+                // Initial creation upon first Google sign-in
+                const newAcc: UserAccount = {
+                  id: fbUser.uid,
+                  uid: fbUser.uid,
+                  email: fbUser.email || '',
+                  name: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
+                  displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
+                  photoURL: fbUser.photoURL || '',
+                  avatarUrl: fbUser.photoURL || '',
+                  role: isBootstrapAdmin ? 'Admin' : 'Student',
+                  adminRole: isBootstrapAdmin ? 'Super Admin' : undefined,
+                  studentId: isBootstrapAdmin ? undefined : '2024-PCM-0418',
+                  status: 'Active',
+                  provider: 'google.com',
+                  emailVerified: fbUser.emailVerified,
+                  createdAt: new Date().toISOString(),
+                  lastLogin: new Date().toISOString(),
+                };
+                await setDoc(userDocRef, newAcc, { merge: true });
+                setCurrentUserAccount(newAcc);
+
+                if (newAcc.role === 'Admin') {
+                  setIsAdminLoggedIn(true);
+                  setCurrentAdminUser({
+                    id: newAcc.uid,
+                    name: newAcc.name,
+                    email: newAcc.email,
+                    username: newAcc.email.split('@')[0] || 'admin',
+                    role: 'Super Admin',
+                    department: 'Administration & Executive Leadership',
+                    status: 'Active',
+                    createdAt: newAcc.createdAt,
+                    avatarUrl: newAcc.photoURL,
+                  });
+                } else if (newAcc.role === 'Student') {
+                  setIsStudentLoggedIn(true);
+                  setStudentProfile((prev) => ({
+                    ...prev,
+                    fullName: newAcc.name,
+                    email: newAcc.email,
+                    avatarUrl: newAcc.photoURL || prev.avatarUrl,
+                  }));
+                }
+              }
+            } catch (e) {
+              console.warn('Auth state profile handler warning:', e);
+            }
+          }
+        });
+        unsubs.push(unsubAuth);
 
         setIsFirebaseConnected(true);
         setFirebaseSyncStatus('synced');
@@ -1854,6 +2022,152 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('info', 'Admin Deleted', 'User access revoked.');
   };
 
+  // Google / Firebase Authentication & Multi-Role Identity
+  const signInWithGoogle = async (): Promise<{ success: boolean; role?: string; user?: UserAccount }> => {
+    try {
+      const result = await signInWithPopup(auth, googleProvider);
+      const fbUser = result.user;
+      const emailLower = fbUser.email?.toLowerCase() || '';
+
+      const isBootstrapAdmin =
+        emailLower === 'angeloperfecto.epc@gmail.com' ||
+        emailLower === 'president@pcm.edu.ph' ||
+        emailLower === 'admin@pcm.ph' ||
+        adminUsers.some((u) => u.email.toLowerCase() === emailLower);
+
+      const userDocRef = doc(db, 'users', fbUser.uid);
+      const snap = await getDoc(userDocRef);
+
+      let accountData: UserAccount;
+      if (snap.exists()) {
+        accountData = snap.data() as UserAccount;
+        accountData.lastLogin = new Date().toISOString();
+        if (isBootstrapAdmin && accountData.role !== 'Admin') {
+          accountData.role = 'Admin';
+          accountData.adminRole = 'Super Admin';
+        }
+        await setDoc(userDocRef, accountData, { merge: true });
+      } else {
+        accountData = {
+          id: fbUser.uid,
+          uid: fbUser.uid,
+          email: fbUser.email || '',
+          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
+          displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
+          photoURL: fbUser.photoURL || '',
+          avatarUrl: fbUser.photoURL || '',
+          role: isBootstrapAdmin ? 'Admin' : 'Student',
+          adminRole: isBootstrapAdmin ? 'Super Admin' : undefined,
+          studentId: isBootstrapAdmin ? undefined : '2024-PCM-0418',
+          department: isBootstrapAdmin ? 'Administration & Executive Leadership' : 'Undergraduate Theology',
+          status: 'Active',
+          provider: 'google.com',
+          emailVerified: fbUser.emailVerified,
+          createdAt: new Date().toISOString(),
+          lastLogin: new Date().toISOString(),
+        };
+        await setDoc(userDocRef, accountData, { merge: true });
+      }
+
+      setCurrentUserAccount(accountData);
+      setFirebaseAuthUser(fbUser);
+
+      if (accountData.role === 'Admin') {
+        setIsAdminLoggedIn(true);
+        setCurrentAdminUser({
+          id: accountData.uid,
+          name: accountData.name,
+          email: accountData.email,
+          username: accountData.email.split('@')[0] || 'admin',
+          role: accountData.adminRole || 'Super Admin',
+          department: accountData.department || 'Administration & Executive Leadership',
+          status: 'Active',
+          createdAt: accountData.createdAt,
+          avatarUrl: accountData.photoURL,
+        });
+        addToast('success', 'Google Admin Authenticated', `Welcome back, ${accountData.name}! Full CMS access granted.`);
+      } else if (accountData.role === 'Student') {
+        setIsStudentLoggedIn(true);
+        setStudentProfile((prev) => ({
+          ...prev,
+          fullName: accountData.name,
+          email: accountData.email,
+          avatarUrl: accountData.photoURL || prev.avatarUrl,
+        }));
+        addToast('success', 'Google Sign-in Successful', `Welcome to MyPCM Student Portal, ${accountData.name}!`);
+      } else {
+        addToast('success', 'Welcome to PCM', `Signed in as ${accountData.name} (${accountData.role}).`);
+      }
+
+      logActivity('LOGIN', 'Google Auth', accountData.uid, accountData.name, `Authenticated via Google (${accountData.email} - ${accountData.role}).`);
+      return { success: true, role: accountData.role, user: accountData };
+    } catch (err: any) {
+      console.error('Google Sign-in error:', err);
+      addToast('error', 'Google Sign-In Failed', err.message || 'Unable to complete Google authentication.');
+      return { success: false };
+    }
+  };
+
+  const signOutUser = async () => {
+    try {
+      const email = currentUserAccount?.email || firebaseAuthUser?.email || 'User';
+      await signOut(auth);
+      setFirebaseAuthUser(null);
+      setCurrentUserAccount(null);
+      setIsAdminLoggedIn(false);
+      setIsStudentLoggedIn(false);
+      logActivity('LOGOUT', 'User Session', 'auth', email, 'User signed out from PCM Google session.');
+      addToast('info', 'Signed Out', `Google account (${email}) has been signed out.`);
+    } catch (e: any) {
+      console.warn('Sign out error:', e);
+    }
+  };
+
+  const updateUserAccountRole = async (userId: string, role: UserRole, adminRole?: AdminRole) => {
+    try {
+      const targetUser = userAccounts.find((u) => u.id === userId || u.uid === userId);
+      const updates: Partial<UserAccount> = {
+        role,
+        adminRole: role === 'Admin' ? (adminRole || 'Super Admin') : undefined,
+      };
+
+      setUserAccounts((prev) =>
+        prev.map((u) => (u.id === userId || u.uid === userId ? { ...u, ...updates } : u))
+      );
+
+      await setDoc(doc(db, 'users', userId), updates, { merge: true });
+
+      // If updating current active user
+      if (currentUserAccount?.uid === userId || currentUserAccount?.id === userId) {
+        setCurrentUserAccount((prev) => (prev ? { ...prev, ...updates } : null));
+        if (role === 'Admin') {
+          setIsAdminLoggedIn(true);
+        } else if (role === 'Student') {
+          setIsStudentLoggedIn(true);
+        }
+      }
+
+      logActivity('UPDATE', 'User Role', userId, targetUser?.name || userId, `Updated account role to ${role}${adminRole ? ` (${adminRole})` : ''}.`);
+      addToast('success', 'User Role Updated', `Role for ${targetUser?.name || 'user'} updated to ${role}.`);
+    } catch (err: any) {
+      console.error('Failed to update user role:', err);
+      addToast('error', 'Update Failed', err.message || 'Could not update user role in Firestore.');
+    }
+  };
+
+  const linkStudentIdToUser = async (studentId: string) => {
+    if (!currentUserAccount) return;
+    try {
+      const updates = { studentId };
+      setCurrentUserAccount((prev) => (prev ? { ...prev, ...updates } : null));
+      await setDoc(doc(db, 'users', currentUserAccount.uid), updates, { merge: true });
+      addToast('success', 'Student Record Linked', `Linked Student ID ${studentId} to your account.`);
+    } catch (e: any) {
+      console.warn(e);
+    }
+  };
+
+  // Change Admin Password
   const changeAdminPassword = (userId: string, newPass: string): boolean => {
     if (newPass.length < 6) {
       addToast('error', 'Weak Password', 'Password must be at least 6 characters.');
@@ -2178,6 +2492,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getApplicationByRef,
         activeTrackerRef,
         setActiveTrackerRef,
+
+        // Google / Firebase User Accounts & Authentication
+        currentUserAccount,
+        setCurrentUserAccount,
+        firebaseAuthUser,
+        userAccounts,
+        userAccountModalOpen,
+        setUserAccountModalOpen,
+        signInWithGoogle,
+        signOutUser,
+        updateUserAccountRole,
+        linkStudentIdToUser,
 
         // Student Portal
         isStudentLoggedIn,
