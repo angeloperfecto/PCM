@@ -58,7 +58,10 @@ import {
   deleteDoc,
   onSnapshot,
   writeBatch,
+  getDocFromServer,
   uploadFileToFirebaseStorage,
+  handleFirestoreError,
+  OperationType,
 } from './firebase';
 
 export interface ToastNotification {
@@ -309,20 +312,6 @@ interface PCMContextType {
 
 const PCMContext = createContext<PCMContextType | undefined>(undefined);
 
-const LOCAL_STORAGE_KEY = 'pcm_cms_database_v5';
-
-function loadPersisted<T>(key: string, fallback: T): T {
-  if (typeof window === 'undefined') return fallback;
-  try {
-    const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-    if (!saved) return fallback;
-    const parsed = JSON.parse(saved);
-    return parsed[key] !== undefined ? parsed[key] : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
 export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const counterRef = useRef(0);
   const initialSeededRef = useRef(false);
@@ -485,54 +474,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('info', 'Activity Logs Cleared', 'Audit trail has been reset.');
   };
 
-  // Save to localStorage on state changes as a backup/cache layer
-  useEffect(() => {
-    try {
-      const stateToSave = {
-        siteConfig,
-        mediaItems,
-        galleryAlbums,
-        activityLogs,
-        announcements,
-        programs,
-        news,
-        events,
-        faculty,
-        testimonials,
-        stats,
-        faqs,
-        downloads,
-        sermons,
-        scrapbook,
-        applications,
-        adminUsers,
-        studentProfile,
-      };
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(stateToSave));
-    } catch (e) {
-      console.warn('Could not persist PCM CMS state to localStorage:', e);
-    }
-  }, [
-    siteConfig,
-    mediaItems,
-    galleryAlbums,
-    activityLogs,
-    announcements,
-    programs,
-    news,
-    events,
-    faculty,
-    testimonials,
-    stats,
-    faqs,
-    downloads,
-    sermons,
-    scrapbook,
-    applications,
-    adminUsers,
-    studentProfile,
-  ]);
-
   // Keep a ref to the latest state so async batch sync doesn't cause re-subscription loops
   const stateRef = useRef({
     siteConfig,
@@ -591,39 +532,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     studentProfile,
   ]);
 
-  // Client-side initial cache loader (guarantees perfect SSR hydration without mismatch)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      try {
-        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed.siteConfig) setSiteConfig(parsed.siteConfig);
-          if (parsed.programs && Array.isArray(parsed.programs)) setPrograms(parsed.programs);
-          if (parsed.faculty && Array.isArray(parsed.faculty)) setFaculty(parsed.faculty);
-          if (parsed.announcements && Array.isArray(parsed.announcements)) setAnnouncements(parsed.announcements);
-          if (parsed.news && Array.isArray(parsed.news)) setNews(parsed.news);
-          if (parsed.events && Array.isArray(parsed.events)) setEvents(parsed.events);
-          if (parsed.downloads && Array.isArray(parsed.downloads)) setDownloads(parsed.downloads);
-          if (parsed.testimonials && Array.isArray(parsed.testimonials)) setTestimonials(parsed.testimonials);
-          if (parsed.stats && Array.isArray(parsed.stats)) setStats(parsed.stats);
-          if (parsed.faqs && Array.isArray(parsed.faqs)) setFaqs(parsed.faqs);
-          if (parsed.sermons && Array.isArray(parsed.sermons)) setSermons(parsed.sermons);
-          if (parsed.scrapbook && Array.isArray(parsed.scrapbook)) setScrapbook(parsed.scrapbook);
-          if (parsed.mediaItems && Array.isArray(parsed.mediaItems)) setMediaItems(parsed.mediaItems);
-          if (parsed.galleryAlbums && Array.isArray(parsed.galleryAlbums)) setGalleryAlbums(parsed.galleryAlbums);
-          if (parsed.applications && Array.isArray(parsed.applications)) setApplications(parsed.applications);
-          if (parsed.adminUsers && Array.isArray(parsed.adminUsers)) setAdminUsers(parsed.adminUsers);
-          if (parsed.studentProfile) setStudentProfile(parsed.studentProfile);
-        }
-      } catch (e) {
-        console.warn('Local storage cache hydration notice:', e);
-      }
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, []);
-
   // Keyboard shortcut for Cmd+K Search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -636,7 +544,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Sync entire dataset to Firestore in batches
+  // Sync entire dataset to Firestore in atomic batches
   const syncAllDataToFirestore = useCallback(
     async (force: boolean = false): Promise<boolean> => {
       try {
@@ -728,7 +636,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         return true;
       } catch (err: any) {
-        console.error('Firebase sync error:', err);
+        handleFirestoreError(err, OperationType.WRITE, 'global-sync');
         setFirebaseSyncStatus('error');
         if (force) {
           addToast('error', 'Sync Failed', 'Failed to synchronize with Firebase Firestore.');
@@ -750,11 +658,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Check if database already has initial content
         try {
           const configDocSnap = await getDoc(doc(db, 'siteConfig', 'global'));
-          const programsSnap = await getDocs(collection(db, 'programs'));
-
-          if (!configDocSnap.exists() && programsSnap.empty && !initialSeededRef.current) {
+          if (!configDocSnap.exists() && !initialSeededRef.current) {
             initialSeededRef.current = true;
-            console.info('Firestore database is empty. Auto-seeding initial PCM institutional baseline...');
+            console.info('Firestore is empty. Auto-seeding initial PCM institutional baseline...');
             await syncAllDataToFirestore(false);
           }
         } catch (seedErr) {
@@ -769,10 +675,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (snap.exists()) {
               setSiteConfig(snap.data() as SiteConfig);
               setFirebaseSyncStatus('synced');
+              setIsFirebaseConnected(true);
               setLastSyncedAt(new Date());
             }
           },
-          (err) => console.warn('siteConfig snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.GET, 'siteConfig/global');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uConfig);
 
@@ -780,12 +690,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uPrograms = onSnapshot(
           collection(db, 'programs'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicProgram[];
-              setPrograms(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicProgram[];
+            setPrograms(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('programs snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'programs');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uPrograms);
 
@@ -793,12 +707,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uFaculty = onSnapshot(
           collection(db, 'faculty'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FacultyMember[];
-              setFaculty(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FacultyMember[];
+            setFaculty(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('faculty snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'faculty');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uFaculty);
 
@@ -806,12 +724,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uAnnouncements = onSnapshot(
           collection(db, 'announcements'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AnnouncementItem[];
-              setAnnouncements(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AnnouncementItem[];
+            setAnnouncements(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('announcements snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'announcements');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uAnnouncements);
 
@@ -819,12 +741,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uNews = onSnapshot(
           collection(db, 'news'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as NewsArticle[];
-              setNews(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as NewsArticle[];
+            setNews(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('news snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'news');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uNews);
 
@@ -832,12 +758,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uEvents = onSnapshot(
           collection(db, 'events'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as CollegeEvent[];
-              setEvents(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as CollegeEvent[];
+            setEvents(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('events snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'events');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uEvents);
 
@@ -845,12 +775,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uDownloads = onSnapshot(
           collection(db, 'downloads'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[];
-              setDownloads(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[];
+            setDownloads(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('downloads snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'downloads');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uDownloads);
 
@@ -858,12 +792,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uTestimonials = onSnapshot(
           collection(db, 'testimonials'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[];
-              setTestimonials(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[];
+            setTestimonials(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('testimonials snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'testimonials');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uTestimonials);
 
@@ -871,12 +809,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uStats = onSnapshot(
           collection(db, 'stats'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[];
-              setStats(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[];
+            setStats(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('stats snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'stats');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uStats);
 
@@ -884,12 +826,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uFaqs = onSnapshot(
           collection(db, 'faqs'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[];
-              setFaqs(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[];
+            setFaqs(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('faqs snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'faqs');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uFaqs);
 
@@ -897,12 +843,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uSermons = onSnapshot(
           collection(db, 'sermons'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[];
-              setSermons(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[];
+            setSermons(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('sermons snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'sermons');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uSermons);
 
@@ -910,12 +860,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uScrapbook = onSnapshot(
           collection(db, 'scrapbook'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[];
-              setScrapbook(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[];
+            setScrapbook(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('scrapbook snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'scrapbook');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uScrapbook);
 
@@ -923,12 +877,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uMedia = onSnapshot(
           collection(db, 'mediaItems'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MediaItem[];
-              setMediaItems(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MediaItem[];
+            setMediaItems(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('mediaItems snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'mediaItems');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uMedia);
 
@@ -936,12 +894,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uAlbums = onSnapshot(
           collection(db, 'galleryAlbums'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[];
-              setGalleryAlbums(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[];
+            setGalleryAlbums(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('galleryAlbums snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'galleryAlbums');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uAlbums);
 
@@ -949,12 +911,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uApps = onSnapshot(
           collection(db, 'applications'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
-              setApplications(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
+            setApplications(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('applications snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'applications');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uApps);
 
@@ -962,12 +928,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uAdmins = onSnapshot(
           collection(db, 'adminUsers'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[];
-              setAdminUsers(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[];
+            setAdminUsers(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('adminUsers snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'adminUsers');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uAdmins);
 
@@ -975,14 +945,32 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uLogs = onSnapshot(
           collection(db, 'activityLogs'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[];
-              setActivityLogs(list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[];
+            setActivityLogs(list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
-          (err) => console.warn('activityLogs snapshot error:', err)
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'activityLogs');
+            setFirebaseSyncStatus('error');
+          }
         );
         unsubs.push(uLogs);
+
+        // 18. Student Profiles (demo)
+        const uStudent = onSnapshot(
+          doc(db, 'studentProfiles', 'std-demo-1'),
+          (snap) => {
+            if (snap.exists()) {
+              setStudentProfile(snap.data() as StudentProfile);
+            }
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.GET, 'studentProfiles/std-demo-1');
+          }
+        );
+        unsubs.push(uStudent);
 
         setIsFirebaseConnected(true);
         setFirebaseSyncStatus('synced');
