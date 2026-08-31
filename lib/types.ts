@@ -100,6 +100,7 @@ export interface CollegeEvent {
   maxAttendees?: number;
   capacity?: number;
   registeredCount?: number;
+  registeredAttendees?: Array<{ name: string; email: string; date: string }>;
   imageUrl?: string;
   image?: string;
   status?: ContentStatus;
@@ -167,13 +168,14 @@ export interface AdmissionApplication {
   id: string;
   referenceNumber: string;
   trackingNumber?: string;
-  createdAt: string;
+  createdAt?: string;
   submissionDate?: string;
-  updatedAt: string;
+  updatedAt?: string;
   status: ApplicationStatus;
-  programId: string;
-  programName: string;
-  studyMode: string;
+  programId?: string;
+  programName?: string;
+  program?: string;
+  studyMode?: string;
   
   // Personal Info
   fullName: string;
@@ -181,8 +183,9 @@ export interface AdmissionApplication {
   phone: string;
   birthDate?: string;
   birthdate?: string;
-  gender?: 'Male' | 'Female';
-  civilStatus?: 'Single' | 'Married' | 'Widowed';
+  dateOfBirth?: string;
+  gender?: 'Male' | 'Female' | 'Prefer not to say' | string;
+  civilStatus?: 'Single' | 'Married' | 'Widowed' | string;
   citizenship?: string;
   address?: string;
   city?: string;
@@ -194,6 +197,9 @@ export interface AdmissionApplication {
   waterBaptized?: boolean;
   homeChurch?: string;
   churchName?: string;
+  church?: string;
+  churchAffiliation?: string;
+  christianTestimony?: string;
   churchDenomination?: string;
   pastorName?: string;
   pastorContact?: string;
@@ -207,6 +213,8 @@ export interface AdmissionApplication {
   // Academic Background
   highestEducation?: string;
   previousSchool?: string;
+  previousCollege?: string;
+  highSchool?: string;
   yearGraduated?: string;
   gpaOrHonors?: string;
   
@@ -220,6 +228,7 @@ export interface AdmissionApplication {
   };
   
   // Internal Notes for Admissions Staff
+  adminNotes?: string;
   internalNotes?: string[];
   notes?: string[];
   interviewerRemarks?: string;
@@ -248,13 +257,14 @@ export interface PracticumEntry {
   hours: number;
   description: string;
   supervisorName: string;
-  status: 'Pending Review' | 'Approved';
+  status: 'Pending Review' | 'Pending Verification' | 'Approved' | 'Rejected' | string;
 }
 
 export interface StudentProfile {
   id: string;
   studentId: string;
   fullName: string;
+  name?: string;
   email: string;
   program: string;
   yearLevel: string;
@@ -267,6 +277,7 @@ export interface StudentProfile {
   avatarUrl: string;
   tuitionTotal: number;
   tuitionPaid: number;
+  tuitionBalance?: number;
   courses: StudentCourse[];
   practicumEntries: PracticumEntry[];
 }
@@ -282,6 +293,7 @@ export interface AdminUser {
   role: AdminRole;
   avatarUrl?: string;
   department?: string;
+  status?: 'Active' | 'Inactive' | string;
   createdAt: string;
   lastLogin?: string;
 }
@@ -294,6 +306,7 @@ export interface DownloadableResource {
   format?: 'PDF' | 'DOCX' | 'ZIP' | string;
   fileType?: string;
   downloadCount?: number;
+  downloadsCount?: number;
   description: string;
   fileUrl?: string;
   url?: string;

@@ -119,7 +119,7 @@ export const AdminApplicationsTab: React.FC = () => {
       (app.trackingNumber && app.trackingNumber.toLowerCase().includes(search.toLowerCase())) ||
       (app.referenceNumber && app.referenceNumber.toLowerCase().includes(search.toLowerCase())) ||
       app.email.toLowerCase().includes(search.toLowerCase()) ||
-      app.programName.toLowerCase().includes(search.toLowerCase()) ||
+      ((app.programName || app.program || '').toLowerCase().includes(search.toLowerCase())) ||
       (app.churchName && app.churchName.toLowerCase().includes(search.toLowerCase())) ||
       (app.homeChurch && app.homeChurch.toLowerCase().includes(search.toLowerCase()));
 
@@ -211,7 +211,7 @@ export const AdminApplicationsTab: React.FC = () => {
                     <div>{app.fullName}</div>
                     <div className="text-[11px] font-normal text-slate-400">{app.email}</div>
                   </td>
-                  <td className="py-3 px-4">{app.programName}</td>
+                  <td className="py-3 px-4">{app.programName || app.program || 'N/A'}</td>
                   <td className="py-3 px-4 text-slate-500">{app.churchName || app.homeChurch || 'N/A'}</td>
                   <td className="py-3 px-4 font-mono text-slate-500">{app.submissionDate || app.createdAt}</td>
                   <td className="py-3 px-4">
@@ -261,7 +261,7 @@ export const AdminApplicationsTab: React.FC = () => {
                   {selectedApp.fullName}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Applied for <strong>{selectedApp.programName}</strong> on {selectedApp.submissionDate || selectedApp.createdAt}
+                  Applied for <strong>{selectedApp.programName || selectedApp.program || 'Program'}</strong> on {selectedApp.submissionDate || selectedApp.createdAt}
                 </p>
               </div>
 

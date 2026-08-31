@@ -350,41 +350,41 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [firebaseSyncStatus, setFirebaseSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('syncing');
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
-  // Core CMS Data States
-  const [siteConfig, setSiteConfig] = useState<SiteConfig>(() => loadPersisted('siteConfig', INITIAL_SITE_CONFIG));
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>(() => loadPersisted('mediaItems', INITIAL_MEDIA_ITEMS));
-  const [galleryAlbums, setGalleryAlbums] = useState<GalleryAlbum[]>(() => loadPersisted('galleryAlbums', INITIAL_GALLERY_ALBUMS));
-  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>(() => loadPersisted('activityLogs', INITIAL_ACTIVITY_LOGS));
+  // Core CMS Data States (initialized identically on SSR and client to prevent hydration mismatch)
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(INITIAL_SITE_CONFIG);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>(INITIAL_MEDIA_ITEMS);
+  const [galleryAlbums, setGalleryAlbums] = useState<GalleryAlbum[]>(INITIAL_GALLERY_ALBUMS);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>(INITIAL_ACTIVITY_LOGS);
 
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(() => loadPersisted('announcements', INITIAL_ANNOUNCEMENTS));
-  const [programs, setPrograms] = useState<AcademicProgram[]>(() => loadPersisted('programs', INITIAL_PROGRAMS));
-  const [news, setNews] = useState<NewsArticle[]>(() => loadPersisted('news', INITIAL_NEWS));
-  const [events, setEvents] = useState<CollegeEvent[]>(() => loadPersisted('events', INITIAL_EVENTS));
-  const [faculty, setFaculty] = useState<FacultyMember[]>(() => loadPersisted('faculty', INITIAL_FACULTY));
-  const [testimonials, setTestimonials] = useState<Testimonial[]>(() => loadPersisted('testimonials', INITIAL_TESTIMONIALS));
-  const [stats, setStats] = useState<ImpactStat[]>(() => loadPersisted('stats', INITIAL_STATS));
-  const [faqs, setFaqs] = useState<FAQItem[]>(() => loadPersisted('faqs', INITIAL_FAQS));
-  const [downloads, setDownloads] = useState<DownloadableResource[]>(() => loadPersisted('downloads', INITIAL_DOWNLOADS));
-  const [sermons, setSermons] = useState<SermonLecture[]>(() => loadPersisted('sermons', INITIAL_SERMONS));
-  const [scrapbook, setScrapbook] = useState<ScrapbookItem[]>(() => loadPersisted('scrapbook', INITIAL_SCRAPBOOK));
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(INITIAL_ANNOUNCEMENTS);
+  const [programs, setPrograms] = useState<AcademicProgram[]>(INITIAL_PROGRAMS);
+  const [news, setNews] = useState<NewsArticle[]>(INITIAL_NEWS);
+  const [events, setEvents] = useState<CollegeEvent[]>(INITIAL_EVENTS);
+  const [faculty, setFaculty] = useState<FacultyMember[]>(INITIAL_FACULTY);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>(INITIAL_TESTIMONIALS);
+  const [stats, setStats] = useState<ImpactStat[]>(INITIAL_STATS);
+  const [faqs, setFaqs] = useState<FAQItem[]>(INITIAL_FAQS);
+  const [downloads, setDownloads] = useState<DownloadableResource[]>(INITIAL_DOWNLOADS);
+  const [sermons, setSermons] = useState<SermonLecture[]>(INITIAL_SERMONS);
+  const [scrapbook, setScrapbook] = useState<ScrapbookItem[]>(INITIAL_SCRAPBOOK);
   const [selectedScrapbookItem, setSelectedScrapbookItem] = useState<ScrapbookItem | null>(null);
-  const [migrationAudit, setMigrationAudit] = useState<MigrationAuditItem[]>(() => INITIAL_MIGRATION_AUDIT);
+  const [migrationAudit, setMigrationAudit] = useState<MigrationAuditItem[]>(INITIAL_MIGRATION_AUDIT);
 
   // Applications
-  const [applications, setApplications] = useState<AdmissionApplication[]>(() => loadPersisted('applications', INITIAL_APPLICATIONS));
+  const [applications, setApplications] = useState<AdmissionApplication[]>(INITIAL_APPLICATIONS);
   const [activeTrackerRef, setActiveTrackerRef] = useState<string>('');
 
   // Student Portal
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false);
-  const [studentProfile, setStudentProfile] = useState<StudentProfile>(() => loadPersisted('studentProfile', DEMO_STUDENT_PROFILE));
+  const [studentProfile, setStudentProfile] = useState<StudentProfile>(DEMO_STUDENT_PROFILE);
 
   // Admin Auth
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(() => loadPersisted('adminUsers', INITIAL_ADMIN_USERS));
-  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(() => INITIAL_ADMIN_USERS[0]);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(INITIAL_ADMIN_USERS);
+  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(INITIAL_ADMIN_USERS[0]);
 
   // Newsletter
-  const [newsletterEmails, setNewsletterEmails] = useState<string[]>(() => ['pastor.danilo@gmail.com']);
+  const [newsletterEmails, setNewsletterEmails] = useState<string[]>(['pastor.danilo@gmail.com']);
 
   // Notifications
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
@@ -533,6 +533,97 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     studentProfile,
   ]);
 
+  // Keep a ref to the latest state so async batch sync doesn't cause re-subscription loops
+  const stateRef = useRef({
+    siteConfig,
+    programs,
+    faculty,
+    announcements,
+    news,
+    events,
+    downloads,
+    testimonials,
+    stats,
+    faqs,
+    sermons,
+    scrapbook,
+    mediaItems,
+    galleryAlbums,
+    adminUsers,
+    studentProfile,
+  });
+
+  useEffect(() => {
+    stateRef.current = {
+      siteConfig,
+      programs,
+      faculty,
+      announcements,
+      news,
+      events,
+      downloads,
+      testimonials,
+      stats,
+      faqs,
+      sermons,
+      scrapbook,
+      mediaItems,
+      galleryAlbums,
+      adminUsers,
+      studentProfile,
+    };
+  }, [
+    siteConfig,
+    programs,
+    faculty,
+    announcements,
+    news,
+    events,
+    downloads,
+    testimonials,
+    stats,
+    faqs,
+    sermons,
+    scrapbook,
+    mediaItems,
+    galleryAlbums,
+    adminUsers,
+    studentProfile,
+  ]);
+
+  // Client-side initial cache loader (guarantees perfect SSR hydration without mismatch)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      try {
+        const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed.siteConfig) setSiteConfig(parsed.siteConfig);
+          if (parsed.programs && Array.isArray(parsed.programs)) setPrograms(parsed.programs);
+          if (parsed.faculty && Array.isArray(parsed.faculty)) setFaculty(parsed.faculty);
+          if (parsed.announcements && Array.isArray(parsed.announcements)) setAnnouncements(parsed.announcements);
+          if (parsed.news && Array.isArray(parsed.news)) setNews(parsed.news);
+          if (parsed.events && Array.isArray(parsed.events)) setEvents(parsed.events);
+          if (parsed.downloads && Array.isArray(parsed.downloads)) setDownloads(parsed.downloads);
+          if (parsed.testimonials && Array.isArray(parsed.testimonials)) setTestimonials(parsed.testimonials);
+          if (parsed.stats && Array.isArray(parsed.stats)) setStats(parsed.stats);
+          if (parsed.faqs && Array.isArray(parsed.faqs)) setFaqs(parsed.faqs);
+          if (parsed.sermons && Array.isArray(parsed.sermons)) setSermons(parsed.sermons);
+          if (parsed.scrapbook && Array.isArray(parsed.scrapbook)) setScrapbook(parsed.scrapbook);
+          if (parsed.mediaItems && Array.isArray(parsed.mediaItems)) setMediaItems(parsed.mediaItems);
+          if (parsed.galleryAlbums && Array.isArray(parsed.galleryAlbums)) setGalleryAlbums(parsed.galleryAlbums);
+          if (parsed.applications && Array.isArray(parsed.applications)) setApplications(parsed.applications);
+          if (parsed.adminUsers && Array.isArray(parsed.adminUsers)) setAdminUsers(parsed.adminUsers);
+          if (parsed.studentProfile) setStudentProfile(parsed.studentProfile);
+        }
+      } catch (e) {
+        console.warn('Local storage cache hydration notice:', e);
+      }
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, []);
+
   // Keyboard shortcut for Cmd+K Search
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -550,82 +641,83 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     async (force: boolean = false): Promise<boolean> => {
       try {
         setFirebaseSyncStatus('syncing');
+        const st = stateRef.current;
 
         // 1. Site Config
-        await setDoc(doc(db, 'siteConfig', 'global'), siteConfig, { merge: true });
+        await setDoc(doc(db, 'siteConfig', 'global'), st.siteConfig, { merge: true });
 
         // 2. Programs batch
         const progBatch = writeBatch(db);
-        programs.forEach((p) => progBatch.set(doc(db, 'programs', p.id), p, { merge: true }));
+        st.programs.forEach((p) => progBatch.set(doc(db, 'programs', p.id), p, { merge: true }));
         await progBatch.commit();
 
         // 3. Faculty batch
         const facBatch = writeBatch(db);
-        faculty.forEach((f) => facBatch.set(doc(db, 'faculty', f.id), f, { merge: true }));
+        st.faculty.forEach((f) => facBatch.set(doc(db, 'faculty', f.id), f, { merge: true }));
         await facBatch.commit();
 
         // 4. Announcements batch
         const annBatch = writeBatch(db);
-        announcements.forEach((a) => annBatch.set(doc(db, 'announcements', a.id), a, { merge: true }));
+        st.announcements.forEach((a) => annBatch.set(doc(db, 'announcements', a.id), a, { merge: true }));
         await annBatch.commit();
 
         // 5. News batch
         const newsBatch = writeBatch(db);
-        news.forEach((n) => newsBatch.set(doc(db, 'news', n.id), n, { merge: true }));
+        st.news.forEach((n) => newsBatch.set(doc(db, 'news', n.id), n, { merge: true }));
         await newsBatch.commit();
 
         // 6. Events batch
         const evtBatch = writeBatch(db);
-        events.forEach((e) => evtBatch.set(doc(db, 'events', e.id), e, { merge: true }));
+        st.events.forEach((e) => evtBatch.set(doc(db, 'events', e.id), e, { merge: true }));
         await evtBatch.commit();
 
         // 7. Downloads batch
         const dlBatch = writeBatch(db);
-        downloads.forEach((d) => dlBatch.set(doc(db, 'downloads', d.id), d, { merge: true }));
+        st.downloads.forEach((d) => dlBatch.set(doc(db, 'downloads', d.id), d, { merge: true }));
         await dlBatch.commit();
 
         // 8. Testimonials batch
         const testBatch = writeBatch(db);
-        testimonials.forEach((t) => testBatch.set(doc(db, 'testimonials', t.id), t, { merge: true }));
+        st.testimonials.forEach((t) => testBatch.set(doc(db, 'testimonials', t.id), t, { merge: true }));
         await testBatch.commit();
 
         // 9. Stats batch
         const statBatch = writeBatch(db);
-        stats.forEach((s) => statBatch.set(doc(db, 'stats', s.id), s, { merge: true }));
+        st.stats.forEach((s) => statBatch.set(doc(db, 'stats', s.id), s, { merge: true }));
         await statBatch.commit();
 
         // 10. FAQs batch
         const faqBatch = writeBatch(db);
-        faqs.forEach((f) => faqBatch.set(doc(db, 'faqs', f.id), f, { merge: true }));
+        st.faqs.forEach((f) => faqBatch.set(doc(db, 'faqs', f.id), f, { merge: true }));
         await faqBatch.commit();
 
         // 11. Sermons batch
         const sermonBatch = writeBatch(db);
-        sermons.forEach((s) => sermonBatch.set(doc(db, 'sermons', s.id), s, { merge: true }));
+        st.sermons.forEach((s) => sermonBatch.set(doc(db, 'sermons', s.id), s, { merge: true }));
         await sermonBatch.commit();
 
         // 12. Scrapbook batch
         const sbBatch = writeBatch(db);
-        scrapbook.forEach((sb) => sbBatch.set(doc(db, 'scrapbook', sb.id), sb, { merge: true }));
+        st.scrapbook.forEach((sb) => sbBatch.set(doc(db, 'scrapbook', sb.id), sb, { merge: true }));
         await sbBatch.commit();
 
         // 13. Media items batch
         const mediaBatch = writeBatch(db);
-        mediaItems.forEach((m) => mediaBatch.set(doc(db, 'mediaItems', m.id), m, { merge: true }));
+        st.mediaItems.forEach((m) => mediaBatch.set(doc(db, 'mediaItems', m.id), m, { merge: true }));
         await mediaBatch.commit();
 
         // 14. Gallery albums batch
         const galBatch = writeBatch(db);
-        galleryAlbums.forEach((g) => galBatch.set(doc(db, 'galleryAlbums', g.id), g, { merge: true }));
+        st.galleryAlbums.forEach((g) => galBatch.set(doc(db, 'galleryAlbums', g.id), g, { merge: true }));
         await galBatch.commit();
 
         // 15. Admin users batch
         const admBatch = writeBatch(db);
-        adminUsers.forEach((u) => admBatch.set(doc(db, 'adminUsers', u.id), u, { merge: true }));
+        st.adminUsers.forEach((u) => admBatch.set(doc(db, 'adminUsers', u.id), u, { merge: true }));
         await admBatch.commit();
 
         // 16. Student Profile
-        await setDoc(doc(db, 'studentProfiles', studentProfile.id), studentProfile, { merge: true });
+        await setDoc(doc(db, 'studentProfiles', st.studentProfile.id), st.studentProfile, { merge: true });
 
         setIsFirebaseConnected(true);
         setFirebaseSyncStatus('synced');
@@ -644,28 +736,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return false;
       }
     },
-    [
-      siteConfig,
-      programs,
-      faculty,
-      announcements,
-      news,
-      events,
-      downloads,
-      testimonials,
-      stats,
-      faqs,
-      sermons,
-      scrapbook,
-      mediaItems,
-      galleryAlbums,
-      adminUsers,
-      studentProfile,
-      addToast,
-    ]
+    [addToast]
   );
 
-  // Real-time Firestore Subscriptions & Initial Auto-Seed
+  // Real-time Firestore Subscriptions & Initial Auto-Seed (mounts once)
   useEffect(() => {
     let unsubs: (() => void)[] = [];
 
@@ -1609,7 +1683,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       pass === 'pcm1966'
     ) {
       setIsStudentLoggedIn(true);
-      addToast('success', 'Student Authenticated', `Welcome back, ${studentProfile.name}!`);
+      addToast('success', 'Student Authenticated', `Welcome back, ${studentProfile.fullName || studentProfile.name || 'Student'}!`);
       return true;
     }
     addToast('error', 'Authentication Failed', 'Invalid Student ID or Password.');
@@ -1641,8 +1715,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const makeTuitionPayment = async (amount: number) => {
-    const newBalance = Math.max(0, studentProfile.tuitionBalance - amount);
-    const updated = { ...studentProfile, tuitionBalance: newBalance };
+    const currentBalance =
+      studentProfile.tuitionBalance !== undefined
+        ? studentProfile.tuitionBalance
+        : Math.max(0, (studentProfile.tuitionTotal || 0) - (studentProfile.tuitionPaid || 0));
+    const newPaid = (studentProfile.tuitionPaid || 0) + amount;
+    const newBalance = Math.max(0, currentBalance - amount);
+    const updated = { ...studentProfile, tuitionPaid: newPaid, tuitionBalance: newBalance };
     setStudentProfile(updated);
     try {
       await setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
@@ -1659,7 +1738,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (u.username.toLowerCase() === user.trim().toLowerCase() ||
           u.email.toLowerCase() === user.trim().toLowerCase()) &&
         u.password === pass &&
-        u.status === 'Active'
+        (!u.status || u.status === 'Active')
     );
 
     if (found) {
