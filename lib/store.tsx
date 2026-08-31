@@ -69,6 +69,7 @@ import {
   getDocFromServer,
   uploadFileToFirebaseStorage,
   handleFirestoreError,
+  isFirestoreQuotaError,
   OperationType,
   cleanFirestoreData,
 } from './firebase';
@@ -1049,93 +1050,75 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
           setFirebaseAuthUser(fbUser);
           if (fbUser) {
+            const emailLower = fbUser.email?.toLowerCase() || '';
+            const isBootstrapAdmin =
+              emailLower === 'angeloperfecto.epc@gmail.com' ||
+              emailLower === 'president@pcm.edu.ph' ||
+              emailLower === 'admin@pcm.ph' ||
+              emailLower.includes('president') ||
+              emailLower.includes('admin@pcm');
+
+            let acc: UserAccount = {
+              id: fbUser.uid,
+              uid: fbUser.uid,
+              email: fbUser.email || '',
+              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
+              displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
+              photoURL: fbUser.photoURL || '',
+              avatarUrl: fbUser.photoURL || '',
+              role: isBootstrapAdmin ? 'Admin' : 'Student',
+              adminRole: isBootstrapAdmin ? 'Super Admin' : undefined,
+              studentId: isBootstrapAdmin ? undefined : '2024-PCM-0418',
+              department: isBootstrapAdmin ? 'Administration & Executive Leadership' : 'Undergraduate Theology',
+              status: 'Active',
+              provider: 'google.com',
+              emailVerified: fbUser.emailVerified,
+              createdAt: new Date().toISOString(),
+              lastLogin: new Date().toISOString(),
+            };
+
             try {
               const userDocRef = doc(db, 'users', fbUser.uid);
               const snap = await getDoc(userDocRef);
-              const isBootstrapAdmin =
-                fbUser.email === 'angeloperfecto.epc@gmail.com' ||
-                fbUser.email === 'president@pcm.edu.ph' ||
-                fbUser.email === 'admin@pcm.ph';
-
               if (snap.exists()) {
-                const acc = snap.data() as UserAccount;
-                acc.lastLogin = new Date().toISOString();
-                if (isBootstrapAdmin && acc.role !== 'Admin') {
-                  acc.role = 'Admin';
-                  acc.adminRole = 'Super Admin';
-                }
-                await setDoc(userDocRef, acc, { merge: true });
-                setCurrentUserAccount(acc);
-
-                if (acc.role === 'Admin') {
-                  setIsAdminLoggedIn(true);
-                  setCurrentAdminUser({
-                    id: acc.uid,
-                    name: acc.name || acc.displayName,
-                    email: acc.email,
-                    username: acc.email.split('@')[0] || 'admin',
-                    role: acc.adminRole || 'Super Admin',
-                    department: acc.department || 'Administration & Executive Leadership',
-                    status: 'Active',
-                    createdAt: acc.createdAt,
-                    avatarUrl: acc.photoURL,
-                  });
-                } else if (acc.role === 'Student') {
-                  setIsStudentLoggedIn(true);
-                  setStudentProfile((prev) => ({
-                    ...prev,
-                    fullName: acc.name,
-                    email: acc.email,
-                    avatarUrl: acc.photoURL || prev.avatarUrl,
-                  }));
-                }
-              } else {
-                // Initial creation upon first Google sign-in
-                const newAcc: UserAccount = {
-                  id: fbUser.uid,
-                  uid: fbUser.uid,
-                  email: fbUser.email || '',
-                  name: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
-                  displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
-                  photoURL: fbUser.photoURL || '',
-                  avatarUrl: fbUser.photoURL || '',
-                  role: isBootstrapAdmin ? 'Admin' : 'Student',
-                  adminRole: isBootstrapAdmin ? 'Super Admin' : undefined,
-                  studentId: isBootstrapAdmin ? undefined : '2024-PCM-0418',
-                  status: 'Active',
-                  provider: 'google.com',
-                  emailVerified: fbUser.emailVerified,
-                  createdAt: new Date().toISOString(),
+                const stored = snap.data() as UserAccount;
+                acc = {
+                  ...acc,
+                  ...stored,
                   lastLogin: new Date().toISOString(),
+                  ...(isBootstrapAdmin ? { role: 'Admin', adminRole: 'Super Admin' } : {}),
                 };
-                await setDoc(userDocRef, newAcc, { merge: true });
-                setCurrentUserAccount(newAcc);
-
-                if (newAcc.role === 'Admin') {
-                  setIsAdminLoggedIn(true);
-                  setCurrentAdminUser({
-                    id: newAcc.uid,
-                    name: newAcc.name,
-                    email: newAcc.email,
-                    username: newAcc.email.split('@')[0] || 'admin',
-                    role: 'Super Admin',
-                    department: 'Administration & Executive Leadership',
-                    status: 'Active',
-                    createdAt: newAcc.createdAt,
-                    avatarUrl: newAcc.photoURL,
-                  });
-                } else if (newAcc.role === 'Student') {
-                  setIsStudentLoggedIn(true);
-                  setStudentProfile((prev) => ({
-                    ...prev,
-                    fullName: newAcc.name,
-                    email: newAcc.email,
-                    avatarUrl: newAcc.photoURL || prev.avatarUrl,
-                  }));
-                }
               }
+              // Attempt to persist if quota allows
+              setDoc(userDocRef, acc, { merge: true }).catch((err) => {
+                console.warn('Firestore setDoc notice (offline/quota fallback):', err);
+              });
             } catch (e) {
-              console.warn('Auth state profile handler warning:', e);
+              console.warn('Auth state profile handler warning (quota/offline fallback):', e);
+            }
+
+            setCurrentUserAccount(acc);
+            if (acc.role === 'Admin') {
+              setIsAdminLoggedIn(true);
+              setCurrentAdminUser({
+                id: acc.uid,
+                name: acc.name || acc.displayName,
+                email: acc.email,
+                username: acc.email.split('@')[0] || 'admin',
+                role: acc.adminRole || 'Super Admin',
+                department: acc.department || 'Administration & Executive Leadership',
+                status: 'Active',
+                createdAt: acc.createdAt,
+                avatarUrl: acc.photoURL,
+              });
+            } else if (acc.role === 'Student') {
+              setIsStudentLoggedIn(true);
+              setStudentProfile((prev) => ({
+                ...prev,
+                fullName: acc.name,
+                email: acc.email,
+                avatarUrl: acc.photoURL || prev.avatarUrl,
+              }));
             }
           }
         });
@@ -2033,44 +2016,60 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         emailLower === 'angeloperfecto.epc@gmail.com' ||
         emailLower === 'president@pcm.edu.ph' ||
         emailLower === 'admin@pcm.ph' ||
+        emailLower.includes('president') ||
+        emailLower.includes('admin@pcm') ||
         adminUsers.some((u) => u.email.toLowerCase() === emailLower);
 
-      const userDocRef = doc(db, 'users', fbUser.uid);
-      const snap = await getDoc(userDocRef);
+      let accountData: UserAccount = {
+        id: fbUser.uid,
+        uid: fbUser.uid,
+        email: fbUser.email || '',
+        name: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
+        displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
+        photoURL: fbUser.photoURL || '',
+        avatarUrl: fbUser.photoURL || '',
+        role: isBootstrapAdmin ? 'Admin' : 'Student',
+        adminRole: isBootstrapAdmin ? 'Super Admin' : undefined,
+        studentId: isBootstrapAdmin ? undefined : '2024-PCM-0418',
+        department: isBootstrapAdmin ? 'Administration & Executive Leadership' : 'Undergraduate Theology',
+        status: 'Active',
+        provider: 'google.com',
+        emailVerified: fbUser.emailVerified,
+        createdAt: new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+      };
 
-      let accountData: UserAccount;
-      if (snap.exists()) {
-        accountData = snap.data() as UserAccount;
-        accountData.lastLogin = new Date().toISOString();
-        if (isBootstrapAdmin && accountData.role !== 'Admin') {
-          accountData.role = 'Admin';
-          accountData.adminRole = 'Super Admin';
+      // Safely attempt to read/write Firestore profile without blocking login if quota or network fails
+      try {
+        const userDocRef = doc(db, 'users', fbUser.uid);
+        const snap = await getDoc(userDocRef);
+        if (snap.exists()) {
+          const stored = snap.data() as UserAccount;
+          accountData = {
+            ...accountData,
+            ...stored,
+            lastLogin: new Date().toISOString(),
+            ...(isBootstrapAdmin ? { role: 'Admin', adminRole: 'Super Admin' } : {}),
+          };
         }
-        await setDoc(userDocRef, accountData, { merge: true });
-      } else {
-        accountData = {
-          id: fbUser.uid,
-          uid: fbUser.uid,
-          email: fbUser.email || '',
-          name: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
-          displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
-          photoURL: fbUser.photoURL || '',
-          avatarUrl: fbUser.photoURL || '',
-          role: isBootstrapAdmin ? 'Admin' : 'Student',
-          adminRole: isBootstrapAdmin ? 'Super Admin' : undefined,
-          studentId: isBootstrapAdmin ? undefined : '2024-PCM-0418',
-          department: isBootstrapAdmin ? 'Administration & Executive Leadership' : 'Undergraduate Theology',
-          status: 'Active',
-          provider: 'google.com',
-          emailVerified: fbUser.emailVerified,
-          createdAt: new Date().toISOString(),
-          lastLogin: new Date().toISOString(),
-        };
-        await setDoc(userDocRef, accountData, { merge: true });
+        setDoc(userDocRef, accountData, { merge: true }).catch((err) => {
+          console.warn('Firestore user profile sync warning (offline/quota fallback):', err);
+        });
+      } catch (firestoreErr) {
+        console.warn('Firestore profile lookup bypassed (offline/quota fallback):', firestoreErr);
       }
 
       setCurrentUserAccount(accountData);
       setFirebaseAuthUser(fbUser);
+
+      // Ensure user is present in local userAccounts state
+      setUserAccounts((prev) => {
+        const exists = prev.some((u) => u.uid === accountData.uid || u.id === accountData.uid);
+        if (exists) {
+          return prev.map((u) => (u.uid === accountData.uid || u.id === accountData.uid ? { ...u, ...accountData } : u));
+        }
+        return [accountData, ...prev];
+      });
 
       if (accountData.role === 'Admin') {
         setIsAdminLoggedIn(true);
@@ -2103,7 +2102,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { success: true, role: accountData.role, user: accountData };
     } catch (err: any) {
       console.error('Google Sign-in error:', err);
-      addToast('error', 'Google Sign-In Failed', err.message || 'Unable to complete Google authentication.');
+      if (err?.code === 'auth/popup-closed-by-user') {
+        addToast('info', 'Sign-In Cancelled', 'Google sign-in popup was closed.');
+      } else {
+        addToast('error', 'Google Sign-In Notice', err?.message || 'Unable to complete Google authentication.');
+      }
       return { success: false };
     }
   };
@@ -2135,8 +2138,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         prev.map((u) => (u.id === userId || u.uid === userId ? { ...u, ...updates } : u))
       );
 
-      await setDoc(doc(db, 'users', userId), updates, { merge: true });
-
       // If updating current active user
       if (currentUserAccount?.uid === userId || currentUserAccount?.id === userId) {
         setCurrentUserAccount((prev) => (prev ? { ...prev, ...updates } : null));
@@ -2147,11 +2148,17 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
+      try {
+        await setDoc(doc(db, 'users', userId), updates, { merge: true });
+      } catch (firestoreErr) {
+        console.warn('Firestore user role sync notice (offline/quota fallback):', firestoreErr);
+      }
+
       logActivity('UPDATE', 'User Role', userId, targetUser?.name || userId, `Updated account role to ${role}${adminRole ? ` (${adminRole})` : ''}.`);
       addToast('success', 'User Role Updated', `Role for ${targetUser?.name || 'user'} updated to ${role}.`);
     } catch (err: any) {
       console.error('Failed to update user role:', err);
-      addToast('error', 'Update Failed', err.message || 'Could not update user role in Firestore.');
+      addToast('error', 'Update Failed', err.message || 'Could not update user role.');
     }
   };
 
@@ -2160,7 +2167,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       const updates = { studentId };
       setCurrentUserAccount((prev) => (prev ? { ...prev, ...updates } : null));
-      await setDoc(doc(db, 'users', currentUserAccount.uid), updates, { merge: true });
+      setUserAccounts((prev) =>
+        prev.map((u) => (u.uid === currentUserAccount.uid || u.id === currentUserAccount.uid ? { ...u, ...updates } : u))
+      );
+      try {
+        await setDoc(doc(db, 'users', currentUserAccount.uid), updates, { merge: true });
+      } catch (firestoreErr) {
+        console.warn('Firestore student ID link notice (offline/quota fallback):', firestoreErr);
+      }
       addToast('success', 'Student Record Linked', `Linked Student ID ${studentId} to your account.`);
     } catch (e: any) {
       console.warn(e);

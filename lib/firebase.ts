@@ -83,11 +83,26 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export function isFirestoreQuotaError(error: unknown): boolean {
+  if (!error) return false;
+  const msg = error instanceof Error ? error.message : String(error);
+  const code = (error as any)?.code;
+  return (
+    code === 'resource-exhausted' ||
+    msg.includes('Quota limit exceeded') ||
+    msg.includes('resource-exhausted') ||
+    msg.includes('Quota exceeded') ||
+    msg.includes('quota metric') ||
+    msg.includes('Free daily read units')
+  );
+}
+
 export function handleFirestoreError(
   error: unknown,
   operationType: OperationType,
   path: string | null
 ): void {
+  const isQuota = isFirestoreQuotaError(error);
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -105,7 +120,11 @@ export function handleFirestoreError(
     operationType,
     path,
   };
-  console.warn('Firestore Operation Notice: ', JSON.stringify(errInfo));
+  if (isQuota) {
+    console.warn(`[PCM Firestore Quota Notice] Operation ${operationType} on ${path || 'database'} reached free daily quota limit. Running seamlessly in local/offline cache mode.`);
+  } else {
+    console.warn('Firestore Operation Notice: ', JSON.stringify(errInfo));
+  }
 }
 
 // Compress client image before upload to avoid memory and network bandwidth bottlenecks
