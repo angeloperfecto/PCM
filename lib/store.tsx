@@ -62,6 +62,7 @@ import {
   uploadFileToFirebaseStorage,
   handleFirestoreError,
   OperationType,
+  cleanFirestoreData,
 } from './firebase';
 
 export interface ToastNotification {
@@ -1048,7 +1049,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Site Configuration Updates
   const updateSiteConfig = async (newConfig: Partial<SiteConfig>) => {
-    const updated = { ...siteConfig, ...newConfig };
+    const updated = cleanFirestoreData({ ...siteConfig, ...newConfig });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1060,10 +1061,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateContactInfo = async (newInfo: Partial<SiteConfig['contactInfo']>) => {
-    const updated = {
+    const updated = cleanFirestoreData({
       ...siteConfig,
       contactInfo: { ...siteConfig.contactInfo, ...newInfo },
-    };
+    });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1075,10 +1076,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSeoSettings = async (newSeo: Partial<SiteConfig['seoSettings']>) => {
-    const updated = {
+    const updated = cleanFirestoreData({
       ...siteConfig,
       seoSettings: { ...siteConfig.seoSettings, ...newSeo },
-    };
+    });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1090,10 +1091,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSiteIdentity = async (newIdentity: Partial<SiteConfig['siteIdentity']>) => {
-    const updated = {
+    const updated = cleanFirestoreData({
       ...siteConfig,
       siteIdentity: { ...siteConfig.siteIdentity, ...newIdentity },
-    };
+    });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1105,10 +1106,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateHomeAbout = async (newHomeAbout: Partial<SiteConfig['homeAbout']>) => {
-    const updated = {
+    const updated = cleanFirestoreData({
       ...siteConfig,
       homeAbout: { ...siteConfig.homeAbout, ...newHomeAbout },
-    };
+    });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1120,10 +1121,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateMissionVisionValues = async (newMvv: Partial<SiteConfig['missionVisionValues']>) => {
-    const updated = {
+    const updated = cleanFirestoreData({
       ...siteConfig,
       missionVisionValues: { ...siteConfig.missionVisionValues, ...newMvv },
-    };
+    });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1135,10 +1136,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCtaSections = async (newCtas: Partial<SiteConfig['ctaSections']>) => {
-    const updated = {
+    const updated = cleanFirestoreData({
       ...siteConfig,
       ctaSections: { ...siteConfig.ctaSections, ...newCtas },
-    };
+    });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1150,10 +1151,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAdmissionsConfig = async (newAdm: Partial<SiteConfig['admissionsConfig']>) => {
-    const updated = {
+    const updated = cleanFirestoreData({
       ...siteConfig,
       admissionsConfig: { ...siteConfig.admissionsConfig, ...newAdm },
-    };
+    });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1165,10 +1166,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateFooterConfig = async (newFooter: Partial<SiteConfig['footerConfig']>) => {
-    const updated = {
+    const updated = cleanFirestoreData({
       ...siteConfig,
       footerConfig: { ...siteConfig.footerConfig, ...newFooter },
-    };
+    });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1180,10 +1181,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateNavigationMenu = async (newNav: SiteConfig['navigationMenu']) => {
-    const updated = {
+    const updated = cleanFirestoreData({
       ...siteConfig,
       navigationMenu: newNav,
-    };
+    });
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
@@ -1196,11 +1197,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Media Library CRUD
   const addMediaItem = (item: Omit<MediaItem, 'id' | 'uploadDate'>): MediaItem => {
-    const newItem: MediaItem = {
+    const newItem: MediaItem = cleanFirestoreData({
       ...item,
       id: `med-${Date.now()}`,
       uploadDate: new Date().toISOString().split('T')[0],
-    };
+    });
     setMediaItems((prev) => [newItem, ...prev]);
     setDoc(doc(db, 'mediaItems', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Media Library', newItem.id, newItem.title, `Uploaded image asset to media library (${newItem.category}).`);
@@ -1209,10 +1210,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateMediaItem = (id: string, updates: Partial<MediaItem>) => {
+    const sanitized = cleanFirestoreData(updates);
     setMediaItems((prev) =>
       prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
     );
-    updateDoc(doc(db, 'mediaItems', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'mediaItems', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Media Library', id, updates.title || 'Media Asset', 'Updated media metadata and alt text.');
     addToast('success', 'Media Updated', 'Image asset details updated.');
   };
@@ -1227,10 +1229,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Gallery Albums CRUD
   const addGalleryAlbum = (album: Omit<GalleryAlbum, 'id'>): GalleryAlbum => {
-    const newAlbum: GalleryAlbum = {
+    const newAlbum: GalleryAlbum = cleanFirestoreData({
       ...album,
       id: `alb-${Date.now()}`,
-    };
+    });
     setGalleryAlbums((prev) => [newAlbum, ...prev]);
     setDoc(doc(db, 'galleryAlbums', newAlbum.id), newAlbum, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Gallery Album', newAlbum.id, newAlbum.title, `Created new photo album with ${newAlbum.photos.length} photos.`);
@@ -1239,10 +1241,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateGalleryAlbum = (id: string, updates: Partial<GalleryAlbum>) => {
+    const sanitized = cleanFirestoreData(updates);
     setGalleryAlbums((prev) =>
       prev.map((alb) => (alb.id === id ? { ...alb, ...updates } : alb))
     );
-    updateDoc(doc(db, 'galleryAlbums', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'galleryAlbums', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Gallery Album', id, updates.title || 'Album', 'Updated album photos and metadata.');
     addToast('success', 'Album Updated', 'Gallery album saved.');
   };
@@ -1257,11 +1260,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Announcements CRUD
   const addAnnouncement = (item: Omit<AnnouncementItem, 'id'>) => {
-    const newItem: AnnouncementItem = {
+    const newItem: AnnouncementItem = cleanFirestoreData({
       ...item,
       id: `ann-${Date.now()}`,
       status: item.status || 'Published',
-    };
+    });
     setAnnouncements((prev) => [newItem, ...prev]);
     setDoc(doc(db, 'announcements', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Announcement', newItem.id, newItem.title, 'Created new ticker announcement alert.');
@@ -1269,10 +1272,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAnnouncement = (id: string, updates: Partial<AnnouncementItem>) => {
+    const sanitized = cleanFirestoreData(updates);
     setAnnouncements((prev) =>
       prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
     );
-    updateDoc(doc(db, 'announcements', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'announcements', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Announcement', id, updates.title || 'Announcement', 'Updated announcement message.');
     addToast('success', 'Announcement Updated', 'Ticker alert updated.');
   };
@@ -1282,7 +1286,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prev.map((a) => {
         if (a.id === id) {
           const nextActive = !a.active;
-          updateDoc(doc(db, 'announcements', id), { active: nextActive }).catch((e) => console.warn(e));
+          setDoc(doc(db, 'announcements', id), { active: nextActive }, { merge: true }).catch((e) => console.warn(e));
           logActivity(nextActive ? 'PUBLISH' : 'UNPUBLISH', 'Announcement', id, a.title, `${nextActive ? 'Enabled' : 'Disabled'} announcement ticker.`);
           return { ...a, active: nextActive };
         }
@@ -1301,11 +1305,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Academic Programs CRUD
   const addProgram = (program: Omit<AcademicProgram, 'id'>): AcademicProgram => {
-    const newProg: AcademicProgram = {
+    const newProg: AcademicProgram = cleanFirestoreData({
       ...program,
       id: `prog-${Date.now()}`,
       status: program.status || 'Published',
-    };
+    });
     setPrograms((prev) => [newProg, ...prev]);
     setDoc(doc(db, 'programs', newProg.id), newProg, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Academic Program', newProg.id, newProg.name, `Added new academic degree program (${newProg.code}).`);
@@ -1314,10 +1318,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateProgram = (id: string, updates: Partial<AcademicProgram>) => {
+    const sanitized = cleanFirestoreData(updates);
     setPrograms((prev) =>
       prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
     );
-    updateDoc(doc(db, 'programs', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'programs', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Academic Program', id, updates.name || 'Program', 'Updated curriculum, tuition, and admission prerequisites.');
     addToast('success', 'Program Updated', 'Academic degree information saved.');
   };
@@ -1332,11 +1337,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Faculty CRUD
   const addFaculty = (member: Omit<FacultyMember, 'id'>): FacultyMember => {
-    const newFac: FacultyMember = {
+    const newFac: FacultyMember = cleanFirestoreData({
       ...member,
       id: `fac-${Date.now()}`,
       status: member.status || 'Published',
-    };
+    });
     setFaculty((prev) => [...prev, newFac]);
     setDoc(doc(db, 'faculty', newFac.id), newFac, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Faculty Member', newFac.id, newFac.name, `Added ${newFac.name} (${newFac.group} - ${newFac.role}) to directory.`);
@@ -1345,10 +1350,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateFaculty = (id: string, updates: Partial<FacultyMember>) => {
+    const sanitized = cleanFirestoreData(updates);
     setFaculty((prev) =>
       prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
     );
-    updateDoc(doc(db, 'faculty', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'faculty', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Faculty Member', id, updates.name || 'Faculty Member', 'Updated academic credentials, bio, and portrait image.');
     addToast('success', 'Faculty Profile Updated', 'Faculty details saved.');
   };
@@ -1363,11 +1369,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // News CRUD
   const addNewsArticle = (article: Omit<NewsArticle, 'id'>): NewsArticle => {
-    const newArt: NewsArticle = {
+    const newArt: NewsArticle = cleanFirestoreData({
       ...article,
       id: `news-${Date.now()}`,
       status: article.status || 'Published',
-    };
+    });
     setNews((prev) => [newArt, ...prev]);
     setDoc(doc(db, 'news', newArt.id), newArt, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'News Article', newArt.id, newArt.title, 'Published college news/feature article.');
@@ -1376,10 +1382,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateNewsArticle = (id: string, updates: Partial<NewsArticle>) => {
+    const sanitized = cleanFirestoreData(updates);
     setNews((prev) =>
       prev.map((n) => (n.id === id ? { ...n, ...updates } : n))
     );
-    updateDoc(doc(db, 'news', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'news', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'News Article', id, updates.title || 'News Article', 'Updated article content and cover image.');
     addToast('success', 'Article Updated', 'News article updated.');
   };
@@ -1394,11 +1401,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Events CRUD
   const addEvent = (event: Omit<CollegeEvent, 'id'>): CollegeEvent => {
-    const newEvt: CollegeEvent = {
+    const newEvt: CollegeEvent = cleanFirestoreData({
       ...event,
       id: `evt-${Date.now()}`,
       registeredAttendees: event.registeredAttendees || [],
-    };
+    });
     setEvents((prev) => [newEvt, ...prev]);
     setDoc(doc(db, 'events', newEvt.id), newEvt, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Event', newEvt.id, newEvt.title, `Scheduled college calendar event for ${newEvt.date}.`);
@@ -1407,10 +1414,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateEvent = (id: string, updates: Partial<CollegeEvent>) => {
+    const sanitized = cleanFirestoreData(updates);
     setEvents((prev) =>
       prev.map((e) => (e.id === id ? { ...e, ...updates } : e))
     );
-    updateDoc(doc(db, 'events', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'events', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Event', id, updates.title || 'Event', 'Updated event date, venue, and description.');
     addToast('success', 'Event Updated', 'Calendar event saved.');
   };
@@ -1425,11 +1433,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Downloads CRUD
   const addDownload = (res: Omit<DownloadableResource, 'id'>): DownloadableResource => {
-    const newRes: DownloadableResource = {
+    const newRes: DownloadableResource = cleanFirestoreData({
       ...res,
       id: `dl-${Date.now()}`,
       downloadsCount: 0,
-    };
+    });
     setDownloads((prev) => [newRes, ...prev]);
     setDoc(doc(db, 'downloads', newRes.id), newRes, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Resource / Form', newRes.id, newRes.title, `Added downloadable document (${newRes.category}).`);
@@ -1438,10 +1446,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateDownload = (id: string, updates: Partial<DownloadableResource>) => {
+    const sanitized = cleanFirestoreData(updates);
     setDownloads((prev) =>
       prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
     );
-    updateDoc(doc(db, 'downloads', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'downloads', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Resource / Form', id, updates.title || 'Resource', 'Updated downloadable resource metadata.');
     addToast('success', 'Resource Updated', 'Downloadable document saved.');
   };
@@ -1456,7 +1465,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Testimonials CRUD
   const addTestimonial = (item: Omit<Testimonial, 'id'>) => {
-    const newItem: Testimonial = { ...item, id: `test-${Date.now()}` };
+    const newItem: Testimonial = cleanFirestoreData({ ...item, id: `test-${Date.now()}` });
     setTestimonials((prev) => [newItem, ...prev]);
     setDoc(doc(db, 'testimonials', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Testimonial', newItem.id, newItem.name, `Added testimony quote from ${newItem.name} (${newItem.role}).`);
@@ -1464,10 +1473,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateTestimonial = (id: string, updates: Partial<Testimonial>) => {
+    const sanitized = cleanFirestoreData(updates);
     setTestimonials((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
-    updateDoc(doc(db, 'testimonials', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'testimonials', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Testimonial', id, updates.name || 'Testimonial', 'Updated testimonial quote and role.');
     addToast('success', 'Testimonial Updated', 'Testimonial saved.');
   };
@@ -1482,17 +1492,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Stats CRUD
   const updateStat = (id: string, updates: Partial<ImpactStat>) => {
+    const sanitized = cleanFirestoreData(updates);
     setStats((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     );
-    updateDoc(doc(db, 'stats', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'stats', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Institutional Stat', id, updates.label || 'Stat', 'Updated institutional metric values.');
     addToast('success', 'Metric Updated', 'Institutional impact statistic saved.');
   };
 
   // FAQs CRUD
   const addFaq = (item: Omit<FAQItem, 'id'>) => {
-    const newItem: FAQItem = { ...item, id: `faq-${Date.now()}` };
+    const newItem: FAQItem = cleanFirestoreData({ ...item, id: `faq-${Date.now()}` });
     setFaqs((prev) => [...prev, newItem]);
     setDoc(doc(db, 'faqs', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'FAQ', newItem.id, newItem.question, 'Added new FAQ entry.');
@@ -1500,10 +1511,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateFaq = (id: string, updates: Partial<FAQItem>) => {
+    const sanitized = cleanFirestoreData(updates);
     setFaqs((prev) =>
       prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
     );
-    updateDoc(doc(db, 'faqs', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'faqs', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'FAQ', id, updates.question || 'FAQ', 'Updated question and response.');
     addToast('success', 'FAQ Updated', 'FAQ item saved.');
   };
@@ -1518,7 +1530,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sermons CRUD
   const addSermon = (item: Omit<SermonLecture, 'id'>) => {
-    const newItem: SermonLecture = { ...item, id: `sermon-${Date.now()}` };
+    const newItem: SermonLecture = cleanFirestoreData({ ...item, id: `sermon-${Date.now()}` });
     setSermons((prev) => [newItem, ...prev]);
     setDoc(doc(db, 'sermons', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Sermon / Chapel', newItem.id, newItem.title, `Added chapel audio lecture by ${newItem.speaker}.`);
@@ -1526,10 +1538,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSermon = (id: string, updates: Partial<SermonLecture>) => {
+    const sanitized = cleanFirestoreData(updates);
     setSermons((prev) =>
       prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
     );
-    updateDoc(doc(db, 'sermons', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'sermons', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Sermon / Chapel', id, updates.title || 'Sermon', 'Updated sermon details and audio link.');
     addToast('success', 'Sermon Updated', 'Chapel archive item saved.');
   };
@@ -1544,7 +1557,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Scrapbook CRUD
   const addScrapbookItem = (item: Omit<ScrapbookItem, 'id'>) => {
-    const newItem: ScrapbookItem = { ...item, id: `sb-${Date.now()}` };
+    const newItem: ScrapbookItem = cleanFirestoreData({ ...item, id: `sb-${Date.now()}` });
     setScrapbook((prev) => [newItem, ...prev]);
     setDoc(doc(db, 'scrapbook', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Historical Scrapbook', newItem.id, newItem.title, `Added heritage milestone (${newItem.year}).`);
@@ -1552,10 +1565,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateScrapbookItem = (id: string, updates: Partial<ScrapbookItem>) => {
+    const sanitized = cleanFirestoreData(updates);
     setScrapbook((prev) =>
       prev.map((sb) => (sb.id === id ? { ...sb, ...updates } : sb))
     );
-    updateDoc(doc(db, 'scrapbook', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'scrapbook', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Historical Scrapbook', id, updates.title || 'Heritage Item', 'Updated heritage archive record.');
     addToast('success', 'Heritage Item Updated', 'Scrapbook milestone saved.');
   };
@@ -1618,7 +1632,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     try {
-      await updateDoc(doc(db, 'applications', id), { status, adminNotes: updatedNote });
+      await setDoc(doc(db, 'applications', id), cleanFirestoreData({ status, adminNotes: updatedNote }), { merge: true });
     } catch (e) {
       console.warn(e);
     }
@@ -1636,7 +1650,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     try {
-      await updateDoc(doc(db, 'applications', id), { adminNotes: newNotes });
+      await setDoc(doc(db, 'applications', id), cleanFirestoreData({ adminNotes: newNotes }), { merge: true });
     } catch (e) {
       console.warn(e);
     }
@@ -1709,10 +1723,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `prac-${Date.now()}`,
       status: 'Pending Verification' as const,
     };
-    const updated = {
+    const updated = cleanFirestoreData({
       ...studentProfile,
       practicumEntries: [newEntry, ...studentProfile.practicumEntries],
-    };
+    });
     setStudentProfile(updated);
     try {
       await setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
@@ -1729,7 +1743,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         : Math.max(0, (studentProfile.tuitionTotal || 0) - (studentProfile.tuitionPaid || 0));
     const newPaid = (studentProfile.tuitionPaid || 0) + amount;
     const newBalance = Math.max(0, currentBalance - amount);
-    const updated = { ...studentProfile, tuitionPaid: newPaid, tuitionBalance: newBalance };
+    const updated = cleanFirestoreData({ ...studentProfile, tuitionPaid: newPaid, tuitionBalance: newBalance });
     setStudentProfile(updated);
     try {
       await setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
@@ -1806,11 +1820,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addAdminUser = (user: Omit<AdminUser, 'id' | 'createdAt'>): AdminUser => {
-    const newUser: AdminUser = {
+    const newUser: AdminUser = cleanFirestoreData({
       ...user,
       id: `adm-${Date.now()}`,
       createdAt: new Date().toISOString().split('T')[0],
-    };
+    });
     setAdminUsers((prev) => [...prev, newUser]);
     setDoc(doc(db, 'adminUsers', newUser.id), newUser, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Admin User', newUser.id, newUser.name, `Provisioned new admin account (${newUser.role}).`);
@@ -1819,10 +1833,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAdminUser = (id: string, updates: Partial<AdminUser>) => {
+    const sanitized = cleanFirestoreData(updates);
     setAdminUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, ...updates } : u))
     );
-    updateDoc(doc(db, 'adminUsers', id), updates).catch((e) => console.warn(e));
+    setDoc(doc(db, 'adminUsers', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Admin User', id, updates.name || 'Admin', 'Updated user role or permissions.');
     addToast('success', 'Admin Profile Updated', 'Admin account updated.');
   };
@@ -1847,7 +1862,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAdminUsers((prev) =>
       prev.map((u) => (u.id === userId ? { ...u, password: newPass } : u))
     );
-    updateDoc(doc(db, 'adminUsers', userId), { password: newPass }).catch((e) => console.warn(e));
+    setDoc(doc(db, 'adminUsers', userId), { password: newPass }, { merge: true }).catch((e) => console.warn(e));
     logActivity('SETTINGS', 'Admin Security', userId, currentAdminUser.name, 'Changed account password.');
     addToast('success', 'Password Updated', 'Your security password has been changed.');
     return true;

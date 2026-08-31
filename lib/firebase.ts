@@ -153,6 +153,23 @@ async function compressImageFile(file: File | Blob, maxWidth = 1920, maxHeight =
   });
 }
 
+export function cleanFirestoreData<T>(data: T): T {
+  if (data === null || data === undefined) return data;
+  if (Array.isArray(data)) {
+    return data.map(cleanFirestoreData) as unknown as T;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const res: any = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        res[key] = cleanFirestoreData(value);
+      }
+    }
+    return res as T;
+  }
+  return data;
+}
+
 export async function uploadFileToFirebaseStorage(
   file: File | Blob,
   storagePath: string
@@ -174,4 +191,5 @@ export async function uploadFileToFirebaseStorage(
     });
   }
 }
+
 
