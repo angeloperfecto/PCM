@@ -100,10 +100,30 @@ export const PortalView: React.FC = () => {
             </p>
           </div>
 
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-xs text-amber-200">
-            <span className="font-bold block mb-1">Demo Access Credentials:</span>
-            <span>Student ID: <code className="font-mono text-white">2024-PCM-0418</code></span>
-            <span className="block mt-0.5">Password: <code className="font-mono text-white">pcmstudent</code></span>
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-xs text-amber-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-amber-300">Demo Access Credentials:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setStudentIdInput('2024-PCM-0418');
+                  setPasswordInput('pcmstudent');
+                }}
+                className="text-[10px] bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 px-2 py-0.5 rounded font-mono transition cursor-pointer"
+              >
+                Auto Fill
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+              <div className="bg-black/30 p-1.5 rounded border border-white/5">
+                <span className="text-slate-400 block text-[10px]">Student ID</span>
+                <code className="text-white font-bold">2024-PCM-0418</code>
+              </div>
+              <div className="bg-black/30 p-1.5 rounded border border-white/5">
+                <span className="text-slate-400 block text-[10px]">Password</span>
+                <code className="text-white font-bold">pcmstudent</code>
+              </div>
+            </div>
           </div>
 
           <form onSubmit={handleLogin} className="space-y-4 text-xs">

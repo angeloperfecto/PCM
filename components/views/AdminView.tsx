@@ -132,9 +132,32 @@ export const AdminView: React.FC = () => {
             </button>
           </form>
 
-          <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800 text-[11px] text-slate-300 text-center space-y-1">
-            <div className="font-mono text-[#85AA9B]">Default Super Admin Credentials:</div>
-            <div>Username: <code className="text-white font-bold">admin</code> | Password: <code className="text-white font-bold">pcm2026</code></div>
+          <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 text-[11px] text-slate-300 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-mono font-bold text-[#85AA9B]">Authorized Demo Accounts:</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setLoginUser('admin');
+                  setLoginPass('pcm2026');
+                }}
+                className="text-[10px] bg-[#588B76]/20 hover:bg-[#588B76]/30 text-[#85AA9B] px-2 py-0.5 rounded font-mono transition cursor-pointer"
+              >
+                Auto Fill
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+              <div className="bg-black/40 p-2 rounded border border-white/5">
+                <span className="text-slate-400 block text-[10px]">Super Admin</span>
+                <div>User: <code className="text-white font-bold">admin</code></div>
+                <div>Pass: <code className="text-white font-bold">pcm2026</code></div>
+              </div>
+              <div className="bg-black/40 p-2 rounded border border-white/5">
+                <span className="text-slate-400 block text-[10px]">Content Admin</span>
+                <div>User: <code className="text-white font-bold">esantos</code></div>
+                <div>Pass: <code className="text-white font-bold">pcm2026</code></div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
