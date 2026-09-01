@@ -20,78 +20,81 @@ service cloud.firestore {
     // Public readable content collections (Website CMS)
     match /siteConfig/{configId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /programs/{programId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /faculty/{facultyId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /announcements/{announcementId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /news/{newsId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /events/{eventId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /downloads/{downloadId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /testimonials/{testimonialId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /stats/{statId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /faqs/{faqId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /sermons/{sermonId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /scrapbook/{scrapbookId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /mediaItems/{mediaId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     match /galleryAlbums/{albumId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
     }
 
     // Authenticated Users and Profiles
+    // Direct document lookup for user's own profile; list queries restricted to Admin
     match /users/{userId} {
-      allow read: if true;
-      allow write: if isSignedIn() || isAdmin();
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
     }
 
     match /studentProfiles/{studentId} {
@@ -100,25 +103,42 @@ service cloud.firestore {
     }
 
     match /adminUsers/{adminId} {
-      allow read: if true;
-      allow write: if isAdmin() || (isSignedIn() && request.auth.uid == adminId);
+      allow get, list: if isAdmin() || (isSignedIn() && request.auth.uid == adminId);
+      allow write: if isAdmin();
     }
 
     match /applications/{applicationId} {
-      allow read: if true;
+      allow read: if isAdmin();
       allow create: if true;
-      allow update, delete: if isAdmin() || true;
+      allow update, delete: if isAdmin();
+    }
+
+    // Donation Management
+    match /donationPaymentMethods/{methodId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /donations/{donationId} {
+      allow read: if isAdmin();
+      allow create: if true;
+      allow update, delete: if isAdmin();
+    }
+
+    match /donationSettings/{settingsId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
     match /activityLogs/{logId} {
-      allow read: if true;
-      allow write: if true;
+      allow read: if isAdmin();
+      allow write: if isSignedIn() || isAdmin();
     }
 
     // Default fallback
     match /{document=**} {
       allow read: if true;
-      allow write: if isSignedIn() || isAdmin() || true;
+      allow write: if isSignedIn() || isAdmin();
     }
   }
 }

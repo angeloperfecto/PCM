@@ -20,6 +20,7 @@ import {
   Eye,
   TrendingUp,
   Sparkles,
+  Heart,
 } from 'lucide-react';
 
 interface AdminOverviewTabProps {
@@ -39,6 +40,7 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
     news,
     events,
     mediaLibrary,
+    donations,
     activityLogs,
     currentAdminUser,
     stats,
@@ -80,7 +82,7 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
   return (
     <div className="space-y-8">
       {/* 1. Live CMS Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3.5">
         <div
           onClick={() => onSelectTab('applications')}
           className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:border-[#588B76] hover:shadow-md transition cursor-pointer group"
@@ -93,6 +95,20 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
           <div className="text-[11px] text-amber-600 font-medium mt-1 flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
             {pendingApps} require review
+          </div>
+        </div>
+
+        <div
+          onClick={() => onSelectTab('donations')}
+          className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs hover:border-[#588B76] hover:shadow-md transition cursor-pointer group"
+        >
+          <div className="flex items-center justify-between text-slate-500 mb-2">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">Donations</span>
+            <Heart className="w-4 h-4 text-amber-500 group-hover:scale-110 transition-transform fill-amber-500/20" />
+          </div>
+          <div className="text-2xl font-serif font-bold text-[#18392B]">{donations.length}</div>
+          <div className="text-[11px] text-emerald-700 font-medium mt-1">
+            {donations.filter((d) => d.status === 'Pending Verification').length} pending checks
           </div>
         </div>
 

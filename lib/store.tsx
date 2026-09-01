@@ -27,6 +27,9 @@ import {
   GalleryAlbum,
   ActivityLogItem,
   ContentStatus,
+  DonationPaymentMethod,
+  DonationRecord,
+  DonationSettings,
 } from './types';
 import {
   INITIAL_PROGRAMS,
@@ -48,6 +51,9 @@ import {
   INITIAL_MEDIA_ITEMS,
   INITIAL_GALLERY_ALBUMS,
   INITIAL_ACTIVITY_LOGS,
+  INITIAL_DONATION_METHODS,
+  INITIAL_DONATIONS,
+  INITIAL_DONATION_SETTINGS,
 } from './initialData';
 import {
   db,
@@ -70,6 +76,7 @@ import {
   uploadFileToFirebaseStorage,
   handleFirestoreError,
   isFirestoreQuotaError,
+  logFirestoreOp,
   OperationType,
   cleanFirestoreData,
 } from './firebase';
@@ -317,6 +324,21 @@ interface PCMContextType {
   importDatabaseJson: (jsonString: string) => Promise<boolean> | boolean;
   resetToInitialData: () => Promise<void> | void;
 
+  // Donation Management & Giving Portal
+  donationMethods: DonationPaymentMethod[];
+  setDonationMethods: React.Dispatch<React.SetStateAction<DonationPaymentMethod[]>>;
+  addDonationMethod: (method: Omit<DonationPaymentMethod, 'id'>) => Promise<DonationPaymentMethod> | DonationPaymentMethod;
+  updateDonationMethod: (id: string, updates: Partial<DonationPaymentMethod>) => Promise<void> | void;
+  deleteDonationMethod: (id: string) => Promise<void> | void;
+  donations: DonationRecord[];
+  setDonations: React.Dispatch<React.SetStateAction<DonationRecord[]>>;
+  submitDonation: (data: Omit<DonationRecord, 'id' | 'trackingCode' | 'status' | 'createdAt'>) => Promise<DonationRecord>;
+  updateDonationRecord: (id: string, updates: Partial<DonationRecord>) => Promise<void> | void;
+  deleteDonationRecord: (id: string) => Promise<void> | void;
+  donationSettings: DonationSettings;
+  setDonationSettings: React.Dispatch<React.SetStateAction<DonationSettings>>;
+  updateDonationSettings: (updates: Partial<DonationSettings>) => Promise<void> | void;
+
   // Event Registration & Newsletter
   registerForEvent: (eventId: string, attendeeName: string, email: string) => Promise<boolean> | boolean;
   newsletterEmails: string[];
@@ -390,6 +412,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Applications
   const [applications, setApplications] = useState<AdmissionApplication[]>(INITIAL_APPLICATIONS);
   const [activeTrackerRef, setActiveTrackerRef] = useState<string>('');
+
+  // Donation Management & Giving Portal
+  const [donationMethods, setDonationMethods] = useState<DonationPaymentMethod[]>(INITIAL_DONATION_METHODS);
+  const [donations, setDonations] = useState<DonationRecord[]>(INITIAL_DONATIONS);
+  const [donationSettings, setDonationSettings] = useState<DonationSettings>(INITIAL_DONATION_SETTINGS);
 
   // Student Portal
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false);
@@ -534,6 +561,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     galleryAlbums,
     adminUsers,
     studentProfile,
+    donationMethods,
+    donations,
+    donationSettings,
   });
 
   useEffect(() => {
@@ -554,6 +584,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       galleryAlbums,
       adminUsers,
       studentProfile,
+      donationMethods,
+      donations,
+      donationSettings,
     };
   }, [
     siteConfig,
@@ -572,6 +605,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     galleryAlbums,
     adminUsers,
     studentProfile,
+    donationMethods,
+    donations,
+    donationSettings,
   ]);
 
   // Keyboard shortcut for Cmd+K Search
@@ -701,6 +737,25 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           await setDoc(doc(db, 'studentProfiles', st.studentProfile.id), cleanFirestoreData(st.studentProfile), { merge: true });
         }
 
+        // 17. Donation Payment Methods batch
+        if (st.donationMethods && st.donationMethods.length > 0) {
+          const donMethodBatch = writeBatch(db);
+          st.donationMethods.forEach((m: any) => donMethodBatch.set(doc(db, 'donationPaymentMethods', m.id), cleanFirestoreData(m), { merge: true }));
+          await donMethodBatch.commit();
+        }
+
+        // 18. Donations batch
+        if (st.donations && st.donations.length > 0) {
+          const donBatch = writeBatch(db);
+          st.donations.forEach((d: any) => donBatch.set(doc(db, 'donations', d.id), cleanFirestoreData(d), { merge: true }));
+          await donBatch.commit();
+        }
+
+        // 19. Donation Settings
+        if (st.donationSettings) {
+          await setDoc(doc(db, 'donationSettings', 'global'), cleanFirestoreData(st.donationSettings), { merge: true });
+        }
+
         setIsFirebaseConnected(true);
         setFirebaseSyncStatus('synced');
         setLastSyncedAt(new Date());
@@ -725,6 +780,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Real-time Firestore Subscriptions & Initial Auto-Seed (mounts once)
   useEffect(() => {
     let unsubs: (() => void)[] = [];
+    let singleUserUnsub: (() => void) | null = null;
 
     const initializeFirestoreSync = async () => {
       try {
@@ -732,6 +788,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Check if database already has initial content
         try {
+          logFirestoreOp('read', 'siteConfig/global', 'Initial baseline existence check');
           const configDocSnap = await getDoc(doc(db, 'siteConfig', 'global'));
           if (!configDocSnap.exists() && !initialSeededRef.current) {
             initialSeededRef.current = true;
@@ -742,8 +799,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           console.warn('Initial seed check notice (auto-sync cache fallback):', seedErr);
         }
 
-        // Set up real-time onSnapshot listeners
+        // Set up real-time onSnapshot listeners ONLY for core public CMS collections
         // 1. Site Config
+        logFirestoreOp('listen', 'siteConfig/global', 'Public Site Config Real-Time Sync');
         const uConfig = onSnapshot(
           doc(db, 'siteConfig', 'global'),
           (snap) => {
@@ -763,6 +821,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(uConfig);
 
         // 2. Programs
+        logFirestoreOp('listen', 'programs', 'Academic Programs Real-Time Sync');
         const uPrograms = onSnapshot(
           collection(db, 'programs'),
           (snap) => {
@@ -781,6 +840,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(uPrograms);
 
         // 3. Faculty
+        logFirestoreOp('listen', 'faculty', 'Faculty Directory Real-Time Sync');
         const uFaculty = onSnapshot(
           collection(db, 'faculty'),
           (snap) => {
@@ -799,6 +859,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(uFaculty);
 
         // 4. Announcements
+        logFirestoreOp('listen', 'announcements', 'Announcements Real-Time Sync');
         const uAnnouncements = onSnapshot(
           collection(db, 'announcements'),
           (snap) => {
@@ -817,6 +878,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(uAnnouncements);
 
         // 5. News
+        logFirestoreOp('listen', 'news', 'Institutional News Real-Time Sync');
         const uNews = onSnapshot(
           collection(db, 'news'),
           (snap) => {
@@ -835,6 +897,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unsubs.push(uNews);
 
         // 6. Events
+        logFirestoreOp('listen', 'events', 'College Events Real-Time Sync');
         const uEvents = onSnapshot(
           collection(db, 'events'),
           (snap) => {
@@ -852,270 +915,58 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         unsubs.push(uEvents);
 
-        // 7. Downloads
-        const uDownloads = onSnapshot(
-          collection(db, 'downloads'),
+        // 7. Donation Payment Methods
+        logFirestoreOp('listen', 'donationPaymentMethods', 'Giving Options Real-Time Sync');
+        const uDonMethods = onSnapshot(
+          collection(db, 'donationPaymentMethods'),
           (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[];
-            setDownloads(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationPaymentMethod[];
+              list.sort((a, b) => (a.order || 0) - (b.order || 0));
+              setDonationMethods(list);
+              setIsFirebaseConnected(true);
+              setFirebaseSyncStatus('synced');
+              setLastSyncedAt(new Date());
+            }
           },
           (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'downloads');
+            handleFirestoreError(err, OperationType.LIST, 'donationPaymentMethods');
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
           }
         );
-        unsubs.push(uDownloads);
+        unsubs.push(uDonMethods);
 
-        // 8. Testimonials
-        const uTestimonials = onSnapshot(
-          collection(db, 'testimonials'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[];
-            setTestimonials(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'testimonials');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uTestimonials);
-
-        // 9. Stats
-        const uStats = onSnapshot(
-          collection(db, 'stats'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[];
-            setStats(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'stats');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uStats);
-
-        // 10. FAQs
-        const uFaqs = onSnapshot(
-          collection(db, 'faqs'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[];
-            setFaqs(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'faqs');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uFaqs);
-
-        // 11. Sermons
-        const uSermons = onSnapshot(
-          collection(db, 'sermons'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[];
-            setSermons(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'sermons');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uSermons);
-
-        // 12. Scrapbook
-        const uScrapbook = onSnapshot(
-          collection(db, 'scrapbook'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[];
-            setScrapbook(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'scrapbook');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uScrapbook);
-
-        // 13. Media Items
-        const uMedia = onSnapshot(
-          collection(db, 'mediaItems'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as MediaItem[];
-            setMediaItems(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'mediaItems');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uMedia);
-
-        // 14. Gallery Albums
-        const uAlbums = onSnapshot(
-          collection(db, 'galleryAlbums'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[];
-            setGalleryAlbums(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'galleryAlbums');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uAlbums);
-
-        // 15. Applications
-        const uApps = onSnapshot(
-          collection(db, 'applications'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
-            setApplications(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'applications');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uApps);
-
-        // 16. Admin Users
-        const uAdmins = onSnapshot(
-          collection(db, 'adminUsers'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[];
-            setAdminUsers(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'adminUsers');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uAdmins);
-
-        // 17. Activity Logs
-        const uLogs = onSnapshot(
-          collection(db, 'activityLogs'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[];
-            setActivityLogs(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'activityLogs');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uLogs);
-
-        // 18. Student Profiles (demo)
-        const uStudent = onSnapshot(
-          doc(db, 'studentProfiles', 'std-demo-1'),
+        // 8. Donation Settings
+        logFirestoreOp('listen', 'donationSettings/global', 'Giving Settings Real-Time Sync');
+        const uDonSettings = onSnapshot(
+          doc(db, 'donationSettings', 'global'),
           (snap) => {
             if (snap.exists()) {
-              setStudentProfile(snap.data() as StudentProfile);
+              setDonationSettings(snap.data() as DonationSettings);
+              setIsFirebaseConnected(true);
+              setFirebaseSyncStatus('synced');
+              setLastSyncedAt(new Date());
             }
           },
           (err) => {
-            handleFirestoreError(err, OperationType.GET, 'studentProfiles/std-demo-1');
+            handleFirestoreError(err, OperationType.GET, 'donationSettings/global');
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
           }
         );
-        unsubs.push(uStudent);
+        unsubs.push(uDonSettings);
 
-        // 19. Google / Authenticated User Accounts
-        const uUsers = onSnapshot(
-          collection(db, 'users'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[];
-            setUserAccounts(list);
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-            setLastSyncedAt(new Date());
-
-            // If user is currently signed in, ensure currentUserAccount stays synchronized
-            const currentUid = auth.currentUser?.uid;
-            if (currentUid) {
-              const matched = list.find((u) => u.uid === currentUid || u.id === currentUid);
-              if (matched) {
-                setCurrentUserAccount(matched);
-                if (matched.role === 'Admin') {
-                  setIsAdminLoggedIn(true);
-                  setCurrentAdminUser((prev) => ({
-                    ...prev,
-                    id: matched.uid,
-                    name: matched.name || matched.displayName,
-                    email: matched.email,
-                    username: matched.email.split('@')[0] || 'admin',
-                    role: matched.adminRole || 'Super Admin',
-                    avatarUrl: matched.photoURL || matched.avatarUrl,
-                  }));
-                } else if (matched.role === 'Student') {
-                  setIsStudentLoggedIn(true);
-                  setStudentProfile((prev) => ({
-                    ...prev,
-                    fullName: matched.name || matched.displayName,
-                    email: matched.email,
-                    avatarUrl: matched.photoURL || prev.avatarUrl,
-                  }));
-                }
-              }
-            }
-          },
-          (err) => {
-            handleFirestoreError(err, OperationType.LIST, 'users');
-            setIsFirebaseConnected(true);
-            setFirebaseSyncStatus('synced');
-          }
-        );
-        unsubs.push(uUsers);
-
-        // 20. Listen to Firebase Auth state
+        // 9. Listen to Firebase Auth state & Single User Profile (Targeted Read / Subscription)
         const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
           setFirebaseAuthUser(fbUser);
+
+          // Clean up prior single user listener if user changes
+          if (singleUserUnsub) {
+            singleUserUnsub();
+            singleUserUnsub = null;
+          }
+
           if (fbUser) {
             const emailLower = fbUser.email?.toLowerCase() || '';
             const isBootstrapAdmin =
@@ -1144,7 +995,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               lastLogin: new Date().toISOString(),
             };
 
+            // Targeted single-document getDoc for active authenticated user profile only
             try {
+              logFirestoreOp('read', `users/${fbUser.uid}`, 'Auth state single user profile lookup');
               const userDocRef = doc(db, 'users', fbUser.uid);
               const snap = await getDoc(userDocRef);
               if (snap.exists()) {
@@ -1156,7 +1009,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   ...(isBootstrapAdmin ? { role: 'Admin', adminRole: 'Super Admin' } : {}),
                 };
               }
-              // Attempt to persist if quota allows
+              // Attempt to update last login for active user
+              logFirestoreOp('write', `users/${fbUser.uid}`, 'Auth state lastLogin update');
               setDoc(userDocRef, acc, { merge: true }).catch((err) => {
                 console.warn('Firestore setDoc notice (offline/quota fallback):', err);
               });
@@ -1187,6 +1041,21 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 avatarUrl: acc.photoURL || prev.avatarUrl,
               }));
             }
+
+            // Real-time listener specifically for current user's profile document only (NOT full collection)
+            logFirestoreOp('listen', `users/${fbUser.uid}`, 'Current user profile document listener');
+            singleUserUnsub = onSnapshot(
+              doc(db, 'users', fbUser.uid),
+              (userSnap) => {
+                if (userSnap.exists()) {
+                  const updatedProfile = userSnap.data() as UserAccount;
+                  setCurrentUserAccount((prev) => (prev ? { ...prev, ...updatedProfile } : updatedProfile));
+                }
+              },
+              (err) => handleFirestoreError(err, OperationType.GET, `users/${fbUser.uid}`)
+            );
+          } else {
+            setCurrentUserAccount(null);
           }
         });
         unsubs.push(unsubAuth);
@@ -1205,8 +1074,83 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       unsubs.forEach((unsub) => unsub());
+      if (singleUserUnsub) singleUserUnsub();
     };
   }, [syncAllDataToFirestore]);
+
+  // Gated Admin Subscriptions: Only subscribe to Admin/Sensitive collections when Admin is authenticated & active
+  useEffect(() => {
+    const isUserAdmin = isAdminLoggedIn || currentUserAccount?.role === 'Admin' || currentSection === 'admin';
+    if (!isUserAdmin) {
+      return;
+    }
+
+    let adminUnsubs: (() => void)[] = [];
+
+    // 1. Users collection (for Admin Users & Roles management tab)
+    logFirestoreOp('listen', 'users', 'Admin Active Users & Roles Management Listener');
+    const uUsers = onSnapshot(
+      collection(db, 'users'),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[];
+        setUserAccounts(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'users')
+    );
+    adminUnsubs.push(uUsers);
+
+    // 2. Admin System Users collection
+    logFirestoreOp('listen', 'adminUsers', 'Admin System Accounts Listener');
+    const uAdmins = onSnapshot(
+      collection(db, 'adminUsers'),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[];
+        setAdminUsers(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'adminUsers')
+    );
+    adminUnsubs.push(uAdmins);
+
+    // 3. Admissions Applications collection
+    logFirestoreOp('listen', 'applications', 'Admissions Applications Review Listener');
+    const uApps = onSnapshot(
+      collection(db, 'applications'),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
+        setApplications(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'applications')
+    );
+    adminUnsubs.push(uApps);
+
+    // 4. Donations collection
+    logFirestoreOp('listen', 'donations', 'Donations Review Listener');
+    const uDonations = onSnapshot(
+      collection(db, 'donations'),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationRecord[];
+        setDonations(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'donations')
+    );
+    adminUnsubs.push(uDonations);
+
+    // 5. Activity Audit Logs collection
+    logFirestoreOp('listen', 'activityLogs', 'Activity Audit Logs Listener');
+    const uLogs = onSnapshot(
+      collection(db, 'activityLogs'),
+      (snap) => {
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[];
+        setActivityLogs(list);
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'activityLogs')
+    );
+    adminUnsubs.push(uLogs);
+
+    return () => {
+      adminUnsubs.forEach((unsub) => unsub());
+    };
+  }, [isAdminLoggedIn, currentUserAccount?.role, currentSection]);
 
   // Upload media file to Firebase Storage & register in Media Library
   const uploadMediaFile = async (
@@ -2361,6 +2305,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adminUsers,
       studentProfile,
       activityLogs,
+      donationMethods,
+      donations,
+      donationSettings,
     };
     return JSON.stringify(fullDb, null, 2);
   };
@@ -2384,6 +2331,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.siteConfig) setSiteConfig(data.siteConfig);
       if (data.applications && Array.isArray(data.applications)) setApplications(data.applications);
       if (data.studentProfile) setStudentProfile(data.studentProfile);
+      if (data.donationMethods && Array.isArray(data.donationMethods)) setDonationMethods(data.donationMethods);
+      if (data.donations && Array.isArray(data.donations)) setDonations(data.donations);
+      if (data.donationSettings) setDonationSettings(data.donationSettings);
 
       const restorePayload = {
         siteConfig: data.siteConfig || stateRef.current.siteConfig,
@@ -2402,6 +2352,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         galleryAlbums: data.galleryAlbums || stateRef.current.galleryAlbums,
         adminUsers: data.adminUsers || stateRef.current.adminUsers,
         studentProfile: data.studentProfile || stateRef.current.studentProfile,
+        donationMethods: data.donationMethods || stateRef.current.donationMethods,
+        donations: data.donations || stateRef.current.donations,
+        donationSettings: data.donationSettings || stateRef.current.donationSettings,
       };
 
       logActivity('RESTORE', 'Database Import', 'import-db', 'Full Dataset Restore', 'Imported complete JSON database backup.');
@@ -2433,6 +2386,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAdminUsers(INITIAL_ADMIN_USERS);
     setStudentProfile(DEMO_STUDENT_PROFILE);
     setActivityLogs(INITIAL_ACTIVITY_LOGS);
+    setDonationMethods(INITIAL_DONATION_METHODS);
+    setDonations(INITIAL_DONATIONS);
+    setDonationSettings(INITIAL_DONATION_SETTINGS);
 
     const resetPayload = {
       siteConfig: INITIAL_SITE_CONFIG,
@@ -2451,6 +2407,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       galleryAlbums: INITIAL_GALLERY_ALBUMS,
       adminUsers: INITIAL_ADMIN_USERS,
       studentProfile: DEMO_STUDENT_PROFILE,
+      donationMethods: INITIAL_DONATION_METHODS,
+      donations: INITIAL_DONATIONS,
+      donationSettings: INITIAL_DONATION_SETTINGS,
     };
 
     try {
@@ -2460,6 +2419,131 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     addToast('warning', 'Database Reset', 'Restored initial baseline catalog & configuration.');
+  };
+
+  // Donation Operations
+  const submitDonation = async (
+    data: Omit<DonationRecord, 'id' | 'trackingCode' | 'status' | 'createdAt'>
+  ): Promise<DonationRecord> => {
+    const timestamp = new Date().toISOString();
+    const trackingCode = `PCM-GIVE-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const newDonation: DonationRecord = cleanFirestoreData({
+      ...data,
+      id: `don-${Date.now()}`,
+      trackingCode,
+      status: 'Pending Verification',
+      createdAt: `${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+    });
+
+    setDonations((prev) => [newDonation, ...prev]);
+
+    try {
+      await setDoc(doc(db, 'donations', newDonation.id), newDonation, { merge: true });
+    } catch (e) {
+      console.warn('Firestore donation submission error:', e);
+    }
+
+    logActivity('CREATE', 'Donation Pledge / Record', newDonation.id, newDonation.donorName, `New giving notification for ₱${newDonation.amount.toLocaleString()} via ${newDonation.paymentMethodName}.`);
+    addToast('success', 'Donation Notified', `Thank you, ${newDonation.donorName}! Your gift tracking code is ${trackingCode}.`);
+    return newDonation;
+  };
+
+  const addDonationMethod = async (method: Omit<DonationPaymentMethod, 'id'>): Promise<DonationPaymentMethod> => {
+    const newMethod: DonationPaymentMethod = cleanFirestoreData({
+      ...method,
+      id: `pay-${Date.now()}`,
+      order: method.order || donationMethods.length + 1,
+      active: method.active !== undefined ? method.active : true,
+    });
+
+    setDonationMethods((prev) => [...prev, newMethod]);
+
+    try {
+      await setDoc(doc(db, 'donationPaymentMethods', newMethod.id), newMethod, { merge: true });
+    } catch (e) {
+      console.warn('Firestore donation method write error:', e);
+    }
+
+    logActivity('CREATE', 'Donation Payment Channel', newMethod.id, newMethod.name, `Added payment channel (${newMethod.name}).`);
+    addToast('success', 'Payment Method Added', `Created payment channel "${newMethod.name}".`);
+    return newMethod;
+  };
+
+  const updateDonationMethod = async (id: string, updates: Partial<DonationPaymentMethod>) => {
+    const sanitized = cleanFirestoreData(updates);
+    setDonationMethods((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
+    );
+
+    try {
+      await setDoc(doc(db, 'donationPaymentMethods', id), sanitized, { merge: true });
+    } catch (e) {
+      console.warn('Firestore donation method update error:', e);
+    }
+
+    logActivity('UPDATE', 'Donation Payment Channel', id, updates.name || 'Channel', 'Updated payment details / instructions.');
+    addToast('success', 'Payment Channel Updated', 'Donation channel details saved.');
+  };
+
+  const deleteDonationMethod = async (id: string) => {
+    const target = donationMethods.find((m) => m.id === id);
+    setDonationMethods((prev) => prev.filter((m) => m.id !== id));
+
+    try {
+      await deleteDoc(doc(db, 'donationPaymentMethods', id));
+    } catch (e) {
+      console.warn('Firestore donation method deletion error:', e);
+    }
+
+    logActivity('DELETE', 'Donation Payment Channel', id, target?.name || 'Channel', 'Removed payment channel.');
+    addToast('info', 'Payment Channel Removed', `Deleted ${target?.name || 'payment channel'}.`);
+  };
+
+  const updateDonationRecord = async (id: string, updates: Partial<DonationRecord>) => {
+    const sanitized = cleanFirestoreData(updates);
+    setDonations((prev) =>
+      prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
+    );
+
+    try {
+      await setDoc(doc(db, 'donations', id), sanitized, { merge: true });
+    } catch (e) {
+      console.warn('Firestore donation record update error:', e);
+    }
+
+    logActivity('UPDATE', 'Donation Record', id, updates.donorName || 'Donor', `Updated donation status to ${updates.status || 'updated'}.`);
+    addToast('success', 'Donation Status Updated', 'Donation record status updated.');
+  };
+
+  const deleteDonationRecord = async (id: string) => {
+    const target = donations.find((d) => d.id === id);
+    setDonations((prev) => prev.filter((d) => d.id !== id));
+
+    try {
+      await deleteDoc(doc(db, 'donations', id));
+    } catch (e) {
+      console.warn('Firestore donation record deletion error:', e);
+    }
+
+    logActivity('DELETE', 'Donation Record', id, target?.donorName || 'Donor', 'Removed donation entry.');
+    addToast('info', 'Donation Record Removed', 'Record deleted from database.');
+  };
+
+  const updateDonationSettings = async (updates: Partial<DonationSettings>) => {
+    const updated = cleanFirestoreData({
+      ...donationSettings,
+      ...updates,
+    });
+    setDonationSettings(updated);
+
+    try {
+      await setDoc(doc(db, 'donationSettings', 'global'), updated, { merge: true });
+    } catch (e) {
+      console.warn('Firestore donation settings write error:', e);
+    }
+
+    logActivity('UPDATE', 'Donation Page Configuration', 'donation-settings', 'Global Donation CMS', 'Updated donation page scriptures, featured causes, and stewardship details.');
+    addToast('success', 'Donation Content Updated', 'Donation page settings synchronized with cloud.');
   };
 
   // Event Registration
@@ -2730,6 +2814,21 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         exportDatabaseJson,
         importDatabaseJson,
         resetToInitialData,
+
+        // Donation Management & Giving Portal
+        donationMethods,
+        setDonationMethods,
+        addDonationMethod,
+        updateDonationMethod,
+        deleteDonationMethod,
+        donations,
+        setDonations,
+        submitDonation,
+        updateDonationRecord,
+        deleteDonationRecord,
+        donationSettings,
+        setDonationSettings,
+        updateDonationSettings,
 
         registerForEvent,
         newsletterEmails,

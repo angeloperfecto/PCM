@@ -9,6 +9,7 @@ export type NavSection =
   | 'news-events'
   | 'resources'
   | 'scrapbook'
+  | 'donation'
   | 'contact'
   | 'apply'
   | 'portal'
@@ -599,4 +600,109 @@ export interface MigrationAuditItem {
   notes: string;
   lastChecked: string;
 }
+
+export type PaymentMethodType = 'gcash' | 'bank' | 'bank_transfer' | 'online_card' | 'wire' | 'other' | string;
+
+export interface DonationPaymentMethod {
+  id: string;
+  name: string;
+  type: PaymentMethodType;
+  accountName: string;
+  accountNumber: string;
+  bankName?: string;
+  bankBranch?: string;
+  branch?: string;
+  gcashNumber?: string;
+  swiftCode?: string;
+  qrCodeUrl?: string;
+  instructions: string | string[];
+  active: boolean;
+  order: number;
+  badge?: string;
+  notes?: string;
+}
+
+export type DonationStatus =
+  | 'Pending Verification'
+  | 'Confirmed / Received'
+  | 'Acknowledged / Official Receipt Issued'
+  | 'Verified & Acknowledged'
+  | 'Receipt Issued'
+  | 'Cancelled'
+  | string;
+
+export interface DonationRecord {
+  id: string;
+  trackingCode: string;
+  donorName: string;
+  donorEmail: string;
+  donorPhone?: string;
+  amount: number;
+  currency: string;
+  paymentMethodId: string;
+  paymentMethodName: string;
+  purpose: string;
+  message?: string;
+  prayerRequest?: string;
+  isAnonymous?: boolean;
+  receiptRequested?: boolean;
+  requestOfficialReceipt?: boolean;
+  receiptAddress?: string;
+  taxIdOrTin?: string;
+  transactionRef?: string;
+  referenceNumber?: string;
+  proofImageUrl?: string;
+  status: DonationStatus;
+  createdAt: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  adminNotes?: string;
+  notes?: string;
+  billingAddress?: string;
+}
+
+export interface FeaturedCause {
+  id: string;
+  title: string;
+  targetEst?: string;
+  targetAmount?: number;
+  icon: string;
+  description: string;
+  raisedEst?: string;
+  raisedAmount?: number;
+  beneficiaries?: string;
+}
+
+export interface DonationSettings {
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  stewardshipEmail?: string;
+  stewardshipPhone?: string;
+  heroHeadline: string;
+  heroSubtitle: string;
+  scriptureVerse: string;
+  scriptureReference: string;
+  impactHeadline: string;
+  impactDescription: string;
+  taxExemptInfo: string;
+  stewardshipOfficer: {
+    name: string;
+    title: string;
+    email: string;
+    phone: string;
+    officeLocation: string;
+  };
+  featuredCauses: FeaturedCause[];
+  stewardshipPillars: {
+    title: string;
+    description: string;
+    icon: string;
+  }[];
+  frequentlyAskedQuestions: {
+    question: string;
+    answer: string;
+  }[];
+}
+
 

@@ -28,6 +28,7 @@ import {
   Flame,
   Users,
   Compass,
+  Heart,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -173,6 +174,16 @@ export const Header: React.FC = () => {
       ],
     },
     {
+      id: 'donation',
+      label: 'DONATION',
+      dropdown: [
+        { label: 'Ministry Giving Overview', subSection: 'overview' },
+        { label: 'Official Giving Channels (GCash/Bank)', subSection: 'channels' },
+        { label: 'Online Donation Form', subSection: 'form', icon: Heart },
+        { label: 'Kingdom Impact & Accountability', subSection: 'impact' },
+      ],
+    },
+    {
       id: 'contact',
       label: 'CONTACT',
     },
@@ -224,6 +235,15 @@ export const Header: React.FC = () => {
             className="hover:text-white transition cursor-pointer text-[#D0DED8]"
           >
             Library
+          </button>
+          <span className="text-[#85AA9B]/40">|</span>
+          <button
+            id="nav-utility-give"
+            onClick={() => navigateTo('donation')}
+            className="hover:text-amber-300 transition cursor-pointer text-amber-300 font-bold flex items-center gap-1"
+          >
+            <Heart className="w-3 h-3 fill-amber-300/40 text-amber-300" />
+            <span>Give to PCM</span>
           </button>
         </div>
 
@@ -488,17 +508,29 @@ export const Header: React.FC = () => {
               <ArrowRight className="w-4 h-4" />
             </button>
 
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 id="mobile-menu-btn-portal"
                 onClick={() => {
                   navigateTo('portal');
                   setMobileMenuOpen(false);
                 }}
-                className="flex items-center justify-center gap-1.5 bg-[#10261D] text-[#D0DED8] font-semibold py-2 rounded-sm border border-[#588B76]/40 text-xs hover:text-white transition cursor-pointer"
+                className="flex items-center justify-center gap-1 bg-[#10261D] text-[#D0DED8] font-semibold py-2 rounded-sm border border-[#588B76]/40 text-[11px] hover:text-white transition cursor-pointer"
               >
                 <User className="w-3.5 h-3.5 text-[#85AA9B]" />
-                <span>Student Portal</span>
+                <span>Portal</span>
+              </button>
+
+              <button
+                id="mobile-menu-btn-give"
+                onClick={() => {
+                  navigateTo('donation');
+                  setMobileMenuOpen(false);
+                }}
+                className="flex items-center justify-center gap-1 bg-amber-500/20 text-amber-300 font-bold py-2 rounded-sm border border-amber-500/50 text-[11px] hover:bg-amber-500/30 transition cursor-pointer"
+              >
+                <Heart className="w-3.5 h-3.5 fill-amber-300/40 text-amber-300" />
+                <span>Donate</span>
               </button>
 
               <button
@@ -507,10 +539,10 @@ export const Header: React.FC = () => {
                   setSearchModalOpen(true);
                   setMobileMenuOpen(false);
                 }}
-                className="flex items-center justify-center gap-1.5 bg-[#10261D] text-[#D0DED8] font-semibold py-2 rounded-sm border border-[#588B76]/40 text-xs hover:text-white transition cursor-pointer"
+                className="flex items-center justify-center gap-1 bg-[#10261D] text-[#D0DED8] font-semibold py-2 rounded-sm border border-[#588B76]/40 text-[11px] hover:text-white transition cursor-pointer"
               >
                 <Search className="w-3.5 h-3.5 text-[#85AA9B]" />
-                <span>Global Search</span>
+                <span>Search</span>
               </button>
             </div>
           </div>

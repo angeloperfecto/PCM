@@ -276,6 +276,15 @@ export const Footer: React.FC = () => {
             </li>
             <li>
               <button
+                onClick={() => navigateTo('donation')}
+                className="text-amber-300 font-semibold hover:text-white transition text-left cursor-pointer flex items-center gap-1"
+              >
+                <Heart className="w-3 h-3 text-amber-300 fill-amber-300/40" />
+                <span>Support PCM Ministry / Donate</span>
+              </button>
+            </li>
+            <li>
+              <button
                 onClick={() => navigateTo('migration-report')}
                 className="text-[#85AA9B] hover:text-white transition text-left cursor-pointer flex items-center gap-1"
               >

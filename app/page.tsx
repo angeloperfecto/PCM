@@ -22,6 +22,7 @@ import { ContactView } from '@/components/views/ContactView';
 import { ApplicationView } from '@/components/views/ApplicationView';
 import { PortalView } from '@/components/views/PortalView';
 import { AdminView } from '@/components/views/AdminView';
+import { DonationView } from '@/components/views/DonationView';
 
 // Modals
 import { ProgramDetailModal } from '@/components/modals/ProgramDetailModal';
@@ -58,6 +59,7 @@ const AppContent: React.FC = () => {
         {currentSection === 'resources' && <ResourcesView />}
         {currentSection === 'contact' && <ContactView />}
         {currentSection === 'apply' && <ApplicationView />}
+        {currentSection === 'donation' && <DonationView />}
         {currentSection === 'portal' && <PortalView />}
         {currentSection === 'admin' && <AdminView />}
       </main>

@@ -17,6 +17,7 @@ import {
   Sparkles,
   MapPin,
   Clock,
+  Heart,
 } from 'lucide-react';
 
 export const SearchModal: React.FC = () => {
@@ -80,6 +81,15 @@ export const SearchModal: React.FC = () => {
       icon: GraduationCap,
       action: () => {
         navigateTo('apply');
+        setSearchModalOpen(false);
+      },
+    },
+    {
+      title: 'Support PCM Ministry & Donations',
+      desc: 'Partner through scholarships, GCash, bank transfer, and kingdom giving channels',
+      icon: Heart,
+      action: () => {
+        navigateTo('donation');
         setSearchModalOpen(false);
       },
     },

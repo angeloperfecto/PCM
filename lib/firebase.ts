@@ -83,6 +83,21 @@ export interface FirestoreErrorInfo {
   };
 }
 
+export function logFirestoreOp(
+  opType: 'read' | 'write' | 'listen',
+  path: string,
+  reason: string,
+  details?: any
+): void {
+  if (process.env.NODE_ENV === 'development') {
+    const emoji = opType === 'read' ? '📖 READ' : opType === 'write' ? '✍️ WRITE' : '🎧 LISTEN';
+    console.info(
+      `[PCM Firestore DevLog] ${emoji} | Path: ${path} | Reason: ${reason}`,
+      details !== undefined ? details : ''
+    );
+  }
+}
+
 export function isFirestoreQuotaError(error: unknown): boolean {
   if (!error) return false;
   const msg = error instanceof Error ? error.message : String(error);
@@ -121,7 +136,9 @@ export function handleFirestoreError(
     path,
   };
   if (isQuota) {
-    console.warn(`[PCM Firestore Quota Notice] Operation ${operationType} on ${path || 'database'} reached free daily quota limit. Running seamlessly in local/offline cache mode.`);
+    console.warn(
+      `[PCM Firestore Quota Notice] Operation ${operationType} on ${path || 'database'} reached free daily quota limit. Serving latest cached state seamlessly.`
+    );
   } else {
     console.warn('Firestore Operation Notice: ', JSON.stringify(errInfo));
   }

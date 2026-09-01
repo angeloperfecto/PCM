@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { usePCM } from '@/lib/store';
-import { ArrowRight, HelpCircle, Sparkles } from 'lucide-react';
+import { ArrowRight, HelpCircle, Sparkles, Heart } from 'lucide-react';
 
 export const CTASection: React.FC = () => {
   const { navigateTo, setRequestInfoModalOpen } = usePCM();
@@ -46,12 +46,21 @@ export const CTASection: React.FC = () => {
           </button>
 
           <button
+            id="cta-btn-give"
+            onClick={() => navigateTo('donation')}
+            className="flex items-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold px-6 py-3 rounded-sm border border-amber-500/50 transition text-xs sm:text-sm cursor-pointer"
+          >
+            <Heart className="w-4 h-4 fill-amber-300/40 text-amber-300" />
+            <span>SUPPORT & DONATE</span>
+          </button>
+
+          <button
             id="cta-btn-request-info"
             onClick={() => setRequestInfoModalOpen(true)}
             className="flex items-center gap-2 bg-[#10261D] hover:bg-[#0A1812] text-[#D0DED8] font-semibold px-6 py-3 rounded-sm border border-[#588B76]/50 hover:border-[#85AA9B] transition text-xs sm:text-sm cursor-pointer"
           >
             <HelpCircle className="w-4 h-4 text-[#85AA9B]" />
-            <span>REQUEST INFORMATION</span>
+            <span>REQUEST INFO</span>
           </button>
         </div>
       </div>
