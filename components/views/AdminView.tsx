@@ -15,6 +15,7 @@ import { AdminAnnouncementsTab } from '@/components/admin/AdminAnnouncementsTab'
 import { AdminMediaTab } from '@/components/admin/AdminMediaTab';
 import { AdminDownloadsTab } from '@/components/admin/AdminDownloadsTab';
 import { AdminApplicationsTab } from '@/components/admin/AdminApplicationsTab';
+import { AdminEnrollmentsTab } from '@/components/admin/AdminEnrollmentsTab';
 import { AdminUsersTab } from '@/components/admin/AdminUsersTab';
 import { AdminDonationsTab } from '@/components/admin/AdminDonationsTab';
 import {
@@ -29,6 +30,7 @@ import {
   Image as ImageIcon,
   Download,
   FileCheck,
+  GraduationCap,
   ShieldCheck,
   ShieldAlert,
   Lock,
@@ -54,6 +56,7 @@ export const AdminView: React.FC = () => {
     downloads,
     mediaLibrary,
     donations,
+    enrollments,
     addToast,
   } = usePCM();
 
@@ -73,6 +76,7 @@ export const AdminView: React.FC = () => {
     | 'media'
     | 'downloads'
     | 'applications'
+    | 'enrollments'
     | 'donations'
     | 'users'
   >('overview');
@@ -317,6 +321,7 @@ export const AdminView: React.FC = () => {
     { id: 'media', label: 'Media Library', icon: ImageIcon, count: mediaLibrary.length },
     { id: 'downloads', label: 'Download Center', icon: Download, count: downloads.length },
     { id: 'applications', label: 'Admissions Review', icon: FileCheck, count: applications.length, highlight: true },
+    { id: 'enrollments', label: 'Enrollment & Records', icon: GraduationCap, count: enrollments.length, highlight: true },
     { id: 'donations', label: 'Donations & Giving', icon: Heart, count: donations.length, highlight: true },
     { id: 'users', label: 'Users & Roles', icon: ShieldCheck },
   ];
@@ -379,6 +384,7 @@ export const AdminView: React.FC = () => {
           {activeTab === 'media' && <AdminMediaTab />}
           {activeTab === 'downloads' && <AdminDownloadsTab />}
           {activeTab === 'applications' && <AdminApplicationsTab />}
+          {activeTab === 'enrollments' && <AdminEnrollmentsTab />}
           {activeTab === 'donations' && <AdminDonationsTab />}
           {activeTab === 'users' && <AdminUsersTab />}
         </div>

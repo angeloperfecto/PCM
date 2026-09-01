@@ -12,6 +12,15 @@ import {
   ImpactStat,
   AdmissionApplication,
   StudentProfile,
+  StudentCourse,
+  OnlineEnrollment,
+  StudentDocument,
+  StudentNotification,
+  StudentPaymentRecord,
+  StudentSubjectHistory,
+  EnrollmentStatus,
+  DocumentVerificationStatus,
+  SelectedSubject,
   DownloadableResource,
   SermonLecture,
   FAQItem,
@@ -41,6 +50,9 @@ import {
   INITIAL_STATS,
   INITIAL_APPLICATIONS,
   DEMO_STUDENT_PROFILE,
+  INITIAL_STUDENTS,
+  INITIAL_ENROLLMENTS,
+  INITIAL_STUDENT_NOTIFICATIONS,
   INITIAL_DOWNLOADS,
   INITIAL_SERMONS,
   INITIAL_FAQS,
@@ -298,16 +310,50 @@ interface PCMContextType {
   updateUserAccountRole: (userId: string, role: UserRole, adminRole?: AdminRole) => Promise<void>;
   linkStudentIdToUser: (studentId: string) => Promise<void>;
 
-  // Student Portal State
+  // Student Portal & Multi-Student Directory
   isStudentLoggedIn: boolean;
   setIsStudentLoggedIn: (loggedIn: boolean) => void;
   currentStudent: StudentProfile | null;
   studentProfile: StudentProfile;
   setStudentProfile: React.Dispatch<React.SetStateAction<StudentProfile>>;
+  students: StudentProfile[];
+  setStudents: React.Dispatch<React.SetStateAction<StudentProfile[]>>;
   studentLogin: (id: string, pass: string) => boolean;
   studentLogout: () => void;
+  linkGoogleAccountToStudent: (studentId: string) => Promise<boolean>;
   addPracticumEntry: (entry: Omit<StudentProfile['practicumEntries'][0], 'id' | 'status'>) => void;
-  makeTuitionPayment: (amount: number) => void;
+  makeTuitionPayment: (amount: number, method?: string, refNo?: string) => Promise<void> | void;
+
+  // Online Enrollment System
+  enrollments: OnlineEnrollment[];
+  setEnrollments: React.Dispatch<React.SetStateAction<OnlineEnrollment[]>>;
+  currentEnrollmentDraft: Partial<OnlineEnrollment> | null;
+  setCurrentEnrollmentDraft: React.Dispatch<React.SetStateAction<Partial<OnlineEnrollment> | null>>;
+  saveEnrollmentDraft: (draft: Partial<OnlineEnrollment>) => Promise<OnlineEnrollment>;
+  submitEnrollment: (data: Partial<OnlineEnrollment>) => Promise<{ success: boolean; referenceNumber?: string; message?: string }>;
+  updateEnrollmentStatus: (enrollmentId: string, status: EnrollmentStatus, adminRemarks?: string) => Promise<boolean>;
+  approveEnrollment: (enrollmentId: string, remarks?: string) => Promise<boolean>;
+  returnEnrollmentForCorrection: (enrollmentId: string, adminFeedback: string) => Promise<boolean>;
+  rejectEnrollment: (enrollmentId: string, reason: string) => Promise<boolean>;
+  deleteEnrollment: (enrollmentId: string) => Promise<boolean>;
+
+  // Student Documents Vault & Verification
+  uploadStudentDocument: (studentId: string, docData: Omit<StudentDocument, 'id' | 'uploadDate' | 'verificationStatus'>) => Promise<StudentDocument>;
+  updateDocumentVerification: (studentId: string, docId: string, status: DocumentVerificationStatus, adminFeedback?: string) => Promise<boolean>;
+
+  // Student Profile & Academic Management (Admin / Registrar)
+  createStudentProfile: (profile: Omit<StudentProfile, 'id'>) => Promise<StudentProfile>;
+  updateStudentProfile: (studentId: string, updates: Partial<StudentProfile>) => Promise<boolean>;
+  deleteStudentProfile: (studentId: string) => Promise<boolean>;
+  addStudentGrade: (studentId: string, courseCode: string, midtermGrade: number | string, finalGrade: number | string) => Promise<boolean>;
+  recordStudentPayment: (studentId: string, payment: Omit<StudentPaymentRecord, 'id'>) => Promise<boolean>;
+
+  // Student Notifications
+  studentNotifications: StudentNotification[];
+  setStudentNotifications: React.Dispatch<React.SetStateAction<StudentNotification[]>>;
+  addStudentNotification: (studentId: string, notif: Omit<StudentNotification, 'id' | 'createdAt' | 'read' | 'studentId'>) => Promise<void>;
+  markNotificationRead: (notifId: string) => Promise<void>;
+  markAllNotificationsRead: (studentId: string) => Promise<void>;
 
   // Admin CMS & RBAC
   isAdminLoggedIn: boolean;
@@ -424,9 +470,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [donations, setDonations] = useState<DonationRecord[]>(INITIAL_DONATIONS);
   const [donationSettings, setDonationSettings] = useState<DonationSettings>(INITIAL_DONATION_SETTINGS);
 
-  // Student Portal
+  // Student Portal, Multi-Student Directory, & Online Enrollment System
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false);
-  const [studentProfile, setStudentProfile] = useState<StudentProfile>(DEMO_STUDENT_PROFILE);
+  const [students, setStudents] = useState<StudentProfile[]>(INITIAL_STUDENTS);
+  const [studentProfile, setStudentProfile] = useState<StudentProfile>(INITIAL_STUDENTS[0] || DEMO_STUDENT_PROFILE);
+  const [enrollments, setEnrollments] = useState<OnlineEnrollment[]>(INITIAL_ENROLLMENTS);
+  const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>(INITIAL_STUDENT_NOTIFICATIONS);
+  const [currentEnrollmentDraft, setCurrentEnrollmentDraft] = useState<Partial<OnlineEnrollment> | null>(null);
 
   // Admin Auth
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -563,6 +613,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     galleryAlbums,
     adminUsers,
     studentProfile,
+    students,
+    enrollments,
+    studentNotifications,
     donationMethods,
     donations,
     donationSettings,
@@ -586,6 +639,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       galleryAlbums,
       adminUsers,
       studentProfile,
+      students,
+      enrollments,
+      studentNotifications,
       donationMethods,
       donations,
       donationSettings,
@@ -607,6 +663,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     galleryAlbums,
     adminUsers,
     studentProfile,
+    students,
+    enrollments,
+    studentNotifications,
     donationMethods,
     donations,
     donationSettings,
@@ -801,9 +860,39 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
-        // 16. Student Profile
-        if (st.studentProfile) {
+        // 16. Student Profiles & Directory batch
+        if (st.students && st.students.length > 0) {
+          try {
+            const studentBatch = writeBatch(db);
+            st.students.forEach((s: any) => studentBatch.set(doc(db, 'studentProfiles', s.id), cleanFirestoreData(s), { merge: true }));
+            await studentBatch.commit();
+          } catch (e) {
+            console.warn('Student profiles batch sync notice:', e);
+          }
+        } else if (st.studentProfile) {
           await safeSetDoc(doc(db, 'studentProfiles', st.studentProfile.id), st.studentProfile);
+        }
+
+        // 16b. Enrollments batch
+        if (st.enrollments && st.enrollments.length > 0) {
+          try {
+            const enrBatch = writeBatch(db);
+            st.enrollments.forEach((enr: any) => enrBatch.set(doc(db, 'enrollments', enr.id), cleanFirestoreData(enr), { merge: true }));
+            await enrBatch.commit();
+          } catch (e) {
+            console.warn('Enrollments batch sync notice:', e);
+          }
+        }
+
+        // 16c. Student Notifications batch
+        if (st.studentNotifications && st.studentNotifications.length > 0) {
+          try {
+            const notifBatch = writeBatch(db);
+            st.studentNotifications.forEach((nt: any) => notifBatch.set(doc(db, 'studentNotifications', nt.id), cleanFirestoreData(nt), { merge: true }));
+            await notifBatch.commit();
+          } catch (e) {
+            console.warn('Student notifications batch sync notice:', e);
+          }
         }
 
         // 17. Donation Payment Methods batch
@@ -1226,6 +1315,48 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => handleFirestoreError(err, OperationType.LIST, 'activityLogs')
     );
     adminUnsubs.push(uLogs);
+
+    // 6. Student Profiles Directory
+    logFirestoreOp('listen', 'studentProfiles', 'Student Profiles Directory Listener');
+    const uStudents = onSnapshot(
+      collection(db, 'studentProfiles'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[];
+          setStudents(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'studentProfiles')
+    );
+    adminUnsubs.push(uStudents);
+
+    // 7. Online Enrollments collection
+    logFirestoreOp('listen', 'enrollments', 'Online Enrollments Listener');
+    const uEnrollments = onSnapshot(
+      collection(db, 'enrollments'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as OnlineEnrollment[];
+          setEnrollments(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments')
+    );
+    adminUnsubs.push(uEnrollments);
+
+    // 8. Student Notifications collection
+    logFirestoreOp('listen', 'studentNotifications', 'Student Notifications Listener');
+    const uNotifs = onSnapshot(
+      collection(db, 'studentNotifications'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentNotification[];
+          setStudentNotifications(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'studentNotifications')
+    );
+    adminUnsubs.push(uNotifs);
 
     return () => {
       adminUnsubs.forEach((unsub) => unsub());
@@ -1999,43 +2130,89 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  // Student Portal Actions
+  // Student Portal Actions & Multi-Student Directory
   const studentLogin = (studentId: string, pass: string): boolean => {
     const sId = studentId.trim().toUpperCase();
     const p = pass.trim();
-    const currentId = (studentProfile.studentId || '2024-PCM-0418').toUpperCase();
-    const currentEmail = (studentProfile.email || 'elijah.soriano@student.pcm.edu.ph').toLowerCase();
     const inputEmail = studentId.trim().toLowerCase();
 
-    const isIdMatch =
-      sId === currentId ||
-      sId === currentId.replace(/-/g, '') ||
-      sId === '2024-PCM-0418' ||
-      sId === '2024PCM0418' ||
-      sId === 'STUDENT' ||
-      inputEmail === currentEmail ||
-      inputEmail === 'elijah.soriano@student.pcm.edu.ph' ||
-      inputEmail === 'student@pcm.ph';
+    // Look for matching student in state or fallback
+    const matched = students.find((s) => {
+      const matchId = (s.studentId || '').toUpperCase() === sId || (s.studentId || '').replace(/-/g, '').toUpperCase() === sId || s.id.toUpperCase() === sId;
+      const matchEmail = (s.email || '').toLowerCase() === inputEmail;
+      return matchId || matchEmail;
+    }) || (
+      // Fallback check against active student profile
+      ((studentProfile.studentId || '').toUpperCase() === sId || (studentProfile.email || '').toLowerCase() === inputEmail || sId === 'STUDENT' || sId === '2024-PCM-0418' || sId === '2024PCM0418')
+        ? studentProfile
+        : null
+    );
 
     const isPassMatch =
+      (matched?.portalPassword && matched.portalPassword === p) ||
       p === 'pcmstudent' ||
       p === 'pcm1966' ||
       p === 'pcm1992' ||
       p === 'student' ||
       p === 'password';
 
-    if (isIdMatch && isPassMatch) {
+    if (matched && isPassMatch) {
+      setStudentProfile(matched);
       setIsStudentLoggedIn(true);
-      addToast('success', 'Student Authenticated', `Welcome back, ${studentProfile.fullName || studentProfile.name || 'Elijah Matthew Soriano'}!`);
+      logActivity('LOGIN', 'Student Portal', matched.id, matched.fullName || matched.name || 'Student', `Student logged into portal (ID: ${matched.studentId}).`);
+      addToast('success', 'Student Authenticated', `Welcome back, ${matched.fullName || matched.name}!`);
       return true;
     }
+
     addToast('error', 'Authentication Failed', 'Invalid Student ID or Password. Try ID: 2024-PCM-0418 / Password: pcmstudent');
     return false;
   };
 
   const studentLogout = () => {
     setIsStudentLoggedIn(false);
+    setCurrentEnrollmentDraft(null);
+    logActivity('LOGOUT', 'Student Session', studentProfile.id, studentProfile.fullName || studentProfile.name || 'Student', 'Student logged out of portal.');
     addToast('info', 'Logged Out', 'Student session ended.');
+  };
+
+  const linkGoogleAccountToStudent = async (studentId: string): Promise<boolean> => {
+    if (!firebaseAuthUser && !currentUserAccount) {
+      addToast('warning', 'Sign in with Google First', 'Please sign in with your Google account before linking your Student ID.');
+      return false;
+    }
+
+    const uid = firebaseAuthUser?.uid || currentUserAccount?.uid || '';
+    const email = firebaseAuthUser?.email || currentUserAccount?.email || '';
+
+    const targetStudent = students.find((s) => (s.studentId || '').toUpperCase() === studentId.trim().toUpperCase() || s.id === studentId);
+    if (!targetStudent) {
+      addToast('error', 'Student ID Not Found', `No student record found with ID: ${studentId}. Please verify with the Registrar.`);
+      return false;
+    }
+
+    const updatedStudent: StudentProfile = {
+      ...targetStudent,
+      linkedGoogleUid: uid,
+      email: email || targetStudent.email,
+      avatarUrl: firebaseAuthUser?.photoURL || targetStudent.avatarUrl,
+    };
+
+    setStudentProfile(updatedStudent);
+    setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+    setIsStudentLoggedIn(true);
+
+    try {
+      await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent));
+      if (uid) {
+        await safeSetDoc(doc(db, 'users', uid), { studentId: updatedStudent.studentId, role: 'Student', linkedStudentId: updatedStudent.id }, { merge: true });
+      }
+    } catch (e) {
+      console.warn('Student account link sync notice:', e);
+    }
+
+    logActivity('UPDATE', 'Student Account Link', updatedStudent.id, updatedStudent.fullName || updatedStudent.name || 'Student', `Linked Google account (${email}) to Student ID ${updatedStudent.studentId}.`);
+    addToast('success', 'Google Account Linked', `Your Google account is now permanently linked to Student ID ${updatedStudent.studentId}.`);
+    return true;
   };
 
   const addPracticumEntry = async (entry: Omit<StudentProfile['practicumEntries'][0], 'id' | 'status'>) => {
@@ -2046,33 +2223,605 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const updated = cleanFirestoreData({
       ...studentProfile,
-      practicumEntries: [newEntry, ...studentProfile.practicumEntries],
+      practicumEntries: [newEntry, ...(studentProfile.practicumEntries || [])],
     });
     setStudentProfile(updated);
+    setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     try {
-      await setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
+      await safeSetDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
     } catch (e) {
       console.warn(e);
     }
     addToast('success', 'Ministry Log Submitted', 'Practicum hours submitted to Dean of Students.');
   };
 
-  const makeTuitionPayment = async (amount: number) => {
+  const makeTuitionPayment = async (amount: number, method: string = 'GCash', refNo?: string) => {
     const currentBalance =
       studentProfile.tuitionBalance !== undefined
         ? studentProfile.tuitionBalance
         : Math.max(0, (studentProfile.tuitionTotal || 0) - (studentProfile.tuitionPaid || 0));
     const newPaid = (studentProfile.tuitionPaid || 0) + amount;
     const newBalance = Math.max(0, currentBalance - amount);
-    const updated = cleanFirestoreData({ ...studentProfile, tuitionPaid: newPaid, tuitionBalance: newBalance });
+
+    const paymentEntry: StudentPaymentRecord = {
+      id: `pay-${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      amount,
+      paymentMethod: method,
+      referenceNumber: refNo || `REF-${Math.floor(100000 + Math.random() * 900000)}`,
+      description: 'Online Tuition Installment Payment',
+      status: 'Verified',
+      receiptUrl: '',
+    };
+
+    const updated = cleanFirestoreData({
+      ...studentProfile,
+      tuitionPaid: newPaid,
+      tuitionBalance: newBalance,
+      paymentHistory: [paymentEntry, ...(studentProfile.paymentHistory || [])],
+    });
+
     setStudentProfile(updated);
+    setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
     try {
-      await setDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
+      await safeSetDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
     } catch (e) {
       console.warn(e);
     }
-    addToast('success', 'Tuition Payment Processed', `Payment of ₱${amount.toLocaleString()} received.`);
+    addToast('success', 'Tuition Payment Processed', `Payment of ₱${amount.toLocaleString()} received via ${method}.`);
   };
+
+  // Online Enrollment Workflow Engine
+  const saveEnrollmentDraft = async (draft: Partial<OnlineEnrollment>): Promise<OnlineEnrollment> => {
+    const id = draft.id || `enr-draft-${studentProfile.id || Date.now()}`;
+    const refNo = draft.referenceNumber || `ENR-DRAFT-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const fullDraft: OnlineEnrollment = {
+      id,
+      referenceNumber: refNo,
+      studentId: draft.studentId || studentProfile.studentId || '2024-PCM-0418',
+      studentName: draft.studentName || studentProfile.fullName || studentProfile.name || 'Student',
+      studentEmail: draft.studentEmail || studentProfile.email,
+      studentContact: draft.studentContact || studentProfile.phone || '',
+      programId: draft.programId || studentProfile.programId || 'bth-general',
+      programCode: draft.programCode || studentProfile.degreeProgram || 'B.Th.',
+      programTitle: draft.programTitle || studentProfile.degreeProgram || 'Bachelor of Theology',
+      yearLevel: draft.yearLevel || studentProfile.yearLevel || '3rd Year',
+      semester: draft.semester || '1st Semester',
+      schoolYear: draft.schoolYear || '2026-2027',
+      status: 'Draft',
+      selectedSubjects: draft.selectedSubjects || [],
+      totalUnits: (draft.selectedSubjects || []).reduce((sum, s) => sum + (s.units || 0), 0),
+      estimatedTuition: draft.estimatedTuition || ((draft.selectedSubjects || []).reduce((sum, s) => sum + (s.units || 0), 0) * 850 + 2500),
+      paymentMethod: draft.paymentMethod || 'GCash',
+      paymentOption: draft.paymentOption || 'Installment (40% Downpayment)',
+      proofOfPaymentUrl: draft.proofOfPaymentUrl || '',
+      submittedAt: '',
+      submissionDate: '',
+      lastSavedAt: new Date().toISOString(),
+      documents: draft.documents || studentProfile.documents || [],
+      notes: draft.notes || '',
+    };
+
+    setCurrentEnrollmentDraft(fullDraft);
+    setEnrollments((prev) => {
+      const idx = prev.findIndex((e) => e.id === id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = fullDraft;
+        return next;
+      }
+      return [fullDraft, ...prev];
+    });
+
+    try {
+      await safeSetDoc(doc(db, 'enrollments', id), cleanFirestoreData(fullDraft));
+    } catch (e) {
+      console.warn('Save enrollment draft notice:', e);
+    }
+
+    addToast('info', 'Draft Saved', 'Your enrollment application draft has been saved securely.');
+    return fullDraft;
+  };
+
+  // Student Notifications Engine
+  const addStudentNotification = useCallback(
+    async (studentId: string, notif: Omit<StudentNotification, 'id' | 'createdAt' | 'read' | 'studentId'>): Promise<void> => {
+      const newNotif: StudentNotification = {
+        ...notif,
+        id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        studentId,
+        createdAt: new Date().toISOString(),
+        read: false,
+      };
+
+      setStudentNotifications((prev) => [newNotif, ...prev]);
+      try {
+        await safeSetDoc(doc(db, 'studentNotifications', newNotif.id), cleanFirestoreData(newNotif));
+      } catch (e) {
+        console.warn('Add student notification notice:', e);
+      }
+    },
+    []
+  );
+
+  const markNotificationRead = async (notifId: string): Promise<void> => {
+    setStudentNotifications((prev) => prev.map((n) => (n.id === notifId ? { ...n, read: true } : n)));
+    try {
+      await safeSetDoc(doc(db, 'studentNotifications', notifId), { read: true }, { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const markAllNotificationsRead = async (studentId: string): Promise<void> => {
+    setStudentNotifications((prev) => prev.map((n) => (n.studentId === studentId ? { ...n, read: true } : n)));
+    try {
+      const batch = writeBatch(db);
+      studentNotifications
+        .filter((n) => n.studentId === studentId && !n.read)
+        .forEach((n) => {
+          batch.update(doc(db, 'studentNotifications', n.id), { read: true });
+        });
+      await batch.commit();
+    } catch (e) {
+      console.warn(e);
+    }
+  };
+
+  const submitEnrollment = useCallback(
+    async (data: Partial<OnlineEnrollment>): Promise<{ success: boolean; referenceNumber?: string; message?: string }> => {
+      const subjects = data.selectedSubjects || [];
+      if (subjects.length === 0) {
+        addToast('error', 'No Subjects Selected', 'Please select at least 1 subject to proceed with enrollment.');
+        return { success: false, message: 'Please select at least 1 subject.' };
+      }
+
+      const refNo = `ENR-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      const id = data.id && !data.id.includes('draft') ? data.id : `enr-${Date.now()}`;
+      const now = new Date().toISOString();
+
+      const submission: OnlineEnrollment = {
+        id,
+        referenceNumber: refNo,
+        studentId: data.studentId || studentProfile.studentId || '2024-PCM-0418',
+        studentName: data.studentName || studentProfile.fullName || studentProfile.name || 'Student',
+        studentEmail: data.studentEmail || studentProfile.email,
+        studentContact: data.studentContact || studentProfile.phone || '',
+        programId: data.programId || studentProfile.programId || 'bth-general',
+        programCode: data.programCode || studentProfile.degreeProgram || 'B.Th.',
+        programTitle: data.programTitle || studentProfile.degreeProgram || 'Bachelor of Theology',
+        yearLevel: data.yearLevel || studentProfile.yearLevel || '3rd Year',
+        semester: data.semester || '1st Semester',
+        schoolYear: data.schoolYear || '2026-2027',
+        status: 'Submitted',
+        selectedSubjects: subjects,
+        totalUnits: subjects.reduce((sum, s) => sum + (s.units || 0), 0),
+        estimatedTuition: data.estimatedTuition || (subjects.reduce((sum, s) => sum + (s.units || 0), 0) * 850 + 2500),
+        paymentMethod: data.paymentMethod || 'GCash',
+        paymentOption: data.paymentOption || 'Installment (40% Downpayment)',
+        proofOfPaymentUrl: data.proofOfPaymentUrl || '',
+        paymentReference: data.paymentReference || '',
+        submittedAt: now,
+        submissionDate: now.split('T')[0],
+        lastSavedAt: now,
+        documents: data.documents || studentProfile.documents || [],
+        notes: data.notes || '',
+      };
+
+      setEnrollments((prev) => [submission, ...prev.filter((e) => e.id !== id && e.id !== data.id)]);
+      setCurrentEnrollmentDraft(null);
+
+      // Update active student profile state
+      const updatedStudent: StudentProfile = {
+        ...studentProfile,
+        enrollmentStatus: 'Submitted',
+        currentSemester: `${submission.semester}, AY ${submission.schoolYear}`,
+      };
+      setStudentProfile(updatedStudent);
+      setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+
+      try {
+        await safeSetDoc(doc(db, 'enrollments', id), cleanFirestoreData(submission));
+        await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
+      } catch (e) {
+        console.warn('Submit enrollment Firestore sync notice:', e);
+      }
+
+      // Trigger Notification for Student
+      await addStudentNotification(updatedStudent.id, {
+        type: 'enrollment',
+        title: 'Enrollment Application Submitted',
+        message: `Your enrollment application for ${submission.semester} (Ref: ${refNo}) has been received and is under review by the Registrar.`,
+        linkSection: 'portal',
+      });
+
+      logActivity('CREATE', 'Online Enrollment', id, submission.studentName, `Submitted online enrollment application (${refNo} - ${subjects.length} subjects).`);
+      addToast('success', 'Enrollment Submitted!', `Application ${refNo} sent to Registrar for verification.`);
+      return { success: true, referenceNumber: refNo };
+    },
+    [studentProfile, addToast, addStudentNotification, logActivity]
+  );
+
+  const updateEnrollmentStatus = async (enrollmentId: string, status: EnrollmentStatus, adminRemarks?: string): Promise<boolean> => {
+    const target = enrollments.find((e) => e.id === enrollmentId);
+    if (!target) return false;
+
+    const updated: OnlineEnrollment = {
+      ...target,
+      status,
+      adminRemarks: adminRemarks || target.adminRemarks,
+      updatedAt: new Date().toISOString(),
+    };
+
+    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updated : e)));
+    try {
+      await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true });
+    } catch (e) {
+      console.warn('Update enrollment status sync notice:', e);
+    }
+
+    logActivity('UPDATE', 'Online Enrollment', enrollmentId, target.studentName, `Enrollment status updated to "${status}".`);
+    addToast('info', 'Enrollment Status Updated', `Status changed to ${status}.`);
+    return true;
+  };
+
+  const approveEnrollment = async (enrollmentId: string, remarks?: string): Promise<boolean> => {
+    const target = enrollments.find((e) => e.id === enrollmentId);
+    if (!target) return false;
+
+    const now = new Date().toISOString();
+    const updatedEnrollment: OnlineEnrollment = {
+      ...target,
+      status: 'Approved',
+      approvedAt: now,
+      approvedBy: currentAdminUser.name || 'Office of the Registrar',
+      adminRemarks: remarks || 'Officially verified and approved by the Registrar.',
+    };
+
+    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updatedEnrollment : e)));
+
+    // Update Student Profile with Enrolled Courses & Tuition
+    const student = students.find((s) => s.studentId === target.studentId || s.id === target.studentId) || studentProfile;
+    const enrolledCourses: StudentCourse[] = (target.selectedSubjects || []).map((sub, idx) => ({
+      id: sub.id || `crs-${sub.code.toLowerCase().replace(/\s+/g, '-')}-${idx}`,
+      code: sub.code,
+      title: sub.title,
+      units: sub.units,
+      instructor: sub.instructor || 'Faculty Member',
+      schedule: sub.schedule || 'TBA',
+      room: sub.room || 'Main Hall',
+      status: 'Enrolled',
+    }));
+
+    const tuitionTotal = target.estimatedTuition || student.tuitionTotal || 15000;
+    const tuitionBalance = Math.max(0, tuitionTotal - (student.tuitionPaid || 0));
+
+    const updatedStudent: StudentProfile = {
+      ...student,
+      enrollmentStatus: 'Enrolled',
+      courses: enrolledCourses,
+      currentSemester: `${target.semester}, AY ${target.schoolYear}`,
+      tuitionTotal,
+      tuitionBalance,
+    };
+
+    if (student.id === studentProfile.id) {
+      setStudentProfile(updatedStudent);
+    }
+    setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+
+    try {
+      await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updatedEnrollment), { merge: true });
+      await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
+    } catch (e) {
+      console.warn('Approve enrollment sync notice:', e);
+    }
+
+    await addStudentNotification(updatedStudent.id, {
+      type: 'enrollment',
+      title: 'Enrollment Approved — Certificate of Registration Ready',
+      message: `Your enrollment for ${target.semester}, AY ${target.schoolYear} has been officially approved! You can now access your class schedule and Certificate of Registration.`,
+      linkSection: 'portal',
+    });
+
+    logActivity('UPDATE', 'Online Enrollment', enrollmentId, target.studentName, `Approved enrollment application (${target.referenceNumber}).`);
+    addToast('success', 'Enrollment Approved!', `Student ${target.studentName} is now officially enrolled.`);
+    return true;
+  };
+
+  const returnEnrollmentForCorrection = async (enrollmentId: string, adminFeedback: string): Promise<boolean> => {
+    const target = enrollments.find((e) => e.id === enrollmentId);
+    if (!target) return false;
+
+    const updated: OnlineEnrollment = {
+      ...target,
+      status: 'Returned for Correction',
+      adminRemarks: adminFeedback,
+    };
+
+    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updated : e)));
+
+    const student = students.find((s) => s.studentId === target.studentId || s.id === target.studentId) || studentProfile;
+    const updatedStudent: StudentProfile = {
+      ...student,
+      enrollmentStatus: 'Returned for Correction',
+    };
+    if (student.id === studentProfile.id) {
+      setStudentProfile(updatedStudent);
+    }
+    setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+
+    try {
+      await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true });
+      await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
+    } catch (e) {
+      console.warn('Return enrollment sync notice:', e);
+    }
+
+    await addStudentNotification(updatedStudent.id, {
+      type: 'alert',
+      title: 'Enrollment Action Required: Corrections Needed',
+      message: `The Registrar returned your enrollment application for corrections: "${adminFeedback}". Please update and resubmit.`,
+      linkSection: 'portal',
+    });
+
+    logActivity('UPDATE', 'Online Enrollment', enrollmentId, target.studentName, `Returned enrollment for correction: ${adminFeedback}`);
+    addToast('warning', 'Enrollment Returned', `Application returned to ${target.studentName} for revision.`);
+    return true;
+  };
+
+  const rejectEnrollment = async (enrollmentId: string, reason: string): Promise<boolean> => {
+    const target = enrollments.find((e) => e.id === enrollmentId);
+    if (!target) return false;
+
+    const updated: OnlineEnrollment = {
+      ...target,
+      status: 'Rejected',
+      adminRemarks: reason,
+    };
+
+    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updated : e)));
+    try {
+      await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+
+    logActivity('UPDATE', 'Online Enrollment', enrollmentId, target.studentName, `Rejected enrollment: ${reason}`);
+    addToast('info', 'Enrollment Disapproved', 'Enrollment application has been disapproved.');
+    return true;
+  };
+
+  const deleteEnrollment = async (enrollmentId: string): Promise<boolean> => {
+    const target = enrollments.find((e) => e.id === enrollmentId);
+    setEnrollments((prev) => prev.filter((e) => e.id !== enrollmentId));
+    try {
+      await safeDeleteDoc(doc(db, 'enrollments', enrollmentId));
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('DELETE', 'Online Enrollment', enrollmentId, target?.studentName || 'Enrollment', 'Deleted enrollment record.');
+    addToast('info', 'Enrollment Deleted', 'Application record removed.');
+    return true;
+  };
+
+  // Student Document Vault & Verification
+  const uploadStudentDocument = async (studentId: string, docData: Omit<StudentDocument, 'id' | 'uploadDate' | 'verificationStatus'>): Promise<StudentDocument> => {
+    const newDoc: StudentDocument = {
+      ...docData,
+      id: `doc-${Date.now()}`,
+      uploadDate: new Date().toISOString().split('T')[0],
+      verificationStatus: 'Pending Verification',
+    };
+
+    const targetStudent = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
+    const updatedDocs = [newDoc, ...(targetStudent.documents || [])];
+
+    const updatedStudent: StudentProfile = {
+      ...targetStudent,
+      documents: updatedDocs,
+    };
+
+    if (targetStudent.id === studentProfile.id) {
+      setStudentProfile(updatedStudent);
+    }
+    setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+
+    try {
+      await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
+    } catch (e) {
+      console.warn('Upload student doc sync notice:', e);
+    }
+
+    addToast('success', 'Document Uploaded', `${newDoc.name} submitted for Registrar verification.`);
+    return newDoc;
+  };
+
+  const updateDocumentVerification = async (studentId: string, docId: string, status: DocumentVerificationStatus, adminFeedback?: string): Promise<boolean> => {
+    const targetStudent = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
+    const updatedDocs = (targetStudent.documents || []).map((d) =>
+      d.id === docId
+        ? {
+            ...d,
+            verificationStatus: status,
+            verifiedAt: new Date().toISOString(),
+            verifiedBy: currentAdminUser.name,
+            adminFeedback: adminFeedback || d.adminFeedback,
+          }
+        : d
+    );
+
+    const updatedStudent: StudentProfile = {
+      ...targetStudent,
+      documents: updatedDocs,
+    };
+
+    if (targetStudent.id === studentProfile.id) {
+      setStudentProfile(updatedStudent);
+    }
+    setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+
+    try {
+      await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+
+    const docItem = updatedDocs.find((d) => d.id === docId);
+    await addStudentNotification(updatedStudent.id, {
+      type: status === 'Verified' ? 'general' : 'alert',
+      title: `Document ${status === 'Verified' ? 'Approved' : 'Verification Update'}`,
+      message: `Your ${docItem?.name || 'document'} has been marked as ${status}.${adminFeedback ? ` Note: ${adminFeedback}` : ''}`,
+      linkSection: 'portal',
+    });
+
+    logActivity('UPDATE', 'Student Document', docId, targetStudent.fullName || targetStudent.name || 'Student', `Updated document verification to "${status}".`);
+    addToast('success', 'Document Verification Updated', `Document marked as ${status}.`);
+    return true;
+  };
+
+  // Student Profile & Academic Record Management (Admin / Registrar)
+  const createStudentProfile = async (profileData: Omit<StudentProfile, 'id'>): Promise<StudentProfile> => {
+    const id = `stu-${Date.now()}`;
+    const newStudent: StudentProfile = cleanFirestoreData({
+      ...profileData,
+      id,
+    });
+
+    setStudents((prev) => [newStudent, ...prev]);
+    try {
+      await safeSetDoc(doc(db, 'studentProfiles', id), newStudent);
+    } catch (e) {
+      console.warn(e);
+    }
+
+    logActivity('CREATE', 'Student Profile', id, newStudent.fullName || newStudent.name || 'Student', `Created student account (${newStudent.studentId}).`);
+    addToast('success', 'Student Profile Created', `Added ${newStudent.fullName || newStudent.name || 'Student'} to Student Directory.`);
+    return newStudent;
+  };
+
+  const updateStudentProfile = async (studentId: string, updates: Partial<StudentProfile>): Promise<boolean> => {
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId ? studentProfile : null);
+    if (!target) return false;
+
+    const updated: StudentProfile = cleanFirestoreData({
+      ...target,
+      ...updates,
+    });
+
+    if (target.id === studentProfile.id || target.studentId === studentProfile.studentId) {
+      setStudentProfile(updated);
+    }
+    setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+
+    try {
+      await safeSetDoc(doc(db, 'studentProfiles', updated.id), updated, { merge: true });
+    } catch (e) {
+      console.warn('Update student profile sync notice:', e);
+    }
+
+    logActivity('UPDATE', 'Student Profile', updated.id, updated.fullName || updated.name || 'Student', 'Updated student record and academic information.');
+    addToast('success', 'Profile Updated', `Updated record for ${updated.fullName || updated.name || 'Student'}.`);
+    return true;
+  };
+
+  const deleteStudentProfile = async (studentId: string): Promise<boolean> => {
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId);
+    setStudents((prev) => prev.filter((s) => s.id !== studentId && s.studentId !== studentId));
+    try {
+      await safeDeleteDoc(doc(db, 'studentProfiles', studentId));
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('DELETE', 'Student Profile', studentId, target?.fullName || target?.name || 'Student', 'Deleted student record.');
+    addToast('info', 'Student Record Deleted', 'Student profile has been removed.');
+    return true;
+  };
+
+  const addStudentGrade = async (studentId: string, courseCode: string, midtermGrade: number | string, finalGrade: number | string): Promise<boolean> => {
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
+    const updatedCourses = (target.courses || []).map((c) =>
+      c.code === courseCode
+        ? {
+            ...c,
+            midtermGrade: typeof midtermGrade === 'number' ? midtermGrade.toFixed(2) : String(midtermGrade),
+            finalGrade: typeof finalGrade === 'number' ? finalGrade.toFixed(2) : String(finalGrade),
+            status: 'Completed' as const,
+          }
+        : c
+    );
+
+    const updated: StudentProfile = {
+      ...target,
+      courses: updatedCourses,
+    };
+
+    if (target.id === studentProfile.id) {
+      setStudentProfile(updated);
+    }
+    setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+
+    try {
+      await safeSetDoc(doc(db, 'studentProfiles', updated.id), cleanFirestoreData(updated), { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+
+    await addStudentNotification(updated.id, {
+      type: 'grade',
+      title: `Grades Encoded: ${courseCode}`,
+      message: `Final grades for ${courseCode} have been published. Final Grade: ${finalGrade}.`,
+      linkSection: 'portal',
+    });
+
+    logActivity('UPDATE', 'Student Grade', updated.id, courseCode, `Encoded grades for student ${updated.fullName || updated.name || 'Student'}.`);
+    addToast('success', 'Grade Encoded', `Grades for ${courseCode} posted successfully.`);
+    return true;
+  };
+
+  const recordStudentPayment = useCallback(
+    async (studentId: string, payment: Omit<StudentPaymentRecord, 'id'>): Promise<boolean> => {
+      const target = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
+      const newPayment: StudentPaymentRecord = {
+        ...payment,
+        id: `pay-${Date.now()}`,
+      };
+
+      const newPaid = (target.tuitionPaid || 0) + payment.amount;
+      const newBalance = Math.max(0, (target.tuitionTotal || 0) - newPaid);
+
+      const updated: StudentProfile = {
+        ...target,
+        tuitionPaid: newPaid,
+        tuitionBalance: newBalance,
+        paymentHistory: [newPayment, ...(target.paymentHistory || [])],
+      };
+
+      if (target.id === studentProfile.id) {
+        setStudentProfile(updated);
+      }
+      setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+
+      try {
+        await safeSetDoc(doc(db, 'studentProfiles', updated.id), cleanFirestoreData(updated), { merge: true });
+      } catch (e) {
+        console.warn(e);
+      }
+
+      await addStudentNotification(updated.id, {
+        type: 'payment',
+        title: 'Payment Receipt Confirmed',
+        message: `Tuition payment of ₱${payment.amount.toLocaleString()} (Ref: ${payment.referenceNumber}) has been verified and posted to your ledger.`,
+        linkSection: 'portal',
+      });
+
+      logActivity('CREATE', 'Student Payment', newPayment.id, updated.fullName || updated.name || 'Student', `Recorded payment of ₱${payment.amount.toLocaleString()}.`);
+      addToast('success', 'Payment Recorded', `Official receipt issued for ₱${payment.amount.toLocaleString()}.`);
+      return true;
+    },
+    [students, studentProfile, addStudentNotification, logActivity, addToast]
+  );
 
   // Admin CMS Auth & Management
   const adminLogin = (user: string, pass: string): boolean => {
@@ -2944,16 +3693,50 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateUserAccountRole,
         linkStudentIdToUser,
 
-        // Student Portal
+        // Student Portal & Multi-Student Directory
         isStudentLoggedIn,
         setIsStudentLoggedIn,
         currentStudent: isStudentLoggedIn ? studentProfile : null,
         studentProfile,
         setStudentProfile,
+        students,
+        setStudents,
         studentLogin,
         studentLogout,
+        linkGoogleAccountToStudent,
         addPracticumEntry,
         makeTuitionPayment,
+
+        // Online Enrollment System
+        enrollments,
+        setEnrollments,
+        currentEnrollmentDraft,
+        setCurrentEnrollmentDraft,
+        saveEnrollmentDraft,
+        submitEnrollment,
+        updateEnrollmentStatus,
+        approveEnrollment,
+        returnEnrollmentForCorrection,
+        rejectEnrollment,
+        deleteEnrollment,
+
+        // Student Document Vault & Verification
+        uploadStudentDocument,
+        updateDocumentVerification,
+
+        // Student Profile & Academic Record Management
+        createStudentProfile,
+        updateStudentProfile,
+        deleteStudentProfile,
+        addStudentGrade,
+        recordStudentPayment,
+
+        // Student Notifications Engine
+        studentNotifications,
+        setStudentNotifications,
+        addStudentNotification,
+        markNotificationRead,
+        markAllNotificationsRead,
 
         // Admin CMS & RBAC
         isAdminLoggedIn,

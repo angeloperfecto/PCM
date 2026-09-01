@@ -216,6 +216,14 @@
       "schema": "StudentProfile",
       "description": "Student portal grades, enrollment, and tuition."
     },
+    "/enrollments/{enrollmentId}": {
+      "schema": "OnlineEnrollment",
+      "description": "Student term enrollment applications, subject loads, and document submissions."
+    },
+    "/studentNotifications/{notifId}": {
+      "schema": "StudentNotification",
+      "description": "Student notification notices and alerts."
+    },
     "/activityLogs/{logId}": {
       "schema": "ActivityLogItem",
       "description": "Audit log for admin modifications."

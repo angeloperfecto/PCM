@@ -247,13 +247,20 @@ export interface StudentCourse {
   instructor: string;
   midtermGrade?: number | string;
   finalGrade?: number | string;
-  status: 'In Progress' | 'Completed' | 'Enrolled';
+  status: 'In Progress' | 'Completed' | 'Enrolled' | 'Dropped';
 }
 
 export interface PracticumEntry {
   id: string;
   date: string;
-  ministryType: 'Preaching / Teaching' | 'Youth Ministry' | 'Evangelism & Outreach' | 'Counseling & Visitation' | 'Worship & Media' | 'Church Administration';
+  ministryType:
+    | 'Preaching / Teaching'
+    | 'Youth Ministry'
+    | 'Evangelism & Outreach'
+    | 'Counseling & Visitation'
+    | 'Worship & Media'
+    | 'Church Administration'
+    | string;
   location: string;
   hours: number;
   description: string;
@@ -261,26 +268,215 @@ export interface PracticumEntry {
   status: 'Pending Review' | 'Pending Verification' | 'Approved' | 'Rejected' | string;
 }
 
-export interface StudentProfile {
+export type EnrollmentStatus =
+  | 'Draft'
+  | 'Submitted'
+  | 'Under Review'
+  | 'For Verification'
+  | 'Approved'
+  | 'Enrolled'
+  | 'Rejected'
+  | 'Returned for Correction'
+  | 'Cancelled'
+  | 'Not Enrolled';
+
+export type DocumentVerificationStatus =
+  | 'Pending Verification'
+  | 'Verified'
+  | 'Rejected'
+  | 'Requires Resubmission'
+  | 'Action Required';
+
+export interface StudentDocument {
   id: string;
-  studentId: string;
+  documentType?:
+    | 'Form 138 / High School Report Card'
+    | 'Transcript of Records (TOR)'
+    | 'Certificate of Good Moral Character'
+    | 'Pastoral Recommendation Letter'
+    | 'PSA Birth Certificate'
+    | '2x2 ID Photo'
+    | 'Proof of Downpayment / Payment Slip'
+    | 'Christian Testimony Essay'
+    | 'Medical / Physical Exam Clearance'
+    | 'Certificate of Graduation / Diploma'
+    | 'Honorable Dismissal / Transfer Credential'
+    | string;
+  type?: string;
+  fileName?: string;
+  name?: string;
+  fileUrl?: string;
+  url?: string;
+  fileSize?: string;
+  size?: string;
+  uploadDate?: string;
+  date?: string;
+  schoolYear?: string;
+  semester?: string;
+  verificationStatus?: DocumentVerificationStatus;
+  status?: DocumentVerificationStatus | string;
+  adminFeedback?: string;
+  remarks?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+}
+
+export interface StudentPaymentRecord {
+  id: string;
+  referenceNo?: string;
+  referenceNumber?: string;
+  receiptNo?: string;
+  amount: number;
+  paymentDate?: string;
+  date?: string;
+  method?: 'GCash' | 'Bank Transfer (BDO)' | 'Bank Transfer (Metrobank)' | 'Over-the-Counter Cashier' | 'Scholarship Grant' | string;
+  paymentMethod?: string;
+  status?: 'Verified' | 'Pending Verification' | 'Rejected';
+  proofUrl?: string;
+  receiptUrl?: string;
+  description?: string;
+  remarks?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  recordedBy?: string;
+}
+
+export interface StudentSubjectHistory {
+  id?: string;
+  code: string;
+  title: string;
+  units: number;
+  grade: number | string;
+  semester: string;
+  academicYear: string;
+  status: 'Passed' | 'In Progress' | 'Incomplete' | 'Credited' | 'Failed';
+}
+
+export interface StudentProfile {
+  id: string; // Document ID (e.g. std-2024-0418)
+  studentId: string; // Permanent Unique Identifier (e.g. 2024-PCM-0418)
   fullName: string;
   name?: string;
   email: string;
+  linkedGoogleUid?: string;
+  authUid?: string;
+  portalPassword?: string;
   program: string;
+  programId?: string;
+  degreeProgram?: string;
   yearLevel: string;
+  academicStatus: 'Regular' | 'Irregular' | 'Probationary' | "Dean's List" | 'Graduating' | 'Alumni' | string;
+  enrollmentStatus: EnrollmentStatus;
   currentSemester: string;
   academicYear: string;
+  contactNumber?: string;
+  phone?: string;
+  address?: string;
+  birthDate?: string;
+  gender?: 'Male' | 'Female' | string;
+  civilStatus?: 'Single' | 'Married' | 'Widowed' | string;
+  emergencyContact?: {
+    name: string;
+    relationship: string;
+    phone: string;
+  };
+  homeChurch: string;
+  pastorName?: string;
+  mentorName: string;
+  avatarUrl: string;
   gpa: number;
   totalUnitsEarned: number;
-  mentorName: string;
-  homeChurch: string;
-  avatarUrl: string;
   tuitionTotal: number;
   tuitionPaid: number;
   tuitionBalance?: number;
   courses: StudentCourse[];
+  subjectHistory?: StudentSubjectHistory[];
+  paymentRecords?: StudentPaymentRecord[];
+  paymentHistory?: StudentPaymentRecord[];
+  uploadedDocuments?: StudentDocument[];
+  documents?: StudentDocument[];
   practicumEntries: PracticumEntry[];
+  adminNotes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SelectedSubject {
+  id?: string;
+  code: string;
+  title: string;
+  units: number;
+  schedule: string;
+  room: string;
+  instructor: string;
+  section?: string;
+}
+
+export interface OnlineEnrollment {
+  id: string; // enr-2026-XXXX
+  referenceNumber: string; // ENR-2026-0842
+  studentId: string; // Permanent PCM Student ID (e.g. 2024-PCM-0418)
+  studentUid?: string;
+  studentName: string;
+  email?: string;
+  phone?: string;
+  studentEmail?: string;
+  studentContact?: string;
+  schoolYear: string; // e.g. '2026–2027'
+  semester: string; // e.g. '1st Semester'
+  programId?: string;
+  programName?: string;
+  programTitle?: string;
+  programCode?: string;
+  yearLevel: string;
+  enrollmentType?: 'Regular' | 'Irregular' | 'Returning' | 'Cross-Enrollee' | 'New / Transferee';
+  selectedSubjects: SelectedSubject[];
+  totalUnits: number;
+  tuitionPerUnit?: number;
+  miscellaneousFees?: number;
+  estimatedTuition: number;
+  downpaymentAmount?: number;
+  paymentMethod?: string;
+  paymentOption?: string;
+  proofOfPaymentUrl?: string;
+  paymentReference?: string;
+  personalInfo?: {
+    birthDate?: string;
+    gender?: string;
+    civilStatus?: string;
+    address?: string;
+    guardianName?: string;
+    guardianPhone?: string;
+    homeChurch?: string;
+    pastorName?: string;
+  };
+  uploadedDocuments?: StudentDocument[];
+  documents?: StudentDocument[];
+  status: EnrollmentStatus;
+  submissionDate?: string;
+  submittedAt?: string;
+  lastSavedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  adminRemarks?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface StudentNotification {
+  id: string;
+  studentId: string;
+  title: string;
+  message: string;
+  type: 'enrollment' | 'grade' | 'document' | 'payment' | 'announcement' | 'system' | string;
+  read: boolean;
+  createdAt: string;
+  linkTab?: 'enrollment' | 'schedule' | 'grades' | 'financial' | 'documents' | 'practicum' | 'settings' | string;
+  linkSection?: string;
+  actionUrl?: string;
 }
 
 export type AdminRole = 'Super Admin' | 'Content Admin' | 'Editor';
