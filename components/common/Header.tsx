@@ -299,22 +299,26 @@ export const Header: React.FC = () => {
             )}
           </button>
 
-          <span className="text-[#85AA9B]/40">|</span>
+          {currentUserAccount?.role !== 'Student' && (
+            <>
+              <span className="text-[#85AA9B]/40">|</span>
 
-          {/* Admin CMS Trigger */}
-          <button
-            id="btn-nav-admin-cms"
-            onClick={() => navigateTo('admin')}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-sm transition font-medium cursor-pointer ${
-              currentSection === 'admin'
-                ? 'bg-[#588B76] text-white font-bold'
-                : 'text-[#D0DED8] hover:text-white'
-            }`}
-            title="Institutional CMS & Admissions Administration"
-          >
-            <Lock className="w-3 h-3 text-[#85AA9B]" />
-            <span>{isAdminLoggedIn ? 'Admin (In)' : 'Admin'}</span>
-          </button>
+              {/* Admin CMS Trigger */}
+              <button
+                id="btn-nav-admin-cms"
+                onClick={() => navigateTo('admin')}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-sm transition font-medium cursor-pointer ${
+                  currentSection === 'admin'
+                    ? 'bg-[#588B76] text-white font-bold'
+                    : 'text-[#D0DED8] hover:text-white'
+                }`}
+                title="Institutional CMS & Admissions Administration"
+              >
+                <Lock className="w-3 h-3 text-[#85AA9B]" />
+                <span>{isAdminLoggedIn ? 'Admin (In)' : 'Admin'}</span>
+              </button>
+            </>
+          )}
 
           <span className="text-[#85AA9B]/40">|</span>
 

@@ -442,6 +442,20 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const navigateTo = (section: NavSection, subSection: string | null = null) => {
+    if (section === 'admin') {
+      const isStudentUser =
+        currentUserAccount?.role === 'Student' ||
+        (isStudentLoggedIn && !isAdminLoggedIn && currentUserAccount?.role !== 'Admin');
+
+      if (isStudentUser) {
+        addToast({
+          title: 'Access Restricted',
+          message: 'Student accounts are not authorized to access the Administrator section or user management.',
+          type: 'error',
+        });
+        return;
+      }
+    }
     setCurrentSection(section);
     setActiveSubSection(subSection);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -1242,7 +1256,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // RBAC Permission Check
   const canPerformAction = (requiredRole: AdminRole): boolean => {
-    if (!currentAdminUser) return false;
+    if (!isAdminLoggedIn || !currentAdminUser) return false;
+    if (currentUserAccount?.role === 'Student') return false;
     if (currentAdminUser.role === 'Super Admin') return true;
     if (requiredRole === 'Content Admin') {
       return currentAdminUser.role === 'Content Admin';
@@ -1959,6 +1974,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Admin CMS Auth & Management
   const adminLogin = (user: string, pass: string): boolean => {
+    // If the active user profile is a student, deny access to the administrator interface
+    if (currentUserAccount?.role === 'Student' || (isStudentLoggedIn && !isAdminLoggedIn && currentUserAccount?.role !== 'Admin')) {
+      addToast({
+        title: 'Access Restricted',
+        message: 'Student accounts are not authorized to authenticate into the Administrator CMS.',
+        type: 'error',
+      });
+      return false;
+    }
+
     const trimmedUser = user.trim().toLowerCase();
     const trimmedPass = pass.trim();
 
@@ -2024,6 +2049,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addAdminUser = (user: Omit<AdminUser, 'id' | 'createdAt'>): AdminUser => {
+    if (currentUserAccount?.role === 'Student' || !isAdminLoggedIn) {
+      addToast('error', 'Permission Denied', 'Student accounts cannot create admin users.');
+      throw new Error('Unauthorized');
+    }
     const newUser: AdminUser = cleanFirestoreData({
       ...user,
       id: `adm-${Date.now()}`,
@@ -2037,6 +2066,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAdminUser = (id: string, updates: Partial<AdminUser>) => {
+    if (currentUserAccount?.role === 'Student' || !isAdminLoggedIn) {
+      addToast('error', 'Permission Denied', 'Student accounts cannot modify admin users.');
+      return;
+    }
     const sanitized = cleanFirestoreData(updates);
     setAdminUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, ...updates } : u))
@@ -2047,6 +2080,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteAdminUser = (id: string) => {
+    if (currentUserAccount?.role === 'Student' || !isAdminLoggedIn) {
+      addToast('error', 'Permission Denied', 'Student accounts cannot delete admin users.');
+      return;
+    }
     if (adminUsers.length <= 1) {
       addToast('error', 'Cannot Delete', 'You cannot delete the only remaining admin account.');
       return;
@@ -2180,6 +2217,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateUserAccountRole = async (userId: string, role: UserRole, adminRole?: AdminRole) => {
+    if (currentUserAccount?.role === 'Student' || !isAdminLoggedIn) {
+      addToast({
+        title: 'Permission Denied',
+        message: 'Student accounts are not authorized to modify user roles.',
+        type: 'error',
+      });
+      return;
+    }
     try {
       const targetUser = userAccounts.find((u) => u.id === userId || u.uid === userId);
       const updates: Partial<UserAccount> = {

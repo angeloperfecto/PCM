@@ -45,6 +45,27 @@ export const AdminUsersTab: React.FC = () => {
   const [resetTargetUser, setResetTargetUser] = useState<AdminUser | null>(null);
   const [resetNewPassword, setResetNewPassword] = useState('');
 
+  if (currentUserAccount?.role === 'Student' || !canPerformAction('Super Admin')) {
+    return (
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-10 text-center space-y-4">
+        <div className="w-14 h-14 bg-amber-50 rounded-2xl flex items-center justify-center mx-auto text-amber-600 border border-amber-200 shadow-xs">
+          <Shield className="w-7 h-7" />
+        </div>
+        <div className="space-y-1">
+          <h3 className="font-serif text-lg font-bold text-[#18392B]">
+            Super Administrator Authorization Required
+          </h3>
+          <p className="text-xs text-slate-500 max-w-md mx-auto leading-relaxed">
+            The User Management, Security Roles, and Access Audit Log section is strictly reserved for Super Administrators. Student accounts and restricted roles are prohibited from viewing or modifying user credentials.
+          </p>
+        </div>
+        <div className="inline-block px-3 py-1 bg-slate-100 rounded-full text-[11px] font-semibold text-slate-600">
+          Current Role: {currentAdminUser?.role || currentUserAccount?.role || 'Unauthorized'}
+        </div>
+      </div>
+    );
+  }
+
   const handleCreateUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!canPerformAction('Super Admin')) {

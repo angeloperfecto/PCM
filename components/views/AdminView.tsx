@@ -29,14 +29,18 @@ import {
   Download,
   FileCheck,
   ShieldCheck,
+  ShieldAlert,
   Lock,
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
   const {
     isAdminAuthenticated,
+    isStudentLoggedIn,
     adminLogin,
     signInWithGoogle,
+    signOutUser,
+    navigateTo,
     currentUserAccount,
     firebaseAuthUser,
     applications,
@@ -69,6 +73,56 @@ export const AdminView: React.FC = () => {
     | 'users'
   >('overview');
 
+  // Strict RBAC gate: Student accounts are completely restricted from Admin section
+  const isStudentUser =
+    currentUserAccount?.role === 'Student' ||
+    (isStudentLoggedIn && !isAdminAuthenticated && currentUserAccount?.role !== 'Admin');
+
+  if (isStudentUser) {
+    return (
+      <div className="w-full min-h-[75vh] bg-[#070e1c] py-16 px-4 flex items-center justify-center font-sans">
+        <div className="max-w-md w-full bg-[#18392B] rounded-2xl border border-red-500/30 shadow-2xl p-8 space-y-6 text-white text-center">
+          <div className="w-16 h-16 bg-red-500/10 border border-red-500/30 rounded-2xl flex items-center justify-center mx-auto text-red-400">
+            <ShieldAlert className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="font-serif text-2xl font-bold text-white">
+              Access Restricted
+            </h2>
+            <p className="text-xs text-slate-300">
+              Student accounts are not authorized to access the PCM Administrator CMS or view administrator user directories.
+            </p>
+          </div>
+          <div className="p-4 rounded-xl bg-black/30 border border-white/10 text-xs text-left space-y-1.5 font-sans">
+            <div className="text-slate-400 text-[11px]">Active Signed-In Account:</div>
+            <div className="font-bold text-emerald-400 truncate">{currentUserAccount?.name || 'PCM Student'}</div>
+            <div className="text-slate-300 truncate text-[11px]">{currentUserAccount?.email}</div>
+            <div className="inline-block mt-1 px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-semibold">
+              Role: Student
+            </div>
+          </div>
+          <div className="space-y-2.5 pt-2">
+            <button
+              onClick={() => navigateTo('portal')}
+              className="w-full bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] font-bold py-2.5 px-4 rounded-xl transition cursor-pointer text-xs shadow-md"
+            >
+              Go to MyPCM Student Portal
+            </button>
+            <button
+              onClick={() => {
+                signOutUser();
+                navigateTo('home');
+              }}
+              className="w-full bg-transparent hover:bg-white/10 border border-white/20 text-slate-300 hover:text-white py-2 px-4 rounded-xl transition cursor-pointer text-xs"
+            >
+              Sign Out & Switch Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     const success = adminLogin(loginUser, loginPass);
@@ -85,7 +139,15 @@ export const AdminView: React.FC = () => {
     setIsGoogleSigningIn(true);
     try {
       const res = await signInWithGoogle();
-      if (!res.success) {
+      if (res.success) {
+        if (res.role === 'Student') {
+          addToast({
+            title: 'Admin Access Denied',
+            message: 'Your Google account is registered as a Student. Student accounts cannot access the Administrator CMS.',
+            type: 'error',
+          });
+        }
+      } else {
         addToast({
           title: 'Google Login',
           message: 'Unable to authenticate with Google.',

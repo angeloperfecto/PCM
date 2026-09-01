@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export const Footer: React.FC = () => {
-  const { navigateTo, subscribeNewsletter, setStatementOfFaithModalOpen, siteConfig } = usePCM();
+  const { navigateTo, subscribeNewsletter, setStatementOfFaithModalOpen, siteConfig, currentUserAccount } = usePCM();
   const [footerEmail, setFooterEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
 
@@ -283,15 +283,17 @@ export const Footer: React.FC = () => {
                 <span>Source Migration Report</span>
               </button>
             </li>
-            <li>
-              <button
-                onClick={() => navigateTo('admin')}
-                className="text-[#D0DED8] hover:text-white transition text-left cursor-pointer flex items-center gap-1"
-              >
-                <Lock className="w-3 h-3 text-[#85AA9B]" />
-                <span>Admin CMS Portal</span>
-              </button>
-            </li>
+            {currentUserAccount?.role !== 'Student' && (
+              <li>
+                <button
+                  onClick={() => navigateTo('admin')}
+                  className="text-[#D0DED8] hover:text-white transition text-left cursor-pointer flex items-center gap-1"
+                >
+                  <Lock className="w-3 h-3 text-[#85AA9B]" />
+                  <span>Admin CMS Portal</span>
+                </button>
+              </li>
+            )}
           </ul>
         </div>
       </div>
