@@ -36,6 +36,7 @@ export const AdminFacultyTab: React.FC = () => {
     deleteFacultyMember,
     mediaLibrary,
     addMediaItem,
+    uploadMediaFile,
     addToast,
     canPerformAction,
   } = usePCM();
@@ -45,6 +46,7 @@ export const AdminFacultyTab: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFaculty, setEditingFaculty] = useState<FacultyMember | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
 
   // Modal Form State
   const [formName, setFormName] = useState('');
@@ -94,7 +96,7 @@ export const AdminFacultyTab: React.FC = () => {
   };
 
   // Photo upload handling
-  const handlePhotoFile = (file: File) => {
+  const handlePhotoFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       addToast({
         title: 'Invalid File Type',
@@ -104,40 +106,45 @@ export const AdminFacultyTab: React.FC = () => {
       return;
     }
 
-    // Size warning if > 5MB
-    if (file.size > 5 * 1024 * 1024) {
+    setIsUploadingPhoto(true);
+    try {
+      const assetTitle = `${formName || 'Faculty'} Portrait`;
+      const downloadUrl = await uploadMediaFile(file, 'Faculty', assetTitle);
+      setFormImage(downloadUrl);
       addToast({
-        title: 'File Too Large',
-        message: 'Image size should ideally be under 5MB for fast loading.',
-        type: 'warning',
+        title: 'Photo Uploaded',
+        message: 'Portrait image uploaded and synced with PCM Media Library.',
+        type: 'success',
       });
+    } catch (uploadError) {
+      console.warn('Direct upload fallback to data URL:', uploadError);
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (typeof event.target?.result === 'string') {
+          const dataUrl = event.target.result;
+          setFormImage(dataUrl);
+
+          const assetTitle = `${formName || 'Faculty'} Portrait`;
+          addMediaItem({
+            title: assetTitle,
+            url: dataUrl,
+            category: 'Faculty',
+            altText: `Portrait of ${formName || 'Faculty Member'}`,
+            fileSize: `${Math.round(file.size / 1024)} KB`,
+            dimensions: 'Portrait',
+          });
+
+          addToast({
+            title: 'Photo Loaded',
+            message: 'Portrait image updated.',
+            type: 'success',
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsUploadingPhoto(false);
     }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (typeof event.target?.result === 'string') {
-        const dataUrl = event.target.result;
-        setFormImage(dataUrl);
-
-        // Optionally register asset to media library for future re-use
-        const assetTitle = `${formName || 'Faculty'} Portrait`;
-        addMediaItem({
-          title: assetTitle,
-          url: dataUrl,
-          category: 'Faculty',
-          altText: `Portrait of ${formName || 'Faculty Member'}`,
-          fileSize: `${Math.round(file.size / 1024)} KB`,
-          dimensions: 'Portrait',
-        });
-
-        addToast({
-          title: 'Photo Uploaded',
-          message: 'Portrait image updated and saved to Media Library.',
-          type: 'success',
-        });
-      }
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -189,6 +196,8 @@ export const AdminFacultyTab: React.FC = () => {
       .map((s) => s.trim())
       .filter(Boolean);
 
+    const trimmedImg = formImage.trim();
+
     if (editingFaculty) {
       updateFacultyMember(editingFaculty.id, {
         name: formName.trim(),
@@ -199,7 +208,8 @@ export const AdminFacultyTab: React.FC = () => {
         bio: formBio.trim(),
         email: formEmail.trim(),
         phone: formPhone.trim(),
-        image: formImage.trim(),
+        image: trimmedImg,
+        imageUrl: trimmedImg,
       });
       addToast({ title: 'Faculty Profile Updated', message: `${formName} updated successfully.`, type: 'success' });
     } else {
@@ -212,7 +222,8 @@ export const AdminFacultyTab: React.FC = () => {
         bio: formBio.trim(),
         email: formEmail.trim(),
         phone: formPhone.trim(),
-        image: formImage.trim(),
+        image: trimmedImg,
+        imageUrl: trimmedImg,
       });
       addToast({ title: 'Faculty Profile Added', message: `${formName} added to the PCM directory.`, type: 'success' });
     }
@@ -323,10 +334,10 @@ export const AdminFacultyTab: React.FC = () => {
           >
             <div className="flex items-start gap-3.5">
               {/* Portrait */}
-              <div className="w-14 h-18 rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-xs bg-[#18392B]">
+              <div className="w-14 h-18 rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-xs bg-[#18392B] relative">
                 <FacultyPortrait
                   name={fac.name}
-                  imageSrc={fac.image}
+                  imageSrc={fac.image || fac.imageUrl}
                   className="w-full h-full object-cover"
                 />
               </div>

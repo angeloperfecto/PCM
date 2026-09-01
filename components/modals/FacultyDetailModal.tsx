@@ -45,7 +45,7 @@ export const FacultyDetailModal: React.FC = () => {
           <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-xl overflow-hidden border-2 border-[#588B76] shadow-lg shrink-0 bg-[#070e1c] flex items-center justify-center">
             <FacultyPortrait
               name={selectedFaculty.name}
-              imageUrl={selectedFaculty.imageUrl}
+              imageUrl={selectedFaculty.imageUrl || selectedFaculty.image}
               id={`modal-${selectedFaculty.id}`}
               sizes="128px"
             />

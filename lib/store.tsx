@@ -844,8 +844,22 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uFaculty = onSnapshot(
           collection(db, 'faculty'),
           (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FacultyMember[];
+            const list = snap.docs.map((d) => {
+              const data = d.data() as any;
+              const photo = data.imageUrl || data.image || '';
+              return {
+                id: d.id,
+                ...data,
+                imageUrl: photo,
+                image: photo,
+              } as FacultyMember;
+            });
             setFaculty(list);
+            setSelectedFaculty((currentSelected) => {
+              if (!currentSelected) return null;
+              const match = list.find((m) => m.id === currentSelected.id);
+              return match || currentSelected;
+            });
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
             setLastSyncedAt(new Date());
@@ -1500,9 +1514,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Faculty CRUD
   const addFaculty = (member: Omit<FacultyMember, 'id'>): FacultyMember => {
+    const photo = member.imageUrl || member.image || '';
     const newFac: FacultyMember = cleanFirestoreData({
       ...member,
       id: `fac-${Date.now()}`,
+      imageUrl: photo,
+      image: photo,
       status: member.status || 'Published',
     });
     setFaculty((prev) => [...prev, newFac]);
@@ -1513,10 +1530,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateFaculty = (id: string, updates: Partial<FacultyMember>) => {
-    const sanitized = cleanFirestoreData(updates);
+    const photo = updates.imageUrl !== undefined ? updates.imageUrl : updates.image !== undefined ? updates.image : undefined;
+    const normalizedUpdates: Partial<FacultyMember> = {
+      ...updates,
+      ...(photo !== undefined ? { imageUrl: photo, image: photo } : {}),
+    };
+    const sanitized = cleanFirestoreData(normalizedUpdates);
     setFaculty((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
+      prev.map((f) => (f.id === id ? { ...f, ...normalizedUpdates } : f))
     );
+    setSelectedFaculty((prev) => (prev && prev.id === id ? { ...prev, ...normalizedUpdates } : prev));
     setDoc(doc(db, 'faculty', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Faculty Member', id, updates.name || 'Faculty Member', 'Updated academic credentials, bio, and portrait image.');
     addToast('success', 'Faculty Profile Updated', 'Faculty details saved.');

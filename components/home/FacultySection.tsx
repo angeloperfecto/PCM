@@ -51,7 +51,7 @@ export const FacultySection: React.FC = () => {
                 <div className="h-64 overflow-hidden relative bg-[#070e1c]">
                   <FacultyPortrait
                     name={member.name}
-                    imageUrl={member.imageUrl}
+                    imageUrl={member.imageUrl || member.image}
                     id={`featured-${member.id}`}
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                     className="group-hover:scale-105 transition-transform duration-500"

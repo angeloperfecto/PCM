@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 
 interface FacultyPortraitProps {
@@ -35,24 +35,32 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   fill = true,
   priority = false,
 }) => {
-  const [hasError, setHasError] = useState(false);
   const resolvedImage = imageUrl || imageSrc || image;
+  const [failedImage, setFailedImage] = useState<string | null>(null);
+  const isImageFailed = Boolean(resolvedImage && failedImage === resolvedImage);
 
-  // If a valid custom photo is provided, render it
-  if (resolvedImage && resolvedImage.trim().length > 0 && !hasError) {
+  // If a valid custom photo is provided and hasn't failed to load, render it
+  if (resolvedImage && resolvedImage.trim().length > 0 && !isImageFailed) {
     const isSvg = resolvedImage.endsWith('.svg');
+    const isDataOrBlob = resolvedImage.startsWith('data:') || resolvedImage.startsWith('blob:');
+    const shouldUnoptimize = isSvg || isDataOrBlob || resolvedImage.startsWith('http');
+
     return (
       <div className={`relative w-full h-full overflow-hidden ${className}`}>
         <Image
+          key={resolvedImage}
           src={resolvedImage}
           alt={name}
           fill={fill}
-          className="object-cover object-top"
+          className="object-cover object-top w-full h-full"
           sizes={sizes}
           priority={priority}
-          unoptimized={isSvg}
+          unoptimized={shouldUnoptimize}
           referrerPolicy="no-referrer"
-          onError={() => setHasError(true)}
+          onError={() => {
+            console.warn(`Failed to load faculty portrait image for ${name}:`, resolvedImage);
+            setFailedImage(resolvedImage);
+          }}
         />
       </div>
     );
