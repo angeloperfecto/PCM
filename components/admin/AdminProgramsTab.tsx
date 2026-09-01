@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { Program } from '@/lib/types';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   BookOpen,
   Plus,
@@ -30,6 +31,7 @@ export const AdminProgramsTab: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProgram, setEditingProgram] = useState<Program | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Modal Form State
   const [formName, setFormName] = useState('');
@@ -134,10 +136,14 @@ export const AdminProgramsTab: React.FC = () => {
       return;
     }
 
-    if (confirm(`Are you sure you want to delete ${name}?`)) {
-      deleteProgram(id);
-      addToast({ title: 'Program Deleted', message: `${name} has been removed.`, type: 'info' });
-    }
+    setDeleteTarget({ id, name });
+  };
+
+  const confirmDeleteProg = () => {
+    if (!deleteTarget) return;
+    deleteProgram(deleteTarget.id);
+    addToast({ title: 'Program Deleted', message: `"${deleteTarget.name}" has been removed.`, type: 'info' });
+    setDeleteTarget(null);
   };
 
   const filteredPrograms = programs.filter((p) => {
@@ -426,6 +432,17 @@ export const AdminProgramsTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        title="Delete Academic Degree Program"
+        itemName={deleteTarget?.name}
+        message="Are you sure you want to delete this academic program and its curriculum specifications from the catalog?"
+        confirmLabel="Delete Program"
+        onConfirm={confirmDeleteProg}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

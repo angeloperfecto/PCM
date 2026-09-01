@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { MediaItem } from '@/lib/types';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   Image as ImageIcon,
   Plus,
@@ -29,6 +30,7 @@ export const AdminMediaTab: React.FC = () => {
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   // Upload/Add Media Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -100,10 +102,14 @@ export const AdminMediaTab: React.FC = () => {
       return;
     }
 
-    if (confirm(`Are you sure you want to remove "${title}"?`)) {
-      deleteMediaItem(id);
-      addToast({ title: 'Asset Removed', message: 'Media item deleted.', type: 'info' });
-    }
+    setDeleteTarget({ id, title });
+  };
+
+  const confirmDeleteMedia = () => {
+    if (!deleteTarget) return;
+    deleteMediaItem(deleteTarget.id);
+    addToast({ title: 'Asset Removed', message: `"${deleteTarget.title}" deleted.`, type: 'info' });
+    setDeleteTarget(null);
   };
 
   const filteredMedia = mediaLibrary.filter((m) => {
@@ -326,6 +332,17 @@ export const AdminMediaTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        title="Remove Media Asset"
+        itemName={deleteTarget?.title}
+        message="Are you sure you want to remove this asset from the media library?"
+        confirmLabel="Remove Asset"
+        onConfirm={confirmDeleteMedia}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

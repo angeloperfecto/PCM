@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { DonationPaymentMethod, DonationRecord, DonationSettings, PaymentMethodType, FeaturedCause } from '@/lib/types';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   Heart,
   Plus,
@@ -43,6 +44,8 @@ export const AdminDonationsTab: React.FC = () => {
   } = usePCM();
 
   const [activeSubTab, setActiveSubTab] = useState<'records' | 'channels' | 'settings'>('records');
+  const [deleteTargetRecord, setDeleteTargetRecord] = useState<DonationRecord | null>(null);
+  const [deleteTargetMethod, setDeleteTargetMethod] = useState<DonationPaymentMethod | null>(null);
 
   // Search & Filter for Donation Records
   const [searchTerm, setSearchTerm] = useState('');
@@ -442,11 +445,7 @@ export const AdminDonationsTab: React.FC = () => {
                             <Eye className="w-4 h-4" />
                           </button>
                           <button
-                            onClick={() => {
-                              if (confirm(`Delete donation record ${d.trackingCode}?`)) {
-                                deleteDonationRecord(d.id);
-                              }
-                            }}
+                            onClick={() => setDeleteTargetRecord(d)}
                             className="p-1.5 text-red-500 hover:bg-red-50 rounded-md transition cursor-pointer"
                             title="Delete Record"
                           >
@@ -556,11 +555,7 @@ export const AdminDonationsTab: React.FC = () => {
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={() => {
-                        if (confirm(`Remove payment channel "${m.name}"?`)) {
-                          deleteDonationMethod(m.id);
-                        }
-                      }}
+                      onClick={() => setDeleteTargetMethod(m)}
                       className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition cursor-pointer"
                       title="Delete Channel"
                     >
@@ -1011,6 +1006,40 @@ export const AdminDonationsTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal for Donation Records */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTargetRecord}
+        title="Delete Donation Record"
+        itemName={deleteTargetRecord ? `${deleteTargetRecord.trackingCode} - ₱${deleteTargetRecord.amount.toLocaleString()} (${deleteTargetRecord.donorName})` : undefined}
+        message="Are you sure you want to permanently delete this donation ledger record?"
+        confirmLabel="Delete Record"
+        onConfirm={() => {
+          if (deleteTargetRecord) {
+            deleteDonationRecord(deleteTargetRecord.id);
+            addToast({ title: 'Record Deleted', message: `Donation ${deleteTargetRecord.trackingCode} removed.`, type: 'info' });
+            setDeleteTargetRecord(null);
+          }
+        }}
+        onCancel={() => setDeleteTargetRecord(null)}
+      />
+
+      {/* Confirmation Modal for Payment Channels */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTargetMethod}
+        title="Delete Payment Channel"
+        itemName={deleteTargetMethod?.name}
+        message="Are you sure you want to permanently delete this payment channel from the giving portal?"
+        confirmLabel="Delete Channel"
+        onConfirm={() => {
+          if (deleteTargetMethod) {
+            deleteDonationMethod(deleteTargetMethod.id);
+            addToast({ title: 'Channel Deleted', message: `Payment channel "${deleteTargetMethod.name}" removed.`, type: 'info' });
+            setDeleteTargetMethod(null);
+          }
+        }}
+        onCancel={() => setDeleteTargetMethod(null)}
+      />
     </div>
   );
 };

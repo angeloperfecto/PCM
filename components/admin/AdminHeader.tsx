@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { Emblem } from '@/components/common/Emblem';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   LogOut,
   Shield,
@@ -40,6 +41,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   } = usePCM();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const pendingApps = applications.filter(
     (a) => a.status === 'Submitted' || a.status === 'Under Review'
@@ -92,14 +94,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       onResetClick();
       return;
     }
-    if (
-      typeof window !== 'undefined' &&
-      window.confirm(
-        'Are you sure you want to reset all CMS content and configurations to the original Philippine College of Ministry baseline?'
-      )
-    ) {
-      resetToInitialData();
-    }
+    setShowResetConfirm(true);
   };
 
   return (
@@ -218,6 +213,20 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={showResetConfirm}
+        title="Reset Baseline Database"
+        itemName="All Philippine College of Ministry CMS Records"
+        message="Are you sure you want to reset all CMS content, news, events, faculty profiles, and configurations to the original Philippine College of Ministry baseline?"
+        confirmLabel="Reset to Baseline"
+        onConfirm={() => {
+          resetToInitialData();
+          setShowResetConfirm(false);
+        }}
+        onCancel={() => setShowResetConfirm(false)}
+      />
     </header>
   );
 };

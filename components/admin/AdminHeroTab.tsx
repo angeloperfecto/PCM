@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { HeroSlide } from '@/lib/types';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   Sparkles,
   Plus,
@@ -23,6 +24,7 @@ export const AdminHeroTab: React.FC = () => {
 
   const [editingSlide, setEditingSlide] = useState<HeroSlide | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteTargetSlide, setDeleteTargetSlide] = useState<HeroSlide | null>(null);
 
   const [formHeadline, setFormHeadline] = useState('');
   const [formTag, setFormTag] = useState('');
@@ -127,7 +129,7 @@ export const AdminHeroTab: React.FC = () => {
     });
   };
 
-  const handleDeleteSlide = (id: string) => {
+  const handleDeleteSlide = (slide: HeroSlide) => {
     if (!canPerformAction('Content Admin')) {
       addToast({
         title: 'Permission Required',
@@ -146,13 +148,19 @@ export const AdminHeroTab: React.FC = () => {
       return;
     }
 
-    const updatedSlides = slides.filter((s) => s.id !== id);
+    setDeleteTargetSlide(slide);
+  };
+
+  const confirmDeleteSlide = () => {
+    if (!deleteTargetSlide) return;
+    const updatedSlides = slides.filter((s) => s.id !== deleteTargetSlide.id);
     updateSiteConfig({ ...siteConfig, heroSlides: updatedSlides });
     addToast({
       title: 'Slide Removed',
       message: 'The hero slide has been removed.',
       type: 'info',
     });
+    setDeleteTargetSlide(null);
   };
 
   const handleToggleSlideActive = (id: string) => {
@@ -288,7 +296,7 @@ export const AdminHeroTab: React.FC = () => {
 
               {/* Delete */}
               <button
-                onClick={() => handleDeleteSlide(slide.id)}
+                onClick={() => handleDeleteSlide(slide)}
                 className="p-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer"
                 title="Delete Slide"
               >
@@ -298,6 +306,17 @@ export const AdminHeroTab: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTargetSlide}
+        title="Delete Homepage Hero Slide"
+        itemName={deleteTargetSlide?.headline || deleteTargetSlide?.tag}
+        message="Are you sure you want to remove this hero slide from the homepage carousel?"
+        confirmLabel="Delete Slide"
+        onConfirm={confirmDeleteSlide}
+        onCancel={() => setDeleteTargetSlide(null)}
+      />
 
       {/* Modal: Add/Edit Slide */}
       {isModalOpen && (

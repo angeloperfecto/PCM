@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { Announcement } from '@/lib/types';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   Megaphone,
   Plus,
@@ -26,6 +27,7 @@ export const AdminAnnouncementsTab: React.FC = () => {
 
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState<'Admissions' | 'Academic' | 'Chapel' | 'Conference' | 'General'>('Admissions');
+  const [deleteTarget, setDeleteTarget] = useState<Announcement | null>(null);
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
@@ -156,7 +158,17 @@ export const AdminAnnouncementsTab: React.FC = () => {
               </button>
 
               <button
-                onClick={() => deleteAnnouncement(ann.id)}
+                onClick={() => {
+                  if (!canPerformAction('Editor')) {
+                    addToast({
+                      title: 'Permission Denied',
+                      message: 'You need Editor privileges to delete announcements.',
+                      type: 'error',
+                    });
+                    return;
+                  }
+                  setDeleteTarget(ann);
+                }}
                 className="p-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer"
                 title="Delete Announcement"
               >
@@ -166,6 +178,27 @@ export const AdminAnnouncementsTab: React.FC = () => {
           </div>
         ))}
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        title="Delete Announcement"
+        itemName={deleteTarget?.title}
+        message="Are you sure you want to remove this announcement from the campus bulletin and notification banner?"
+        confirmLabel="Delete Announcement"
+        onConfirm={() => {
+          if (deleteTarget) {
+            deleteAnnouncement(deleteTarget.id);
+            addToast({
+              title: 'Announcement Removed',
+              message: `"${deleteTarget.title}" has been deleted.`,
+              type: 'info',
+            });
+            setDeleteTarget(null);
+          }
+        }}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

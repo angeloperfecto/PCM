@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { PCMEvent } from '@/lib/types';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   Calendar,
   Plus,
@@ -29,6 +30,7 @@ export const AdminEventsTab: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<PCMEvent | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   // Modal Form State
   const [formTitle, setFormTitle] = useState('');
@@ -127,10 +129,14 @@ export const AdminEventsTab: React.FC = () => {
       return;
     }
 
-    if (confirm(`Are you sure you want to delete "${title}"?`)) {
-      deleteEvent(id);
-      addToast({ title: 'Event Deleted', message: 'The calendar event has been removed.', type: 'info' });
-    }
+    setDeleteTarget({ id, title });
+  };
+
+  const confirmDeleteEvent = () => {
+    if (!deleteTarget) return;
+    deleteEvent(deleteTarget.id);
+    addToast({ title: 'Event Deleted', message: `"${deleteTarget.title}" has been removed.`, type: 'info' });
+    setDeleteTarget(null);
   };
 
   const filteredEvents = events.filter((ev) => {
@@ -406,6 +412,17 @@ export const AdminEventsTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        title="Delete Calendar Event"
+        itemName={deleteTarget?.title}
+        message="Are you sure you want to cancel and delete this event from the college calendar?"
+        confirmLabel="Delete Event"
+        onConfirm={confirmDeleteEvent}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

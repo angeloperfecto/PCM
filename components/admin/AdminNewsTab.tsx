@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { NewsArticle } from '@/lib/types';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   Megaphone,
   Plus,
@@ -33,6 +34,7 @@ export const AdminNewsTab: React.FC = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<NewsArticle | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   // Modal Form State
   const [formTitle, setFormTitle] = useState('');
@@ -134,10 +136,14 @@ export const AdminNewsTab: React.FC = () => {
       return;
     }
 
-    if (confirm(`Are you sure you want to delete "${title}"?`)) {
-      deleteNewsArticle(id);
-      addToast({ title: 'Article Deleted', message: 'The article has been removed.', type: 'info' });
-    }
+    setDeleteTarget({ id, title });
+  };
+
+  const confirmDeleteArticle = () => {
+    if (!deleteTarget) return;
+    deleteNewsArticle(deleteTarget.id);
+    addToast({ title: 'Article Deleted', message: `"${deleteTarget.title}" has been removed.`, type: 'info' });
+    setDeleteTarget(null);
   };
 
   const handleTogglePublish = (id: string) => {
@@ -437,6 +443,17 @@ export const AdminNewsTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        title="Delete News Article"
+        itemName={deleteTarget?.title}
+        message="Are you sure you want to permanently delete this news article or feature release?"
+        confirmLabel="Delete Article"
+        onConfirm={confirmDeleteArticle}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

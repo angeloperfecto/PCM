@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { usePCM } from '@/lib/store';
 import { FacultyMember, MediaItem } from '@/lib/types';
 import { FacultyPortrait } from '@/components/common/FacultyPortrait';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   Users,
   Plus,
@@ -47,6 +48,7 @@ export const AdminFacultyTab: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFaculty, setEditingFaculty] = useState<FacultyMember | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   // Modal Form State
   const [formName, setFormName] = useState('');
@@ -241,10 +243,14 @@ export const AdminFacultyTab: React.FC = () => {
       return;
     }
 
-    if (confirm(`Are you sure you want to remove ${name} from the directory?`)) {
-      deleteFacultyMember(id);
-      addToast({ title: 'Profile Removed', message: `${name} has been removed.`, type: 'info' });
-    }
+    setDeleteTarget({ id, name });
+  };
+
+  const confirmDeleteFaculty = () => {
+    if (!deleteTarget) return;
+    deleteFacultyMember(deleteTarget.id);
+    addToast({ title: 'Profile Removed', message: `${deleteTarget.name} has been removed.`, type: 'info' });
+    setDeleteTarget(null);
   };
 
   const filteredFaculty = faculty.filter((f) => {
@@ -740,6 +746,17 @@ export const AdminFacultyTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        title="Delete Directory Profile"
+        itemName={deleteTarget?.name}
+        message="Are you sure you want to remove this faculty or staff member from the institutional directory?"
+        confirmLabel="Remove Profile"
+        onConfirm={confirmDeleteFaculty}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };

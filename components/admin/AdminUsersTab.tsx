@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { AdminUser, AdminRole, UserRole, UserAccount } from '@/lib/types';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   ShieldCheck,
   UserPlus,
@@ -35,6 +36,7 @@ export const AdminUsersTab: React.FC = () => {
   } = usePCM();
 
   const [isNewUserModalOpen, setIsNewUserModalOpen] = useState(false);
+  const [deleteTargetUser, setDeleteTargetUser] = useState<AdminUser | null>(null);
   const [newUsername, setNewUsername] = useState('');
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
@@ -138,10 +140,14 @@ export const AdminUsersTab: React.FC = () => {
       return;
     }
 
-    if (confirm(`Are you sure you want to permanently delete administrator account "${user.name}"?`)) {
-      deleteAdminUser(user.id);
-      addToast({ title: 'Account Deleted', message: `${user.name} was removed.`, type: 'info' });
-    }
+    setDeleteTargetUser(user);
+  };
+
+  const confirmDeleteAdmin = () => {
+    if (!deleteTargetUser) return;
+    deleteAdminUser(deleteTargetUser.id);
+    addToast({ title: 'Account Deleted', message: `Administrator "${deleteTargetUser.name}" was removed.`, type: 'info' });
+    setDeleteTargetUser(null);
   };
 
   const handleRoleChange = (userId: string, newRoleValue: AdminRole) => {
@@ -576,6 +582,17 @@ export const AdminUsersTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTargetUser}
+        title="Delete Administrator Account"
+        itemName={deleteTargetUser ? `${deleteTargetUser.name} (@${deleteTargetUser.username})` : undefined}
+        message="Are you sure you want to permanently revoke all access and delete this administrator account?"
+        confirmLabel="Delete Account"
+        onConfirm={confirmDeleteAdmin}
+        onCancel={() => setDeleteTargetUser(null)}
+      />
     </div>
   );
 };

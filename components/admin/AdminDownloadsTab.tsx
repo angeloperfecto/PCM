@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { DownloadResource } from '@/lib/types';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   Download,
   Plus,
@@ -26,6 +27,7 @@ export const AdminDownloadsTab: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [formTitle, setFormTitle] = useState('');
   const [formCategory, setFormCategory] = useState<'Admissions' | 'Academic' | 'Theology' | 'Institutional' | 'Forms'>('Admissions');
   const [formType, setFormType] = useState('PDF');
@@ -75,10 +77,14 @@ export const AdminDownloadsTab: React.FC = () => {
       return;
     }
 
-    if (confirm(`Are you sure you want to delete "${title}"?`)) {
-      deleteDownloadResource(id);
-      addToast({ title: 'Resource Deleted', message: 'File has been removed from download center.', type: 'info' });
-    }
+    setDeleteTarget({ id, title });
+  };
+
+  const confirmDeleteDownload = () => {
+    if (!deleteTarget) return;
+    deleteDownloadResource(deleteTarget.id);
+    addToast({ title: 'Resource Deleted', message: `"${deleteTarget.title}" has been removed from download center.`, type: 'info' });
+    setDeleteTarget(null);
   };
 
   const filteredDownloads = downloads.filter((d) => {
@@ -297,6 +303,17 @@ export const AdminDownloadsTab: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        title="Delete Download Resource"
+        itemName={deleteTarget?.title}
+        message="Are you sure you want to permanently delete this downloadable file from the student and faculty download catalog?"
+        confirmLabel="Delete File"
+        onConfirm={confirmDeleteDownload}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 };
