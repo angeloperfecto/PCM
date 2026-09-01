@@ -301,147 +301,307 @@ export const AboutView: React.FC = () => {
               Institutional Governance & Academic Leadership
             </span>
             <h2 className="font-serif text-3xl sm:text-4xl font-extrabold text-[#18392B]">
-              PCM BOARD OF TRUSTEES, FACULTY AND STAFFS
+              PCM BOARD OF TRUSTEES, FACULTY AND STAFF
             </h2>
             <p className="text-xs sm:text-sm text-slate-600 max-w-2xl mx-auto leading-relaxed">
-              Authoritative directory of the Philippine College of Ministry Board of Trustees, institutional administrators, academic deans, and teaching faculty. Click any card to inspect full degrees and academic disciplines.
+              Authoritative directory of the Philippine College of Ministry Board of Trustees, institutional administrators, academic deans, teaching faculty, and administrative staff. Click any card to inspect full degrees and academic disciplines.
             </p>
           </div>
 
           {/* Directory Filter & Search */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-[#F8FAF9] p-4 rounded-xl border border-[#D0DED8]">
-            {/* Category Buttons */}
-            <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
-              {[
-                { id: 'all', label: 'All Directory', count: faculty.length },
-                { id: 'Board of Trustees', label: 'Board of Trustees', count: faculty.filter(f => f.group === 'Board of Trustees').length },
-                { id: 'Key Administrators', label: 'Administration', count: faculty.filter(f => f.group === 'Key Administrators' || f.group === 'Administration').length },
-                { id: 'Resident Faculty', label: 'Faculty & Staff', count: faculty.filter(f => f.group === 'Resident Faculty' || f.group === 'Faculty' || f.group === 'Administrative Staff').length },
-                { id: 'Adjunct Faculty', label: 'Adjunct & Emeritus', count: faculty.filter(f => f.group === 'Adjunct Faculty' || f.group === 'Emeritus & Adjunct').length },
-              ].map((tab) => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveCategory(tab.id)}
-                  className={`text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
-                    activeCategory === tab.id
-                      ? 'bg-[#18392B] text-white shadow-xs'
-                      : 'bg-white text-slate-700 hover:bg-[#D0DED8]/50 border border-slate-200'
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  <span className={`ml-1.5 text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    activeCategory === tab.id ? 'bg-[#588B76] text-[#18392B] font-bold' : 'bg-slate-100 text-slate-500'
-                  }`}>
-                    {tab.count}
-                  </span>
-                </button>
-              ))}
-            </div>
+          {(() => {
+            type DirectoryCategory = 'Board of Trustees' | 'Administration' | 'Faculty' | 'Staff' | 'Adjunct & Emeritus';
 
-            {/* Search Input */}
-            <div className="w-full md:w-72">
-              <input
-                type="text"
-                placeholder="Search name, degree, or subject..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#588B76] focus:ring-1 focus:ring-[#588B76]"
-              />
-            </div>
-          </div>
+            const getMemberCategory = (f: any): DirectoryCategory => {
+              const grp = (f.group || '').toLowerCase();
+              const role = (f.role || '').toLowerCase();
+              const title = (f.title || '').toLowerCase();
+              const name = (f.name || '').toLowerCase();
 
-          {/* Personnel Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {faculty
-              .filter((f) => {
-                if (activeCategory === 'Key Administrators' && f.group !== 'Key Administrators' && f.group !== 'Administration') return false;
-                if (activeCategory === 'Resident Faculty' && f.group !== 'Resident Faculty' && f.group !== 'Faculty' && f.group !== 'Administrative Staff') return false;
-                if (activeCategory === 'Adjunct Faculty' && f.group !== 'Adjunct Faculty' && f.group !== 'Emeritus & Adjunct') return false;
-                if (activeCategory !== 'all' && activeCategory !== 'Key Administrators' && activeCategory !== 'Resident Faculty' && activeCategory !== 'Adjunct Faculty' && f.group !== activeCategory) return false;
-                
-                if (!searchQuery.trim()) return true;
-                const q = searchQuery.toLowerCase();
-                return (
-                  (f.name && f.name.toLowerCase().includes(q)) ||
-                  (f.title && f.title.toLowerCase().includes(q)) ||
-                  (f.role && f.role.toLowerCase().includes(q)) ||
-                  (f.department && f.department.toLowerCase().includes(q)) ||
-                  (f.credentials && f.credentials.toLowerCase().includes(q)) ||
-                  (f.degrees || []).some((d) => d.toLowerCase().includes(q)) ||
-                  (f.subjectTaught || []).some((s) => s.toLowerCase().includes(q)) ||
-                  (f.coursesTaught || []).some((c) => c.toLowerCase().includes(q))
-                );
-              })
-              .map((f) => (
-                <div
-                  key={f.id}
-                  onClick={() => setSelectedFaculty(f)}
-                  className="bg-white rounded-xl p-5 border border-slate-200 hover:border-[#588B76] shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
-                >
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-4">
-                      <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 border-[#588B76] shrink-0 bg-[#070e1c] flex items-center justify-center shadow-xs">
-                        <FacultyPortrait
-                          name={f.name}
-                          imageSrc={f.image || f.imageUrl}
-                          id={`dir-${f.id}`}
-                          sizes="80px"
-                          className="group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </div>
-                      <div className="space-y-1 min-w-0 flex-1">
-                        <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#588B76] bg-[#588B76]/10 px-2 py-0.5 rounded border border-[#588B76]/20 inline-block truncate max-w-full">
-                          {f.group || f.role}
-                        </span>
-                        <h4 className="font-serif text-base font-bold text-[#18392B] group-hover:text-[#588B76] transition-colors leading-snug">
-                          {f.name}
-                        </h4>
-                        <p className="text-xs text-slate-700 font-semibold leading-tight">
-                          {f.role || f.title}
-                        </p>
-                      </div>
-                    </div>
+              // 1. Primary Reference: Board of Trustees
+              if (
+                grp.includes('board') ||
+                grp.includes('trustee') ||
+                role.includes('board of trustee') ||
+                role.includes('trustee') ||
+                title.includes('board of trustee') ||
+                title.includes('trustee') ||
+                name.includes('laruta') ||
+                name.includes('ali') ||
+                name.includes('batuna') ||
+                name.includes('aliba') ||
+                name.includes('marquez') ||
+                name.includes('suello') ||
+                name.includes('hong') ||
+                name.includes('dungo')
+              ) {
+                return 'Board of Trustees';
+              }
 
-                    {/* Degrees & Subjects Preview */}
-                    <div className="space-y-2 pt-2 border-t border-slate-100 text-xs">
-                      {f.degrees && f.degrees.length > 0 && (
-                        <div className="space-y-1">
-                          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase block">
-                            Academic Credentials
+              // 2. Emeritus & Adjunct
+              if (
+                grp.includes('emeritus') ||
+                grp.includes('adjunct') ||
+                role.includes('emeritus') ||
+                role.includes('adjunct') ||
+                title.includes('emeritus') ||
+                title.includes('adjunct') ||
+                name.includes('huckaba') ||
+                name.includes('lubag')
+              ) {
+                return 'Adjunct & Emeritus';
+              }
+
+              // 3. Administration (President, Deans, Registrar, Business Administrator)
+              if (
+                grp === 'administration' ||
+                grp === 'key administrators' ||
+                role.includes('president') ||
+                role.includes('business administrator') ||
+                role.includes('academic dean') ||
+                role.includes('dean of student') ||
+                role.includes('registrar') ||
+                title.includes('president') ||
+                title.includes('business administrator') ||
+                title.includes('academic dean') ||
+                title.includes('dean of student') ||
+                title.includes('registrar') ||
+                name.includes('pasion') ||
+                name.includes('cruz') ||
+                name.includes('santos') ||
+                name.includes('agayao') ||
+                name.includes('cabalar')
+              ) {
+                return 'Administration';
+              }
+
+              // 4. Staff (Librarian, Finance Officers, Administrative Staff)
+              if (
+                grp === 'administrative staff' ||
+                grp === 'staff' ||
+                role.includes('librarian') ||
+                role.includes('finance officer') ||
+                role.includes('staff of finance') ||
+                title.includes('librarian') ||
+                title.includes('finance officer') ||
+                title.includes('administrative office') ||
+                name.includes('benalio, marlon') ||
+                name.includes('marlon t. benalio') ||
+                name.includes('virtudazo') ||
+                name.includes('bacuyag')
+              ) {
+                return 'Staff';
+              }
+
+              // 5. Resident Faculty (Teaching Faculty, Professors, Course Facilitators)
+              return 'Faculty';
+            };
+
+            const CATEGORY_TABS: { id: string; label: string; description: string }[] = [
+              { id: 'all', label: 'All Directory', description: 'Complete Institutional Directory' },
+              { id: 'Board of Trustees', label: 'Board of Trustees', description: 'Governing Board of Trustees' },
+              { id: 'Administration', label: 'Administration', description: 'Institutional & Academic Leadership' },
+              { id: 'Faculty', label: 'Faculty', description: 'Resident & Teaching Faculty' },
+              { id: 'Staff', label: 'Staff', description: 'Administrative & Operational Staff' },
+              { id: 'Adjunct & Emeritus', label: 'Adjunct & Emeritus', description: 'Emeritus Deans & Adjunct Professors' },
+            ];
+
+            const categorizedFaculty = faculty.map((f) => ({
+              ...f,
+              calculatedCategory: getMemberCategory(f),
+            }));
+
+            const matchesSearch = (f: any) => {
+              if (!searchQuery.trim()) return true;
+              const q = searchQuery.toLowerCase();
+              return (
+                (f.name && f.name.toLowerCase().includes(q)) ||
+                (f.title && f.title.toLowerCase().includes(q)) ||
+                (f.role && f.role.toLowerCase().includes(q)) ||
+                (f.department && f.department.toLowerCase().includes(q)) ||
+                (f.credentials && f.credentials.toLowerCase().includes(q)) ||
+                (f.calculatedCategory && f.calculatedCategory.toLowerCase().includes(q)) ||
+                (f.degrees || []).some((d: string) => d.toLowerCase().includes(q)) ||
+                (f.subjectTaught || []).some((s: string) => s.toLowerCase().includes(q)) ||
+                (f.coursesTaught || []).some((c: string) => c.toLowerCase().includes(q))
+              );
+            };
+
+            const filteredFaculty = categorizedFaculty.filter((f) => {
+              if (activeCategory !== 'all' && f.calculatedCategory !== activeCategory) return false;
+              return matchesSearch(f);
+            });
+
+            const categoriesToDisplay = activeCategory === 'all'
+              ? (['Board of Trustees', 'Administration', 'Faculty', 'Staff', 'Adjunct & Emeritus'] as DirectoryCategory[])
+              : [activeCategory as DirectoryCategory];
+
+            return (
+              <div className="space-y-8">
+                {/* Directory Filter & Search */}
+                <div className="flex flex-col md:flex-row items-center justify-between gap-4 bg-[#F8FAF9] p-4 rounded-xl border border-[#D0DED8]">
+                  {/* Category Buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5 w-full md:w-auto">
+                    {CATEGORY_TABS.map((tab) => {
+                      const count = tab.id === 'all'
+                        ? categorizedFaculty.length
+                        : categorizedFaculty.filter((f) => f.calculatedCategory === tab.id).length;
+
+                      return (
+                        <button
+                          key={tab.id}
+                          onClick={() => setActiveCategory(tab.id)}
+                          className={`text-xs font-semibold px-3.5 py-1.5 rounded-lg transition-all cursor-pointer ${
+                            activeCategory === tab.id
+                              ? 'bg-[#18392B] text-white shadow-xs'
+                              : 'bg-white text-slate-700 hover:bg-[#D0DED8]/50 border border-slate-200'
+                          }`}
+                        >
+                          <span>{tab.label}</span>
+                          <span
+                            className={`ml-1.5 text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
+                              activeCategory === tab.id ? 'bg-[#588B76] text-[#18392B] font-bold' : 'bg-slate-100 text-slate-500'
+                            }`}
+                          >
+                            {count}
                           </span>
-                          <div className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed font-sans">
-                            {f.degrees.join(' • ')}
-                          </div>
-                        </div>
-                      )}
-
-                      {(f.subjectTaught || f.coursesTaught) && (
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {(f.subjectTaught || f.coursesTaught || []).slice(0, 2).map((subj, idx) => (
-                            <span
-                              key={idx}
-                              className="bg-[#F8FAF9] text-[#18392B] border border-[#D0DED8] text-[10px] px-2 py-0.5 rounded font-medium truncate max-w-full"
-                            >
-                              {subj}
-                            </span>
-                          ))}
-                          {(f.subjectTaught || f.coursesTaught || []).length > 2 && (
-                            <span className="text-[10px] font-mono text-[#588B76] font-bold self-center">
-                              +{(f.subjectTaught || f.coursesTaught || []).length - 2} more
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                        </button>
+                      );
+                    })}
                   </div>
 
-                  <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-[#18392B] group-hover:text-[#588B76] font-semibold">
-                    <span>View Academic Profile</span>
-                    <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />
+                  {/* Search Input */}
+                  <div className="w-full md:w-72">
+                    <input
+                      type="text"
+                      placeholder="Search name, role, degree, or course..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:border-[#588B76] focus:ring-1 focus:ring-[#588B76]"
+                    />
                   </div>
                 </div>
-              ))}
-          </div>
+
+                {/* Categorized Personnels Display */}
+                {filteredFaculty.length === 0 ? (
+                  <div className="text-center py-12 bg-[#F8FAF9] rounded-xl border border-[#D0DED8] space-y-2">
+                    <p className="text-sm font-semibold text-slate-700">No personnel found matching &ldquo;{searchQuery}&rdquo;</p>
+                    <button
+                      onClick={() => {
+                        setSearchQuery('');
+                        setActiveCategory('all');
+                      }}
+                      className="text-xs text-[#588B76] hover:underline font-semibold"
+                    >
+                      Clear filters and view all
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-10">
+                    {categoriesToDisplay.map((catKey) => {
+                      const membersInCat = filteredFaculty.filter((f) => f.calculatedCategory === catKey);
+                      if (membersInCat.length === 0) return null;
+
+                      const catMeta = CATEGORY_TABS.find((t) => t.id === catKey);
+
+                      return (
+                        <div key={catKey} className="space-y-4">
+                          {/* Category Header */}
+                          <div className="flex items-center justify-between pb-2 border-b-2 border-[#18392B]/15">
+                            <div className="flex items-center gap-2.5">
+                              <span className="w-2.5 h-2.5 rounded-full bg-[#588B76]" />
+                              <h3 className="font-serif text-lg sm:text-xl font-bold text-[#18392B]">
+                                {catMeta?.label || catKey}
+                              </h3>
+                              <span className="text-[11px] font-mono font-bold text-[#588B76] bg-[#588B76]/10 px-2 py-0.5 rounded-full border border-[#588B76]/20">
+                                {membersInCat.length}
+                              </span>
+                            </div>
+                            <span className="text-xs text-slate-500 hidden sm:inline-block font-sans">
+                              {catMeta?.description}
+                            </span>
+                          </div>
+
+                          {/* Cards Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {membersInCat.map((f) => (
+                              <div
+                                key={f.id}
+                                onClick={() => setSelectedFaculty(f)}
+                                className="bg-white rounded-xl p-5 border border-slate-200 hover:border-[#588B76] shadow-xs hover:shadow-md transition-all cursor-pointer flex flex-col justify-between group"
+                              >
+                                <div className="space-y-4">
+                                  <div className="flex items-start gap-4">
+                                    <div className="relative w-18 h-18 sm:w-20 sm:h-20 rounded-xl overflow-hidden border-2 border-[#588B76] shrink-0 bg-[#070e1c] flex items-center justify-center shadow-xs">
+                                      <FacultyPortrait
+                                        name={f.name}
+                                        imageSrc={f.image || f.imageUrl}
+                                        id={`dir-${f.id}`}
+                                        sizes="80px"
+                                        className="group-hover:scale-105 transition-transform duration-300"
+                                      />
+                                    </div>
+                                    <div className="space-y-1 min-w-0 flex-1">
+                                      <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#588B76] bg-[#588B76]/10 px-2 py-0.5 rounded border border-[#588B76]/20 inline-block truncate max-w-full">
+                                        {f.calculatedCategory}
+                                      </span>
+                                      <h4 className="font-serif text-base font-bold text-[#18392B] group-hover:text-[#588B76] transition-colors leading-snug">
+                                        {f.name}
+                                      </h4>
+                                      <p className="text-xs text-slate-700 font-semibold leading-tight">
+                                        {f.role || f.title}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Degrees & Subjects Preview */}
+                                  <div className="space-y-2 pt-2 border-t border-slate-100 text-xs">
+                                    {f.degrees && f.degrees.length > 0 && (
+                                      <div className="space-y-1">
+                                        <span className="text-[10px] font-mono font-bold text-slate-400 uppercase block">
+                                          Academic Credentials
+                                        </span>
+                                        <div className="text-[11px] text-slate-600 line-clamp-2 leading-relaxed font-sans">
+                                          {f.degrees.join(' • ')}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {(f.subjectTaught || f.coursesTaught) && (
+                                      <div className="flex flex-wrap gap-1 pt-1">
+                                        {(f.subjectTaught || f.coursesTaught || []).slice(0, 2).map((subj: string, idx: number) => (
+                                          <span
+                                            key={idx}
+                                            className="bg-[#F8FAF9] text-[#18392B] border border-[#D0DED8] text-[10px] px-2 py-0.5 rounded font-medium truncate max-w-full"
+                                          >
+                                            {subj}
+                                          </span>
+                                        ))}
+                                        {(f.subjectTaught || f.coursesTaught || []).length > 2 && (
+                                          <span className="text-[10px] font-mono text-[#588B76] font-bold self-center">
+                                            +{(f.subjectTaught || f.coursesTaught || []).length - 2} more
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+
+                                <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-[#18392B] group-hover:text-[#588B76] font-semibold">
+                                  <span>View Academic Profile</span>
+                                  <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </section>
       </div>
     </div>
