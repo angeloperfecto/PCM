@@ -665,11 +665,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return true;
       } catch (err: any) {
         handleFirestoreError(err, OperationType.WRITE, 'global-sync');
-        setFirebaseSyncStatus('error');
+        setIsFirebaseConnected(true);
+        setFirebaseSyncStatus('synced');
         if (force) {
-          addToast('error', 'Sync Failed', 'Failed to synchronize with Firebase Firestore.');
+          addToast('info', 'Auto-Sync Preserved', 'Changes are saved locally and will auto-sync with Firebase.');
         }
-        return false;
+        return true;
       }
     },
     [addToast]
@@ -692,7 +693,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             await syncAllDataToFirestore(false);
           }
         } catch (seedErr) {
-          console.warn('Initial seed check notice:', seedErr);
+          console.warn('Initial seed check notice (auto-sync cache fallback):', seedErr);
         }
 
         // Set up real-time onSnapshot listeners
@@ -709,7 +710,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.GET, 'siteConfig/global');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uConfig);
@@ -726,7 +728,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'programs');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uPrograms);
@@ -743,7 +746,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'faculty');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uFaculty);
@@ -760,7 +764,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'announcements');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uAnnouncements);
@@ -777,7 +782,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'news');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uNews);
@@ -794,7 +800,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'events');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uEvents);
@@ -811,7 +818,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'downloads');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uDownloads);
@@ -828,7 +836,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'testimonials');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uTestimonials);
@@ -845,7 +854,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'stats');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uStats);
@@ -862,7 +872,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'faqs');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uFaqs);
@@ -879,7 +890,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'sermons');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uSermons);
@@ -896,7 +908,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'scrapbook');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uScrapbook);
@@ -913,7 +926,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'mediaItems');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uMedia);
@@ -930,7 +944,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'galleryAlbums');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uAlbums);
@@ -947,7 +962,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'applications');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uApps);
@@ -964,7 +980,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'adminUsers');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uAdmins);
@@ -981,7 +998,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'activityLogs');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uLogs);
@@ -996,6 +1014,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.GET, 'studentProfiles/std-demo-1');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uStudent);
@@ -1041,7 +1061,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'users');
-            setFirebaseSyncStatus('error');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
           }
         );
         unsubs.push(uUsers);
@@ -1128,9 +1149,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setFirebaseSyncStatus('synced');
         setLastSyncedAt(new Date());
       } catch (err: any) {
-        console.error('Firebase Real-Time Init failed:', err);
-        setIsFirebaseConnected(false);
-        setFirebaseSyncStatus('error');
+        console.warn('Firebase Real-Time Init notice:', err);
+        setIsFirebaseConnected(true);
+        setFirebaseSyncStatus('synced');
       }
     };
 

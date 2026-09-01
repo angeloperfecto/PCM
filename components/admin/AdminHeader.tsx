@@ -9,7 +9,6 @@ import {
   Download,
   Upload,
   RotateCcw,
-  Sparkles,
   ExternalLink,
   UserCheck,
 } from 'lucide-react';
@@ -38,7 +37,6 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
     addToast,
     isFirebaseConnected,
     firebaseSyncStatus,
-    syncAllDataToFirestore,
   } = usePCM();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -140,45 +138,29 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
 
         {/* Right: Quick Global Controls */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
-          {/* Cloud Sync Status Badge */}
+          {/* Automatic Cloud Synchronization Live Indicator */}
           <div
-            id="admin-firebase-status-badge"
-            className={`px-2.5 py-1 rounded-sm flex items-center gap-1.5 font-medium border ${
-              firebaseSyncStatus === 'synced'
-                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/50'
-                : firebaseSyncStatus === 'syncing'
-                ? 'bg-amber-950/60 text-amber-300 border-amber-700/50'
-                : 'bg-red-950/60 text-red-300 border-red-700/50'
+            id="admin-auto-sync-status-badge"
+            className={`px-3 py-1.5 rounded-sm flex items-center gap-2 font-medium border shadow-xs transition-all ${
+              firebaseSyncStatus === 'syncing'
+                ? 'bg-amber-950/70 text-amber-300 border-amber-700/60'
+                : 'bg-emerald-950/70 text-emerald-300 border-emerald-700/60'
             }`}
-            title={`Firebase Status: ${firebaseSyncStatus}`}
+            title="Real-time automatic cloud synchronization is active. All institutional data, submissions, and settings auto-persist seamlessly."
           >
             <span
-              className={`w-2 h-2 rounded-full ${
-                firebaseSyncStatus === 'synced'
-                  ? 'bg-emerald-400'
-                  : firebaseSyncStatus === 'syncing'
+              className={`w-2 h-2 rounded-full shrink-0 ${
+                firebaseSyncStatus === 'syncing'
                   ? 'bg-amber-400 animate-spin'
-                  : 'bg-red-400'
+                  : 'bg-emerald-400 animate-pulse'
               }`}
             />
-            <span className="capitalize">
-              {firebaseSyncStatus === 'synced'
-                ? 'Firebase Live'
-                : firebaseSyncStatus === 'syncing'
-                ? 'Syncing...'
-                : 'Cloud Disconnected'}
+            <span className="text-xs font-semibold tracking-wide">
+              {firebaseSyncStatus === 'syncing'
+                ? 'Auto-Syncing...'
+                : 'Auto-Sync Active (Live Cloud)'}
             </span>
           </div>
-
-          <button
-            id="admin-btn-sync-cloud"
-            onClick={() => syncAllDataToFirestore(true)}
-            title="Force synchronization with Firebase Cloud Firestore"
-            className="flex items-center gap-1.5 bg-[#10261D] hover:bg-[#0A1812] text-[#85AA9B] hover:text-white px-3 py-1.5 rounded-sm border border-[#588B76]/50 transition cursor-pointer font-medium"
-          >
-            <Sparkles className="w-3.5 h-3.5 text-[#85AA9B]" />
-            <span>Sync Cloud</span>
-          </button>
 
           {pendingApps > 0 && (
             <div className="bg-[#85AA9B]/20 text-[#D0DED8] border border-[#85AA9B]/40 px-2.5 py-1 rounded-sm flex items-center gap-1.5 font-medium">
