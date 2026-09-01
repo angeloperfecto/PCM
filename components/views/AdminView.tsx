@@ -136,15 +136,32 @@ export const AdminView: React.FC = () => {
   };
 
   const handleGoogleAdminLogin = async () => {
+    // If student is currently active in session, forbid immediately
+    if (currentUserAccount?.role === 'Student' || isStudentLoggedIn) {
+      addToast({
+        title: 'Access Prohibited',
+        message: 'You are currently signed in as a Student. Student accounts are not permitted to access or register in the Admin Portal. Please sign out from your student session first.',
+        type: 'error',
+      });
+      return;
+    }
+
     setIsGoogleSigningIn(true);
     try {
       const res = await signInWithGoogle();
       if (res.success) {
-        if (res.role === 'Student') {
+        if (res.role === 'Student' || res.user?.role === 'Student') {
           addToast({
-            title: 'Admin Access Denied',
-            message: 'Your Google account is registered as a Student. Student accounts cannot access the Administrator CMS.',
+            title: 'Administrator Access Denied',
+            message: 'Your Google/Gmail account is registered as a Student. Student accounts are strictly prohibited from signing in or registering in the Administrator CMS.',
             type: 'error',
+          });
+          navigateTo('portal');
+        } else if (res.role === 'Admin') {
+          addToast({
+            title: 'Administrator Verified',
+            message: 'Welcome to Philippine College of Ministry Institutional CMS Workspace.',
+            type: 'success',
           });
         }
       } else {

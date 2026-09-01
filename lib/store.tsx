@@ -2049,10 +2049,23 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addAdminUser = (user: Omit<AdminUser, 'id' | 'createdAt'>): AdminUser => {
-    if (currentUserAccount?.role === 'Student' || !isAdminLoggedIn) {
+    if (currentUserAccount?.role === 'Student' || isStudentLoggedIn || !isAdminLoggedIn) {
       addToast('error', 'Permission Denied', 'Student accounts cannot create admin users.');
       throw new Error('Unauthorized');
     }
+
+    const emailLower = user.email.trim().toLowerCase();
+    const isExistingStudent =
+      userAccounts.some((u) => u.email?.toLowerCase() === emailLower && u.role === 'Student') ||
+      studentProfile?.email?.toLowerCase() === emailLower ||
+      emailLower.endsWith('@student.pcm.edu.ph') ||
+      applications.some((app) => app.email.toLowerCase() === emailLower && app.status === 'Enrolled');
+
+    if (isExistingStudent) {
+      addToast('error', 'Registration Conflict', 'This email is already registered as a Student account. Registered students cannot be added as Admin users.');
+      throw new Error('Student accounts cannot be registered as Admin users.');
+    }
+
     const newUser: AdminUser = cleanFirestoreData({
       ...user,
       id: `adm-${Date.now()}`,
@@ -2066,7 +2079,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAdminUser = (id: string, updates: Partial<AdminUser>) => {
-    if (currentUserAccount?.role === 'Student' || !isAdminLoggedIn) {
+    if (currentUserAccount?.role === 'Student' || isStudentLoggedIn || !isAdminLoggedIn) {
       addToast('error', 'Permission Denied', 'Student accounts cannot modify admin users.');
       return;
     }
@@ -2080,7 +2093,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteAdminUser = (id: string) => {
-    if (currentUserAccount?.role === 'Student' || !isAdminLoggedIn) {
+    if (currentUserAccount?.role === 'Student' || isStudentLoggedIn || !isAdminLoggedIn) {
       addToast('error', 'Permission Denied', 'Student accounts cannot delete admin users.');
       return;
     }
@@ -2102,13 +2115,42 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const fbUser = result.user;
       const emailLower = fbUser.email?.toLowerCase() || '';
 
-      const isBootstrapAdmin =
+      // Check if user is already registered as a student in Firestore, local user list, or student profile
+      let isRegisteredStudent =
+        userAccounts.some((u) => (u.email?.toLowerCase() === emailLower || u.uid === fbUser.uid) && u.role === 'Student') ||
+        studentProfile?.email?.toLowerCase() === emailLower ||
+        emailLower.endsWith('@student.pcm.edu.ph') ||
+        applications.some((app) => app.email.toLowerCase() === emailLower && app.status === 'Enrolled');
+
+      let storedRole: UserRole | undefined;
+      try {
+        const userDocRef = doc(db, 'users', fbUser.uid);
+        const snap = await getDoc(userDocRef);
+        if (snap.exists()) {
+          const stored = snap.data() as UserAccount;
+          if (stored.role === 'Student') {
+            isRegisteredStudent = true;
+            storedRole = 'Student';
+          } else if (stored.role === 'Admin') {
+            storedRole = 'Admin';
+          }
+        }
+      } catch (firestoreErr) {
+        console.warn('Firestore profile lookup notice:', firestoreErr);
+      }
+
+      // If registered or signed in as a student, NEVER grant or elevate to Admin role
+      const isBootstrapAdmin = !isRegisteredStudent && (
+        storedRole === 'Admin' ||
         emailLower === 'angeloperfecto.epc@gmail.com' ||
         emailLower === 'president@pcm.edu.ph' ||
         emailLower === 'admin@pcm.ph' ||
         emailLower.includes('president') ||
         emailLower.includes('admin@pcm') ||
-        adminUsers.some((u) => u.email.toLowerCase() === emailLower);
+        adminUsers.some((u) => u.email.toLowerCase() === emailLower)
+      );
+
+      const assignedRole: UserRole = isBootstrapAdmin ? 'Admin' : 'Student';
 
       let accountData: UserAccount = {
         id: fbUser.uid,
@@ -2118,10 +2160,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM Member',
         photoURL: fbUser.photoURL || '',
         avatarUrl: fbUser.photoURL || '',
-        role: isBootstrapAdmin ? 'Admin' : 'Student',
-        adminRole: isBootstrapAdmin ? 'Super Admin' : undefined,
-        studentId: isBootstrapAdmin ? undefined : '2024-PCM-0418',
-        department: isBootstrapAdmin ? 'Administration & Executive Leadership' : 'Undergraduate Theology',
+        role: isRegisteredStudent ? 'Student' : assignedRole,
+        adminRole: isRegisteredStudent ? undefined : (isBootstrapAdmin ? 'Super Admin' : undefined),
+        studentId: isRegisteredStudent || assignedRole === 'Student' ? '2024-PCM-0418' : undefined,
+        department: isRegisteredStudent || assignedRole === 'Student' ? 'Undergraduate Theology' : 'Administration & Executive Leadership',
         status: 'Active',
         provider: 'google.com',
         emailVerified: fbUser.emailVerified,
@@ -2138,8 +2180,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           accountData = {
             ...accountData,
             ...stored,
+            role: isRegisteredStudent ? 'Student' : (stored.role || accountData.role),
+            adminRole: isRegisteredStudent ? undefined : (stored.role === 'Admin' ? (stored.adminRole || 'Super Admin') : undefined),
             lastLogin: new Date().toISOString(),
-            ...(isBootstrapAdmin ? { role: 'Admin', adminRole: 'Super Admin' } : {}),
           };
         }
         setDoc(userDocRef, accountData, { merge: true }).catch((err) => {
@@ -2161,8 +2204,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return [accountData, ...prev];
       });
 
-      if (accountData.role === 'Admin') {
+      if (accountData.role === 'Admin' && !isRegisteredStudent) {
         setIsAdminLoggedIn(true);
+        setIsStudentLoggedIn(false);
         setCurrentAdminUser({
           id: accountData.uid,
           name: accountData.name,
@@ -2175,8 +2219,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           avatarUrl: accountData.photoURL,
         });
         addToast('success', 'Google Admin Authenticated', `Welcome back, ${accountData.name}! Full CMS access granted.`);
-      } else if (accountData.role === 'Student') {
+      } else {
+        // Student role
         setIsStudentLoggedIn(true);
+        setIsAdminLoggedIn(false);
         setStudentProfile((prev) => ({
           ...prev,
           fullName: accountData.name,
@@ -2184,8 +2230,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           avatarUrl: accountData.photoURL || prev.avatarUrl,
         }));
         addToast('success', 'Google Sign-in Successful', `Welcome to MyPCM Student Portal, ${accountData.name}!`);
-      } else {
-        addToast('success', 'Welcome to PCM', `Signed in as ${accountData.name} (${accountData.role}).`);
       }
 
       logActivity('LOGIN', 'Google Auth', accountData.uid, accountData.name, `Authenticated via Google (${accountData.email} - ${accountData.role}).`);
