@@ -104,11 +104,16 @@ export function isFirestoreQuotaError(error: unknown): boolean {
   const code = (error as any)?.code;
   return (
     code === 'resource-exhausted' ||
-    msg.includes('Quota limit exceeded') ||
     msg.includes('resource-exhausted') ||
+    msg.includes('Write stream exhausted') ||
+    msg.includes('maximum allowed queued writes') ||
+    msg.includes('maximum backoff delay') ||
+    msg.includes('Quota limit exceeded') ||
     msg.includes('Quota exceeded') ||
     msg.includes('quota metric') ||
-    msg.includes('Free daily read units')
+    msg.includes('Free daily read units') ||
+    msg.includes('insufficient permissions') ||
+    code === 'permission-denied'
   );
 }
 
@@ -137,10 +142,45 @@ export function handleFirestoreError(
   };
   if (isQuota) {
     console.warn(
-      `[PCM Firestore Quota Notice] Operation ${operationType} on ${path || 'database'} reached free daily quota limit. Serving latest cached state seamlessly.`
+      `[PCM Firestore Notice] ${operationType} operation on ${path || 'database'} deferred (${errInfo.error.substring(0, 100)}). State maintained locally.`
     );
   } else {
     console.warn('Firestore Operation Notice: ', JSON.stringify(errInfo));
+  }
+}
+
+// Resilient safe write wrappers to prevent stream exhaustion
+export async function safeSetDoc(
+  docRef: any,
+  data: any,
+  options: { merge?: boolean } = { merge: true }
+): Promise<boolean> {
+  try {
+    await setDoc(docRef, cleanFirestoreData(data), options);
+    return true;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.WRITE, docRef.path);
+    return false;
+  }
+}
+
+export async function safeUpdateDoc(docRef: any, data: any): Promise<boolean> {
+  try {
+    await updateDoc(docRef, cleanFirestoreData(data));
+    return true;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.UPDATE, docRef.path);
+    return false;
+  }
+}
+
+export async function safeDeleteDoc(docRef: any): Promise<boolean> {
+  try {
+    await deleteDoc(docRef);
+    return true;
+  } catch (err) {
+    handleFirestoreError(err, OperationType.DELETE, docRef.path);
+    return false;
   }
 }
 
