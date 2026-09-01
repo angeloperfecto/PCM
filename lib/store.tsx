@@ -314,8 +314,8 @@ interface PCMContextType {
 
   // Backup & Restore
   exportDatabaseJson: () => string;
-  importDatabaseJson: (jsonString: string) => boolean;
-  resetToInitialData: () => void;
+  importDatabaseJson: (jsonString: string) => Promise<boolean> | boolean;
+  resetToInitialData: () => Promise<void> | void;
 
   // Event Registration & Newsletter
   registerForEvent: (eventId: string, attendeeName: string, email: string) => Promise<boolean> | boolean;
@@ -574,86 +574,118 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Sync entire dataset to Firestore in atomic batches
   const syncAllDataToFirestore = useCallback(
-    async (force: boolean = false): Promise<boolean> => {
+    async (force: boolean = false, customData?: any): Promise<boolean> => {
       try {
         setFirebaseSyncStatus('syncing');
-        const st = stateRef.current;
+        const st = customData || stateRef.current;
 
         // 1. Site Config
-        await setDoc(doc(db, 'siteConfig', 'global'), st.siteConfig, { merge: true });
+        if (st.siteConfig) {
+          await setDoc(doc(db, 'siteConfig', 'global'), cleanFirestoreData(st.siteConfig), { merge: true });
+        }
 
         // 2. Programs batch
-        const progBatch = writeBatch(db);
-        st.programs.forEach((p) => progBatch.set(doc(db, 'programs', p.id), p, { merge: true }));
-        await progBatch.commit();
+        if (st.programs && st.programs.length > 0) {
+          const progBatch = writeBatch(db);
+          st.programs.forEach((p: any) => progBatch.set(doc(db, 'programs', p.id), cleanFirestoreData(p), { merge: true }));
+          await progBatch.commit();
+        }
 
         // 3. Faculty batch
-        const facBatch = writeBatch(db);
-        st.faculty.forEach((f) => facBatch.set(doc(db, 'faculty', f.id), f, { merge: true }));
-        await facBatch.commit();
+        if (st.faculty && st.faculty.length > 0) {
+          const facBatch = writeBatch(db);
+          st.faculty.forEach((f: any) => facBatch.set(doc(db, 'faculty', f.id), cleanFirestoreData(f), { merge: true }));
+          await facBatch.commit();
+        }
 
         // 4. Announcements batch
-        const annBatch = writeBatch(db);
-        st.announcements.forEach((a) => annBatch.set(doc(db, 'announcements', a.id), a, { merge: true }));
-        await annBatch.commit();
+        if (st.announcements && st.announcements.length > 0) {
+          const annBatch = writeBatch(db);
+          st.announcements.forEach((a: any) => annBatch.set(doc(db, 'announcements', a.id), cleanFirestoreData(a), { merge: true }));
+          await annBatch.commit();
+        }
 
         // 5. News batch
-        const newsBatch = writeBatch(db);
-        st.news.forEach((n) => newsBatch.set(doc(db, 'news', n.id), n, { merge: true }));
-        await newsBatch.commit();
+        if (st.news && st.news.length > 0) {
+          const newsBatch = writeBatch(db);
+          st.news.forEach((n: any) => newsBatch.set(doc(db, 'news', n.id), cleanFirestoreData(n), { merge: true }));
+          await newsBatch.commit();
+        }
 
         // 6. Events batch
-        const evtBatch = writeBatch(db);
-        st.events.forEach((e) => evtBatch.set(doc(db, 'events', e.id), e, { merge: true }));
-        await evtBatch.commit();
+        if (st.events && st.events.length > 0) {
+          const evtBatch = writeBatch(db);
+          st.events.forEach((e: any) => evtBatch.set(doc(db, 'events', e.id), cleanFirestoreData(e), { merge: true }));
+          await evtBatch.commit();
+        }
 
         // 7. Downloads batch
-        const dlBatch = writeBatch(db);
-        st.downloads.forEach((d) => dlBatch.set(doc(db, 'downloads', d.id), d, { merge: true }));
-        await dlBatch.commit();
+        if (st.downloads && st.downloads.length > 0) {
+          const dlBatch = writeBatch(db);
+          st.downloads.forEach((d: any) => dlBatch.set(doc(db, 'downloads', d.id), cleanFirestoreData(d), { merge: true }));
+          await dlBatch.commit();
+        }
 
         // 8. Testimonials batch
-        const testBatch = writeBatch(db);
-        st.testimonials.forEach((t) => testBatch.set(doc(db, 'testimonials', t.id), t, { merge: true }));
-        await testBatch.commit();
+        if (st.testimonials && st.testimonials.length > 0) {
+          const testBatch = writeBatch(db);
+          st.testimonials.forEach((t: any) => testBatch.set(doc(db, 'testimonials', t.id), cleanFirestoreData(t), { merge: true }));
+          await testBatch.commit();
+        }
 
         // 9. Stats batch
-        const statBatch = writeBatch(db);
-        st.stats.forEach((s) => statBatch.set(doc(db, 'stats', s.id), s, { merge: true }));
-        await statBatch.commit();
+        if (st.stats && st.stats.length > 0) {
+          const statBatch = writeBatch(db);
+          st.stats.forEach((s: any) => statBatch.set(doc(db, 'stats', s.id), cleanFirestoreData(s), { merge: true }));
+          await statBatch.commit();
+        }
 
         // 10. FAQs batch
-        const faqBatch = writeBatch(db);
-        st.faqs.forEach((f) => faqBatch.set(doc(db, 'faqs', f.id), f, { merge: true }));
-        await faqBatch.commit();
+        if (st.faqs && st.faqs.length > 0) {
+          const faqBatch = writeBatch(db);
+          st.faqs.forEach((f: any) => faqBatch.set(doc(db, 'faqs', f.id), cleanFirestoreData(f), { merge: true }));
+          await faqBatch.commit();
+        }
 
         // 11. Sermons batch
-        const sermonBatch = writeBatch(db);
-        st.sermons.forEach((s) => sermonBatch.set(doc(db, 'sermons', s.id), s, { merge: true }));
-        await sermonBatch.commit();
+        if (st.sermons && st.sermons.length > 0) {
+          const sermonBatch = writeBatch(db);
+          st.sermons.forEach((s: any) => sermonBatch.set(doc(db, 'sermons', s.id), cleanFirestoreData(s), { merge: true }));
+          await sermonBatch.commit();
+        }
 
         // 12. Scrapbook batch
-        const sbBatch = writeBatch(db);
-        st.scrapbook.forEach((sb) => sbBatch.set(doc(db, 'scrapbook', sb.id), sb, { merge: true }));
-        await sbBatch.commit();
+        if (st.scrapbook && st.scrapbook.length > 0) {
+          const sbBatch = writeBatch(db);
+          st.scrapbook.forEach((sb: any) => sbBatch.set(doc(db, 'scrapbook', sb.id), cleanFirestoreData(sb), { merge: true }));
+          await sbBatch.commit();
+        }
 
         // 13. Media items batch
-        const mediaBatch = writeBatch(db);
-        st.mediaItems.forEach((m) => mediaBatch.set(doc(db, 'mediaItems', m.id), m, { merge: true }));
-        await mediaBatch.commit();
+        if (st.mediaItems && st.mediaItems.length > 0) {
+          const mediaBatch = writeBatch(db);
+          st.mediaItems.forEach((m: any) => mediaBatch.set(doc(db, 'mediaItems', m.id), cleanFirestoreData(m), { merge: true }));
+          await mediaBatch.commit();
+        }
 
         // 14. Gallery albums batch
-        const galBatch = writeBatch(db);
-        st.galleryAlbums.forEach((g) => galBatch.set(doc(db, 'galleryAlbums', g.id), g, { merge: true }));
-        await galBatch.commit();
+        if (st.galleryAlbums && st.galleryAlbums.length > 0) {
+          const galBatch = writeBatch(db);
+          st.galleryAlbums.forEach((g: any) => galBatch.set(doc(db, 'galleryAlbums', g.id), cleanFirestoreData(g), { merge: true }));
+          await galBatch.commit();
+        }
 
         // 15. Admin users batch
-        const admBatch = writeBatch(db);
-        st.adminUsers.forEach((u) => admBatch.set(doc(db, 'adminUsers', u.id), u, { merge: true }));
-        await admBatch.commit();
+        if (st.adminUsers && st.adminUsers.length > 0) {
+          const admBatch = writeBatch(db);
+          st.adminUsers.forEach((u: any) => admBatch.set(doc(db, 'adminUsers', u.id), cleanFirestoreData(u), { merge: true }));
+          await admBatch.commit();
+        }
 
         // 16. Student Profile
-        await setDoc(doc(db, 'studentProfiles', st.studentProfile.id), st.studentProfile, { merge: true });
+        if (st.studentProfile) {
+          await setDoc(doc(db, 'studentProfiles', st.studentProfile.id), cleanFirestoreData(st.studentProfile), { merge: true });
+        }
 
         setIsFirebaseConnected(true);
         setFirebaseSyncStatus('synced');
@@ -2244,7 +2276,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return JSON.stringify(fullDb, null, 2);
   };
 
-  const importDatabaseJson = (jsonString: string): boolean => {
+  const importDatabaseJson = async (jsonString: string): Promise<boolean> => {
     try {
       const data = JSON.parse(jsonString);
       if (data.programs && Array.isArray(data.programs)) setPrograms(data.programs);
@@ -2264,9 +2296,28 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.applications && Array.isArray(data.applications)) setApplications(data.applications);
       if (data.studentProfile) setStudentProfile(data.studentProfile);
 
+      const restorePayload = {
+        siteConfig: data.siteConfig || stateRef.current.siteConfig,
+        programs: data.programs || stateRef.current.programs,
+        faculty: data.faculty || stateRef.current.faculty,
+        announcements: data.announcements || stateRef.current.announcements,
+        news: data.news || stateRef.current.news,
+        events: data.events || stateRef.current.events,
+        downloads: data.downloads || stateRef.current.downloads,
+        testimonials: data.testimonials || stateRef.current.testimonials,
+        stats: data.stats || stateRef.current.stats,
+        faqs: data.faqs || stateRef.current.faqs,
+        sermons: data.sermons || stateRef.current.sermons,
+        scrapbook: data.scrapbook || stateRef.current.scrapbook,
+        mediaItems: data.mediaItems || stateRef.current.mediaItems,
+        galleryAlbums: data.galleryAlbums || stateRef.current.galleryAlbums,
+        adminUsers: data.adminUsers || stateRef.current.adminUsers,
+        studentProfile: data.studentProfile || stateRef.current.studentProfile,
+      };
+
       logActivity('RESTORE', 'Database Import', 'import-db', 'Full Dataset Restore', 'Imported complete JSON database backup.');
       addToast('success', 'Database Restored', 'Institutional dataset restored successfully.');
-      syncAllDataToFirestore(true);
+      await syncAllDataToFirestore(true, restorePayload);
       return true;
     } catch (e: any) {
       addToast('error', 'Import Failed', 'Invalid JSON backup file structure.');
@@ -2294,8 +2345,27 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudentProfile(DEMO_STUDENT_PROFILE);
     setActivityLogs(INITIAL_ACTIVITY_LOGS);
 
+    const resetPayload = {
+      siteConfig: INITIAL_SITE_CONFIG,
+      programs: INITIAL_PROGRAMS,
+      faculty: INITIAL_FACULTY,
+      announcements: INITIAL_ANNOUNCEMENTS,
+      news: INITIAL_NEWS,
+      events: INITIAL_EVENTS,
+      downloads: INITIAL_DOWNLOADS,
+      testimonials: INITIAL_TESTIMONIALS,
+      stats: INITIAL_STATS,
+      faqs: INITIAL_FAQS,
+      sermons: INITIAL_SERMONS,
+      scrapbook: INITIAL_SCRAPBOOK,
+      mediaItems: INITIAL_MEDIA_ITEMS,
+      galleryAlbums: INITIAL_GALLERY_ALBUMS,
+      adminUsers: INITIAL_ADMIN_USERS,
+      studentProfile: DEMO_STUDENT_PROFILE,
+    };
+
     try {
-      await syncAllDataToFirestore(true);
+      await syncAllDataToFirestore(true, resetPayload);
     } catch (e) {
       console.warn(e);
     }
