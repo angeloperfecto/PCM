@@ -8,7 +8,10 @@ import { FacultyPortrait } from '@/components/common/FacultyPortrait';
 export const FacultySection: React.FC = () => {
   const { faculty, setSelectedFaculty, navigateTo } = usePCM();
 
-  const featuredFaculty = faculty.filter((f) => f.featured).slice(0, 4);
+  const featuredFaculty = [...faculty]
+    .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999))
+    .filter((f) => f.featured)
+    .slice(0, 4);
 
   return (
     <section className="w-full bg-white py-16 lg:py-24 border-b border-[#D0DED8] font-sans">

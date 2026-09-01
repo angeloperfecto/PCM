@@ -208,6 +208,9 @@ interface PCMContextType {
   updateFacultyMember: (id: string, updates: Partial<FacultyMember>) => void;
   deleteFaculty: (id: string) => void;
   deleteFacultyMember: (id: string) => void;
+  reorderFaculty: (reordered: FacultyMember[]) => void;
+  moveFacultyMember: (id: string, direction: 'up' | 'down' | 'top' | 'bottom') => void;
+  setFacultyOrderIndex: (id: string, targetOrder: number) => void;
 
   // News CRUD
   news: NewsArticle[];
@@ -854,6 +857,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 image: photo,
               } as FacultyMember;
             });
+            // Sort by order ascending if provided
+            list.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
             setFaculty(list);
             setSelectedFaculty((currentSelected) => {
               if (!currentSelected) return null;
@@ -1551,6 +1556,66 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteDoc(doc(db, 'faculty', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Faculty Member', id, fac?.name || 'Faculty Member', 'Removed faculty record from directory.');
     addToast('info', 'Faculty Removed', 'Faculty profile removed.');
+  };
+
+  const reorderFaculty = (reordered: FacultyMember[]) => {
+    const updated = reordered.map((member, index) => ({
+      ...member,
+      order: index + 1,
+    }));
+    setFaculty(updated);
+
+    try {
+      const batch = writeBatch(db);
+      updated.forEach((member) => {
+        batch.set(doc(db, 'faculty', member.id), cleanFirestoreData(member), { merge: true });
+      });
+      batch.commit().catch((e) => console.warn('Firestore faculty reorder sync warning:', e));
+    } catch (err) {
+      console.warn('Batch commit error:', err);
+    }
+
+    logActivity(
+      'UPDATE',
+      'Faculty Directory',
+      'bulk-reorder',
+      'Directory Order',
+      'Updated sequence and manual arrangement of Board of Trustees, Faculty & Staff directory.'
+    );
+    addToast('success', 'Directory Order Updated', 'New display arrangement saved and synchronized.');
+  };
+
+  const moveFacultyMember = (id: string, direction: 'up' | 'down' | 'top' | 'bottom') => {
+    const currentIndex = faculty.findIndex((f) => f.id === id);
+    if (currentIndex === -1) return;
+
+    let targetIndex = currentIndex;
+    if (direction === 'up') targetIndex = Math.max(0, currentIndex - 1);
+    else if (direction === 'down') targetIndex = Math.min(faculty.length - 1, currentIndex + 1);
+    else if (direction === 'top') targetIndex = 0;
+    else if (direction === 'bottom') targetIndex = faculty.length - 1;
+
+    if (targetIndex === currentIndex) return;
+
+    const list = [...faculty];
+    const [moved] = list.splice(currentIndex, 1);
+    list.splice(targetIndex, 0, moved);
+
+    reorderFaculty(list);
+  };
+
+  const setFacultyOrderIndex = (id: string, targetOrder: number) => {
+    const currentIndex = faculty.findIndex((f) => f.id === id);
+    if (currentIndex === -1) return;
+
+    const targetIdx = Math.max(0, Math.min(faculty.length - 1, targetOrder - 1));
+    if (targetIdx === currentIndex) return;
+
+    const list = [...faculty];
+    const [moved] = list.splice(currentIndex, 1);
+    list.splice(targetIdx, 0, moved);
+
+    reorderFaculty(list);
   };
 
   // News CRUD
@@ -2722,6 +2787,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateFacultyMember: updateFaculty,
         deleteFaculty,
         deleteFacultyMember: deleteFaculty,
+        reorderFaculty,
+        moveFacultyMember,
+        setFacultyOrderIndex,
 
         // News
         news,

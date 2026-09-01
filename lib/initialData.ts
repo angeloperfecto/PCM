@@ -814,6 +814,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '/images/faculty/atty-laruta.svg',
     email: 'laruta.trustee@pcm.ph',
     featured: true,
+    order: 1,
   },
   {
     id: 'fac-bot-ali',
@@ -828,6 +829,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'ali.trustee@pcm.ph',
     featured: false,
+    order: 2,
   },
   {
     id: 'fac-bot-batuna',
@@ -842,6 +844,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'batuna.trustee@pcm.ph',
     featured: false,
+    order: 3,
   },
   {
     id: 'fac-bot-aliba',
@@ -856,6 +859,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'aliba.trustee@pcm.ph',
     featured: false,
+    order: 4,
   },
   {
     id: 'fac-bot-marquez',
@@ -874,6 +878,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'marquez.trustee@pcm.ph',
     featured: false,
+    order: 5,
   },
   {
     id: 'fac-bot-suello',
@@ -888,6 +893,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'suello.trustee@pcm.ph',
     featured: false,
+    order: 6,
   },
   {
     id: 'fac-bot-hong',
@@ -906,6 +912,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'hong.trustee@pcm.ph',
     featured: true,
+    order: 7,
   },
   {
     id: 'fac-bot-dungo',
@@ -920,6 +927,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'dungo.trustee@pcm.ph',
     featured: false,
+    order: 8,
   },
   {
     id: 'fac-pasion',
@@ -939,6 +947,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'president@pcm.ph',
     featured: true,
+    order: 9,
   },
   {
     id: 'fac-cruz',
@@ -957,6 +966,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'business.admin@pcm.ph',
     featured: true,
+    order: 10,
   },
   {
     id: 'fac-santos-crisanta',
@@ -977,6 +987,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'academic.dean@pcm.ph',
     featured: true,
+    order: 11,
   },
   {
     id: 'fac-benalio-marlon',
@@ -1004,6 +1015,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'library@pcm.ph',
     featured: false,
+    order: 12,
   },
   {
     id: 'fac-cabalar',
@@ -1031,6 +1043,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'registrar@pcm.ph',
     featured: true,
+    order: 13,
   },
   {
     id: 'fac-dagasen',
@@ -1051,6 +1064,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'dagasen@pcm.ph',
     featured: true,
+    order: 14,
   },
   {
     id: 'fac-intuya',
@@ -1077,6 +1091,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'intuya@pcm.ph',
     featured: true,
+    order: 15,
   },
   {
     id: 'fac-agayao',
@@ -1104,6 +1119,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'studentaffairs@pcm.ph',
     featured: true,
+    order: 16,
   },
   {
     id: 'fac-benalio-adelaida',
@@ -1122,6 +1138,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'abenalio@pcm.ph',
     featured: false,
+    order: 17,
   },
   {
     id: 'fac-virtudazo',
@@ -1146,6 +1163,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'evirtudazo@pcm.ph',
     featured: false,
+    order: 18,
   },
   {
     id: 'fac-bacuyag',
@@ -1165,6 +1183,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'ebacuyag@pcm.ph',
     featured: false,
+    order: 19,
   },
   {
     id: 'fac-huckaba-james',
@@ -1189,6 +1208,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'academic.emeritus@pcm.ph',
     featured: true,
+    order: 20,
   },
   {
     id: 'fac-lubag-samson',
@@ -1215,6 +1235,7 @@ export const INITIAL_FACULTY: FacultyMember[] = [
     imageUrl: '',
     email: 'slubag@pcm.ph',
     featured: true,
+    order: 21,
   },
 ];
 

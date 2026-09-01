@@ -406,10 +406,12 @@ export const AboutView: React.FC = () => {
               { id: 'Adjunct & Emeritus', label: 'Adjunct & Emeritus', description: 'Emeritus Deans & Adjunct Professors' },
             ];
 
-            const categorizedFaculty = faculty.map((f) => ({
-              ...f,
-              calculatedCategory: getMemberCategory(f),
-            }));
+            const categorizedFaculty = [...faculty]
+              .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999))
+              .map((f) => ({
+                ...f,
+                calculatedCategory: getMemberCategory(f),
+              }));
 
             const matchesSearch = (f: any) => {
               if (!searchQuery.trim()) return true;

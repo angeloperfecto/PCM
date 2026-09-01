@@ -27,6 +27,19 @@ import {
   Eye,
   CheckCircle2,
   Info,
+  ArrowUpDown,
+  MoveUp,
+  MoveDown,
+  ChevronsUp,
+  ChevronsDown,
+  GripVertical,
+  ListOrdered,
+  SlidersHorizontal,
+  LayoutGrid,
+  Table as TableIcon,
+  RefreshCw,
+  HelpCircle,
+  Save,
 } from 'lucide-react';
 
 export const AdminFacultyTab: React.FC = () => {
@@ -35,6 +48,9 @@ export const AdminFacultyTab: React.FC = () => {
     addFacultyMember,
     updateFacultyMember,
     deleteFacultyMember,
+    reorderFaculty,
+    moveFacultyMember,
+    setFacultyOrderIndex,
     mediaLibrary,
     addMediaItem,
     uploadMediaFile,
@@ -44,11 +60,16 @@ export const AdminFacultyTab: React.FC = () => {
 
   const [search, setSearch] = useState('');
   const [groupFilter, setGroupFilter] = useState('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'arrange' | 'table'>('grid');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingFaculty, setEditingFaculty] = useState<FacultyMember | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+
+  // Drag & drop sorting state
+  const [draggedMemberId, setDraggedMemberId] = useState<string | null>(null);
+  const [dragOverMemberId, setDragOverMemberId] = useState<string | null>(null);
 
   // Modal Form State
   const [formName, setFormName] = useState('');
@@ -60,12 +81,16 @@ export const AdminFacultyTab: React.FC = () => {
   const [formEmail, setFormEmail] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formImage, setFormImage] = useState('');
+  const [formOrder, setFormOrder] = useState<number>(1);
 
   // Media picker & photo upload state
   const [showMediaPicker, setShowMediaPicker] = useState(false);
   const [mediaPickerSearch, setMediaPickerSearch] = useState('');
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Sorted full faculty list by order index
+  const sortedFaculty = [...faculty].sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
 
   const openNewModal = () => {
     setEditingFaculty(null);
@@ -78,6 +103,7 @@ export const AdminFacultyTab: React.FC = () => {
     setFormEmail('');
     setFormPhone('');
     setFormImage('');
+    setFormOrder(faculty.length + 1);
     setShowMediaPicker(false);
     setIsModalOpen(true);
   };
@@ -93,6 +119,7 @@ export const AdminFacultyTab: React.FC = () => {
     setFormEmail(fac.email || '');
     setFormPhone(fac.phone || '');
     setFormImage(fac.image || fac.imageUrl || '');
+    setFormOrder(fac.order ?? (sortedFaculty.findIndex((f) => f.id === fac.id) + 1));
     setShowMediaPicker(false);
     setIsModalOpen(true);
   };
@@ -154,7 +181,6 @@ export const AdminFacultyTab: React.FC = () => {
     if (file) {
       handlePhotoFile(file);
     }
-    // reset input value so user can re-upload same file if desired
     e.target.value = '';
   };
 
@@ -212,10 +238,16 @@ export const AdminFacultyTab: React.FC = () => {
         phone: formPhone.trim(),
         image: trimmedImg,
         imageUrl: trimmedImg,
+        order: Number(formOrder) || editingFaculty.order || 1,
       });
+
+      if (formOrder && formOrder !== editingFaculty.order) {
+        setFacultyOrderIndex(editingFaculty.id, Number(formOrder));
+      }
+
       addToast({ title: 'Faculty Profile Updated', message: `${formName} updated successfully.`, type: 'success' });
     } else {
-      addFacultyMember({
+      const created = addFacultyMember({
         name: formName.trim(),
         role: formRole.trim(),
         department: formDept.trim(),
@@ -226,7 +258,13 @@ export const AdminFacultyTab: React.FC = () => {
         phone: formPhone.trim(),
         image: trimmedImg,
         imageUrl: trimmedImg,
+        order: Number(formOrder) || faculty.length + 1,
       });
+
+      if (formOrder && formOrder <= faculty.length) {
+        setFacultyOrderIndex(created.id, Number(formOrder));
+      }
+
       addToast({ title: 'Faculty Profile Added', message: `${formName} added to the PCM directory.`, type: 'success' });
     }
 
@@ -253,7 +291,110 @@ export const AdminFacultyTab: React.FC = () => {
     setDeleteTarget(null);
   };
 
-  const filteredFaculty = faculty.filter((f) => {
+  // Drag and drop reordering handlers
+  const handleItemDragStart = (e: React.DragEvent, id: string) => {
+    setDraggedMemberId(id);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', id);
+  };
+
+  const handleItemDragOver = (e: React.DragEvent, id: string) => {
+    e.preventDefault();
+    if (draggedMemberId && draggedMemberId !== id) {
+      setDragOverMemberId(id);
+    }
+  };
+
+  const handleItemDragLeave = () => {
+    setDragOverMemberId(null);
+  };
+
+  const handleItemDrop = (e: React.DragEvent, targetId: string) => {
+    e.preventDefault();
+    const sourceId = draggedMemberId || e.dataTransfer.getData('text/plain');
+    setDraggedMemberId(null);
+    setDragOverMemberId(null);
+
+    if (!sourceId || sourceId === targetId) return;
+
+    const sourceIdx = sortedFaculty.findIndex((f) => f.id === sourceId);
+    const targetIdx = sortedFaculty.findIndex((f) => f.id === targetId);
+
+    if (sourceIdx === -1 || targetIdx === -1) return;
+
+    const reordered = [...sortedFaculty];
+    const [moved] = reordered.splice(sourceIdx, 1);
+    reordered.splice(targetIdx, 0, moved);
+
+    reorderFaculty(reordered);
+  };
+
+  const handleItemDragEnd = () => {
+    setDraggedMemberId(null);
+    setDragOverMemberId(null);
+  };
+
+  // Preset Sorting Actions
+  const handleSortAlphabetical = () => {
+    if (!canPerformAction('Content Admin')) {
+      addToast({ title: 'Permission Denied', message: 'Admin access required to rearrange directory.', type: 'error' });
+      return;
+    }
+
+    let reordered: FacultyMember[] = [];
+    if (groupFilter === 'all') {
+      reordered = [...sortedFaculty].sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      const match = sortedFaculty.filter((f) => f.group?.toLowerCase() === groupFilter.toLowerCase());
+      const others = sortedFaculty.filter((f) => f.group?.toLowerCase() !== groupFilter.toLowerCase());
+      match.sort((a, b) => a.name.localeCompare(b.name));
+      reordered = [...match, ...others];
+    }
+
+    reorderFaculty(reordered);
+    addToast({
+      title: 'Alphabetical Sort Applied',
+      message: `Directory records sorted from A to Z${groupFilter !== 'all' ? ` for ${groupFilter}` : ''}.`,
+      type: 'info',
+    });
+  };
+
+  const handleSortByInstitutionalHierarchy = () => {
+    if (!canPerformAction('Content Admin')) {
+      addToast({ title: 'Permission Denied', message: 'Admin access required to rearrange directory.', type: 'error' });
+      return;
+    }
+
+    const groupWeights: Record<string, number> = {
+      'board of trustees': 1,
+      'key administrators': 2,
+      'administration': 2,
+      'resident faculty': 3,
+      'faculty': 3,
+      'administrative staff': 4,
+      'staff': 4,
+      'adjunct faculty': 5,
+      'emeritus & adjunct': 5,
+    };
+
+    const reordered = [...sortedFaculty].sort((a, b) => {
+      const weightA = groupWeights[(a.group || '').toLowerCase()] || 99;
+      const weightB = groupWeights[(b.group || '').toLowerCase()] || 99;
+      if (weightA !== weightB) {
+        return weightA - weightB;
+      }
+      return (a.order ?? 9999) - (b.order ?? 9999);
+    });
+
+    reorderFaculty(reordered);
+    addToast({
+      title: 'Institutional Precedence Applied',
+      message: 'Arranged by: Board of Trustees → Administration → Faculty → Staff → Emeritus.',
+      type: 'success',
+    });
+  };
+
+  const filteredFaculty = sortedFaculty.filter((f) => {
     const q = search.toLowerCase();
     const matchesSearch =
       !search ||
@@ -281,25 +422,112 @@ export const AdminFacultyTab: React.FC = () => {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
+      {/* Header & Mode Switcher */}
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <div>
-          <h2 className="font-serif text-lg font-bold text-[#18392B] flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <Users className="w-5 h-5 text-[#588B76]" />
-            Board of Trustees, Faculty & Staff Directory Manager
-          </h2>
-          <p className="text-xs text-slate-500">
-            Manage academic profiles, degrees, photos, and leadership assignments across the institution.
+            <h2 className="font-serif text-lg font-bold text-[#18392B]">
+              Board of Trustees, Faculty & Staff Directory Manager
+            </h2>
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Manually organize priority order, update academic degrees, bios, portrait photos, and institutional assignments.
           </p>
         </div>
 
-        <button
-          onClick={openNewModal}
-          className="flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer shadow-sm"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Faculty / Staff</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* View Mode Switcher */}
+          <div className="bg-slate-100 p-1 rounded-lg flex items-center border border-slate-200 text-xs">
+            <button
+              onClick={() => setViewMode('grid')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-semibold transition cursor-pointer ${
+                viewMode === 'grid'
+                  ? 'bg-white text-[#18392B] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Standard Grid View"
+            >
+              <LayoutGrid className="w-3.5 h-3.5" />
+              <span>Grid</span>
+            </button>
+            <button
+              onClick={() => setViewMode('arrange')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-semibold transition cursor-pointer ${
+                viewMode === 'arrange'
+                  ? 'bg-[#18392B] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Manual Arrange & Reordering Workspace"
+            >
+              <ArrowUpDown className="w-3.5 h-3.5" />
+              <span>Manual Arrange</span>
+            </button>
+            <button
+              onClick={() => setViewMode('table')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md font-semibold transition cursor-pointer ${
+                viewMode === 'table'
+                  ? 'bg-white text-[#18392B] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="Compact Table View"
+            >
+              <TableIcon className="w-3.5 h-3.5" />
+              <span>Table</span>
+            </button>
+          </div>
+
+          <button
+            onClick={openNewModal}
+            className="flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Personnel</span>
+          </button>
+        </div>
       </div>
+
+      {/* Reorder Information Banner (when in Arrange mode) */}
+      {viewMode === 'arrange' && (
+        <div className="p-4 bg-emerald-50/70 border border-emerald-200/80 rounded-xl space-y-3">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-xs text-[#18392B] font-medium">
+              <span className="w-6 h-6 rounded-full bg-[#588B76] text-white flex items-center justify-center font-bold text-xs shrink-0">
+                ↕
+              </span>
+              <div>
+                <p className="font-bold text-emerald-950">Manual Directory Reordering Active</p>
+                <p className="text-[11px] text-emerald-800">
+                  Drag cards by the handle <GripVertical className="w-3 h-3 inline mx-0.5" /> or use the Up/Down buttons to position trustees, professors, and staff. Position changes sync immediately to the public directory.
+                </p>
+              </div>
+            </div>
+
+            {/* Quick Preset Sort Actions */}
+            <div className="flex flex-wrap items-center gap-2 text-xs shrink-0">
+              <button
+                type="button"
+                onClick={handleSortByInstitutionalHierarchy}
+                className="flex items-center gap-1.5 bg-white hover:bg-emerald-100/60 border border-emerald-300 text-emerald-900 px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer shadow-xs text-xs"
+                title="Arrange by Trustees → Administration → Faculty → Staff"
+              >
+                <Building className="w-3.5 h-3.5 text-[#588B76]" />
+                <span>Hierarchy Order</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSortAlphabetical}
+                className="flex items-center gap-1.5 bg-white hover:bg-emerald-100/60 border border-emerald-300 text-emerald-900 px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer shadow-xs text-xs"
+                title="Sort Alphabetically from A to Z"
+              >
+                <ListOrdered className="w-3.5 h-3.5 text-[#588B76]" />
+                <span>A-Z Names</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search & Filter Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -331,64 +559,354 @@ export const AdminFacultyTab: React.FC = () => {
         </div>
       </div>
 
-      {/* Faculty Profiles Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredFaculty.map((fac) => (
-          <div
-            key={fac.id}
-            className="p-4 rounded-xl border border-slate-200 shadow-xs hover:border-[#588B76]/60 transition space-y-3 bg-white flex flex-col justify-between"
-          >
-            <div className="flex items-start gap-3.5">
-              {/* Portrait */}
-              <div className="w-14 h-18 rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-xs bg-[#18392B] relative">
-                <FacultyPortrait
-                  name={fac.name}
-                  imageSrc={fac.image || fac.imageUrl}
-                  className="w-full h-full object-cover"
-                />
-              </div>
-
-              <div className="space-y-1 flex-1 min-w-0">
-                <span className="text-[10px] font-mono uppercase font-bold text-[#588B76] bg-[#588B76]/10 px-2 py-0.5 rounded">
-                  {fac.group || 'Faculty'}
-                </span>
-                <h4 className="font-serif text-sm font-bold text-[#18392B] truncate">{fac.name}</h4>
-                <p className="text-xs text-slate-600 font-medium line-clamp-1">{fac.role}</p>
-                <p className="text-[11px] text-slate-400 truncate">{fac.department}</p>
-              </div>
-            </div>
-
-            {fac.degrees && fac.degrees.length > 0 && (
-              <div className="text-[11px] text-[#588B76] font-medium truncate pt-1 border-t border-slate-100">
-                {fac.degrees.join(', ')}
-              </div>
-            )}
-
-            <div className="pt-2 flex items-center justify-between border-t border-slate-100 text-xs">
-              <span className="text-[11px] text-slate-400 truncate max-w-[150px]">
-                {fac.email || 'No email registered'}
-              </span>
-
-              <div className="flex items-center gap-1.5 shrink-0">
-                <button
-                  onClick={() => openEditModal(fac)}
-                  className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition"
-                  title="Edit Profile"
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  onClick={() => handleDelete(fac.id, fac.name)}
-                  className="p-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer transition"
-                  title="Delete Profile"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
+      {/* MODE 1: MANUAL ARRANGE WORKSPACE */}
+      {viewMode === 'arrange' && (
+        <div className="space-y-3">
+          <div className="flex items-center justify-between text-xs text-slate-500 pb-1 border-b border-slate-100">
+            <span>Showing {filteredFaculty.length} personnel in display order</span>
+            <span className="text-[11px] text-slate-400">Drag to reorder or click arrows to move</span>
           </div>
-        ))}
-      </div>
+
+          {filteredFaculty.map((fac, idx) => {
+            const actualIndex = sortedFaculty.findIndex((f) => f.id === fac.id);
+            const isFirst = actualIndex === 0;
+            const isLast = actualIndex === sortedFaculty.length - 1;
+            const isDragged = draggedMemberId === fac.id;
+            const isDropTarget = dragOverMemberId === fac.id;
+
+            return (
+              <div
+                key={fac.id}
+                draggable
+                onDragStart={(e) => handleItemDragStart(e, fac.id)}
+                onDragOver={(e) => handleItemDragOver(e, fac.id)}
+                onDragLeave={handleItemDragLeave}
+                onDrop={(e) => handleItemDrop(e, fac.id)}
+                onDragEnd={handleItemDragEnd}
+                className={`p-3.5 rounded-xl border transition flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3.5 bg-white ${
+                  isDragged
+                    ? 'opacity-40 border-dashed border-[#588B76] bg-emerald-50/30'
+                    : isDropTarget
+                    ? 'border-[#588B76] ring-2 ring-[#588B76]/40 bg-emerald-50/40 shadow-md'
+                    : 'border-slate-200 shadow-xs hover:border-[#588B76]/60'
+                }`}
+              >
+                {/* Drag Handle, Rank, and Member Info */}
+                <div className="flex items-center gap-3.5 flex-1 min-w-0">
+                  {/* Grip Handle */}
+                  <div
+                    className="cursor-grab active:cursor-grabbing text-slate-400 hover:text-slate-700 p-1 rounded hover:bg-slate-100 shrink-0"
+                    title="Drag to rearrange position"
+                  >
+                    <GripVertical className="w-5 h-5" />
+                  </div>
+
+                  {/* Rank Badge */}
+                  <div className="w-8 h-8 rounded-lg bg-[#18392B] text-white flex items-center justify-center font-mono font-bold text-xs shrink-0 shadow-xs">
+                    #{fac.order ?? (actualIndex + 1)}
+                  </div>
+
+                  {/* Portrait Thumbnail */}
+                  <div className="w-10 h-12 rounded-md overflow-hidden shrink-0 border border-slate-200 bg-[#18392B]">
+                    <FacultyPortrait
+                      name={fac.name}
+                      imageSrc={fac.image || fac.imageUrl}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  {/* Member Details */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-serif text-sm font-bold text-[#18392B] truncate">{fac.name}</h4>
+                      <span className="text-[10px] font-mono font-bold text-[#588B76] bg-[#588B76]/10 px-2 py-0.5 rounded border border-[#588B76]/20">
+                        {fac.group || 'Faculty'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 truncate">{fac.role || fac.title}</p>
+                    {fac.department && (
+                      <p className="text-[11px] text-slate-400 truncate">{fac.department}</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Direct Rank Selection & Step Arrows */}
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                  {/* Direct Jump to Position Select */}
+                  <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-xs">
+                    <span className="text-[11px] text-slate-500 font-medium">Rank:</span>
+                    <select
+                      value={fac.order ?? (actualIndex + 1)}
+                      onChange={(e) => setFacultyOrderIndex(fac.id, Number(e.target.value))}
+                      className="bg-transparent font-bold text-[#18392B] text-xs focus:outline-none cursor-pointer"
+                      title="Jump directly to rank"
+                    >
+                      {sortedFaculty.map((_, i) => (
+                        <option key={i + 1} value={i + 1}>
+                          #{i + 1}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Step Action Buttons */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => moveFacultyMember(fac.id, 'top')}
+                      disabled={isFirst}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+                      title="Move to Top"
+                    >
+                      <ChevronsUp className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => moveFacultyMember(fac.id, 'up')}
+                      disabled={isFirst}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+                      title="Move Up 1 Position"
+                    >
+                      <MoveUp className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => moveFacultyMember(fac.id, 'down')}
+                      disabled={isLast}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+                      title="Move Down 1 Position"
+                    >
+                      <MoveDown className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => moveFacultyMember(fac.id, 'bottom')}
+                      disabled={isLast}
+                      className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition"
+                      title="Move to Bottom"
+                    >
+                      <ChevronsDown className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Edit Button */}
+                  <button
+                    onClick={() => openEditModal(fac)}
+                    className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition ml-1"
+                    title="Edit Profile Details"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* MODE 2: STANDARD GRID VIEW */}
+      {viewMode === 'grid' && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredFaculty.map((fac) => {
+            const actualIndex = sortedFaculty.findIndex((f) => f.id === fac.id);
+            const isFirst = actualIndex === 0;
+            const isLast = actualIndex === sortedFaculty.length - 1;
+
+            return (
+              <div
+                key={fac.id}
+                className="p-4 rounded-xl border border-slate-200 shadow-xs hover:border-[#588B76]/60 transition space-y-3 bg-white flex flex-col justify-between relative group"
+              >
+                <div className="space-y-3">
+                  {/* Top Bar with Rank Badge & Quick Nudges */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-mono font-bold bg-[#18392B] text-white px-2 py-0.5 rounded shadow-xs">
+                        #{fac.order ?? (actualIndex + 1)}
+                      </span>
+                      <span className="text-[10px] font-mono uppercase font-bold text-[#588B76] bg-[#588B76]/10 px-2 py-0.5 rounded">
+                        {fac.group || 'Faculty'}
+                      </span>
+                    </div>
+
+                    {/* Quick Move Up/Down Arrow buttons right on the card */}
+                    <div className="flex items-center gap-1 opacity-80 group-hover:opacity-100 transition">
+                      <button
+                        type="button"
+                        onClick={() => moveFacultyMember(fac.id, 'up')}
+                        disabled={isFirst}
+                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer transition"
+                        title="Move Up in Directory Order"
+                      >
+                        <MoveUp className="w-3 h-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveFacultyMember(fac.id, 'down')}
+                        disabled={isLast}
+                        className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer transition"
+                        title="Move Down in Directory Order"
+                      >
+                        <MoveDown className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3.5">
+                    {/* Portrait */}
+                    <div className="w-14 h-18 rounded-lg overflow-hidden shrink-0 border border-slate-200 shadow-xs bg-[#18392B] relative">
+                      <FacultyPortrait
+                        name={fac.name}
+                        imageSrc={fac.image || fac.imageUrl}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <h4 className="font-serif text-sm font-bold text-[#18392B] truncate">{fac.name}</h4>
+                      <p className="text-xs text-slate-600 font-medium line-clamp-1">{fac.role}</p>
+                      <p className="text-[11px] text-slate-400 truncate">{fac.department}</p>
+                    </div>
+                  </div>
+
+                  {fac.degrees && fac.degrees.length > 0 && (
+                    <div className="text-[11px] text-[#588B76] font-medium truncate pt-1 border-t border-slate-100">
+                      {fac.degrees.join(', ')}
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 flex items-center justify-between border-t border-slate-100 text-xs">
+                  <span className="text-[11px] text-slate-400 truncate max-w-[150px]">
+                    {fac.email || 'No email registered'}
+                  </span>
+
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      onClick={() => openEditModal(fac)}
+                      className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition"
+                      title="Edit Profile"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      onClick={() => handleDelete(fac.id, fac.name)}
+                      className="p-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer transition"
+                      title="Delete Profile"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* MODE 3: COMPACT TABLE VIEW */}
+      {viewMode === 'table' && (
+        <div className="overflow-x-auto rounded-xl border border-slate-200 shadow-xs">
+          <table className="w-full text-left text-xs border-collapse">
+            <thead>
+              <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-bold uppercase tracking-wider text-[10px]">
+                <th className="py-3 px-3 w-16">Rank</th>
+                <th className="py-3 px-3">Portrait</th>
+                <th className="py-3 px-4">Name & Title</th>
+                <th className="py-3 px-4">Group / Category</th>
+                <th className="py-3 px-4">Role & Department</th>
+                <th className="py-3 px-4">Email</th>
+                <th className="py-3 px-4 text-center">Arrange</th>
+                <th className="py-3 px-3 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredFaculty.map((fac) => {
+                const actualIndex = sortedFaculty.findIndex((f) => f.id === fac.id);
+                const isFirst = actualIndex === 0;
+                const isLast = actualIndex === sortedFaculty.length - 1;
+
+                return (
+                  <tr key={fac.id} className="hover:bg-slate-50/70 transition">
+                    <td className="py-2.5 px-3">
+                      <span className="font-mono font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-xs">
+                        #{fac.order ?? (actualIndex + 1)}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-3">
+                      <div className="w-8 h-10 rounded overflow-hidden border border-slate-200 bg-[#18392B]">
+                        <FacultyPortrait
+                          name={fac.name}
+                          imageSrc={fac.image || fac.imageUrl}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-4 font-semibold text-[#18392B]">
+                      {fac.name}
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <span className="text-[10px] font-mono font-bold text-[#588B76] bg-[#588B76]/10 px-2 py-0.5 rounded">
+                        {fac.group}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-600">
+                      <div>{fac.role}</div>
+                      <div className="text-[11px] text-slate-400">{fac.department}</div>
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-500 font-mono text-[11px]">
+                      {fac.email || '—'}
+                    </td>
+                    <td className="py-2.5 px-4 text-center">
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => moveFacultyMember(fac.id, 'up')}
+                          disabled={isFirst}
+                          className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 disabled:opacity-25 cursor-pointer"
+                          title="Move Up"
+                        >
+                          <MoveUp className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveFacultyMember(fac.id, 'down')}
+                          disabled={isLast}
+                          className="p-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 disabled:opacity-25 cursor-pointer"
+                          title="Move Down"
+                        >
+                          <MoveDown className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-3 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => openEditModal(fac)}
+                          className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 cursor-pointer transition"
+                          title="Edit Profile"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(fac.id, fac.name)}
+                          className="p-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer transition"
+                          title="Delete Profile"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Add/Edit Modal */}
       {isModalOpen && (
@@ -401,7 +919,7 @@ export const AdminFacultyTab: React.FC = () => {
                   {editingFaculty ? 'Edit Directory Profile' : 'Add New Faculty / Staff Member'}
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Update directory listing credentials, biographical profile, and portrait photo.
+                  Update directory listing credentials, rank sequence, biographical profile, and portrait photo.
                 </p>
               </div>
               <button
@@ -414,8 +932,8 @@ export const AdminFacultyTab: React.FC = () => {
             </div>
 
             <form onSubmit={handleSave} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
                   <label className="block text-slate-700 font-bold mb-1">
                     Full Name (with Title)
                   </label>
@@ -430,6 +948,24 @@ export const AdminFacultyTab: React.FC = () => {
                 </div>
 
                 <div>
+                  <label className="block text-slate-700 font-bold mb-1 flex items-center gap-1">
+                    <ListOrdered className="w-3.5 h-3.5 text-[#588B76]" />
+                    <span>Display Rank / Order</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={faculty.length + 1}
+                    value={formOrder}
+                    onChange={(e) => setFormOrder(Number(e.target.value))}
+                    placeholder="1"
+                    className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
                   <label className="block text-slate-700 font-bold mb-1">
                     Institutional Role
                   </label>
@@ -438,13 +974,11 @@ export const AdminFacultyTab: React.FC = () => {
                     required
                     value={formRole}
                     onChange={(e) => setFormRole(e.target.value)}
-                    placeholder="e.g. Board of Trustees / Professor"
+                    placeholder="e.g. Chairman, Board of Trustees / Professor"
                     className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                   />
                 </div>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-700 font-bold mb-1">
                     Governance / Faculty Group
@@ -461,19 +995,19 @@ export const AdminFacultyTab: React.FC = () => {
                     <option value="Administrative Staff">Administrative Staff</option>
                   </select>
                 </div>
+              </div>
 
-                <div>
-                  <label className="block text-slate-700 font-bold mb-1">
-                    Academic Department
-                  </label>
-                  <input
-                    type="text"
-                    value={formDept}
-                    onChange={(e) => setFormDept(e.target.value)}
-                    placeholder="e.g. Theology & Pastoral Studies"
-                    className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
-                  />
-                </div>
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Academic Department
+                </label>
+                <input
+                  type="text"
+                  value={formDept}
+                  onChange={(e) => setFormDept(e.target.value)}
+                  placeholder="e.g. Theology & Pastoral Studies"
+                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                />
               </div>
 
               <div>
@@ -760,3 +1294,4 @@ export const AdminFacultyTab: React.FC = () => {
     </div>
   );
 };
+
