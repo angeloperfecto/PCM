@@ -38,11 +38,12 @@ import { UserAccountModal } from '@/components/modals/UserAccountModal';
 
 const AppContent: React.FC = () => {
   const { currentSection } = usePCM();
+  const isAdminSection = currentSection === 'admin';
 
   return (
     <div className="min-h-screen flex flex-col bg-[#FFFFFF] text-[#1e293b] antialiased">
-      {/* Top Header */}
-      <Header />
+      {/* Top Public Header (hidden on Admin CMS to prevent overlapping) */}
+      {!isAdminSection && <Header />}
 
       {/* Main View Router */}
       <main className="flex-1 w-full">
@@ -64,8 +65,8 @@ const AppContent: React.FC = () => {
         {currentSection === 'admin' && <AdminView />}
       </main>
 
-      {/* Institutional Footer */}
-      <Footer />
+      {/* Institutional Footer (hidden on Admin CMS) */}
+      {!isAdminSection && <Footer />}
 
       {/* Toast Notification Container */}
       <ToastContainer />

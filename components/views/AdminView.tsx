@@ -1,8 +1,9 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { Emblem } from '@/components/common/Emblem';
+import { AdminSidebar, AdminTabType } from '@/components/admin/AdminSidebar';
 import { AdminHeader } from '@/components/admin/AdminHeader';
 import { AdminOverviewTab } from '@/components/admin/AdminOverviewTab';
 import { AdminSiteConfigTab } from '@/components/admin/AdminSiteConfigTab';
@@ -18,23 +19,10 @@ import { AdminApplicationsTab } from '@/components/admin/AdminApplicationsTab';
 import { AdminEnrollmentsTab } from '@/components/admin/AdminEnrollmentsTab';
 import { AdminUsersTab } from '@/components/admin/AdminUsersTab';
 import { AdminDonationsTab } from '@/components/admin/AdminDonationsTab';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
-  LayoutDashboard,
-  Building,
-  Sparkles,
-  BookOpen,
-  Users,
-  Megaphone,
-  Calendar,
-  Bell,
-  Image as ImageIcon,
-  Download,
-  FileCheck,
-  GraduationCap,
-  ShieldCheck,
   ShieldAlert,
   Lock,
-  Heart,
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
@@ -57,29 +45,59 @@ export const AdminView: React.FC = () => {
     mediaLibrary,
     donations,
     enrollments,
+    exportDatabaseJson,
+    importDatabaseJson,
+    resetToInitialData,
     addToast,
   } = usePCM();
 
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
   const [loginUser, setLoginUser] = useState('admin');
   const [loginPass, setLoginPass] = useState('pcm2026');
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<
-    | 'overview'
-    | 'siteConfig'
-    | 'hero'
-    | 'programs'
-    | 'faculty'
-    | 'news'
-    | 'events'
-    | 'announcements'
-    | 'media'
-    | 'downloads'
-    | 'applications'
-    | 'enrollments'
-    | 'donations'
-    | 'users'
-  >('overview');
+  const [activeTab, setActiveTab] = useState<AdminTabType>('overview');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+
+  const handleExportDB = () => {
+    const json = exportDatabaseJson();
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `pcm-backup-${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    addToast({
+      title: 'Database Exported',
+      message: 'Full institutional dataset downloaded to your device.',
+      type: 'success',
+    });
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target?.result as string;
+      if (content) {
+        importDatabaseJson(content);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleResetClick = () => {
+    setShowResetConfirm(true);
+  };
 
   // Strict RBAC gate: Student accounts are completely restricted from Admin section
   const isStudentUser =
@@ -308,87 +326,82 @@ export const AdminView: React.FC = () => {
     );
   }
 
-  // Navigation tabs definition with badges
-  const navTabs = [
-    { id: 'overview', label: 'Dashboard Overview', icon: LayoutDashboard },
-    { id: 'siteConfig', label: 'Site Identity & SEO', icon: Building },
-    { id: 'hero', label: 'Hero Slideshow', icon: Sparkles },
-    { id: 'programs', label: 'Academic Programs', icon: BookOpen, count: programs.length },
-    { id: 'faculty', label: 'Faculty & Trustees', icon: Users, count: faculty.length },
-    { id: 'news', label: 'News & Articles', icon: Megaphone, count: news.length },
-    { id: 'events', label: 'Calendar Events', icon: Calendar, count: events.length },
-    { id: 'announcements', label: 'Ticker Notices', icon: Bell, count: announcements.filter(a => a.active).length },
-    { id: 'media', label: 'Media Library', icon: ImageIcon, count: mediaLibrary.length },
-    { id: 'downloads', label: 'Download Center', icon: Download, count: downloads.length },
-    { id: 'applications', label: 'Admissions Review', icon: FileCheck, count: applications.length, highlight: true },
-    { id: 'enrollments', label: 'Enrollment & Records', icon: GraduationCap, count: enrollments.length, highlight: true },
-    { id: 'donations', label: 'Donations & Giving', icon: Heart, count: donations.length, highlight: true },
-    { id: 'users', label: 'Users & Roles', icon: ShieldCheck },
-  ];
-
   return (
-    <div className="w-full min-h-screen bg-slate-50 font-sans pb-24">
-      {/* Top Controls Header */}
-      <AdminHeader />
+    <div className="w-full min-h-screen bg-slate-100 font-sans flex">
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept=".json"
+        className="hidden"
+      />
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-        {/* Navigation Tabs Bar */}
-        <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-1.5 overflow-x-auto text-xs font-bold scrollbar-none">
-          {navTabs.map((t) => {
-            const Icon = t.icon;
-            const isActive = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id as any)}
-                className={`px-3.5 py-2.5 rounded-xl flex items-center gap-2 whitespace-nowrap transition cursor-pointer shrink-0 ${
-                  isActive
-                    ? 'bg-[#18392B] text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <Icon
-                  className={`w-4 h-4 ${
-                    isActive ? 'text-[#85AA9B]' : 'text-slate-400'
-                  }`}
-                />
-                <span>{t.label}</span>
-                {t.count !== undefined && (
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                      isActive
-                        ? 'bg-white/20 text-white'
-                        : t.highlight
-                        ? 'bg-amber-100 text-amber-800'
-                        : 'bg-slate-200 text-slate-700'
-                    }`}
-                  >
-                    {t.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      {/* Modern Vertical Sidebar */}
+      <AdminSidebar
+        activeTab={activeTab}
+        setActiveTab={(tab) => setActiveTab(tab)}
+        isCollapsed={isSidebarCollapsed}
+        setIsCollapsed={setIsSidebarCollapsed}
+        isMobileOpen={isMobileSidebarOpen}
+        setIsMobileOpen={setIsMobileSidebarOpen}
+        onExportDB={handleExportDB}
+        onImportClick={handleImportClick}
+        onResetClick={handleResetClick}
+      />
 
-        {/* Tab Content Rendering */}
-        <div className="transition-all duration-150">
-          {activeTab === 'overview' && <AdminOverviewTab onSelectTab={(tab) => setActiveTab(tab as any)} />}
-          {activeTab === 'siteConfig' && <AdminSiteConfigTab />}
-          {activeTab === 'hero' && <AdminHeroTab />}
-          {activeTab === 'programs' && <AdminProgramsTab />}
-          {activeTab === 'faculty' && <AdminFacultyTab />}
-          {activeTab === 'news' && <AdminNewsTab />}
-          {activeTab === 'events' && <AdminEventsTab />}
-          {activeTab === 'announcements' && <AdminAnnouncementsTab />}
-          {activeTab === 'media' && <AdminMediaTab />}
-          {activeTab === 'downloads' && <AdminDownloadsTab />}
-          {activeTab === 'applications' && <AdminApplicationsTab />}
-          {activeTab === 'enrollments' && <AdminEnrollmentsTab />}
-          {activeTab === 'donations' && <AdminDonationsTab />}
-          {activeTab === 'users' && <AdminUsersTab />}
-        </div>
+      {/* Main Content Workspace */}
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
+          isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-72'
+        }`}
+      >
+        {/* Top Header Bar */}
+        <AdminHeader
+          activeTab={activeTab}
+          setActiveTab={(tab) => setActiveTab(tab)}
+          isCollapsed={isSidebarCollapsed}
+          setIsCollapsed={setIsSidebarCollapsed}
+          isMobileOpen={isMobileSidebarOpen}
+          setIsMobileOpen={setIsMobileSidebarOpen}
+          onExportDB={handleExportDB}
+          onImportClick={handleImportClick}
+          onResetClick={handleResetClick}
+        />
+
+        {/* Tab Content Canvas */}
+        <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-[1600px] w-full mx-auto pb-24">
+          <div className="transition-all duration-150">
+            {activeTab === 'overview' && <AdminOverviewTab onSelectTab={(tab) => setActiveTab(tab as any)} />}
+            {activeTab === 'siteConfig' && <AdminSiteConfigTab />}
+            {activeTab === 'hero' && <AdminHeroTab />}
+            {activeTab === 'programs' && <AdminProgramsTab />}
+            {activeTab === 'faculty' && <AdminFacultyTab />}
+            {activeTab === 'news' && <AdminNewsTab />}
+            {activeTab === 'events' && <AdminEventsTab />}
+            {activeTab === 'announcements' && <AdminAnnouncementsTab />}
+            {activeTab === 'media' && <AdminMediaTab />}
+            {activeTab === 'downloads' && <AdminDownloadsTab />}
+            {activeTab === 'applications' && <AdminApplicationsTab />}
+            {activeTab === 'enrollments' && <AdminEnrollmentsTab />}
+            {activeTab === 'donations' && <AdminDonationsTab />}
+            {activeTab === 'users' && <AdminUsersTab />}
+          </div>
+        </main>
       </div>
+
+      {/* Database Reset Baseline Modal */}
+      <ConfirmDeleteModal
+        isOpen={showResetConfirm}
+        title="Reset Baseline Database"
+        itemName="All Philippine College of Ministry CMS Records"
+        message="Are you sure you want to reset all CMS content, news, events, faculty profiles, and configurations to the original Philippine College of Ministry baseline?"
+        confirmLabel="Reset to Baseline"
+        onConfirm={() => {
+          resetToInitialData();
+          setShowResetConfirm(false);
+        }}
+        onCancel={() => setShowResetConfirm(false)}
+      />
     </div>
   );
 };
