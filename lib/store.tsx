@@ -57,6 +57,7 @@ import {
   INITIAL_SERMONS,
   INITIAL_FAQS,
   INITIAL_ADMIN_USERS,
+  INITIAL_USER_ACCOUNTS,
   INITIAL_SCRAPBOOK,
   INITIAL_MIGRATION_AUDIT,
   INITIAL_SITE_CONFIG,
@@ -307,6 +308,8 @@ interface PCMContextType {
   setUserAccountModalOpen: (open: boolean) => void;
   signInWithGoogle: () => Promise<{ success: boolean; role?: string; user?: UserAccount }>;
   signOutUser: () => Promise<void>;
+  addUserAccount: (user: Omit<UserAccount, 'id' | 'createdAt'>) => Promise<UserAccount> | UserAccount;
+  deleteUserAccount: (userId: string) => Promise<void> | void;
   updateUserAccountRole: (userId: string, role: UserRole, adminRole?: AdminRole) => Promise<void>;
   linkStudentIdToUser: (studentId: string) => Promise<void>;
 
@@ -439,7 +442,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // User Accounts & Multi-Role Auth
   const [currentUserAccount, setCurrentUserAccount] = useState<UserAccount | null>(null);
   const [firebaseAuthUser, setFirebaseAuthUser] = useState<FirebaseUser | null>(null);
-  const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(INITIAL_USER_ACCOUNTS);
 
   // Core CMS Data States (initialized identically on SSR and client to prevent hydration mismatch)
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(INITIAL_SITE_CONFIG);
@@ -612,6 +615,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     mediaItems,
     galleryAlbums,
     adminUsers,
+    userAccounts,
     studentProfile,
     students,
     enrollments,
@@ -638,6 +642,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mediaItems,
       galleryAlbums,
       adminUsers,
+      userAccounts,
       studentProfile,
       students,
       enrollments,
@@ -857,6 +862,17 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             await admBatch.commit();
           } catch (e) {
             console.warn('Admin users batch sync notice:', e);
+          }
+        }
+
+        // 15b. Google & System User Accounts directory batch
+        if (st.userAccounts && st.userAccounts.length > 0) {
+          try {
+            const userBatch = writeBatch(db);
+            st.userAccounts.forEach((u: any) => userBatch.set(doc(db, 'users', u.uid || u.id), cleanFirestoreData(u), { merge: true }));
+            await userBatch.commit();
+          } catch (e) {
+            console.warn('User accounts batch sync notice:', e);
           }
         }
 
@@ -1261,8 +1277,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uUsers = onSnapshot(
       collection(db, 'users'),
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[];
-        setUserAccounts(list);
+        if (!snap.empty && snap.docs.length > 0) {
+          const remoteList = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[];
+          const map = new Map<string, UserAccount>();
+          INITIAL_USER_ACCOUNTS.forEach((u) => map.set(u.email?.toLowerCase() || u.id, u));
+          remoteList.forEach((u) => {
+            const key = u.email?.toLowerCase() || u.id;
+            map.set(key, { ...(map.get(key) || {}), ...u });
+          });
+          setUserAccounts(Array.from(map.values()));
+        } else {
+          setUserAccounts(INITIAL_USER_ACCOUNTS);
+        }
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'users')
     );
@@ -3111,6 +3137,45 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const addUserAccount = async (user: Omit<UserAccount, 'id' | 'createdAt'>): Promise<UserAccount> => {
+    const newId = user.uid || `uid-usr-${Date.now()}`;
+    const newAcc: UserAccount = cleanFirestoreData({
+      ...user,
+      id: newId,
+      uid: newId,
+      createdAt: new Date().toISOString(),
+      lastLogin: user.lastLogin || new Date().toISOString(),
+      status: user.status || 'Active',
+      provider: user.provider || 'google.com',
+    });
+
+    setUserAccounts((prev) => [newAcc, ...prev.filter((u) => u.email?.toLowerCase() !== newAcc.email.toLowerCase())]);
+
+    try {
+      await safeSetDoc(doc(db, 'users', newId), newAcc);
+    } catch (e) {
+      console.warn('Add user account Firestore sync notice:', e);
+    }
+
+    logActivity('CREATE', 'User Account', newId, newAcc.name, `Registered new account (${newAcc.email} - ${newAcc.role}).`);
+    addToast('success', 'User Account Registered', `Registered ${newAcc.name} (${newAcc.role}) into directory.`);
+    return newAcc;
+  };
+
+  const deleteUserAccount = async (userId: string) => {
+    const target = userAccounts.find((u) => u.id === userId || u.uid === userId);
+    setUserAccounts((prev) => prev.filter((u) => u.id !== userId && u.uid !== userId));
+
+    try {
+      await safeDeleteDoc(doc(db, 'users', userId));
+    } catch (e) {
+      console.warn('Delete user account Firestore sync notice:', e);
+    }
+
+    logActivity('DELETE', 'User Account', userId, target?.name || userId, 'Removed user account from system directory.');
+    addToast('info', 'User Account Removed', `Removed ${target?.name || 'user'} from account directory.`);
+  };
+
   const updateUserAccountRole = async (userId: string, role: UserRole, adminRole?: AdminRole) => {
     if (currentUserAccount?.role === 'Student' || !isAdminLoggedIn) {
       addToast({
@@ -3690,6 +3755,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setUserAccountModalOpen,
         signInWithGoogle,
         signOutUser,
+        addUserAccount,
+        deleteUserAccount,
         updateUserAccountRole,
         linkStudentIdToUser,
 
