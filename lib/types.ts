@@ -329,6 +329,8 @@ export interface StudentPaymentRecord {
   amount: number;
   paymentDate?: string;
   date?: string;
+  term?: string;
+  notes?: string;
   method?: 'GCash' | 'Bank Transfer (BDO)' | 'Bank Transfer (Metrobank)' | 'Over-the-Counter Cashier' | 'Scholarship Grant' | string;
   paymentMethod?: string;
   status?: 'Verified' | 'Pending Verification' | 'Rejected';
@@ -382,6 +384,12 @@ export interface StudentProfile {
   };
   homeChurch: string;
   pastorName?: string;
+  presbytery?: string;
+  emergencyContactName?: string;
+  emergencyContactRelation?: string;
+  emergencyContactPhone?: string;
+  guardianName?: string;
+  guardianPhone?: string;
   mentorName: string;
   avatarUrl: string;
   gpa: number;
@@ -410,6 +418,122 @@ export interface SelectedSubject {
   room: string;
   instructor: string;
   section?: string;
+}
+
+export type EnrollmentSubmenuTab =
+  | 'profile'
+  | 'pre-enlistment'
+  | 'enrollment'
+  | 'add-drop'
+  | 'adding-dropping'
+  | 'assessment'
+  | 'amount-due';
+
+export type Course = StudentCourse;
+
+export interface AcademicSubject {
+  id: string;
+  code: string;
+  title: string;
+  description?: string;
+  category?: string;
+  units: number;
+  schedule: string;
+  room: string;
+  instructor: string;
+  prerequisites: string[];
+  prerequisite?: string;
+  semester: string;
+  academicYear: string;
+  section: string;
+  capacity: number;
+  enrolledCount: number;
+  status: 'Open' | 'Closed' | 'Waitlist';
+}
+
+export interface PreEnlistmentRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  program: string;
+  degreeProgram?: string;
+  yearLevel: string;
+  semester: string;
+  academicYear: string;
+  selectedSubjects?: SelectedSubject[];
+  selectedSubjectCodes?: string[];
+  totalUnits: number;
+  status: 'Draft' | 'Submitted' | 'Approved' | 'Returned for Revision' | 'Rejected';
+  remarks?: string;
+  adminRemarks?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type AddDropAction = 'Add' | 'Drop';
+export type AddDropStatus = 'Pending' | 'Approved' | 'Rejected' | 'Completed';
+
+export interface AddDropRequest {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  program: string;
+  degreeProgram?: string;
+  academicYear: string;
+  semester: string;
+  subjectCode: string;
+  subjectTitle: string;
+  units: number;
+  action: AddDropAction;
+  reason: string;
+  dateSubmitted: string;
+  status: AddDropStatus;
+  adminRemarks?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
+export interface FeeStructureItem {
+  id: string;
+  category: 'Tuition' | 'Miscellaneous' | 'Laboratory' | 'Other';
+  name: string;
+  amount: number;
+  isPerUnit?: boolean;
+  required: boolean;
+  description?: string;
+}
+
+export interface StudentAssessment {
+  id: string;
+  studentId: string;
+  academicYear: string;
+  semester: string;
+  tuitionTotal: number;
+  tuitionPerUnit: number;
+  totalUnits: number;
+  miscellaneousTotal: number;
+  miscBreakdown: { id: string; name: string; amount: number }[];
+  laboratoryTotal: number;
+  labBreakdown: { id: string; name: string; amount: number }[];
+  otherFeesTotal: number;
+  otherBreakdown: { id: string; name: string; amount: number }[];
+  discountsTotal: number;
+  discountsBreakdown: { id: string; name: string; amount: number; percentage?: number }[];
+  adjustmentsTotal: number;
+  adjustmentsBreakdown: { id: string; name: string; amount: number; note?: string }[];
+  totalAssessment: number;
+  previousBalance: number;
+  totalAmountPaid: number;
+  currentAmountDue: number;
+  paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid' | 'Overdue';
+  dueDate: string;
+  updatedAt: string;
 }
 
 export interface OnlineEnrollment {

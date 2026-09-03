@@ -8,6 +8,13 @@ import {
   StudentDocument,
   SelectedSubject,
 } from '@/lib/types';
+import { EnrollmentNavbar } from '@/components/portal/enrollment/EnrollmentNavbar';
+import { StudentProfileModule } from '@/components/portal/enrollment/StudentProfileModule';
+import { PreEnlistmentModule } from '@/components/portal/enrollment/PreEnlistmentModule';
+import { EnrollmentModule } from '@/components/portal/enrollment/EnrollmentModule';
+import { AddDropModule } from '@/components/portal/enrollment/AddDropModule';
+import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModule';
+import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule';
 import {
   GraduationCap,
   Calendar,
@@ -64,6 +71,8 @@ export const PortalView: React.FC = () => {
     markAllNotificationsRead,
     addToast,
     programs,
+    enrollmentActiveSubTab,
+    setEnrollmentActiveSubTab,
   } = usePCM();
 
   // Authentication states
@@ -548,116 +557,41 @@ export const PortalView: React.FC = () => {
           })}
         </div>
 
-        {/* TAB 1: ONLINE ENROLLMENT HUB */}
+        {/* TAB 1: ENROLLMENT SECTION (6 SUBMENU MODULES) */}
         {activeTab === 'enrollment' && (
           <div className="space-y-6">
-            {/* Enrollment Status Card */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-6">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-                <div>
-                  <span className="text-xs font-mono font-bold text-[#588B76] uppercase">
-                    Academic Year 2026–2027 • 1st Semester
-                  </span>
-                  <h3 className="font-serif text-2xl font-bold text-[#18392B]">
-                    Online Enrollment & Course Registration
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Manage your semester subject enlistment, upload admission requirements, and obtain your official Certificate of Registration.
-                  </p>
-                </div>
+            {/* Enrollment Submenu Navigation Bar (Purple highlighted active state) */}
+            <EnrollmentNavbar
+              activeTab={enrollmentActiveSubTab}
+              onTabChange={setEnrollmentActiveSubTab}
+            />
 
-                <div className="flex items-center gap-2">
-                  {isEnrolled && (
-                    <button
-                      onClick={() => setIsCORModalOpen(true)}
-                      className="bg-[#18392B] hover:bg-[#588B76] text-white hover:text-[#18392B] font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 cursor-pointer shadow-sm"
-                    >
-                      <Printer className="w-4 h-4" />
-                      <span>View & Print Official COR</span>
-                    </button>
-                  )}
+            {/* Submenu Item 1: Student Profile */}
+            {enrollmentActiveSubTab === 'profile' && <StudentProfileModule />}
 
-                  <button
-                    onClick={() => setIsEnrollmentWizardOpen(true)}
-                    className="bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 cursor-pointer shadow-sm"
-                  >
-                    <PlusCircle className="w-4 h-4" />
-                    <span>{latestEnrollment ? 'Manage / Update Enrollment' : 'Start Online Enrollment'}</span>
-                  </button>
-                </div>
-              </div>
+            {/* Submenu Item 2: Pre-enlistment */}
+            {enrollmentActiveSubTab === 'pre-enlistment' && <PreEnlistmentModule />}
 
-              {/* Status Timeline Workflow */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                {[
-                  { step: '1', title: 'Course Enlistment', desc: 'Subjects selected & units assessed', completed: true },
-                  { step: '2', title: 'Document Verification', desc: 'TOR, Good Moral & Endorsement', completed: true },
-                  { step: '3', title: 'Registrar Approval', desc: 'Verification of academic prerequisites', completed: isEnrolled },
-                  { step: '4', title: 'Official COR Release', desc: 'Certificate of Registration issued', completed: isEnrolled },
-                ].map((st, i) => (
-                  <div
-                    key={st.step}
-                    className={`p-4 rounded-xl border text-xs space-y-1.5 ${
-                      st.completed
-                        ? 'bg-emerald-50/70 border-emerald-200 text-emerald-950'
-                        : 'bg-slate-50 border-slate-200 text-slate-500'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono font-bold text-[10px] text-[#588B76]">Step 0{st.step}</span>
-                      {st.completed ? (
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                      ) : (
-                        <Clock className="w-4 h-4 text-slate-400" />
-                      )}
-                    </div>
-                    <strong className="font-serif text-sm block font-bold text-slate-900">{st.title}</strong>
-                    <p className="text-[11px] text-slate-600">{st.desc}</p>
-                  </div>
-                ))}
-              </div>
+            {/* Submenu Item 3: Enrollment */}
+            {enrollmentActiveSubTab === 'enrollment' && (
+              <EnrollmentModule
+                onOpenWizard={() => setIsEnrollmentWizardOpen(true)}
+                onOpenCORModal={() => setIsCORModalOpen(true)}
+              />
+            )}
 
-              {/* Current Application Summary */}
-              {latestEnrollment && (
-                <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 space-y-3 text-xs">
-                  <div className="flex items-center justify-between">
-                    <span className="font-mono font-bold text-[#18392B]">
-                      Active Enrollment Record: {latestEnrollment.referenceNumber}
-                    </span>
-                    <span
-                      className={`font-mono font-bold px-2 py-0.5 rounded text-[10px] ${
-                        latestEnrollment.status === 'Approved'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : latestEnrollment.status === 'Submitted'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-slate-200 text-slate-700'
-                      }`}
-                    >
-                      Status: {latestEnrollment.status}
-                    </span>
-                  </div>
+            {/* Submenu Item 4: Adding & Dropping */}
+            {enrollmentActiveSubTab === 'add-drop' && <AddDropModule />}
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-slate-700 font-sans">
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Degree Program</span>
-                      <strong className="font-semibold">{latestEnrollment.programTitle}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Academic Term</span>
-                      <strong className="font-semibold">{latestEnrollment.semester}, {latestEnrollment.schoolYear}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Course Load</span>
-                      <strong className="font-semibold font-mono">{latestEnrollment.selectedSubjects?.length || 0} Subjects ({latestEnrollment.totalUnits} Units)</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Assessed Tuition</span>
-                      <strong className="font-semibold font-mono text-[#18392B]">₱{(latestEnrollment.estimatedTuition || 0).toLocaleString()}</strong>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Submenu Item 5: Assessment */}
+            {enrollmentActiveSubTab === 'assessment' && (
+              <AssessmentModule
+                onNavigateToAmountDue={() => setEnrollmentActiveSubTab('amount-due')}
+              />
+            )}
+
+            {/* Submenu Item 6: Amount Due */}
+            {enrollmentActiveSubTab === 'amount-due' && <AmountDueModule />}
           </div>
         )}
 

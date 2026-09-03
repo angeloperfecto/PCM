@@ -40,6 +40,14 @@ import {
   DonationPaymentMethod,
   DonationRecord,
   DonationSettings,
+  AcademicSubject,
+  PreEnlistmentRecord,
+  AddDropRequest,
+  AddDropAction,
+  AddDropStatus,
+  FeeStructureItem,
+  StudentAssessment,
+  EnrollmentSubmenuTab,
 } from './types';
 import {
   INITIAL_PROGRAMS,
@@ -68,6 +76,10 @@ import {
   INITIAL_DONATION_METHODS,
   INITIAL_DONATIONS,
   INITIAL_DONATION_SETTINGS,
+  INITIAL_ACADEMIC_SUBJECTS,
+  INITIAL_PRE_ENLISTMENTS,
+  INITIAL_ADD_DROP_REQUESTS,
+  INITIAL_FEE_STRUCTURE,
 } from './initialData';
 import {
   db,
@@ -352,6 +364,37 @@ interface PCMContextType {
   addStudentGrade: (studentId: string, courseCode: string, midtermGrade: number | string, finalGrade: number | string) => Promise<boolean>;
   recordStudentPayment: (studentId: string, payment: Omit<StudentPaymentRecord, 'id'>) => Promise<boolean>;
 
+  // Enrollment Submenu Navigation
+  enrollmentActiveSubTab: EnrollmentSubmenuTab;
+  setEnrollmentActiveSubTab: (tab: EnrollmentSubmenuTab) => void;
+
+  // Academic Subjects Catalog & Sections
+  academicSubjects: AcademicSubject[];
+  setAcademicSubjects: React.Dispatch<React.SetStateAction<AcademicSubject[]>>;
+  addAcademicSubject: (subject: Omit<AcademicSubject, 'id'>) => Promise<AcademicSubject>;
+  updateAcademicSubject: (id: string, updates: Partial<AcademicSubject>) => Promise<boolean>;
+  deleteAcademicSubject: (id: string) => Promise<boolean>;
+
+  // Pre-Enlistment Module
+  preEnlistments: PreEnlistmentRecord[];
+  setPreEnlistments: React.Dispatch<React.SetStateAction<PreEnlistmentRecord[]>>;
+  submitPreEnlistment: (record: Omit<PreEnlistmentRecord, 'id' | 'createdAt'>) => Promise<PreEnlistmentRecord>;
+  updatePreEnlistmentStatus: (id: string, status: PreEnlistmentRecord['status'], remarks?: string) => Promise<boolean>;
+
+  // Adding & Dropping Module
+  addDropRequests: AddDropRequest[];
+  setAddDropRequests: React.Dispatch<React.SetStateAction<AddDropRequest[]>>;
+  submitAddDropRequest: (req: Omit<AddDropRequest, 'id' | 'createdAt' | 'status' | 'dateSubmitted'>) => Promise<AddDropRequest>;
+  reviewAddDropRequest: (id: string, status: AddDropStatus, adminRemarks?: string) => Promise<boolean>;
+
+  // Assessment & Fee Structure Module
+  feeStructure: FeeStructureItem[];
+  setFeeStructure: React.Dispatch<React.SetStateAction<FeeStructureItem[]>>;
+  updateFeeStructureItem: (id: string, updates: Partial<FeeStructureItem>) => Promise<boolean>;
+  addFeeStructureItem: (item: Omit<FeeStructureItem, 'id'>) => Promise<FeeStructureItem>;
+  deleteFeeStructureItem: (id: string) => Promise<boolean>;
+  calculateStudentAssessment: (studentId?: string, overrideUnits?: number, additionalFeeIds?: string[]) => StudentAssessment;
+
   // Student Notifications
   studentNotifications: StudentNotification[];
   setStudentNotifications: React.Dispatch<React.SetStateAction<StudentNotification[]>>;
@@ -481,6 +524,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [enrollments, setEnrollments] = useState<OnlineEnrollment[]>(INITIAL_ENROLLMENTS);
   const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>(INITIAL_STUDENT_NOTIFICATIONS);
   const [currentEnrollmentDraft, setCurrentEnrollmentDraft] = useState<Partial<OnlineEnrollment> | null>(null);
+
+  // Enrollment Submenu Active Tab
+  const [enrollmentActiveSubTab, setEnrollmentActiveSubTab] = useState<EnrollmentSubmenuTab>('profile');
+
+  // Academic Subjects, Pre-Enlistment, Adding & Dropping, and Fee Structure
+  const [academicSubjects, setAcademicSubjects] = useState<AcademicSubject[]>(INITIAL_ACADEMIC_SUBJECTS);
+  const [preEnlistments, setPreEnlistments] = useState<PreEnlistmentRecord[]>(INITIAL_PRE_ENLISTMENTS);
+  const [addDropRequests, setAddDropRequests] = useState<AddDropRequest[]>(INITIAL_ADD_DROP_REQUESTS);
+  const [feeStructure, setFeeStructure] = useState<FeeStructureItem[]>(INITIAL_FEE_STRUCTURE);
 
   // Admin Auth
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -1449,6 +1501,62 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => handleFirestoreError(err, OperationType.LIST, 'studentNotifications')
     );
     adminUnsubs.push(uNotifs);
+
+    // 9. Academic Subjects collection
+    logFirestoreOp('listen', 'academicSubjects', 'Academic Subjects Listener');
+    const uSubjects = onSnapshot(
+      collection(db, 'academicSubjects'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicSubject[];
+          setAcademicSubjects(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'academicSubjects')
+    );
+    adminUnsubs.push(uSubjects);
+
+    // 10. Pre-Enlistments collection
+    logFirestoreOp('listen', 'preEnlistments', 'Pre-Enlistments Listener');
+    const uPreEnlist = onSnapshot(
+      collection(db, 'preEnlistments'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PreEnlistmentRecord[];
+          setPreEnlistments(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'preEnlistments')
+    );
+    adminUnsubs.push(uPreEnlist);
+
+    // 11. Add/Drop Requests collection
+    logFirestoreOp('listen', 'addDropRequests', 'Add/Drop Requests Listener');
+    const uAddDrop = onSnapshot(
+      collection(db, 'addDropRequests'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AddDropRequest[];
+          setAddDropRequests(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'addDropRequests')
+    );
+    adminUnsubs.push(uAddDrop);
+
+    // 12. Fee Structure collection
+    logFirestoreOp('listen', 'feeStructure', 'Fee Structure Listener');
+    const uFeeStruct = onSnapshot(
+      collection(db, 'feeStructure'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FeeStructureItem[];
+          setFeeStructure(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'feeStructure')
+    );
+    adminUnsubs.push(uFeeStruct);
 
     return () => {
       adminUnsubs.forEach((unsub) => unsub());
@@ -2697,6 +2805,386 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('info', 'Enrollment Deleted', 'Application record removed.');
     return true;
   };
+
+  // Academic Subjects Catalog & Sections Management
+  const addAcademicSubject = async (subjectData: Omit<AcademicSubject, 'id'>): Promise<AcademicSubject> => {
+    const id = `subj-${subjectData.code.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
+    const newSubject: AcademicSubject = {
+      ...subjectData,
+      id,
+    };
+
+    setAcademicSubjects((prev) => [...prev, newSubject]);
+    try {
+      await safeSetDoc(doc(db, 'academicSubjects', id), cleanFirestoreData(newSubject));
+    } catch (e) {
+      console.warn('Academic subject firestore save notice:', e);
+    }
+
+    logActivity('CREATE', 'Subject Catalog', id, newSubject.code, `Added academic course ${newSubject.code}: ${newSubject.title}`);
+    addToast('success', 'Subject Added', `${newSubject.code} has been added to the course catalog.`);
+    return newSubject;
+  };
+
+  const updateAcademicSubject = async (id: string, updates: Partial<AcademicSubject>): Promise<boolean> => {
+    setAcademicSubjects((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+    try {
+      await safeSetDoc(doc(db, 'academicSubjects', id), cleanFirestoreData(updates), { merge: true });
+    } catch (e) {
+      console.warn('Update academic subject notice:', e);
+    }
+    return true;
+  };
+
+  const deleteAcademicSubject = async (id: string): Promise<boolean> => {
+    const target = academicSubjects.find((s) => s.id === id);
+    setAcademicSubjects((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await safeDeleteDoc(doc(db, 'academicSubjects', id));
+    } catch (e) {
+      console.warn('Delete academic subject notice:', e);
+    }
+    logActivity('DELETE', 'Subject Catalog', id, target?.code || id, `Removed course from catalog.`);
+    addToast('info', 'Subject Removed', 'Course removed from catalog.');
+    return true;
+  };
+
+  // Pre-Enlistment Workflow
+  const submitPreEnlistment = async (recordData: Omit<PreEnlistmentRecord, 'id' | 'createdAt'>): Promise<PreEnlistmentRecord> => {
+    const id = `pre-${recordData.studentId.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}`;
+    const now = new Date().toISOString();
+    const newRecord: PreEnlistmentRecord = {
+      ...recordData,
+      id,
+      createdAt: now,
+      submittedAt: now,
+      status: 'Submitted',
+    };
+
+    setPreEnlistments((prev) => {
+      const idx = prev.findIndex((p) => p.studentId === recordData.studentId && p.semester === recordData.semester);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = newRecord;
+        return next;
+      }
+      return [newRecord, ...prev];
+    });
+
+    try {
+      await safeSetDoc(doc(db, 'preEnlistments', id), cleanFirestoreData(newRecord));
+    } catch (e) {
+      console.warn('Submit pre-enlistment notice:', e);
+    }
+
+    addStudentNotification(recordData.studentId, {
+      title: 'Pre-Enlistment Submitted',
+      message: `Your pre-enlistment for ${recordData.semester} (${recordData.totalUnits} units) has been submitted for Academic Dean & Registrar review.`,
+      type: 'enrollment',
+      linkTab: 'enrollment',
+    });
+
+    logActivity('CREATE', 'Pre-Enlistment', id, recordData.studentName, `Submitted pre-enlistment (${recordData.totalUnits} units)`);
+    addToast('success', 'Pre-Enlistment Submitted', 'Your course selection has been transmitted to the Academic Dean for advising.');
+    return newRecord;
+  };
+
+  const updatePreEnlistmentStatus = async (id: string, status: PreEnlistmentRecord['status'], remarks?: string): Promise<boolean> => {
+    const target = preEnlistments.find((p) => p.id === id);
+    if (!target) return false;
+
+    const reviewerName = currentAdminUser?.name || 'Dr. Jonathan Reyes (Dean of Academics)';
+    const now = new Date().toISOString();
+
+    const updated: PreEnlistmentRecord = {
+      ...target,
+      status,
+      adminRemarks: remarks || (status === 'Approved' ? 'Approved for official enrollment' : 'Requires revision'),
+      reviewedBy: reviewerName,
+      reviewedAt: now,
+      updatedAt: now,
+    };
+
+    setPreEnlistments((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    try {
+      await safeSetDoc(doc(db, 'preEnlistments', id), cleanFirestoreData(updated), { merge: true });
+    } catch (e) {
+      console.warn('Update pre-enlistment status notice:', e);
+    }
+
+    addStudentNotification(target.studentId, {
+      title: `Pre-Enlistment ${status}`,
+      message: `Your pre-enlistment submission has been ${status.toLowerCase()} by ${reviewerName}.${remarks ? ` Note: "${remarks}"` : ''}`,
+      type: 'enrollment',
+      linkTab: 'enrollment',
+    });
+
+    logActivity('UPDATE', 'Pre-Enlistment', id, target.studentName, `Pre-enlistment status updated to ${status}`);
+    addToast(status === 'Approved' ? 'success' : 'info', `Pre-enlistment ${status}`, `Student ${target.studentName} has been notified.`);
+    return true;
+  };
+
+  // Adding & Dropping Workflow
+  const submitAddDropRequest = async (reqData: Omit<AddDropRequest, 'id' | 'createdAt' | 'status' | 'dateSubmitted'>): Promise<AddDropRequest> => {
+    const id = `ad-${reqData.studentId.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}`;
+    const now = new Date().toISOString();
+    const newReq: AddDropRequest = {
+      ...reqData,
+      id,
+      dateSubmitted: now.split('T')[0],
+      status: 'Pending',
+      createdAt: now,
+    };
+
+    setAddDropRequests((prev) => [newReq, ...prev]);
+    try {
+      await safeSetDoc(doc(db, 'addDropRequests', id), cleanFirestoreData(newReq));
+    } catch (e) {
+      console.warn('Submit add-drop request notice:', e);
+    }
+
+    addStudentNotification(reqData.studentId, {
+      title: `Add/Drop Request Filed (${reqData.action}: ${reqData.subjectCode})`,
+      message: `Your request to ${reqData.action} ${reqData.subjectCode} (${reqData.subjectTitle}) is pending Registrar evaluation.`,
+      type: 'enrollment',
+      linkTab: 'enrollment',
+    });
+
+    logActivity('CREATE', 'Adding & Dropping', id, `${reqData.action} ${reqData.subjectCode}`, `Student filed request to ${reqData.action} course`);
+    addToast('success', 'Request Filed', `Your request to ${reqData.action} ${reqData.subjectCode} has been logged.`);
+    return newReq;
+  };
+
+  const reviewAddDropRequest = async (id: string, status: AddDropStatus, adminRemarks?: string): Promise<boolean> => {
+    const target = addDropRequests.find((r) => r.id === id);
+    if (!target) return false;
+
+    const reviewerName = currentAdminUser?.name || 'Academic Registrar';
+    const now = new Date().toISOString();
+
+    const updatedReq: AddDropRequest = {
+      ...target,
+      status,
+      adminRemarks: adminRemarks || (status === 'Approved' ? 'Approved by Academic Dean/Registrar' : 'Disapproved by Academic Registrar'),
+      reviewedBy: reviewerName,
+      reviewedAt: now,
+    };
+
+    setAddDropRequests((prev) => prev.map((r) => (r.id === id ? updatedReq : r)));
+    try {
+      await safeSetDoc(doc(db, 'addDropRequests', id), cleanFirestoreData(updatedReq), { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+
+    // If Approved, update student profile courses & subject catalog enrolled count!
+    if (status === 'Approved') {
+      const targetStudent = students.find((s) => s.studentId === target.studentId) || studentProfile;
+      let updatedCourses = [...(targetStudent.courses || [])];
+
+      if (target.action === 'Add') {
+        const subjectCatalogItem = academicSubjects.find((s) => s.code === target.subjectCode);
+        const existingIdx = updatedCourses.findIndex((c) => c.code === target.subjectCode);
+        if (existingIdx >= 0) {
+          updatedCourses[existingIdx] = {
+            ...updatedCourses[existingIdx],
+            status: 'Enrolled',
+          };
+        } else {
+          updatedCourses.push({
+            id: `course-${target.subjectCode}-${Date.now()}`,
+            code: target.subjectCode,
+            title: target.subjectTitle,
+            units: target.units,
+            schedule: subjectCatalogItem?.schedule || 'TBA',
+            room: subjectCatalogItem?.room || 'TBA',
+            instructor: subjectCatalogItem?.instructor || 'Faculty',
+            status: 'Enrolled',
+          });
+        }
+        if (subjectCatalogItem) {
+          updateAcademicSubject(subjectCatalogItem.id, { enrolledCount: (subjectCatalogItem.enrolledCount || 0) + 1 });
+        }
+      } else if (target.action === 'Drop') {
+        updatedCourses = updatedCourses.map((c) =>
+          c.code === target.subjectCode ? { ...c, status: 'Dropped' as const } : c
+        );
+        const subjectCatalogItem = academicSubjects.find((s) => s.code === target.subjectCode);
+        if (subjectCatalogItem) {
+          updateAcademicSubject(subjectCatalogItem.id, { enrolledCount: Math.max(0, (subjectCatalogItem.enrolledCount || 1) - 1) });
+        }
+      }
+
+      const newUnits = updatedCourses.filter((c) => c.status !== 'Dropped').reduce((sum, c) => sum + (c.units || 0), 0);
+      const newTuitionTotal = newUnits * 850 + 3000;
+      const updatedProfile: StudentProfile = {
+        ...targetStudent,
+        courses: updatedCourses,
+        tuitionTotal: newTuitionTotal,
+        tuitionBalance: Math.max(0, newTuitionTotal - (targetStudent.tuitionPaid || 0)),
+      };
+
+      setStudents((prev) => prev.map((s) => (s.studentId === target.studentId ? updatedProfile : s)));
+      if (studentProfile.studentId === target.studentId) {
+        setStudentProfile(updatedProfile);
+      }
+      try {
+        await safeSetDoc(doc(db, 'studentProfiles', targetStudent.id || targetStudent.studentId), cleanFirestoreData(updatedProfile), { merge: true });
+      } catch (e) {
+        console.warn(e);
+      }
+    }
+
+    // Send notification to student
+    addStudentNotification(target.studentId, {
+      title: `Adding & Dropping Request ${status}`,
+      message: `Your request to ${target.action} ${target.subjectCode} (${target.subjectTitle}) has been ${status.toLowerCase()} by ${reviewerName}.${adminRemarks ? ` Remarks: ${adminRemarks}` : ''}`,
+      type: 'enrollment',
+      linkTab: 'enrollment',
+    });
+
+    logActivity('UPDATE', 'Adding & Dropping', id, `${target.action} ${target.subjectCode}`, `${status} request for ${target.studentName}`);
+    addToast(status === 'Approved' ? 'success' : 'info', `Request ${status}`, `${target.action} request for ${target.subjectCode} has been ${status.toLowerCase()}.`);
+    return true;
+  };
+
+  // Fee Structure Configuration
+  const updateFeeStructureItem = async (id: string, updates: Partial<FeeStructureItem>): Promise<boolean> => {
+    setFeeStructure((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
+    try {
+      await safeSetDoc(doc(db, 'feeStructure', id), cleanFirestoreData(updates), { merge: true });
+    } catch (e) {
+      console.warn('Update fee structure notice:', e);
+    }
+    addToast('success', 'Fee Updated', 'Institutional fee schedule updated.');
+    return true;
+  };
+
+  const addFeeStructureItem = async (itemData: Omit<FeeStructureItem, 'id'>): Promise<FeeStructureItem> => {
+    const id = `fee-${Date.now()}`;
+    const newItem: FeeStructureItem = { ...itemData, id };
+    setFeeStructure((prev) => [...prev, newItem]);
+    try {
+      await safeSetDoc(doc(db, 'feeStructure', id), cleanFirestoreData(newItem));
+    } catch (e) {
+      console.warn('Add fee structure notice:', e);
+    }
+    addToast('success', 'Fee Item Created', `${newItem.name} has been added to the institutional schedule.`);
+    return newItem;
+  };
+
+  const deleteFeeStructureItem = async (id: string): Promise<boolean> => {
+    setFeeStructure((prev) => prev.filter((f) => f.id !== id));
+    try {
+      await safeDeleteDoc(doc(db, 'feeStructure', id));
+    } catch (e) {
+      console.warn('Delete fee structure notice:', e);
+    }
+    addToast('info', 'Fee Item Removed', 'Fee item removed.');
+    return true;
+  };
+
+  // Assessment Calculation Engine
+  const calculateStudentAssessment = useCallback(
+    (studentId?: string, overrideUnits?: number, additionalFeeIds?: string[]): StudentAssessment => {
+      const activeStudent = students.find((s) => s.studentId === studentId || s.id === studentId) || studentProfile;
+      const enrolledCourses = (activeStudent.courses || []).filter((c) => c.status !== 'Dropped');
+      const units = overrideUnits !== undefined
+        ? overrideUnits
+        : enrolledCourses.reduce((sum, c) => sum + (c.units || 0), 0);
+
+      // 1. Tuition
+      const tuitionFeeItem = feeStructure.find((f) => f.category === 'Tuition') || { amount: 850 };
+      const tuitionPerUnit = tuitionFeeItem.amount || 850;
+      const tuitionTotal = units * tuitionPerUnit;
+
+      // 2. Miscellaneous
+      const miscItems = feeStructure.filter((f) => f.category === 'Miscellaneous' && f.required);
+      const miscBreakdown = miscItems.map((f) => ({ id: f.id, name: f.name, amount: f.amount }));
+      const miscellaneousTotal = miscBreakdown.reduce((sum, item) => sum + item.amount, 0);
+
+      // 3. Laboratory / Special Courses
+      const takesMediaLab = enrolledCourses.some((c) => c.code.includes('HOM') || c.code.includes('AV') || c.title.toLowerCase().includes('preaching'));
+      const labItems = feeStructure.filter(
+        (f) => f.category === 'Laboratory' && (f.required || takesMediaLab || (additionalFeeIds && additionalFeeIds.includes(f.id)))
+      );
+      const labBreakdown = labItems.map((f) => ({ id: f.id, name: f.name, amount: f.amount }));
+      const laboratoryTotal = labBreakdown.reduce((sum, item) => sum + item.amount, 0);
+
+      // 4. Other Fees (e.g. Practicum)
+      const takesPracticum = enrolledCourses.some((c) => c.code.includes('PRA') || c.title.toLowerCase().includes('practicum'));
+      const otherItems = feeStructure.filter(
+        (f) => f.category === 'Other' && (f.required || takesPracticum || (additionalFeeIds && additionalFeeIds.includes(f.id)))
+      );
+      const otherBreakdown = otherItems.map((f) => ({ id: f.id, name: f.name, amount: f.amount }));
+      const otherFeesTotal = otherBreakdown.reduce((sum, item) => sum + item.amount, 0);
+
+      // 5. Discounts & Scholarships
+      const discountsBreakdown: { id: string; name: string; amount: number; percentage?: number }[] = [];
+      if (activeStudent.academicStatus === "Dean's List" || activeStudent.academicStatus === "Dean's Honor List") {
+        const discountAmt = Math.round(tuitionTotal * 0.25);
+        discountsBreakdown.push({
+          id: 'disc-deans-list',
+          name: "Dean's Honor List Merit Scholarship (25% Tuition Discount)",
+          amount: discountAmt,
+          percentage: 25,
+        });
+      }
+      const discountsTotal = discountsBreakdown.reduce((sum, d) => sum + d.amount, 0);
+
+      // 6. Adjustments
+      const adjustmentsTotal = 0;
+      const adjustmentsBreakdown: { id: string; name: string; amount: number; note?: string }[] = [];
+
+      // 7. Total Assessment
+      const totalAssessment = Math.max(0, tuitionTotal + miscellaneousTotal + laboratoryTotal + otherFeesTotal - discountsTotal + adjustmentsTotal);
+      const previousBalance = 0;
+
+      // 8. Total Amount Paid from verified records
+      const verifiedPayments = (activeStudent.paymentHistory || activeStudent.paymentRecords || []).filter(
+        (p) => p.status === 'Verified' || !p.status
+      );
+      const totalAmountPaid = verifiedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+      const currentAmountDue = Math.max(0, (totalAssessment + previousBalance) - totalAmountPaid);
+
+      let paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid' | 'Overdue' = 'Unpaid';
+      if (currentAmountDue <= 0 && totalAssessment > 0) {
+        paymentStatus = 'Paid';
+      } else if (totalAmountPaid > 0) {
+        paymentStatus = 'Partially Paid';
+      } else {
+        paymentStatus = 'Unpaid';
+      }
+
+      return {
+        id: `asmt-${activeStudent.studentId || 'std'}-2026-1`,
+        studentId: activeStudent.studentId,
+        academicYear: '2026–2027',
+        semester: '1st Semester',
+        tuitionTotal,
+        tuitionPerUnit,
+        totalUnits: units,
+        miscellaneousTotal,
+        miscBreakdown,
+        laboratoryTotal,
+        labBreakdown,
+        otherFeesTotal,
+        otherBreakdown,
+        discountsTotal,
+        discountsBreakdown,
+        adjustmentsTotal,
+        adjustmentsBreakdown,
+        totalAssessment,
+        previousBalance,
+        totalAmountPaid,
+        currentAmountDue,
+        paymentStatus,
+        dueDate: 'October 15, 2026',
+        updatedAt: new Date().toISOString(),
+      };
+    },
+    [students, studentProfile, feeStructure]
+  );
 
   // Student Document Vault & Verification
   const uploadStudentDocument = async (studentId: string, docData: Omit<StudentDocument, 'id' | 'uploadDate' | 'verificationStatus'>): Promise<StudentDocument> => {
@@ -3990,6 +4478,37 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteStudentProfile,
         addStudentGrade,
         recordStudentPayment,
+
+        // Enrollment Submenu Navigation
+        enrollmentActiveSubTab,
+        setEnrollmentActiveSubTab,
+
+        // Academic Subjects Catalog & Sections
+        academicSubjects,
+        setAcademicSubjects,
+        addAcademicSubject,
+        updateAcademicSubject,
+        deleteAcademicSubject,
+
+        // Pre-Enlistment Module
+        preEnlistments,
+        setPreEnlistments,
+        submitPreEnlistment,
+        updatePreEnlistmentStatus,
+
+        // Adding & Dropping Module
+        addDropRequests,
+        setAddDropRequests,
+        submitAddDropRequest,
+        reviewAddDropRequest,
+
+        // Assessment & Fee Structure Module
+        feeStructure,
+        setFeeStructure,
+        updateFeeStructureItem,
+        addFeeStructureItem,
+        deleteFeeStructureItem,
+        calculateStudentAssessment,
 
         // Student Notifications Engine
         studentNotifications,
