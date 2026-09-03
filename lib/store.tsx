@@ -27,6 +27,7 @@ import {
   AdminRole,
   AdminUser,
   UserAccount,
+  NewUserAccountInput,
   UserRole,
   ApplicationStatus,
   ScrapbookItem,
@@ -308,7 +309,7 @@ interface PCMContextType {
   setUserAccountModalOpen: (open: boolean) => void;
   signInWithGoogle: () => Promise<{ success: boolean; role?: string; user?: UserAccount }>;
   signOutUser: () => Promise<void>;
-  addUserAccount: (user: Omit<UserAccount, 'id' | 'createdAt'>) => Promise<UserAccount> | UserAccount;
+  addUserAccount: (user: NewUserAccountInput) => Promise<UserAccount> | UserAccount;
   deleteUserAccount: (userId: string) => Promise<void> | void;
   updateUserAccountRole: (userId: string, role: UserRole, adminRole?: AdminRole) => Promise<void>;
   linkStudentIdToUser: (studentId: string) => Promise<void>;
@@ -1208,7 +1209,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setIsAdminLoggedIn(true);
               setCurrentAdminUser({
                 id: acc.uid,
-                name: acc.name || acc.displayName,
+                name: acc.name || acc.displayName || 'Administrator',
                 email: acc.email,
                 username: acc.email.split('@')[0] || 'admin',
                 role: acc.adminRole || 'Super Admin',
@@ -1221,7 +1222,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setIsStudentLoggedIn(true);
               setStudentProfile((prev) => ({
                 ...prev,
-                fullName: acc.name,
+                fullName: acc.name || acc.displayName || prev.fullName,
                 email: acc.email,
                 avatarUrl: acc.photoURL || prev.avatarUrl,
               }));
@@ -1272,23 +1273,78 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let adminUnsubs: (() => void)[] = [];
 
+    // Helper to keep userAccounts in sync with all registered admins and students
+    const syncWithAdminsAndStudents = (
+      baseUsers: UserAccount[],
+      currAdmins: AdminUser[],
+      currStudents: StudentProfile[]
+    ): UserAccount[] => {
+      const map = new Map<string, UserAccount>();
+
+      // 1. Base / Registered accounts
+      baseUsers.forEach((u) => {
+        const key = (u.email || u.id || u.uid || '').toLowerCase().trim();
+        if (key) map.set(key, u);
+      });
+
+      // 2. Ensure all registered admin users are included
+      currAdmins.forEach((adm) => {
+        const key = (adm.email || adm.id).toLowerCase().trim();
+        const existing = map.get(key);
+        map.set(key, {
+          id: existing?.id || `uid-${adm.id}`,
+          uid: existing?.uid || adm.id,
+          name: adm.name || existing?.name || 'Administrator',
+          displayName: adm.name || existing?.displayName || 'Administrator',
+          email: adm.email,
+          role: 'Admin',
+          adminRole: adm.role || existing?.adminRole || 'Super Admin',
+          department: adm.department || existing?.department || 'Office of Administration',
+          status: (adm.status as any) || existing?.status || 'Active',
+          provider: existing?.provider || (adm.email.endsWith('@pcm.edu.ph') ? 'google.com' : 'password'),
+          emailVerified: true,
+          createdAt: existing?.createdAt || adm.createdAt || '2024-01-15T08:00:00Z',
+          lastLogin: existing?.lastLogin || adm.lastLogin || new Date().toISOString(),
+          avatarUrl: adm.avatarUrl || existing?.avatarUrl || '',
+          photoURL: adm.avatarUrl || existing?.photoURL || '',
+        });
+      });
+
+      // 3. Ensure all registered students are included
+      currStudents.forEach((std) => {
+        const key = (std.email || std.studentId || std.id).toLowerCase().trim();
+        const existing = map.get(key);
+        map.set(key, {
+          id: existing?.id || `uid-${std.id}`,
+          uid: existing?.uid || std.id,
+          name: std.fullName || std.name || existing?.name || 'Student',
+          displayName: std.fullName || std.name || existing?.displayName || 'Student',
+          email: std.email,
+          role: 'Student',
+          studentId: std.studentId,
+          department: std.program || std.degreeProgram || existing?.department || 'Undergraduate Theology',
+          status: (std.academicStatus === 'Probationary' ? 'Pending' : (existing?.status || 'Active')) as any,
+          provider: existing?.provider || (std.email.endsWith('@student.pcm.edu.ph') ? 'google.com' : 'password'),
+          emailVerified: true,
+          createdAt: existing?.createdAt || '2024-08-01T10:00:00Z',
+          lastLogin: existing?.lastLogin || new Date().toISOString(),
+          avatarUrl: std.avatarUrl || existing?.avatarUrl || '',
+          photoURL: std.avatarUrl || existing?.photoURL || '',
+        });
+      });
+
+      return Array.from(map.values());
+    };
+
     // 1. Users collection (for Admin Users & Roles management tab)
     logFirestoreOp('listen', 'users', 'Admin Active Users & Roles Management Listener');
     const uUsers = onSnapshot(
       collection(db, 'users'),
       (snap) => {
-        if (!snap.empty && snap.docs.length > 0) {
-          const remoteList = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[];
-          const map = new Map<string, UserAccount>();
-          INITIAL_USER_ACCOUNTS.forEach((u) => map.set(u.email?.toLowerCase() || u.id, u));
-          remoteList.forEach((u) => {
-            const key = u.email?.toLowerCase() || u.id;
-            map.set(key, { ...(map.get(key) || {}), ...u });
-          });
-          setUserAccounts(Array.from(map.values()));
-        } else {
-          setUserAccounts(INITIAL_USER_ACCOUNTS);
-        }
+        const list = (!snap.empty && snap.docs.length > 0)
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[])
+          : INITIAL_USER_ACCOUNTS;
+        setUserAccounts(syncWithAdminsAndStudents(list, adminUsers, students));
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'users')
     );
@@ -1299,8 +1355,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uAdmins = onSnapshot(
       collection(db, 'adminUsers'),
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[];
+        const list = (!snap.empty && snap.docs.length > 0)
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[])
+          : INITIAL_ADMIN_USERS;
         setAdminUsers(list);
+        setUserAccounts((prev) => syncWithAdminsAndStudents(prev, list, students));
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'adminUsers')
     );
@@ -1311,7 +1370,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uApps = onSnapshot(
       collection(db, 'applications'),
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
+        const list = (!snap.empty && snap.docs.length > 0)
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[])
+          : INITIAL_APPLICATIONS;
         setApplications(list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'applications')
@@ -1323,7 +1384,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uDonations = onSnapshot(
       collection(db, 'donations'),
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationRecord[];
+        const list = (!snap.empty && snap.docs.length > 0)
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationRecord[])
+          : INITIAL_DONATIONS;
         setDonations(list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'donations')
@@ -1335,7 +1398,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uLogs = onSnapshot(
       collection(db, 'activityLogs'),
       (snap) => {
-        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[];
+        const list = (!snap.empty && snap.docs.length > 0)
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[])
+          : INITIAL_ACTIVITY_LOGS;
         setActivityLogs(list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'activityLogs')
@@ -1347,10 +1412,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uStudents = onSnapshot(
       collection(db, 'studentProfiles'),
       (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[];
-          setStudents(list);
-        }
+        const list = (!snap.empty && snap.docs.length > 0)
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[])
+          : INITIAL_STUDENTS;
+        setStudents(list);
+        setUserAccounts((prev) => syncWithAdminsAndStudents(prev, adminUsers, list));
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'studentProfiles')
     );
@@ -3137,7 +3203,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addUserAccount = async (user: Omit<UserAccount, 'id' | 'createdAt'>): Promise<UserAccount> => {
+  const addUserAccount = async (user: NewUserAccountInput): Promise<UserAccount> => {
     const newId = user.uid || `uid-usr-${Date.now()}`;
     const newAcc: UserAccount = cleanFirestoreData({
       ...user,
@@ -3151,6 +3217,63 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setUserAccounts((prev) => [newAcc, ...prev.filter((u) => u.email?.toLowerCase() !== newAcc.email.toLowerCase())]);
 
+    // If Admin role, also register in adminUsers directory
+    if (newAcc.role === 'Admin') {
+      const newAdmin: AdminUser = {
+        id: newAcc.id || newAcc.uid || `adm-${Date.now()}`,
+        name: newAcc.name,
+        email: newAcc.email,
+        username: newAcc.email.split('@')[0],
+        password: 'pcm' + new Date().getFullYear(),
+        role: newAcc.adminRole || 'Super Admin',
+        department: newAcc.department || 'Executive Administration & IT Systems',
+        status: (newAcc.status as any) || 'Active',
+        createdAt: new Date().toISOString().split('T')[0],
+        lastLogin: 'Never',
+        avatarUrl: newAcc.avatarUrl || newAcc.photoURL || '',
+      };
+      setAdminUsers((prev) => [newAdmin, ...prev.filter((a) => a.email.toLowerCase() !== newAdmin.email.toLowerCase())]);
+      safeSetDoc(doc(db, 'adminUsers', newAdmin.id), cleanFirestoreData(newAdmin)).catch(console.warn);
+    }
+
+    // If Student role, also register in studentProfiles directory
+    if (newAcc.role === 'Student') {
+      const studentId = newAcc.studentId || `2026-PCM-${Math.floor(100 + Math.random() * 900)}`;
+      const newStudent: StudentProfile = {
+        id: newAcc.id || newAcc.uid || `std-${Date.now()}`,
+        studentId,
+        fullName: newAcc.name,
+        email: newAcc.email,
+        portalPassword: 'pcmstudent',
+        program: newAcc.department || 'Bachelor of Theology (B.Th.)',
+        yearLevel: '1st Year (Freshman)',
+        academicStatus: 'Regular',
+        enrollmentStatus: 'Enrolled',
+        currentSemester: '1st Semester, AY 2026–2027',
+        academicYear: '2026–2027',
+        contactNumber: '+63 917 000 0000',
+        address: 'Baguio City, Benguet',
+        birthDate: '2005-01-01',
+        gender: 'Male',
+        civilStatus: 'Single',
+        gpa: 0,
+        totalUnitsEarned: 0,
+        mentorName: 'Dr. Emmanuel Santos',
+        homeChurch: 'Philippine College of Ministry Chapel',
+        pastorName: 'Rev. Ruben Alcantara',
+        avatarUrl: newAcc.avatarUrl || newAcc.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
+        tuitionTotal: 25000,
+        tuitionPaid: 0,
+        tuitionBalance: 25000,
+        courses: [],
+        paymentRecords: [],
+        uploadedDocuments: [],
+        practicumEntries: [],
+      };
+      setStudents((prev) => [newStudent, ...prev.filter((s) => s.email.toLowerCase() !== newStudent.email.toLowerCase())]);
+      safeSetDoc(doc(db, 'studentProfiles', newStudent.id), cleanFirestoreData(newStudent)).catch(console.warn);
+    }
+
     try {
       await safeSetDoc(doc(db, 'users', newId), newAcc);
     } catch (e) {
@@ -3158,13 +3281,20 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     logActivity('CREATE', 'User Account', newId, newAcc.name, `Registered new account (${newAcc.email} - ${newAcc.role}).`);
-    addToast('success', 'User Account Registered', `Registered ${newAcc.name} (${newAcc.role}) into directory.`);
+    addToast('success', 'User Account Registered', `Registered ${newAcc.name} (${newAcc.role}) into system directory.`);
     return newAcc;
   };
 
   const deleteUserAccount = async (userId: string) => {
     const target = userAccounts.find((u) => u.id === userId || u.uid === userId);
     setUserAccounts((prev) => prev.filter((u) => u.id !== userId && u.uid !== userId));
+
+    if (target) {
+      setAdminUsers((prev) => prev.filter((a) => a.id !== userId && a.email?.toLowerCase() !== target.email?.toLowerCase()));
+      setStudents((prev) => prev.filter((s) => s.id !== userId && s.studentId !== target.studentId && s.email?.toLowerCase() !== target.email?.toLowerCase()));
+      safeDeleteDoc(doc(db, 'adminUsers', userId)).catch(console.warn);
+      safeDeleteDoc(doc(db, 'studentProfiles', userId)).catch(console.warn);
+    }
 
     try {
       await safeDeleteDoc(doc(db, 'users', userId));
@@ -3203,6 +3333,69 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIsAdminLoggedIn(true);
         } else if (role === 'Student') {
           setIsStudentLoggedIn(true);
+        }
+      }
+
+      // If elevated to Admin, ensure adminUsers entry exists
+      if (role === 'Admin' && targetUser) {
+        const adminExists = adminUsers.some((a) => a.id === userId || a.email.toLowerCase() === targetUser.email.toLowerCase());
+        if (!adminExists) {
+          const newAdmin: AdminUser = {
+            id: targetUser.id || targetUser.uid || `adm-${Date.now()}`,
+            name: targetUser.name,
+            email: targetUser.email,
+            username: targetUser.email.split('@')[0],
+            password: 'pcm' + new Date().getFullYear(),
+            role: adminRole || 'Super Admin',
+            department: targetUser.department || 'Executive Administration & IT Systems',
+            status: 'Active',
+            createdAt: new Date().toISOString().split('T')[0],
+            lastLogin: 'Never',
+            avatarUrl: targetUser.avatarUrl || targetUser.photoURL || '',
+          };
+          setAdminUsers((prev) => [newAdmin, ...prev]);
+          safeSetDoc(doc(db, 'adminUsers', newAdmin.id), cleanFirestoreData(newAdmin)).catch(console.warn);
+        }
+      }
+
+      // If switched to Student, ensure studentProfiles entry exists
+      if (role === 'Student' && targetUser) {
+        const studentExists = students.some((s) => s.id === userId || s.email.toLowerCase() === targetUser.email.toLowerCase());
+        if (!studentExists) {
+          const studentId = targetUser.studentId || `2026-PCM-${Math.floor(100 + Math.random() * 900)}`;
+          const newStudent: StudentProfile = {
+            id: targetUser.id || targetUser.uid || `std-${Date.now()}`,
+            studentId,
+            fullName: targetUser.name,
+            email: targetUser.email,
+            portalPassword: 'pcmstudent',
+            program: targetUser.department || 'Bachelor of Theology (B.Th.)',
+            yearLevel: '1st Year (Freshman)',
+            academicStatus: 'Regular',
+            enrollmentStatus: 'Enrolled',
+            currentSemester: '1st Semester, AY 2026–2027',
+            academicYear: '2026–2027',
+            contactNumber: '+63 917 000 0000',
+            address: 'Baguio City, Benguet',
+            birthDate: '2005-01-01',
+            gender: 'Male',
+            civilStatus: 'Single',
+            gpa: 0,
+            totalUnitsEarned: 0,
+            mentorName: 'Dr. Emmanuel Santos',
+            homeChurch: 'Philippine College of Ministry Chapel',
+            pastorName: 'Rev. Ruben Alcantara',
+            avatarUrl: targetUser.avatarUrl || targetUser.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
+            tuitionTotal: 25000,
+            tuitionPaid: 0,
+            tuitionBalance: 25000,
+            courses: [],
+            paymentRecords: [],
+            uploadedDocuments: [],
+            practicumEntries: [],
+          };
+          setStudents((prev) => [newStudent, ...prev]);
+          safeSetDoc(doc(db, 'studentProfiles', newStudent.id), cleanFirestoreData(newStudent)).catch(console.warn);
         }
       }
 

@@ -481,14 +481,14 @@ export interface StudentNotification {
 
 export type AdminRole = 'Super Admin' | 'Content Admin' | 'Editor';
 
-export type UserRole = 'Admin' | 'Student' | 'Member';
+export type UserRole = 'Admin' | 'Student' | 'Faculty' | 'Alumni' | 'Member';
 
 export interface UserAccount {
   id: string; // Firebase UID
   uid: string;
   email: string;
   name: string;
-  displayName: string;
+  displayName?: string;
   photoURL?: string;
   avatarUrl?: string;
   role: UserRole;
@@ -500,8 +500,26 @@ export interface UserAccount {
   provider: string; // 'google.com' | 'password'
   emailVerified?: boolean;
   createdAt: string;
-  lastLogin: string;
+  lastLogin?: string;
 }
+
+export type NewUserAccountInput = {
+  name: string;
+  email: string;
+  role: UserRole;
+  displayName?: string;
+  uid?: string;
+  adminRole?: AdminRole;
+  studentId?: string;
+  department?: string;
+  homeChurch?: string;
+  status?: 'Active' | 'Pending' | 'Inactive' | string;
+  provider?: string;
+  photoURL?: string;
+  avatarUrl?: string;
+  emailVerified?: boolean;
+  lastLogin?: string;
+};
 
 export interface AdminUser {
   id: string;
