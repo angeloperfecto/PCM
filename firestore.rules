@@ -108,6 +108,48 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /preEnlistments/{preEnlistmentId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /addDropRequests/{requestId} {
+      allow read: if true;
+      allow create, update: if isSignedIn() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /academicPeriods/{periodId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /subjects/{subjectId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /sections/{sectionId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /instructors/{instructorId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /feeSchedules/{feeId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /enrollmentSystemConfig/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     match /studentNotifications/{notifId} {
       allow read: if true;
       allow create, update: if isSignedIn() || isAdmin();

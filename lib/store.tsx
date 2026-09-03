@@ -48,6 +48,11 @@ import {
   FeeStructureItem,
   StudentAssessment,
   EnrollmentSubmenuTab,
+  AcademicPeriod,
+  ClassSection,
+  InstructorRecord,
+  EnrollmentSystemConfig,
+  EnrollmentAdminSubTab,
 } from './types';
 import {
   INITIAL_PROGRAMS,
@@ -80,6 +85,10 @@ import {
   INITIAL_PRE_ENLISTMENTS,
   INITIAL_ADD_DROP_REQUESTS,
   INITIAL_FEE_STRUCTURE,
+  INITIAL_ACADEMIC_PERIODS,
+  INITIAL_CLASS_SECTIONS,
+  INITIAL_INSTRUCTORS,
+  INITIAL_ENROLLMENT_SYSTEM_CONFIG,
 } from './initialData';
 import {
   db,
@@ -361,12 +370,44 @@ interface PCMContextType {
   createStudentProfile: (profile: Omit<StudentProfile, 'id'>) => Promise<StudentProfile>;
   updateStudentProfile: (studentId: string, updates: Partial<StudentProfile>) => Promise<boolean>;
   deleteStudentProfile: (studentId: string) => Promise<boolean>;
+  archiveStudentProfile: (studentId: string) => Promise<boolean>;
+  restoreStudentProfile: (studentId: string) => Promise<boolean>;
   addStudentGrade: (studentId: string, courseCode: string, midtermGrade: number | string, finalGrade: number | string) => Promise<boolean>;
   recordStudentPayment: (studentId: string, payment: Omit<StudentPaymentRecord, 'id'>) => Promise<boolean>;
+  updateStudentPaymentRecord: (studentId: string, paymentId: string, updates: Partial<StudentPaymentRecord>) => Promise<boolean>;
 
   // Enrollment Submenu Navigation
   enrollmentActiveSubTab: EnrollmentSubmenuTab;
   setEnrollmentActiveSubTab: (tab: EnrollmentSubmenuTab) => void;
+
+  // Academic Periods Management
+  academicPeriods: AcademicPeriod[];
+  setAcademicPeriods: React.Dispatch<React.SetStateAction<AcademicPeriod[]>>;
+  currentAcademicPeriod: AcademicPeriod | undefined;
+  addAcademicPeriod: (period: Omit<AcademicPeriod, 'id'>) => Promise<AcademicPeriod>;
+  updateAcademicPeriod: (id: string, updates: Partial<AcademicPeriod>) => Promise<boolean>;
+  setCurrentAcademicPeriod: (id: string) => Promise<boolean>;
+  deleteAcademicPeriod: (id: string) => Promise<boolean>;
+
+  // Class Sections Management
+  classSections: ClassSection[];
+  setClassSections: React.Dispatch<React.SetStateAction<ClassSection[]>>;
+  addClassSection: (section: Omit<ClassSection, 'id'>) => Promise<ClassSection>;
+  updateClassSection: (id: string, updates: Partial<ClassSection>) => Promise<boolean>;
+  deleteClassSection: (id: string) => Promise<boolean>;
+  transferStudentSection: (studentId: string, fromSectionId: string, toSectionId: string) => Promise<boolean>;
+
+  // Instructors Faculty Management
+  instructors: InstructorRecord[];
+  setInstructors: React.Dispatch<React.SetStateAction<InstructorRecord[]>>;
+  addInstructor: (instructor: Omit<InstructorRecord, 'id'>) => Promise<InstructorRecord>;
+  updateInstructor: (id: string, updates: Partial<InstructorRecord>) => Promise<boolean>;
+  deleteInstructor: (id: string) => Promise<boolean>;
+
+  // Enrollment System Policy Config
+  enrollmentSystemConfig: EnrollmentSystemConfig;
+  setEnrollmentSystemConfig: React.Dispatch<React.SetStateAction<EnrollmentSystemConfig>>;
+  updateEnrollmentSystemConfig: (updates: Partial<EnrollmentSystemConfig>) => Promise<boolean>;
 
   // Academic Subjects Catalog & Sections
   academicSubjects: AcademicSubject[];
@@ -374,6 +415,7 @@ interface PCMContextType {
   addAcademicSubject: (subject: Omit<AcademicSubject, 'id'>) => Promise<AcademicSubject>;
   updateAcademicSubject: (id: string, updates: Partial<AcademicSubject>) => Promise<boolean>;
   deleteAcademicSubject: (id: string) => Promise<boolean>;
+  duplicateAcademicSubject: (subjectId: string, newAcademicYear: string, newSemester: string) => Promise<AcademicSubject>;
 
   // Pre-Enlistment Module
   preEnlistments: PreEnlistmentRecord[];
@@ -394,6 +436,11 @@ interface PCMContextType {
   addFeeStructureItem: (item: Omit<FeeStructureItem, 'id'>) => Promise<FeeStructureItem>;
   deleteFeeStructureItem: (id: string) => Promise<boolean>;
   calculateStudentAssessment: (studentId?: string, overrideUnits?: number, additionalFeeIds?: string[]) => StudentAssessment;
+
+  // Extended Workflow & RBAC
+  cancelEnrollment: (enrollmentId: string, reason: string) => Promise<boolean>;
+  reopenEnrollment: (enrollmentId: string) => Promise<boolean>;
+  canPerformEnrollmentAction: (action: string, role?: AdminRole) => boolean;
 
   // Student Notifications
   studentNotifications: StudentNotification[];
@@ -533,6 +580,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [preEnlistments, setPreEnlistments] = useState<PreEnlistmentRecord[]>(INITIAL_PRE_ENLISTMENTS);
   const [addDropRequests, setAddDropRequests] = useState<AddDropRequest[]>(INITIAL_ADD_DROP_REQUESTS);
   const [feeStructure, setFeeStructure] = useState<FeeStructureItem[]>(INITIAL_FEE_STRUCTURE);
+
+  // Academic Periods, Class Sections, Instructors, and Enrollment Policy Config
+  const [academicPeriods, setAcademicPeriods] = useState<AcademicPeriod[]>(INITIAL_ACADEMIC_PERIODS);
+  const [classSections, setClassSections] = useState<ClassSection[]>(INITIAL_CLASS_SECTIONS);
+  const [instructors, setInstructors] = useState<InstructorRecord[]>(INITIAL_INSTRUCTORS);
+  const [enrollmentSystemConfig, setEnrollmentSystemConfig] = useState<EnrollmentSystemConfig>(INITIAL_ENROLLMENT_SYSTEM_CONFIG);
+
+  const currentAcademicPeriod = academicPeriods.find((p) => p.isCurrent) || academicPeriods[0];
 
   // Admin Auth
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
@@ -1558,6 +1613,61 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     adminUnsubs.push(uFeeStruct);
 
+    // 13. Academic Periods collection
+    logFirestoreOp('listen', 'academicPeriods', 'Academic Periods Listener');
+    const uPeriods = onSnapshot(
+      collection(db, 'academicPeriods'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicPeriod[];
+          setAcademicPeriods(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'academicPeriods')
+    );
+    adminUnsubs.push(uPeriods);
+
+    // 14. Class Sections collection
+    logFirestoreOp('listen', 'classSections', 'Class Sections Listener');
+    const uSections = onSnapshot(
+      collection(db, 'classSections'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ClassSection[];
+          setClassSections(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'classSections')
+    );
+    adminUnsubs.push(uSections);
+
+    // 15. Instructors collection
+    logFirestoreOp('listen', 'instructors', 'Instructors Faculty Listener');
+    const uInstructors = onSnapshot(
+      collection(db, 'instructors'),
+      (snap) => {
+        if (!snap.empty) {
+          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InstructorRecord[];
+          setInstructors(list);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.LIST, 'instructors')
+    );
+    adminUnsubs.push(uInstructors);
+
+    // 16. Enrollment Settings config
+    logFirestoreOp('listen', 'enrollmentSettings', 'Enrollment Settings Listener');
+    const uEnrollSettings = onSnapshot(
+      doc(db, 'enrollmentSettings', 'global-enrollment-settings'),
+      (snap) => {
+        if (snap.exists()) {
+          setEnrollmentSystemConfig(snap.data() as EnrollmentSystemConfig);
+        }
+      },
+      (err) => handleFirestoreError(err, OperationType.GET, 'enrollmentSettings')
+    );
+    adminUnsubs.push(uEnrollSettings);
+
     return () => {
       adminUnsubs.forEach((unsub) => unsub());
     };
@@ -1614,10 +1724,78 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!isAdminLoggedIn || !currentAdminUser) return false;
     if (currentUserAccount?.role === 'Student') return false;
     if (currentAdminUser.role === 'Super Admin') return true;
-    if (requiredRole === 'Content Admin') {
-      return currentAdminUser.role === 'Content Admin';
-    }
+    if (currentAdminUser.role === requiredRole) return true;
     if (requiredRole === 'Editor') return true;
+    if (requiredRole === 'Content Admin' && ['Super Admin', 'Content Admin', 'Academic Admin'].includes(currentAdminUser.role)) return true;
+    if (requiredRole === 'Registrar' && ['Super Admin', 'Registrar'].includes(currentAdminUser.role)) return true;
+    if (requiredRole === 'Finance' && ['Super Admin', 'Finance'].includes(currentAdminUser.role)) return true;
+    if (requiredRole === 'Academic Admin' && ['Super Admin', 'Academic Admin'].includes(currentAdminUser.role)) return true;
+    return false;
+  };
+
+  const canPerformEnrollmentAction = (action: string, role?: AdminRole): boolean => {
+    const userRole = role || currentAdminUser?.role || (currentUserAccount?.adminRole as AdminRole) || 'Super Admin';
+    if (!isAdminLoggedIn && currentUserAccount?.role !== 'Admin') return false;
+    if (userRole === 'Super Admin') return true;
+
+    if (userRole === 'Registrar') {
+      return [
+        'view_dashboard',
+        'manage_students',
+        'create_student',
+        'edit_student',
+        'archive_student',
+        'restore_student',
+        'manage_subjects',
+        'manage_sections',
+        'review_pre_enlistment',
+        'approve_pre_enlistment',
+        'review_enrollment',
+        'approve_enrollment',
+        'reject_enrollment',
+        'return_enrollment',
+        'manage_add_drop',
+        'approve_add_drop',
+        'disapprove_add_drop',
+      ].includes(action);
+    }
+
+    if (userRole === 'Finance') {
+      return [
+        'view_dashboard',
+        'manage_fees',
+        'edit_fee_structure',
+        'add_fee_structure',
+        'delete_fee_structure',
+        'record_payment',
+        'edit_payment',
+        'manage_amount_due',
+        'view_assessment',
+        'apply_discount',
+        'adjust_assessment',
+      ].includes(action);
+    }
+
+    if (userRole === 'Academic Admin') {
+      return [
+        'view_dashboard',
+        'manage_periods',
+        'create_period',
+        'edit_period',
+        'manage_subjects',
+        'create_subject',
+        'edit_subject',
+        'duplicate_subject',
+        'manage_sections',
+        'create_section',
+        'edit_section',
+        'manage_instructors',
+        'create_instructor',
+        'edit_instructor',
+        'manage_settings',
+      ].includes(action);
+    }
+
     return false;
   };
 
@@ -3403,6 +3581,295 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [students, studentProfile, addStudentNotification, logActivity, addToast]
   );
 
+  const archiveStudentProfile = async (studentId: string): Promise<boolean> => {
+    return await updateStudentProfile(studentId, { isArchived: true, academicStatus: 'Archived' });
+  };
+
+  const restoreStudentProfile = async (studentId: string): Promise<boolean> => {
+    return await updateStudentProfile(studentId, { isArchived: false, academicStatus: 'Regular' });
+  };
+
+  const updateStudentPaymentRecord = async (
+    studentId: string,
+    paymentId: string,
+    updates: Partial<StudentPaymentRecord>
+  ): Promise<boolean> => {
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
+    const paymentHistory = (target.paymentHistory || []).map((p) =>
+      p.id === paymentId ? { ...p, ...updates } : p
+    );
+    const verifiedPayments = paymentHistory.filter((p) => p.status === 'Verified' || !p.status);
+    const newPaid = verifiedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const newBalance = Math.max(0, (target.tuitionTotal || 0) - newPaid);
+
+    const updated: StudentProfile = {
+      ...target,
+      paymentHistory,
+      tuitionPaid: newPaid,
+      tuitionBalance: newBalance,
+    };
+    if (target.id === studentProfile.id) {
+      setStudentProfile(updated);
+    }
+    setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    try {
+      await safeSetDoc(doc(db, 'studentProfiles', updated.id), cleanFirestoreData(updated), { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('UPDATE', 'Payment Record', paymentId, target.fullName || target.name || 'Student', 'Updated student tuition payment entry.');
+    addToast('success', 'Payment Record Updated', 'The payment entry has been modified.');
+    return true;
+  };
+
+  // Academic Periods Management
+  const addAcademicPeriod = async (periodData: Omit<AcademicPeriod, 'id'>): Promise<AcademicPeriod> => {
+    const id = `period-${Date.now()}`;
+    const newPeriod: AcademicPeriod = cleanFirestoreData({
+      ...periodData,
+      id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    if (newPeriod.isCurrent) {
+      setAcademicPeriods((prev) => prev.map((p) => ({ ...p, isCurrent: false })));
+    }
+    setAcademicPeriods((prev) => [newPeriod, ...prev]);
+
+    try {
+      await safeSetDoc(doc(db, 'academicPeriods', id), newPeriod);
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('CREATE', 'Academic Period', id, `${newPeriod.academicYear} ${newPeriod.semester}`, 'Created academic period.');
+    addToast('success', 'Academic Period Created', `${newPeriod.academicYear} - ${newPeriod.semester} created.`);
+    return newPeriod;
+  };
+
+  const updateAcademicPeriod = async (id: string, updates: Partial<AcademicPeriod>): Promise<boolean> => {
+    const sanitized = cleanFirestoreData({ ...updates, updatedAt: new Date().toISOString() });
+    setAcademicPeriods((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...sanitized } : p))
+    );
+    try {
+      await safeSetDoc(doc(db, 'academicPeriods', id), sanitized, { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('UPDATE', 'Academic Period', id, 'Academic Period', 'Updated academic period configuration.');
+    addToast('success', 'Period Updated', 'Academic period settings synchronized.');
+    return true;
+  };
+
+  const setCurrentAcademicPeriod = async (id: string): Promise<boolean> => {
+    setAcademicPeriods((prev) =>
+      prev.map((p) => ({ ...p, isCurrent: p.id === id }))
+    );
+    try {
+      const batch = writeBatch(db);
+      academicPeriods.forEach((p) => {
+        batch.update(doc(db, 'academicPeriods', p.id), { isCurrent: p.id === id, updatedAt: new Date().toISOString() });
+      });
+      await batch.commit();
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('UPDATE', 'Current Academic Term', id, 'Academic Calendar', 'Changed active academic term.');
+    addToast('success', 'Active Period Set', 'Current academic term updated.');
+    return true;
+  };
+
+  const deleteAcademicPeriod = async (id: string): Promise<boolean> => {
+    if (academicPeriods.length <= 1) {
+      addToast('error', 'Cannot Delete', 'At least one academic period must remain configured.');
+      return false;
+    }
+    setAcademicPeriods((prev) => prev.filter((p) => p.id !== id));
+    try {
+      await safeDeleteDoc(doc(db, 'academicPeriods', id));
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('DELETE', 'Academic Period', id, 'Academic Period', 'Removed academic term from calendar.');
+    addToast('info', 'Period Deleted', 'Academic period removed.');
+    return true;
+  };
+
+  // Class Sections Management
+  const addClassSection = async (sectionData: Omit<ClassSection, 'id'>): Promise<ClassSection> => {
+    const id = `sec-${Date.now()}`;
+    const newSection: ClassSection = cleanFirestoreData({
+      ...sectionData,
+      id,
+      enrolledCount: sectionData.enrolledCount || 0,
+      enrolledStudentIds: sectionData.enrolledStudentIds || [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    setClassSections((prev) => [newSection, ...prev]);
+    try {
+      await safeSetDoc(doc(db, 'classSections', id), newSection);
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('CREATE', 'Class Section', id, newSection.sectionName, `Created class section ${newSection.sectionCode}.`);
+    addToast('success', 'Section Created', `Class section ${newSection.sectionName} added.`);
+    return newSection;
+  };
+
+  const updateClassSection = async (id: string, updates: Partial<ClassSection>): Promise<boolean> => {
+    const sanitized = cleanFirestoreData({ ...updates, updatedAt: new Date().toISOString() });
+    setClassSections((prev) => prev.map((s) => (s.id === id ? { ...s, ...sanitized } : s)));
+    try {
+      await safeSetDoc(doc(db, 'classSections', id), sanitized, { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('UPDATE', 'Class Section', id, updates.sectionName || 'Section', 'Updated section information.');
+    addToast('success', 'Section Updated', 'Class section updated.');
+    return true;
+  };
+
+  const deleteClassSection = async (id: string): Promise<boolean> => {
+    setClassSections((prev) => prev.filter((s) => s.id !== id));
+    try {
+      await safeDeleteDoc(doc(db, 'classSections', id));
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('DELETE', 'Class Section', id, 'Class Section', 'Removed class section.');
+    addToast('info', 'Section Deleted', 'Class section removed.');
+    return true;
+  };
+
+  const transferStudentSection = async (studentId: string, fromSectionId: string, toSectionId: string): Promise<boolean> => {
+    const toSec = classSections.find((s) => s.id === toSectionId);
+    if (!toSec) return false;
+    if (toSec.enrolledCount >= toSec.maxCapacity) {
+      addToast('error', 'Section Full', `${toSec.sectionName} has reached maximum capacity (${toSec.maxCapacity}).`);
+      return false;
+    }
+
+    setClassSections((prev) =>
+      prev.map((s) => {
+        if (s.id === fromSectionId) {
+          const studentIds = (s.enrolledStudentIds || []).filter((sid) => sid !== studentId);
+          return { ...s, enrolledCount: Math.max(0, s.enrolledCount - 1), enrolledStudentIds: studentIds };
+        }
+        if (s.id === toSectionId) {
+          const studentIds = [...(s.enrolledStudentIds || []), studentId];
+          return { ...s, enrolledCount: s.enrolledCount + 1, enrolledStudentIds: studentIds };
+        }
+        return s;
+      })
+    );
+    logActivity('UPDATE', 'Section Roster', toSectionId, studentId, `Transferred student from ${fromSectionId} to ${toSec.sectionName}.`);
+    addToast('success', 'Student Transferred', `Transferred student to ${toSec.sectionName}.`);
+    return true;
+  };
+
+  // Instructors Management
+  const addInstructor = async (instructorData: Omit<InstructorRecord, 'id'>): Promise<InstructorRecord> => {
+    const id = `inst-${Date.now()}`;
+    const newInst: InstructorRecord = cleanFirestoreData({
+      ...instructorData,
+      id,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+    setInstructors((prev) => [newInst, ...prev]);
+    try {
+      await safeSetDoc(doc(db, 'instructors', id), newInst);
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('CREATE', 'Instructor', id, newInst.fullName, `Added instructor ${newInst.fullName} (${newInst.employeeId}).`);
+    addToast('success', 'Instructor Added', `${newInst.fullName} added to faculty roster.`);
+    return newInst;
+  };
+
+  const updateInstructor = async (id: string, updates: Partial<InstructorRecord>): Promise<boolean> => {
+    const sanitized = cleanFirestoreData({ ...updates, updatedAt: new Date().toISOString() });
+    setInstructors((prev) => prev.map((i) => (i.id === id ? { ...i, ...sanitized } : i)));
+    try {
+      await safeSetDoc(doc(db, 'instructors', id), sanitized, { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('UPDATE', 'Instructor', id, updates.fullName || 'Instructor', 'Updated faculty credentials / load.');
+    addToast('success', 'Instructor Updated', 'Instructor record updated.');
+    return true;
+  };
+
+  const deleteInstructor = async (id: string): Promise<boolean> => {
+    setInstructors((prev) => prev.filter((i) => i.id !== id));
+    try {
+      await safeDeleteDoc(doc(db, 'instructors', id));
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('DELETE', 'Instructor', id, 'Instructor', 'Removed instructor from directory.');
+    addToast('info', 'Instructor Removed', 'Instructor removed from system.');
+    return true;
+  };
+
+  // Enrollment System Policy Config
+  const updateEnrollmentSystemConfig = async (updates: Partial<EnrollmentSystemConfig>): Promise<boolean> => {
+    const sanitized = cleanFirestoreData({
+      ...enrollmentSystemConfig,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+      updatedBy: currentAdminUser?.name || 'Administrator',
+    });
+    setEnrollmentSystemConfig(sanitized);
+    try {
+      await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), sanitized, { merge: true });
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('SETTINGS', 'Enrollment Policy', 'global-settings', 'Enrollment Policies', 'Updated institutional enrollment policies and thresholds.');
+    addToast('success', 'Settings Saved', 'Enrollment policies updated.');
+    return true;
+  };
+
+  // Academic Subject Operations (Clone / Duplicate)
+  const duplicateAcademicSubject = async (
+    subjectId: string,
+    newAcademicYear: string,
+    newSemester: string
+  ): Promise<AcademicSubject> => {
+    const source = academicSubjects.find((s) => s.id === subjectId);
+    if (!source) throw new Error('Subject not found');
+    const id = `subj-${source.code.toLowerCase()}-${Date.now()}`;
+    const duplicated: AcademicSubject = cleanFirestoreData({
+      ...source,
+      id,
+      academicYear: newAcademicYear,
+      semester: newSemester,
+      enrolledCount: 0,
+      status: 'Open',
+    });
+    setAcademicSubjects((prev) => [...prev, duplicated]);
+    try {
+      await safeSetDoc(doc(db, 'academicSubjects', id), duplicated);
+    } catch (e) {
+      console.warn(e);
+    }
+    logActivity('CREATE', 'Subject Duplicated', id, duplicated.code, `Duplicated ${duplicated.code} to ${newAcademicYear} ${newSemester}.`);
+    addToast('success', 'Subject Duplicated', `${duplicated.code} cloned for ${newAcademicYear} ${newSemester}.`);
+    return duplicated;
+  };
+
+  // Cancel / Reopen Enrollment
+  const cancelEnrollment = async (enrollmentId: string, reason: string): Promise<boolean> => {
+    return await updateEnrollmentStatus(enrollmentId, 'Cancelled', `Cancelled by Admin: ${reason}`);
+  };
+
+  const reopenEnrollment = async (enrollmentId: string): Promise<boolean> => {
+    return await updateEnrollmentStatus(enrollmentId, 'Submitted', 'Reopened by Admin for review');
+  };
+
   // Admin CMS Auth & Management
   const adminLogin = (user: string, pass: string): boolean => {
     // If the active user profile is a student, deny access to the administrator interface
@@ -4476,12 +4943,44 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createStudentProfile,
         updateStudentProfile,
         deleteStudentProfile,
+        archiveStudentProfile,
+        restoreStudentProfile,
         addStudentGrade,
         recordStudentPayment,
+        updateStudentPaymentRecord,
 
         // Enrollment Submenu Navigation
         enrollmentActiveSubTab,
         setEnrollmentActiveSubTab,
+
+        // Academic Periods Management
+        academicPeriods,
+        setAcademicPeriods,
+        currentAcademicPeriod,
+        addAcademicPeriod,
+        updateAcademicPeriod,
+        setCurrentAcademicPeriod,
+        deleteAcademicPeriod,
+
+        // Class Sections Management
+        classSections,
+        setClassSections,
+        addClassSection,
+        updateClassSection,
+        deleteClassSection,
+        transferStudentSection,
+
+        // Instructors Faculty Management
+        instructors,
+        setInstructors,
+        addInstructor,
+        updateInstructor,
+        deleteInstructor,
+
+        // Enrollment System Policy Config
+        enrollmentSystemConfig,
+        setEnrollmentSystemConfig,
+        updateEnrollmentSystemConfig,
 
         // Academic Subjects Catalog & Sections
         academicSubjects,
@@ -4489,6 +4988,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addAcademicSubject,
         updateAcademicSubject,
         deleteAcademicSubject,
+        duplicateAcademicSubject,
 
         // Pre-Enlistment Module
         preEnlistments,
@@ -4509,6 +5009,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addFeeStructureItem,
         deleteFeeStructureItem,
         calculateStudentAssessment,
+
+        // Extended Workflow & RBAC
+        cancelEnrollment,
+        reopenEnrollment,
+        canPerformEnrollmentAction,
 
         // Student Notifications Engine
         studentNotifications,

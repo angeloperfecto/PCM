@@ -220,6 +220,38 @@
       "schema": "OnlineEnrollment",
       "description": "Student term enrollment applications, subject loads, and document submissions."
     },
+    "/preEnlistments/{preEnlistmentId}": {
+      "schema": "PreEnlistmentRecord",
+      "description": "Student course pre-enlistment records and advisor reviews."
+    },
+    "/addDropRequests/{requestId}": {
+      "schema": "AddDropRequest",
+      "description": "Course addition, dropping, and section change requests."
+    },
+    "/academicPeriods/{periodId}": {
+      "schema": "AcademicPeriod",
+      "description": "Academic school years, semesters, and enrollment status windows."
+    },
+    "/subjects/{subjectId}": {
+      "schema": "SubjectCourse",
+      "description": "Master curriculum course catalog, prerequisites, and units."
+    },
+    "/sections/{sectionId}": {
+      "schema": "CourseSection",
+      "description": "Class sections, schedules, room assignments, and capacity tracking."
+    },
+    "/instructors/{instructorId}": {
+      "schema": "InstructorFaculty",
+      "description": "Faculty instructors, teaching loads, and department assignments."
+    },
+    "/feeSchedules/{feeId}": {
+      "schema": "FeeScheduleItem",
+      "description": "Tuition, laboratory, miscellaneous fee structures and unit rates."
+    },
+    "/enrollmentSystemConfig/{configId}": {
+      "schema": "EnrollmentSystemConfig",
+      "description": "Enrollment system toggles, locks, and portal announcements."
+    },
     "/studentNotifications/{notifId}": {
       "schema": "StudentNotification",
       "description": "Student notification notices and alerts."

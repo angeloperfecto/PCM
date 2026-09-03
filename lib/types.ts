@@ -405,6 +405,9 @@ export interface StudentProfile {
   documents?: StudentDocument[];
   practicumEntries: PracticumEntry[];
   adminNotes?: string;
+  adminRemarks?: string;
+  major?: string;
+  isArchived?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -441,15 +444,113 @@ export interface AcademicSubject {
   schedule: string;
   room: string;
   instructor: string;
+  instructorId?: string;
   prerequisites: string[];
   prerequisite?: string;
+  corequisites?: string[];
+  subjectType?: 'Lecture' | 'Laboratory' | 'Practicum' | 'Seminar';
   semester: string;
   academicYear: string;
   section: string;
   capacity: number;
   enrolledCount: number;
   status: 'Open' | 'Closed' | 'Waitlist';
+  isArchived?: boolean;
+  remarks?: string;
+  program?: string;
+  yearLevel?: string;
 }
+
+export interface AcademicPeriod {
+  id: string;
+  academicYear: string; // e.g. "2026–2027"
+  semester: string; // e.g. "1st Semester"
+  isCurrent: boolean;
+  enrollmentStatus: 'Open' | 'Closed';
+  enrollmentStartDate?: string;
+  enrollmentEndDate?: string;
+  preEnlistmentStatus: 'Open' | 'Closed';
+  preEnlistmentStartDate?: string;
+  preEnlistmentEndDate?: string;
+  addDropStatus: 'Open' | 'Closed';
+  addDropStartDate?: string;
+  addDropEndDate?: string;
+  status: 'Active' | 'Upcoming' | 'Archived';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ClassSection {
+  id: string;
+  sectionName: string; // e.g. "Section A", "BTH-3A"
+  sectionCode: string; // e.g. "SEC-HOM301-A"
+  subjectCode: string;
+  subjectTitle: string;
+  units: number;
+  instructorId?: string;
+  instructorName: string;
+  academicYear: string;
+  semester: string;
+  schedule: string; // e.g. "MWF 9:00 AM – 10:30 AM"
+  classroom: string; // e.g. "Room 204"
+  maxCapacity: number;
+  enrolledCount: number;
+  status: 'Open' | 'Closed' | 'Waitlist';
+  enrolledStudentIds?: string[];
+  remarks?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface InstructorRecord {
+  id: string;
+  employeeId: string;
+  fullName: string;
+  title: string; // e.g. "Rev. Dr.", "Prof.", "Pastor"
+  email: string;
+  phone?: string;
+  department: string;
+  status: 'Active' | 'On Leave' | 'Inactive';
+  specialization?: string;
+  assignedSubjectCodes?: string[];
+  assignedSectionsCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EnrollmentSystemConfig {
+  id: string;
+  maxUnitsAllowed: number;
+  minUnitsAllowed: number;
+  maxSubjectsAllowed: number;
+  enforcePrerequisites: boolean;
+  enforceScheduleConflicts: boolean;
+  enforceSectionCapacity: boolean;
+  requirePreEnlistment: boolean;
+  requireEnrollmentApproval: boolean;
+  allowOnlineAddDrop: boolean;
+  defaultTuitionPerUnit: number;
+  defaultRegistrationFee: number;
+  eligibilityRules?: string;
+  requiredDocumentsList?: string[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type EnrollmentAdminSubTab =
+  | 'dashboard'
+  | 'enrollments'
+  | 'pre-enlistment'
+  | 'add-drop'
+  | 'students'
+  | 'academic-periods'
+  | 'subjects'
+  | 'sections'
+  | 'instructors'
+  | 'fees'
+  | 'amount-due'
+  | 'settings'
+  | 'audit-trail';
 
 export interface PreEnlistmentRecord {
   id: string;
@@ -603,7 +704,13 @@ export interface StudentNotification {
   actionUrl?: string;
 }
 
-export type AdminRole = 'Super Admin' | 'Content Admin' | 'Editor';
+export type AdminRole =
+  | 'Super Admin'
+  | 'Registrar'
+  | 'Finance'
+  | 'Academic Admin'
+  | 'Content Admin'
+  | 'Editor';
 
 export type UserRole = 'Admin' | 'Student' | 'Faculty' | 'Alumni' | 'Member';
 
