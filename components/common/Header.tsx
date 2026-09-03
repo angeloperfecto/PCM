@@ -29,6 +29,7 @@ import {
   Users,
   Compass,
   Heart,
+  DollarSign,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -38,6 +39,8 @@ export const Header: React.FC = () => {
     setSearchModalOpen,
     isAdminLoggedIn,
     isStudentLoggedIn,
+    setIsAdminLoggedIn,
+    setIsStudentLoggedIn,
     setStatementOfFaithModalOpen,
     setTuitionCalculatorModalOpen,
     setRequestInfoModalOpen,
@@ -64,6 +67,7 @@ export const Header: React.FC = () => {
   const navItems: {
     id: NavSection;
     label: string;
+    badge?: string;
     dropdown?: { label: string; subSection?: string; action?: () => void; icon?: any }[];
   }[] = [
     {
@@ -123,6 +127,50 @@ export const Header: React.FC = () => {
           label: 'Start Online Application',
           action: () => navigateTo('apply'),
           icon: GraduationCap,
+        },
+      ],
+    },
+    {
+      id: 'portal',
+      label: 'ENROLLMENT',
+      badge: 'AY 2026–2027',
+      dropdown: [
+        {
+          label: 'Student Online Enrollment Hub',
+          action: () => {
+            setIsStudentLoggedIn(true);
+            navigateTo('portal');
+          },
+          icon: GraduationCap,
+        },
+        {
+          label: 'Registrar Admin Enrollment CMS',
+          action: () => {
+            setIsAdminLoggedIn(true);
+            navigateTo('admin');
+          },
+          icon: ShieldCheck,
+        },
+        {
+          label: 'Course Pre-Enlistment Module',
+          action: () => {
+            setIsStudentLoggedIn(true);
+            navigateTo('portal');
+          },
+          icon: FileText,
+        },
+        {
+          label: 'Tuition & Fee Assessment Policy',
+          action: () => {
+            setIsStudentLoggedIn(true);
+            navigateTo('portal');
+          },
+          icon: DollarSign,
+        },
+        {
+          label: 'Academic Calendar & Registration Deadlines',
+          action: () => navigateTo('academics', 'calendar'),
+          icon: Calendar,
         },
       ],
     },
@@ -415,6 +463,11 @@ export const Header: React.FC = () => {
                   }`}
                 >
                   <span>{item.label}</span>
+                  {item.badge && (
+                    <span className="text-[9px] bg-amber-400 text-slate-950 font-extrabold px-1.5 py-0.2 rounded-full uppercase tracking-normal">
+                      {item.badge}
+                    </span>
+                  )}
                   {hasDropdown && (
                     <ChevronDown className="w-3 h-3 text-[#588B76] group-hover:rotate-180 transition-transform duration-200" />
                   )}

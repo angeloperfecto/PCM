@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { HeroSection } from './HeroSection';
+import { EnrollmentAnnouncementBanner } from './EnrollmentAnnouncementBanner';
 import { AnnouncementTicker } from './AnnouncementTicker';
 import { QuickAccessSection } from './QuickAccessSection';
 import { FeaturedProgramsSection } from './FeaturedProgramsSection';
@@ -22,6 +23,7 @@ export const HomeView: React.FC = () => {
   return (
     <div className="w-full">
       <HeroSection />
+      <EnrollmentAnnouncementBanner />
       <AnnouncementTicker />
       <QuickAccessSection />
       <FeaturedProgramsSection />

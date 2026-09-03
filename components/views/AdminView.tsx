@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { usePCM } from '@/lib/store';
 import { Emblem } from '@/components/common/Emblem';
 import { AdminSidebar, AdminTabType } from '@/components/admin/AdminSidebar';
@@ -33,6 +33,7 @@ export const AdminView: React.FC = () => {
     signInWithGoogle,
     signOutUser,
     navigateTo,
+    activeSubSection,
     currentUserAccount,
     firebaseAuthUser,
     applications,
@@ -57,7 +58,17 @@ export const AdminView: React.FC = () => {
   const [loginPass, setLoginPass] = useState('pcm2026');
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<AdminTabType>('overview');
+  const [activeTab, setActiveTab] = useState<AdminTabType>(() =>
+    activeSubSection === 'enrollments' ? 'enrollments' : 'overview'
+  );
+  const [prevSubSection, setPrevSubSection] = useState(activeSubSection);
+
+  if (activeSubSection !== prevSubSection) {
+    setPrevSubSection(activeSubSection);
+    if (activeSubSection === 'enrollments') {
+      setActiveTab('enrollments');
+    }
+  }
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
@@ -221,6 +232,18 @@ export const AdminView: React.FC = () => {
 
           {/* 1-Click Google Admin Sign In */}
           <div className="space-y-3">
+            <button
+              id="btn-admin-instant-enrollment-access"
+              type="button"
+              onClick={() => {
+                adminLogin('admin', 'pcm2026');
+                setActiveTab('enrollments');
+              }}
+              className="w-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
+            >
+              <span>⚡ 1-Click Enter: Enrollment & Registrar Hub</span>
+            </button>
+
             <button
               id="btn-admin-google-login"
               type="button"

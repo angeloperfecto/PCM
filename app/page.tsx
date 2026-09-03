@@ -5,6 +5,7 @@ import { PCMProvider, usePCM } from '@/lib/store';
 import { Header } from '@/components/common/Header';
 import { Footer } from '@/components/common/Footer';
 import { ToastContainer } from '@/components/common/ToastContainer';
+import { QuickViewSwitcher } from '@/components/common/QuickViewSwitcher';
 
 // Views
 import { HomeView } from '@/components/home/HomeView';
@@ -70,6 +71,9 @@ const AppContent: React.FC = () => {
 
       {/* Toast Notification Container */}
       <ToastContainer />
+
+      {/* Floating Quick View Navigator */}
+      <QuickViewSwitcher />
 
       {/* Global Interactive Modals */}
       <SearchModal />
