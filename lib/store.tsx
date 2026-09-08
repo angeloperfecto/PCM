@@ -114,6 +114,8 @@ import {
   writeBatch,
   getDocFromServer,
   uploadFileToFirebaseStorage,
+  deleteFileFromFirebaseStorage,
+  getImageDimensions,
   handleFirestoreError,
   isFirestoreQuotaError,
   logFirestoreOp,
@@ -184,7 +186,13 @@ interface PCMContextType {
   firebaseSyncStatus: 'synced' | 'syncing' | 'offline' | 'error';
   lastSyncedAt: Date | null;
   syncAllDataToFirestore: (force?: boolean) => Promise<boolean>;
-  uploadMediaFile: (file: File | Blob, category?: string, title?: string) => Promise<string>;
+  uploadMediaFile: (
+    file: File | Blob,
+    category?: string,
+    title?: string,
+    altText?: string,
+    tags?: string[]
+  ) => Promise<string>;
 
   // Site Configuration (Homepage, About, Contact, SEO, Navigation, Footer, CTAs)
   siteConfig: SiteConfig;
@@ -204,9 +212,10 @@ interface PCMContextType {
   mediaItems: MediaItem[];
   mediaLibrary: MediaItem[];
   setMediaItems: React.Dispatch<React.SetStateAction<MediaItem[]>>;
-  addMediaItem: (item: Omit<MediaItem, 'id' | 'uploadDate'>) => MediaItem;
-  updateMediaItem: (id: string, updates: Partial<MediaItem>) => void;
-  deleteMediaItem: (id: string) => void;
+  addMediaItem: (item: Omit<MediaItem, 'id' | 'uploadDate'>) => Promise<MediaItem> | MediaItem;
+  updateMediaItem: (id: string, updates: Partial<MediaItem>) => Promise<boolean> | void;
+  deleteMediaItem: (id: string) => Promise<boolean> | void;
+  replaceMediaFile: (id: string, newFile: File | Blob) => Promise<MediaItem>;
 
   // Gallery Albums
   galleryAlbums: GalleryAlbum[];
@@ -979,7 +988,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (st.mediaItems && st.mediaItems.length > 0) {
           try {
             const mediaBatch = writeBatch(db);
-            st.mediaItems.forEach((m: any) => mediaBatch.set(doc(db, 'mediaItems', m.id), cleanFirestoreData(m), { merge: true }));
+            st.mediaItems.forEach((m: any) => {
+              const cleaned = cleanFirestoreData({
+                ...m,
+                downloadURL: m.downloadURL || m.url || '',
+                url: m.downloadURL || m.url || '',
+              });
+              mediaBatch.set(doc(db, 'mediaLibrary', m.id), cleaned, { merge: true });
+              mediaBatch.set(doc(db, 'mediaItems', m.id), cleaned, { merge: true });
+            });
             await mediaBatch.commit();
           } catch (e) {
             console.warn('Media items batch sync notice:', e);
@@ -1329,6 +1346,99 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         );
         unsubs.push(uHomeVideoConfig);
+
+        // 11. Media Library Real-Time Sync (Persistent Cloud Database)
+        logFirestoreOp('listen', 'mediaLibrary', 'Media Library Real-Time Sync');
+        const uMediaLibrary = onSnapshot(
+          collection(db, 'mediaLibrary'),
+          async (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => {
+                const data = d.data() as any;
+                const fileUrl = data.downloadURL || data.url || '';
+                return {
+                  id: d.id,
+                  ...data,
+                  url: fileUrl,
+                  downloadURL: fileUrl,
+                } as MediaItem;
+              });
+              // Sort newest first
+              list.sort((a, b) => {
+                const timeA = new Date(a.createdAt || a.uploadDate || 0).getTime();
+                const timeB = new Date(b.createdAt || b.uploadDate || 0).getTime();
+                return timeB - timeA;
+              });
+              setMediaItems(list);
+              setIsFirebaseConnected(true);
+              setFirebaseSyncStatus('synced');
+              setLastSyncedAt(new Date());
+            } else {
+              // If mediaLibrary collection is empty, check legacy mediaItems collection
+              try {
+                const legacySnap = await getDocs(collection(db, 'mediaItems'));
+                if (!legacySnap.empty) {
+                  const list = legacySnap.docs.map((d) => {
+                    const data = d.data() as any;
+                    const fileUrl = data.downloadURL || data.url || '';
+                    return {
+                      id: d.id,
+                      ...data,
+                      url: fileUrl,
+                      downloadURL: fileUrl,
+                    } as MediaItem;
+                  });
+                  list.sort((a, b) => {
+                    const timeA = new Date(a.createdAt || a.uploadDate || 0).getTime();
+                    const timeB = new Date(b.createdAt || b.uploadDate || 0).getTime();
+                    return timeB - timeA;
+                  });
+                  setMediaItems(list);
+                  // Mirror to mediaLibrary
+                  const batch = writeBatch(db);
+                  list.forEach((item) => {
+                    batch.set(doc(db, 'mediaLibrary', item.id), cleanFirestoreData(item), { merge: true });
+                  });
+                  batch.commit().catch((e) => console.warn('Media migration notice:', e));
+                } else {
+                  // Firestore has no documents in mediaLibrary or mediaItems.
+                  // Only seed once if mediaLibraryMeta document does not exist yet.
+                  const metaRef = doc(db, 'siteConfig', 'mediaLibraryMeta');
+                  const metaSnap = await getDoc(metaRef);
+                  if (!metaSnap.exists()) {
+                    const seedBatch = writeBatch(db);
+                    INITIAL_MEDIA_ITEMS.forEach((item) => {
+                      const itemUrl = item.url || '';
+                      seedBatch.set(
+                        doc(db, 'mediaLibrary', item.id),
+                        cleanFirestoreData({
+                          ...item,
+                          downloadURL: itemUrl,
+                          url: itemUrl,
+                          createdAt: new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                        }),
+                        { merge: true }
+                      );
+                    });
+                    seedBatch.set(metaRef, { seededAt: new Date().toISOString(), initialized: true }, { merge: true });
+                    seedBatch.commit().catch((e) => console.warn('Media seed notice:', e));
+                  }
+                }
+              } catch (e) {
+                console.warn('Media library initialization notice:', e);
+              }
+              setIsFirebaseConnected(true);
+              setFirebaseSyncStatus('synced');
+            }
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'mediaLibrary');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+          }
+        );
+        unsubs.push(uMediaLibrary);
 
         // 11. Listen to Firebase Auth state & Single User Profile (Targeted Read / Subscription)
         const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
@@ -1757,46 +1867,124 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const uploadMediaFile = async (
     file: File | Blob,
     category: string = 'General',
-    title?: string
+    title?: string,
+    altText?: string,
+    tags?: string[]
   ): Promise<string> => {
-    const fileName = (file as File).name || `pcm_media_${Date.now()}`;
-    const cleanTitle = title || fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-    const path = `pcm_assets/${category.toLowerCase()}/${Date.now()}_${fileName}`;
+    const rawFileName = (file as File).name || `pcm_media_${Date.now()}.jpg`;
+    const cleanFileName = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const cleanTitle = title?.trim() || rawFileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+    const id = `med-${Date.now()}`;
+    const storagePath = `mediaLibrary/${id}_${cleanFileName}`;
 
+    // Calculate dimensions
+    let dimensions = '1600x1067';
     try {
-      // 1. Upload to Firebase Storage
-      let downloadUrl = '';
-      try {
-        downloadUrl = await uploadFileToFirebaseStorage(file, path);
-      } catch (storageError) {
-        console.warn('Direct Storage upload failed, converting to object data URL:', storageError);
-        downloadUrl = await new Promise((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.readAsDataURL(file);
-        });
+      const dims = await getImageDimensions(file);
+      if (dims.width && dims.height) {
+        dimensions = `${dims.width}x${dims.height}`;
       }
-
-      // 2. Add to Media Items collection
-      const newMedia: MediaItem = {
-        id: `med-${Date.now()}`,
-        title: cleanTitle,
-        altText: `PCM ${cleanTitle}`,
-        url: downloadUrl,
-        category,
-        fileSize: file.size ? `${(file.size / 1024).toFixed(1)} KB` : 'Custom Asset',
-        uploadDate: new Date().toISOString().split('T')[0],
-      };
-
-      setMediaItems((prev) => [newMedia, ...prev]);
-      await setDoc(doc(db, 'mediaItems', newMedia.id), newMedia, { merge: true });
-      logActivity('CREATE', 'Media Asset', newMedia.id, newMedia.title, `Uploaded media asset to ${category}.`);
-
-      return downloadUrl;
-    } catch (e: any) {
-      console.error('Failed to upload media file:', e);
-      throw e;
+    } catch (e) {
+      console.warn('Dimensions calculation notice:', e);
     }
+
+    const downloadUrl = await uploadFileToFirebaseStorage(file, storagePath, {
+      contentType: file.type || 'image/jpeg',
+    });
+
+    const now = new Date();
+    const formattedSize = file.size
+      ? file.size < 1024 * 1024
+        ? `${(file.size / 1024).toFixed(1)} KB`
+        : `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+      : 'Custom Asset';
+
+    const newMedia: MediaItem = cleanFirestoreData({
+      id,
+      title: cleanTitle,
+      fileName: cleanFileName,
+      storagePath,
+      downloadURL: downloadUrl,
+      url: downloadUrl,
+      category,
+      altText: altText?.trim() || `PCM ${cleanTitle}`,
+      fileSize: formattedSize,
+      fileSizeBytes: file.size || 0,
+      dimensions,
+      contentType: file.type || 'image/jpeg',
+      uploadDate: now.toISOString().split('T')[0],
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      uploadedBy: currentAdminUser?.name || 'Administrator',
+      uploadedByUid: auth.currentUser?.uid || currentAdminUser?.id || '',
+      tags: tags || [],
+    });
+
+    setMediaItems((prev) => [newMedia, ...prev.filter((m) => m.id !== id)]);
+    await safeSetDoc(doc(db, 'mediaLibrary', newMedia.id), newMedia);
+    await safeSetDoc(doc(db, 'mediaItems', newMedia.id), newMedia);
+
+    logActivity('CREATE', 'Media Asset', newMedia.id, newMedia.title, `Uploaded media asset to ${category} Media Library.`);
+    return downloadUrl;
+  };
+
+  // Replace existing media file in Firebase Storage & update Firestore document
+  const replaceMediaFile = async (
+    id: string,
+    newFile: File | Blob
+  ): Promise<MediaItem> => {
+    const existing = mediaItems.find((m) => m.id === id);
+    if (!existing) throw new Error('Media asset not found');
+
+    const rawFileName = (newFile as File).name || `pcm_media_${Date.now()}.jpg`;
+    const cleanFileName = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const storagePath = `mediaLibrary/${id}_${cleanFileName}`;
+
+    let dimensions = existing.dimensions || '1600x1067';
+    try {
+      const dims = await getImageDimensions(newFile);
+      if (dims.width && dims.height) {
+        dimensions = `${dims.width}x${dims.height}`;
+      }
+    } catch (e) {
+      console.warn('Dimensions calculation notice:', e);
+    }
+
+    const downloadUrl = await uploadFileToFirebaseStorage(newFile, storagePath, {
+      contentType: newFile.type || 'image/jpeg',
+    });
+
+    if (existing.storagePath && existing.storagePath !== storagePath) {
+      deleteFileFromFirebaseStorage(existing.storagePath).catch(() => {});
+    }
+
+    const now = new Date();
+    const formattedSize = newFile.size
+      ? newFile.size < 1024 * 1024
+        ? `${(newFile.size / 1024).toFixed(1)} KB`
+        : `${(newFile.size / (1024 * 1024)).toFixed(1)} MB`
+      : existing.fileSize;
+
+    const updatedMedia: MediaItem = cleanFirestoreData({
+      ...existing,
+      fileName: cleanFileName,
+      storagePath,
+      downloadURL: downloadUrl,
+      url: downloadUrl,
+      fileSize: formattedSize,
+      fileSizeBytes: newFile.size || existing.fileSizeBytes || 0,
+      dimensions,
+      contentType: newFile.type || existing.contentType || 'image/jpeg',
+      updatedAt: now.toISOString(),
+    });
+
+    setMediaItems((prev) => prev.map((m) => (m.id === id ? updatedMedia : m)));
+    await safeSetDoc(doc(db, 'mediaLibrary', id), updatedMedia, { merge: true });
+    await safeSetDoc(doc(db, 'mediaItems', id), updatedMedia, { merge: true });
+
+    logActivity('UPDATE', 'Media Asset', id, updatedMedia.title, `Replaced image file for "${updatedMedia.title}".`);
+    addToast('success', 'Image Replaced', `File replaced for "${updatedMedia.title}".`);
+    return updatedMedia;
   };
 
   // RBAC Permission Check
@@ -2027,26 +2215,45 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('success', 'Navigation Updated', 'Website navbar items updated.');
   };
 
-  // Media Library CRUD
+  // Media Library CRUD (Persistent Cloud Database)
   const addMediaItem = (item: Omit<MediaItem, 'id' | 'uploadDate'>): MediaItem => {
+    const id = `med-${Date.now()}`;
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const itemUrl = item.downloadURL || item.url || '';
     const newItem: MediaItem = cleanFirestoreData({
       ...item,
-      id: `med-${Date.now()}`,
-      uploadDate: new Date().toISOString().split('T')[0],
+      id,
+      url: itemUrl,
+      downloadURL: itemUrl,
+      uploadDate: dateStr,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      uploadedBy: currentAdminUser?.name || 'Administrator',
+      uploadedByUid: auth.currentUser?.uid || currentAdminUser?.id || '',
     });
-    setMediaItems((prev) => [newItem, ...prev]);
-    setDoc(doc(db, 'mediaItems', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
-    logActivity('CREATE', 'Media Library', newItem.id, newItem.title, `Uploaded image asset to media library (${newItem.category}).`);
-    addToast('success', 'Media Uploaded', `Asset "${newItem.title}" added to library.`);
+    setMediaItems((prev) => [newItem, ...prev.filter((m) => m.id !== id)]);
+    safeSetDoc(doc(db, 'mediaLibrary', newItem.id), newItem).catch((e) => console.warn(e));
+    safeSetDoc(doc(db, 'mediaItems', newItem.id), newItem).catch((e) => console.warn(e));
+    logActivity('CREATE', 'Media Library', newItem.id, newItem.title, `Added image asset to media library (${newItem.category}).`);
+    addToast('success', 'Media Added', `Asset "${newItem.title}" saved to library.`);
     return newItem;
   };
 
   const updateMediaItem = (id: string, updates: Partial<MediaItem>) => {
-    const sanitized = cleanFirestoreData(updates);
+    const now = new Date().toISOString();
+    const normalizedUpdates: Partial<MediaItem> = {
+      ...updates,
+      updatedAt: now,
+      ...(updates.downloadURL && !updates.url ? { url: updates.downloadURL } : {}),
+      ...(updates.url && !updates.downloadURL ? { downloadURL: updates.url } : {}),
+    };
+    const sanitized = cleanFirestoreData(normalizedUpdates);
     setMediaItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...updates } : item))
+      prev.map((item) => (item.id === id ? { ...item, ...normalizedUpdates } : item))
     );
-    setDoc(doc(db, 'mediaItems', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    safeSetDoc(doc(db, 'mediaLibrary', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    safeSetDoc(doc(db, 'mediaItems', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Media Library', id, updates.title || 'Media Asset', 'Updated media metadata and alt text.');
     addToast('success', 'Media Updated', 'Image asset details updated.');
   };
@@ -2054,7 +2261,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteMediaItem = (id: string) => {
     const item = mediaItems.find((m) => m.id === id);
     setMediaItems((prev) => prev.filter((m) => m.id !== id));
-    deleteDoc(doc(db, 'mediaItems', id)).catch((e) => console.warn(e));
+    safeDeleteDoc(doc(db, 'mediaLibrary', id)).catch((e) => console.warn(e));
+    safeDeleteDoc(doc(db, 'mediaItems', id)).catch((e) => console.warn(e));
+    if (item?.storagePath) {
+      deleteFileFromFirebaseStorage(item.storagePath).catch((e) => console.warn(e));
+    }
     logActivity('DELETE', 'Media Library', id, item?.title || 'Media Asset', 'Removed image asset from media library.');
     addToast('info', 'Media Deleted', 'Image asset removed from library.');
   };
@@ -5066,6 +5277,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addMediaItem,
         updateMediaItem,
         deleteMediaItem,
+        replaceMediaFile,
         galleryAlbums,
         setGalleryAlbums,
         addGalleryAlbum,

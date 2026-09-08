@@ -181,9 +181,40 @@
         "updatedAt": { "type": "string" }
       },
       "required": ["enabled", "sectionTitle"]
+    },
+    "MediaItem": {
+      "title": "Media Asset",
+      "description": "Permanent media library photographic and document assets with Firebase Storage references.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 250 },
+        "fileName": { "type": "string" },
+        "storagePath": { "type": "string" },
+        "downloadURL": { "type": "string" },
+        "url": { "type": "string" },
+        "category": { "type": "string" },
+        "altText": { "type": "string" },
+        "fileSize": { "type": "string" },
+        "fileSizeBytes": { "type": "number" },
+        "dimensions": { "type": "string" },
+        "contentType": { "type": "string" },
+        "uploadDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "uploadedByUid": { "type": "string" },
+        "usedInLocations": { "type": "array" },
+        "tags": { "type": "array" }
+      },
+      "required": ["id", "title", "url"]
     }
   },
   "firestore": {
+    "/mediaLibrary/{mediaId}": {
+      "schema": { "$ref": "#/entities/MediaItem" },
+      "description": "Permanent database-backed Media Library assets with Firebase Storage references."
+    },
     "/siteConfig/{configId}": {
       "schema": { "$ref": "#/entities/SiteConfig" },
       "description": "Global institutional configuration documents."

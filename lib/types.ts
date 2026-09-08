@@ -845,13 +845,23 @@ export interface GalleryAlbum {
 export interface MediaItem {
   id: string;
   title: string;
-  altText: string;
+  fileName?: string;
+  storagePath?: string;
+  downloadURL?: string;
   url: string;
   category: 'Banner' | 'Faculty' | 'Campus' | 'Events' | 'Documents' | 'Logos' | 'General' | 'Chapel' | 'Archive' | string;
+  altText: string;
   fileSize: string;
+  fileSizeBytes?: number;
   dimensions?: string;
+  contentType?: string;
   uploadDate?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  uploadedBy?: string;
+  uploadedByUid?: string;
   usedInLocations?: string[];
+  tags?: string[];
 }
 
 export interface ActivityLogItem {

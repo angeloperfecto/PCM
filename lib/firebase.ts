@@ -17,7 +17,7 @@ import {
   where,
   limit,
 } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
 // Initialize Firebase App instance singleton
@@ -249,18 +249,44 @@ export function cleanFirestoreData<T>(data: T): T {
   return data;
 }
 
+export async function getImageDimensions(file: File | Blob): Promise<{ width: number; height: number }> {
+  return new Promise((resolve) => {
+    if (typeof window === 'undefined' || !(file instanceof Blob) || !file.type.startsWith('image/')) {
+      resolve({ width: 0, height: 0 });
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: img.naturalWidth || img.width, height: img.naturalHeight || img.height });
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve({ width: 0, height: 0 });
+    };
+    img.src = url;
+  });
+}
+
 export async function uploadFileToFirebaseStorage(
   file: File | Blob,
-  storagePath: string
+  storagePath: string,
+  options?: { contentType?: string }
 ): Promise<string> {
   try {
     const optimizedBlob = await compressImageFile(file);
     const storageRef = ref(storage, storagePath);
-    const snapshot = await uploadBytes(storageRef, optimizedBlob);
+    const metadata = options?.contentType
+      ? { contentType: options.contentType }
+      : (file instanceof File && file.type)
+      ? { contentType: file.type }
+      : { contentType: 'image/jpeg' };
+    const snapshot = await uploadBytes(storageRef, optimizedBlob, metadata);
     const downloadUrl = await getDownloadURL(snapshot.ref);
     return downloadUrl;
   } catch (error) {
-    console.warn('Firebase storage upload fallback to optimized data URL:', error);
+    console.warn('Firebase storage direct upload notice, using optimized fallback:', error);
     const optimizedBlob = await compressImageFile(file, 1200, 800, 0.75);
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -268,6 +294,18 @@ export async function uploadFileToFirebaseStorage(
       reader.onerror = reject;
       reader.readAsDataURL(optimizedBlob);
     });
+  }
+}
+
+export async function deleteFileFromFirebaseStorage(storagePath: string): Promise<boolean> {
+  if (!storagePath) return false;
+  try {
+    const storageRef = ref(storage, storagePath);
+    await deleteObject(storageRef);
+    return true;
+  } catch (err) {
+    console.warn('Firebase storage delete file notice:', err);
+    return false;
   }
 }
 

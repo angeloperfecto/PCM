@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { usePCM } from '@/lib/store';
 import { MediaItem } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
+import { getImageDimensions } from '@/lib/firebase';
 import {
   Image as ImageIcon,
   Plus,
@@ -12,320 +13,915 @@ import {
   Check,
   Search,
   Upload,
-  FolderPlus,
   Tag,
+  Eye,
+  RefreshCw,
+  X,
+  ExternalLink,
+  Calendar,
+  User,
+  LayoutGrid,
+  List,
+  CheckCircle2,
+  HardDrive,
+  FileImage,
+  Loader2,
+  Edit3,
 } from 'lucide-react';
 
 export const AdminMediaTab: React.FC = () => {
   const {
     mediaLibrary,
     addMediaItem,
+    updateMediaItem,
     deleteMediaItem,
-    galleryAlbums,
-    addGalleryAlbum,
+    uploadMediaFile,
+    replaceMediaFile,
     addToast,
     canPerformAction,
+    isFirebaseConnected,
   } = usePCM();
 
+  // Search & Filter State
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
-  const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title' | 'size'>('newest');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
-  // Upload/Add Media Modal
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Interactive Action Feedback
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<MediaItem | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Upload Modal State
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [uploadTab, setUploadTab] = useState<'file' | 'url'>('file');
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  const [fileDimensions, setFileDimensions] = useState<string>('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // Form Fields for Upload
   const [mediaTitle, setMediaTitle] = useState('');
   const [mediaUrl, setMediaUrl] = useState('');
-  const [mediaCategory, setMediaCategory] = useState<'Campus' | 'Faculty' | 'Chapel' | 'Events' | 'Archive' | 'Documents'>('Campus');
+  const [mediaCategory, setMediaCategory] = useState<
+    'Campus' | 'Faculty' | 'Chapel' | 'Events' | 'Archive' | 'Documents' | 'General'
+  >('Campus');
   const [mediaAlt, setMediaAlt] = useState('');
+  const [mediaTags, setMediaTags] = useState('');
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Detail / Preview / Edit Modal State
+  const [detailItem, setDetailItem] = useState<MediaItem | null>(null);
+  const [isEditingMetadata, setIsEditingMetadata] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editCategory, setEditCategory] = useState<
+    'Campus' | 'Faculty' | 'Chapel' | 'Events' | 'Archive' | 'Documents' | 'General'
+  >('Campus');
+  const [editAlt, setEditAlt] = useState('');
+  const [editTags, setEditTags] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [isReplacingFile, setIsReplacingFile] = useState(false);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const replaceFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Handle Drag & Drop
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      await processSelectedFile(file);
+    } else {
+      addToast('error', 'Invalid File', 'Please drop a valid image file (PNG, JPG, WEBP, GIF, SVG).');
+    }
+  };
+
+  const processSelectedFile = async (file: File) => {
+    setSelectedFile(file);
+    const objectUrl = URL.createObjectURL(file);
+    setFilePreview(objectUrl);
+
+    // Auto-populate Title if empty
+    if (!mediaTitle.trim()) {
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+      setMediaTitle(cleanName);
+    }
+
+    // Compute dimensions
+    try {
+      const dims = await getImageDimensions(file);
+      if (dims.width && dims.height) {
+        setFileDimensions(`${dims.width} × ${dims.height}`);
+      }
+    } catch {
+      setFileDimensions('');
+    }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (typeof event.target?.result === 'string') {
-        setMediaUrl(event.target.result);
-        if (!mediaTitle) setMediaTitle(file.name.replace(/\.[^/.]+$/, ''));
-      }
-    };
-    reader.readAsDataURL(file);
+    await processSelectedFile(file);
   };
 
-  const handleSaveMedia = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canPerformAction('Editor')) {
-      addToast({
-        title: 'Permission Denied',
-        message: 'You need at least Editor role to upload assets.',
-        type: 'error',
-      });
-      return;
+  const resetUploadForm = () => {
+    setSelectedFile(null);
+    if (filePreview && filePreview.startsWith('blob:')) {
+      URL.revokeObjectURL(filePreview);
     }
-
-    if (!mediaTitle.trim() || !mediaUrl.trim()) {
-      addToast({ title: 'Missing Information', message: 'Title and Media URL / File are required.', type: 'error' });
-      return;
-    }
-
-    addMediaItem({
-      title: mediaTitle.trim(),
-      url: mediaUrl.trim(),
-      category: mediaCategory,
-      altText: mediaAlt.trim() || mediaTitle.trim(),
-      fileSize: '180 KB',
-      dimensions: '1600x1067',
-    });
-
-    addToast({ title: 'Media Added', message: 'Asset added to the PCM Media Library.', type: 'success' });
-    setIsModalOpen(false);
+    setFilePreview(null);
+    setFileDimensions('');
     setMediaTitle('');
     setMediaUrl('');
+    setMediaCategory('Campus');
     setMediaAlt('');
+    setMediaTags('');
+    setIsUploading(false);
   };
 
-  const handleCopyUrl = (id: string, url: string) => {
-    navigator.clipboard.writeText(url);
-    setCopiedId(id);
-    addToast({ title: 'URL Copied', message: 'Asset URL copied to clipboard.', type: 'info' });
-    setTimeout(() => setCopiedId(null), 2000);
-  };
+  // Submit Upload to Firebase Storage & Firestore
+  const handleSaveMedia = async (e: React.FormEvent) => {
+    e.preventDefault();
 
-  const handleDelete = (id: string, title: string) => {
-    if (!canPerformAction('Content Admin')) {
-      addToast({
-        title: 'Permission Denied',
-        message: 'You need Content Admin privileges to delete media assets.',
-        type: 'error',
-      });
+    if (!canPerformAction('Editor')) {
+      addToast('error', 'Permission Denied', 'You need at least Editor privileges to upload assets.');
       return;
     }
 
-    setDeleteTarget({ id, title });
+    if (uploadTab === 'file') {
+      if (!selectedFile) {
+        addToast('error', 'No File Selected', 'Please choose an image file to upload.');
+        return;
+      }
+      if (!mediaTitle.trim()) {
+        addToast('error', 'Title Required', 'Please enter a title for the media asset.');
+        return;
+      }
+
+      setIsUploading(true);
+      try {
+        const parsedTags = mediaTags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean);
+
+        await uploadMediaFile(
+          selectedFile,
+          mediaCategory,
+          mediaTitle.trim(),
+          mediaAlt.trim() || mediaTitle.trim(),
+          parsedTags
+        );
+
+        addToast('success', 'Asset Saved Permanently', `"${mediaTitle}" uploaded to Firebase.`);
+        setIsUploadModalOpen(false);
+        resetUploadForm();
+      } catch (err: any) {
+        console.error('Upload error:', err);
+        addToast('error', 'Upload Failed', err.message || 'Unable to store file. Please try again.');
+      } finally {
+        setIsUploading(false);
+      }
+    } else {
+      // URL Tab
+      if (!mediaUrl.trim() || !mediaTitle.trim()) {
+        addToast('error', 'Missing Information', 'Please provide both an Image URL and Title.');
+        return;
+      }
+
+      setIsUploading(true);
+      try {
+        const parsedTags = mediaTags
+          .split(',')
+          .map((t) => t.trim())
+          .filter(Boolean);
+
+        addMediaItem({
+          title: mediaTitle.trim(),
+          url: mediaUrl.trim(),
+          downloadURL: mediaUrl.trim(),
+          category: mediaCategory,
+          altText: mediaAlt.trim() || mediaTitle.trim(),
+          fileSize: 'External Link',
+          dimensions: fileDimensions || '1600x1067',
+          tags: parsedTags,
+        });
+
+        addToast('success', 'Asset Added', `External asset "${mediaTitle}" saved to library.`);
+        setIsUploadModalOpen(false);
+        resetUploadForm();
+      } catch (err: any) {
+        addToast('error', 'Error Saving Asset', err.message || 'Unable to save external asset.');
+      } finally {
+        setIsUploading(false);
+      }
+    }
   };
 
-  const confirmDeleteMedia = () => {
+  // Copy Permanent URL
+  const handleCopyUrl = (id: string, url: string) => {
+    if (!url) return;
+    navigator.clipboard.writeText(url);
+    setCopiedId(id);
+    addToast('info', 'URL Copied', 'Permanent image URL copied to clipboard.');
+    setTimeout(() => setCopiedId(null), 2500);
+  };
+
+  // Open Details Modal
+  const handleOpenDetail = (item: MediaItem) => {
+    setDetailItem(item);
+    setIsEditingMetadata(false);
+    setEditTitle(item.title);
+    setEditCategory((item.category as any) || 'Campus');
+    setEditAlt(item.altText || '');
+    setEditTags((item.tags || []).join(', '));
+  };
+
+  // Save Edited Metadata
+  const handleSaveMetadata = async () => {
+    if (!detailItem) return;
+    if (!editTitle.trim()) {
+      addToast('error', 'Validation Error', 'Title cannot be empty.');
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      const parsedTags = editTags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean);
+
+      const updates: Partial<MediaItem> = {
+        title: editTitle.trim(),
+        category: editCategory,
+        altText: editAlt.trim() || editTitle.trim(),
+        tags: parsedTags,
+      };
+
+      updateMediaItem(detailItem.id, updates);
+      setDetailItem((prev) => (prev ? { ...prev, ...updates } : null));
+      setIsEditingMetadata(false);
+      addToast('success', 'Updated', 'Asset details updated in Firestore database.');
+    } catch (err: any) {
+      addToast('error', 'Update Failed', err.message || 'Unable to save updates.');
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  // Replace File for Existing Asset
+  const handleReplaceFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !detailItem) return;
+
+    setIsReplacingFile(true);
+    try {
+      const updated = await replaceMediaFile(detailItem.id, file);
+      setDetailItem(updated);
+      addToast('success', 'File Replaced', 'New image uploaded and saved to Firebase Storage.');
+    } catch (err: any) {
+      addToast('error', 'Replacement Failed', err.message || 'Could not replace file.');
+    } finally {
+      setIsReplacingFile(false);
+      if (replaceFileInputRef.current) {
+        replaceFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Delete Action
+  const handleDeleteClick = (item: MediaItem) => {
+    if (!canPerformAction('Content Admin')) {
+      addToast('error', 'Permission Denied', 'Content Admin privileges required to delete assets.');
+      return;
+    }
+    setDeleteTarget(item);
+  };
+
+  const confirmDeleteMedia = async () => {
     if (!deleteTarget) return;
-    deleteMediaItem(deleteTarget.id);
-    addToast({ title: 'Asset Removed', message: `"${deleteTarget.title}" deleted.`, type: 'info' });
-    setDeleteTarget(null);
+    setIsDeleting(true);
+    try {
+      deleteMediaItem(deleteTarget.id);
+      if (detailItem?.id === deleteTarget.id) {
+        setDetailItem(null);
+      }
+      setDeleteTarget(null);
+    } catch (err: any) {
+      addToast('error', 'Delete Failed', err.message || 'Could not remove asset.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
-  const filteredMedia = mediaLibrary.filter((m) => {
-    const matchesSearch =
-      !search ||
-      m.title.toLowerCase().includes(search.toLowerCase()) ||
-      m.category.toLowerCase().includes(search.toLowerCase());
+  // Filter & Sort Assets
+  const filteredAndSortedMedia = mediaLibrary
+    .filter((m) => {
+      const q = search.toLowerCase();
+      const matchesSearch =
+        !search ||
+        m.title?.toLowerCase().includes(q) ||
+        m.category?.toLowerCase().includes(q) ||
+        m.altText?.toLowerCase().includes(q) ||
+        (m.tags && m.tags.some((t) => t.toLowerCase().includes(q))) ||
+        (m.fileName && m.fileName.toLowerCase().includes(q));
 
-    const matchesCategory =
-      categoryFilter === 'all' || m.category.toLowerCase() === categoryFilter.toLowerCase();
+      const matchesCategory =
+        categoryFilter === 'all' || m.category?.toLowerCase() === categoryFilter.toLowerCase();
 
-    return matchesSearch && matchesCategory;
-  });
+      return matchesSearch && matchesCategory;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'newest') {
+        const timeA = new Date(a.createdAt || a.uploadDate || 0).getTime();
+        const timeB = new Date(b.createdAt || b.uploadDate || 0).getTime();
+        return timeB - timeA;
+      }
+      if (sortBy === 'oldest') {
+        const timeA = new Date(a.createdAt || a.uploadDate || 0).getTime();
+        const timeB = new Date(b.createdAt || b.uploadDate || 0).getTime();
+        return timeA - timeB;
+      }
+      if (sortBy === 'title') {
+        return (a.title || '').localeCompare(b.title || '');
+      }
+      if (sortBy === 'size') {
+        return (b.fileSizeBytes || 0) - (a.fileSizeBytes || 0);
+      }
+      return 0;
+    });
+
+  const categories = ['all', 'Campus', 'Faculty', 'Chapel', 'Events', 'Archive', 'Documents', 'General'];
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
-        <div>
-          <h2 className="font-serif text-lg font-bold text-[#18392B] flex items-center gap-2">
-            <ImageIcon className="w-5 h-5 text-[#588B76]" />
-            Media Library & Photographic Asset Manager
-          </h2>
-          <p className="text-xs text-slate-500">
-            Upload, manage, and retrieve photography for hero carousels, faculty portraits, articles, and albums.
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+        <div className="space-y-1">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-[#588B76]/10 flex items-center justify-center text-[#588B76]">
+              <ImageIcon className="w-5 h-5" />
+            </div>
+            <h2 className="font-serif text-lg font-bold text-[#18392B]">
+              Media Library & Photographic Asset Manager
+            </h2>
+          </div>
+          <p className="text-xs text-slate-500 max-w-2xl">
+            Upload, permanently store, and manage photographic assets for hero banners, faculty
+            portraits, college news, events, and albums. Stored in Firebase Storage & Firestore.
           </p>
         </div>
 
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] text-white px-4 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer shadow-sm"
-        >
-          <Upload className="w-4 h-4" />
-          <span>Upload Asset</span>
-        </button>
+        {/* Action Controls & Sync Status */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border ${
+              isFirebaseConnected
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-amber-50 text-amber-700 border-amber-200'
+            }`}
+          >
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isFirebaseConnected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'
+              }`}
+            />
+            <span>
+              {isFirebaseConnected ? 'Cloud Synced' : 'Syncing'} ({mediaLibrary.length} assets)
+            </span>
+          </div>
+
+          <button
+            onClick={() => {
+              resetUploadForm();
+              setIsUploadModalOpen(true);
+            }}
+            className="flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer shadow-xs"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Upload Asset</span>
+          </button>
+        </div>
       </div>
 
-      {/* Search & Category Filter */}
-      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-        <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-          <input
-            type="text"
-            placeholder="Search media by title or category..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-slate-200 focus:border-[#588B76] focus:outline-none"
-          />
+      {/* Search, Filters, View Modes */}
+      <div className="space-y-3">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          {/* Search bar */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
+            <input
+              type="text"
+              placeholder="Search assets by title, category, tag, or alt text..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-9 pr-8 py-2 text-xs rounded-lg border border-slate-200 focus:border-[#588B76] focus:outline-none"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Sort & View Mode controls */}
+          <div className="flex items-center gap-2 self-end sm:self-auto">
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="px-3 py-2 text-xs rounded-lg border border-slate-200 bg-white text-slate-700 focus:border-[#588B76] focus:outline-none"
+            >
+              <option value="newest">Sort: Newest First</option>
+              <option value="oldest">Sort: Oldest First</option>
+              <option value="title">Sort: Title (A-Z)</option>
+              <option value="size">Sort: File Size (Largest)</option>
+            </select>
+
+            <div className="flex items-center border border-slate-200 rounded-lg p-0.5 bg-slate-50">
+              <button
+                onClick={() => setViewMode('grid')}
+                className={`p-1.5 rounded-md text-xs transition cursor-pointer ${
+                  viewMode === 'grid'
+                    ? 'bg-white text-[#18392B] shadow-2xs font-bold'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                title="Grid View"
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => setViewMode('list')}
+                className={`p-1.5 rounded-md text-xs transition cursor-pointer ${
+                  viewMode === 'list'
+                    ? 'bg-white text-[#18392B] shadow-2xs font-bold'
+                    : 'text-slate-500 hover:text-slate-700'
+                }`}
+                title="List View"
+              >
+                <List className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
 
+        {/* Category Pills */}
         <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          {['all', 'Campus', 'Faculty', 'Chapel', 'Events', 'Archive', 'Documents'].map((cat) => (
+          {categories.map((cat) => (
             <button
               key={cat}
               onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1.5 rounded-lg font-medium transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
                 categoryFilter === cat
-                  ? 'bg-[#18392B] text-white font-bold'
+                  ? 'bg-[#18392B] text-white font-bold shadow-2xs'
                   : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
               }`}
             >
               {cat === 'all' ? 'All Assets' : cat}
+              <span className="ml-1.5 opacity-60 text-[10px]">
+                {cat === 'all'
+                  ? mediaLibrary.length
+                  : mediaLibrary.filter((m) => m.category?.toLowerCase() === cat.toLowerCase()).length}
+              </span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* Media Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
-        {filteredMedia.map((m) => (
-          <div
-            key={m.id}
-            className="group relative bg-slate-50 rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:border-[#588B76] transition flex flex-col justify-between"
-          >
-            <div
-              className="w-full h-32 bg-cover bg-center border-b border-slate-200 relative"
-              style={{ backgroundImage: `url(${m.url})` }}
-            >
-              <div className="absolute top-1.5 right-1.5 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  onClick={() => handleCopyUrl(m.id, m.url)}
-                  className="p-1 rounded bg-white/90 hover:bg-white text-slate-700 shadow-xs cursor-pointer"
-                  title="Copy URL"
-                >
-                  {copiedId === m.id ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5" />
-                  )}
-                </button>
-                <button
-                  onClick={() => handleDelete(m.id, m.title)}
-                  className="p-1 rounded bg-red-600 text-white hover:bg-red-700 shadow-xs cursor-pointer"
-                  title="Delete Media"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            </div>
-
-            <div className="p-2.5 space-y-1">
-              <div className="flex items-center justify-between text-[10px] text-slate-400">
-                <span className="font-mono text-[#588B76] font-bold uppercase">{m.category}</span>
-                <span>{m.fileSize || 'Image'}</span>
-              </div>
-              <h4 className="text-xs font-bold text-[#18392B] truncate" title={m.title}>
-                {m.title}
-              </h4>
-            </div>
+      {/* Media Content Display */}
+      {filteredAndSortedMedia.length === 0 ? (
+        <div className="border-2 border-dashed border-slate-200 rounded-xl p-12 text-center space-y-3">
+          <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
+            <ImageIcon className="w-6 h-6" />
           </div>
-        ))}
-      </div>
+          <div>
+            <h3 className="text-sm font-bold text-slate-700">No media assets found</h3>
+            <p className="text-xs text-slate-500 mt-1">
+              {search || categoryFilter !== 'all'
+                ? 'Try adjusting your search keywords or category filters.'
+                : 'Your media library is empty. Upload your first high-resolution photo.'}
+            </p>
+          </div>
+          <button
+            onClick={() => {
+              resetUploadForm();
+              setIsUploadModalOpen(true);
+            }}
+            className="inline-flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] text-white px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer shadow-xs"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Upload New Asset</span>
+          </button>
+        </div>
+      ) : viewMode === 'grid' ? (
+        /* Grid View */
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          {filteredAndSortedMedia.map((m) => {
+            const displayUrl = m.downloadURL || m.url;
+            return (
+              <div
+                key={m.id}
+                className="group relative bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs hover:shadow-md hover:border-[#588B76] transition-all flex flex-col justify-between"
+              >
+                {/* Thumbnail Image Container */}
+                <div
+                  onClick={() => handleOpenDetail(m)}
+                  className="w-full h-36 bg-slate-100 bg-cover bg-center border-b border-slate-200 relative cursor-pointer overflow-hidden"
+                  style={{ backgroundImage: `url(${displayUrl})` }}
+                >
+                  {/* Subtle Gradient Overlay */}
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
 
-      {/* Upload/Add Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <h3 className="font-serif text-base font-bold text-[#18392B]">
-              Add Asset to Media Library
-            </h3>
+                  {/* Top-right Quick Action Buttons */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                  >
+                    <button
+                      onClick={() => handleCopyUrl(m.id, displayUrl)}
+                      className="p-1.5 rounded-md bg-white/95 hover:bg-white text-slate-700 shadow-xs cursor-pointer transition hover:scale-105"
+                      title="Copy Public URL"
+                    >
+                      {copiedId === m.id ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => handleOpenDetail(m)}
+                      className="p-1.5 rounded-md bg-white/95 hover:bg-white text-slate-700 shadow-xs cursor-pointer transition hover:scale-105"
+                      title="View Details"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-[#588B76]" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteClick(m)}
+                      className="p-1.5 rounded-md bg-white/95 hover:bg-red-600 hover:text-white text-red-600 shadow-xs cursor-pointer transition hover:scale-105"
+                      title="Delete Asset"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+
+                  {/* Category Chip on image */}
+                  <div className="absolute bottom-2 left-2">
+                    <span className="px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-xs text-white text-[9px] font-mono uppercase font-bold tracking-wider">
+                      {m.category || 'General'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Metadata Card Footer */}
+                <div className="p-3 space-y-1 bg-white">
+                  <h4
+                    onClick={() => handleOpenDetail(m)}
+                    className="text-xs font-bold text-[#18392B] truncate cursor-pointer hover:text-[#588B76]"
+                    title={m.title}
+                  >
+                    {m.title}
+                  </h4>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span>{m.fileSize || 'Image'}</span>
+                    <span>{m.uploadDate || (m.createdAt ? m.createdAt.split('T')[0] : '')}</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        /* List View */
+        <div className="overflow-x-auto rounded-xl border border-slate-200">
+          <table className="w-full text-left text-xs">
+            <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
+              <tr>
+                <th className="py-3 px-4">Preview</th>
+                <th className="py-3 px-4">Title & Details</th>
+                <th className="py-3 px-4">Category</th>
+                <th className="py-3 px-4">Resolution</th>
+                <th className="py-3 px-4">Size</th>
+                <th className="py-3 px-4">Upload Date</th>
+                <th className="py-3 px-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {filteredAndSortedMedia.map((m) => {
+                const displayUrl = m.downloadURL || m.url;
+                return (
+                  <tr key={m.id} className="hover:bg-slate-50 transition">
+                    <td className="py-2.5 px-4">
+                      <div
+                        onClick={() => handleOpenDetail(m)}
+                        className="w-12 h-12 rounded-lg bg-cover bg-center border border-slate-200 cursor-pointer hover:opacity-90"
+                        style={{ backgroundImage: `url(${displayUrl})` }}
+                      />
+                    </td>
+                    <td className="py-2.5 px-4 max-w-xs">
+                      <div
+                        onClick={() => handleOpenDetail(m)}
+                        className="font-bold text-[#18392B] truncate cursor-pointer hover:text-[#588B76]"
+                        title={m.title}
+                      >
+                        {m.title}
+                      </div>
+                      <div className="text-[11px] text-slate-400 truncate" title={m.altText || ''}>
+                        {m.altText || 'No alt text provided'}
+                      </div>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <span className="px-2 py-0.5 rounded bg-[#588B76]/10 text-[#588B76] font-mono text-[10px] font-bold uppercase">
+                        {m.category || 'General'}
+                      </span>
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-500 font-mono text-[11px]">
+                      {m.dimensions || '—'}
+                    </td>
+                    <td className="py-2.5 px-4 text-slate-500">{m.fileSize || '—'}</td>
+                    <td className="py-2.5 px-4 text-slate-500">
+                      {m.uploadDate || (m.createdAt ? m.createdAt.split('T')[0] : '—')}
+                    </td>
+                    <td className="py-2.5 px-4 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => handleCopyUrl(m.id, displayUrl)}
+                          className="p-1.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 transition"
+                          title="Copy Permanent URL"
+                        >
+                          {copiedId === m.id ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                        <button
+                          onClick={() => handleOpenDetail(m)}
+                          className="p-1.5 rounded bg-slate-100 hover:bg-[#588B76] hover:text-white text-slate-700 transition"
+                          title="View Details"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteClick(m)}
+                          className="p-1.5 rounded bg-slate-100 hover:bg-red-600 hover:text-white text-slate-700 transition"
+                          title="Delete Asset"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* UPLOAD ASSET MODAL */}
+      {isUploadModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-slate-200 my-8">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-[#588B76]/15 flex items-center justify-center text-[#588B76]">
+                  <Upload className="w-4 h-4" />
+                </div>
+                <h3 className="font-serif text-base font-bold text-[#18392B]">
+                  Add Asset to PCM Media Library
+                </h3>
+              </div>
+              <button
+                onClick={() => {
+                  if (!isUploading) {
+                    setIsUploadModalOpen(false);
+                    resetUploadForm();
+                  }
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Tabs: File Upload vs Direct URL */}
+            <div className="flex border-b border-slate-200">
+              <button
+                type="button"
+                onClick={() => setUploadTab('file')}
+                className={`py-2 px-4 text-xs font-bold border-b-2 transition ${
+                  uploadTab === 'file'
+                    ? 'border-[#588B76] text-[#588B76]'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Upload File from Computer (Firebase Storage)
+              </button>
+              <button
+                type="button"
+                onClick={() => setUploadTab('url')}
+                className={`py-2 px-4 text-xs font-bold border-b-2 transition ${
+                  uploadTab === 'url'
+                    ? 'border-[#588B76] text-[#588B76]'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Register by Web URL
+              </button>
+            </div>
 
             <form onSubmit={handleSaveMedia} className="space-y-4 text-xs">
-              {/* File upload or URL */}
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Upload Image File from Computer
-                </label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleFileUpload}
-                  className="w-full text-xs text-slate-500 file:mr-3 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#588B76]/10 file:text-[#588B76] hover:file:bg-[#588B76]/20 cursor-pointer"
-                />
-              </div>
+              {uploadTab === 'file' ? (
+                /* Drag & Drop File Upload Area */
+                <div className="space-y-3">
+                  <div
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition-colors ${
+                      isDragging
+                        ? 'border-[#588B76] bg-[#588B76]/5'
+                        : selectedFile
+                        ? 'border-emerald-300 bg-emerald-50/40'
+                        : 'border-slate-200 hover:border-slate-300 bg-slate-50/50'
+                    }`}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleFileChange}
+                      className="hidden"
+                    />
 
-              <div className="text-center text-[10px] text-slate-400 uppercase font-mono tracking-widest">
-                — OR ENTER URL DIRECTLY —
-              </div>
+                    {filePreview ? (
+                      <div className="space-y-2">
+                        <div
+                          className="w-full h-36 rounded-lg bg-cover bg-center border border-slate-200 shadow-inner"
+                          style={{ backgroundImage: `url(${filePreview})` }}
+                        />
+                        <div className="flex items-center justify-between text-[11px] text-slate-600 px-1">
+                          <span className="font-semibold truncate max-w-[200px]">
+                            {selectedFile?.name}
+                          </span>
+                          <span>
+                            {selectedFile
+                              ? selectedFile.size < 1024 * 1024
+                                ? `${(selectedFile.size / 1024).toFixed(1)} KB`
+                                : `${(selectedFile.size / (1024 * 1024)).toFixed(1)} MB`
+                              : ''}
+                            {fileDimensions && ` • ${fileDimensions}`}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-[#588B76] font-medium">
+                          Click or drag another image here to replace
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="w-10 h-10 rounded-full bg-[#588B76]/10 text-[#588B76] mx-auto flex items-center justify-center">
+                          <FileImage className="w-5 h-5" />
+                        </div>
+                        <div className="text-slate-700 font-semibold">
+                          Click to browse or drag & drop image here
+                        </div>
+                        <p className="text-[10px] text-slate-400">
+                          Supports PNG, JPG, JPEG, WEBP, GIF, SVG (up to 25MB). Permanently stored in
+                          Firebase Storage.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* Direct URL Input */
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Permanent Image URL</label>
+                    <input
+                      type="url"
+                      required
+                      value={mediaUrl}
+                      onChange={(e) => setMediaUrl(e.target.value)}
+                      placeholder="https://images.unsplash.com/... or https://firebasestorage..."
+                      className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Image URL / Link
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={mediaUrl}
-                  onChange={(e) => setMediaUrl(e.target.value)}
-                  placeholder="https://images.unsplash.com/..."
-                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
-                />
-              </div>
-
-              {mediaUrl && (
-                <div className="w-full h-28 rounded-lg bg-cover bg-center border border-slate-200 shadow-inner" style={{ backgroundImage: `url(${mediaUrl})` }} />
+                  {mediaUrl && (
+                    <div
+                      className="w-full h-32 rounded-lg bg-cover bg-center border border-slate-200 shadow-inner"
+                      style={{ backgroundImage: `url(${mediaUrl})` }}
+                    />
+                  )}
+                </div>
               )}
 
+              {/* Title Input */}
               <div>
                 <label className="block text-slate-700 font-bold mb-1">
-                  Asset Title / Caption
+                  Asset Title / Description <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={mediaTitle}
                   onChange={(e) => setMediaTitle(e.target.value)}
-                  placeholder="e.g. Theological Classroom Lecture"
+                  placeholder="e.g. Theological Classroom Lecture - Manila Campus"
                   className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {/* Category & Alt Text */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">
-                    Category
-                  </label>
+                  <label className="block text-slate-700 font-bold mb-1">Category</label>
                   <select
                     value={mediaCategory}
                     onChange={(e) => setMediaCategory(e.target.value as any)}
                     className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none bg-white"
                   >
-                    <option value="Campus">Campus</option>
-                    <option value="Faculty">Faculty</option>
-                    <option value="Chapel">Chapel</option>
-                    <option value="Events">Events</option>
-                    <option value="Archive">Archive</option>
-                    <option value="Documents">Documents</option>
+                    <option value="Campus">Campus & Grounds</option>
+                    <option value="Faculty">Faculty & Leadership</option>
+                    <option value="Chapel">Chapel & Worship</option>
+                    <option value="Events">College Events</option>
+                    <option value="Archive">Historical Archive</option>
+                    <option value="Documents">Documents & Certificates</option>
+                    <option value="General">General Assets</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">
-                    Alt Text (Accessibility)
-                  </label>
+                  <label className="block text-slate-700 font-bold mb-1">Alt Text (Accessibility)</label>
                   <input
                     type="text"
                     value={mediaAlt}
                     onChange={(e) => setMediaAlt(e.target.value)}
-                    placeholder="Visual description"
+                    placeholder="Visual description for screen readers"
                     className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                   />
                 </div>
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100">
+              {/* Tags */}
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">
+                  Tags <span className="text-slate-400 font-normal">(comma-separated)</span>
+                </label>
+                <input
+                  type="text"
+                  value={mediaTags}
+                  onChange={(e) => setMediaTags(e.target.value)}
+                  placeholder="e.g. graduation, students, 2025, baccalaureate"
+                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-slate-100">
                 <button
                   type="button"
-                  onClick={() => setIsModalOpen(false)}
+                  disabled={isUploading}
+                  onClick={() => {
+                    setIsUploadModalOpen(false);
+                    resetUploadForm();
+                  }}
                   className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-[#588B76] hover:bg-[#46705F] text-white font-bold cursor-pointer shadow-sm"
+                  disabled={isUploading}
+                  className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#588B76] hover:bg-[#46705F] text-white font-bold cursor-pointer shadow-xs disabled:opacity-50"
                 >
-                  Add to Library
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Uploading to Firebase...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      <span>Save Permanently</span>
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -333,13 +929,284 @@ export const AdminMediaTab: React.FC = () => {
         </div>
       )}
 
-      {/* Confirmation Modal */}
+      {/* ASSET DETAIL / EDIT / REPLACE MODAL */}
+      {detailItem && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl border border-slate-200 my-8">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <ImageIcon className="w-5 h-5 text-[#588B76]" />
+                <h3 className="font-serif text-base font-bold text-[#18392B] truncate max-w-md">
+                  {detailItem.title}
+                </h3>
+              </div>
+              <button
+                onClick={() => setDetailItem(null)}
+                className="text-slate-400 hover:text-slate-600 p-1"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Image Preview Box */}
+            <div className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200">
+              <img
+                src={detailItem.downloadURL || detailItem.url}
+                alt={detailItem.altText || detailItem.title}
+                className="max-h-full max-w-full object-contain"
+              />
+              <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                <a
+                  href={detailItem.downloadURL || detailItem.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white transition flex items-center gap-1 text-[10px]"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>Open Full View</span>
+                </a>
+              </div>
+            </div>
+
+            {/* Details & Metadata */}
+            {isEditingMetadata ? (
+              /* Edit Metadata Form */
+              <div className="space-y-3 text-xs bg-slate-50 p-4 rounded-xl border border-slate-200">
+                <h4 className="font-bold text-[#18392B] flex items-center gap-1.5">
+                  <Edit3 className="w-4 h-4 text-[#588B76]" />
+                  <span>Edit Asset Metadata</span>
+                </h4>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Asset Title</label>
+                  <input
+                    type="text"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs focus:outline-none focus:border-[#588B76]"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Category</label>
+                    <select
+                      value={editCategory}
+                      onChange={(e) => setEditCategory(e.target.value as any)}
+                      className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs focus:outline-none focus:border-[#588B76]"
+                    >
+                      <option value="Campus">Campus & Grounds</option>
+                      <option value="Faculty">Faculty & Leadership</option>
+                      <option value="Chapel">Chapel & Worship</option>
+                      <option value="Events">College Events</option>
+                      <option value="Archive">Historical Archive</option>
+                      <option value="Documents">Documents & Certificates</option>
+                      <option value="General">General Assets</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-slate-700 font-bold mb-1">Alt Text</label>
+                    <input
+                      type="text"
+                      value={editAlt}
+                      onChange={(e) => setEditAlt(e.target.value)}
+                      className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs focus:outline-none focus:border-[#588B76]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Tags</label>
+                  <input
+                    type="text"
+                    value={editTags}
+                    onChange={(e) => setEditTags(e.target.value)}
+                    className="w-full p-2 rounded-lg border border-slate-200 bg-white text-xs focus:outline-none focus:border-[#588B76]"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMetadata(false)}
+                    className="px-3 py-1.5 rounded-lg bg-slate-200 text-slate-700 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSavingEdit}
+                    onClick={handleSaveMetadata}
+                    className="px-4 py-1.5 rounded-lg bg-[#588B76] text-white font-bold hover:bg-[#46705F]"
+                  >
+                    {isSavingEdit ? 'Saving...' : 'Save Updates'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              /* Display Metadata Grid */
+              <div className="space-y-4 text-xs">
+                {/* Permanent URL Copy Row */}
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                    <span>Permanent Download URL (Firebase Storage)</span>
+                    <button
+                      onClick={() =>
+                        handleCopyUrl(detailItem.id, detailItem.downloadURL || detailItem.url)
+                      }
+                      className="flex items-center gap-1 text-[#588B76] hover:text-[#46705F] cursor-pointer font-bold"
+                    >
+                      {copiedId === detailItem.id ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-emerald-600">Copied to Clipboard!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5" />
+                          <span>Copy URL</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  <input
+                    type="text"
+                    readOnly
+                    value={detailItem.downloadURL || detailItem.url}
+                    className="w-full p-2 text-[11px] font-mono rounded-lg border border-slate-200 bg-white text-slate-600 select-all focus:outline-none"
+                  />
+                </div>
+
+                {/* Metadata Details Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px]">
+                  <div>
+                    <span className="text-slate-400 block">Category</span>
+                    <span className="font-bold text-[#18392B] uppercase font-mono">
+                      {detailItem.category || 'General'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block">File Size</span>
+                    <span className="font-semibold text-slate-700">
+                      {detailItem.fileSize || 'Standard'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block">Dimensions</span>
+                    <span className="font-semibold text-slate-700 font-mono">
+                      {detailItem.dimensions || '1600 × 1067'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block">Uploaded By</span>
+                    <span className="font-semibold text-slate-700">
+                      {detailItem.uploadedBy || 'Administrator'}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block">Upload Date</span>
+                    <span className="font-semibold text-slate-700">
+                      {detailItem.uploadDate ||
+                        (detailItem.createdAt ? detailItem.createdAt.split('T')[0] : '—')}
+                    </span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block">Alt Text</span>
+                    <span className="font-medium text-slate-700 truncate block" title={detailItem.altText}>
+                      {detailItem.altText || 'None'}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Tags if any */}
+                {detailItem.tags && detailItem.tags.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-slate-400 text-[11px] mr-1">Tags:</span>
+                    {detailItem.tags.map((t, idx) => (
+                      <span
+                        key={idx}
+                        className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[10px] font-medium"
+                      >
+                        #{t}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Bottom Actions Row */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-100 text-xs">
+              <div className="flex items-center gap-2">
+                {/* Replace Image Button */}
+                <input
+                  ref={replaceFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleReplaceFileChange}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  disabled={isReplacingFile}
+                  onClick={() => replaceFileInputRef.current?.click()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium transition cursor-pointer disabled:opacity-50"
+                  title="Upload a new image file to replace this asset in Firebase"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isReplacingFile ? 'animate-spin' : ''}`} />
+                  <span>{isReplacingFile ? 'Replacing...' : 'Replace Image'}</span>
+                </button>
+
+                {/* Edit Metadata Toggle */}
+                {!isEditingMetadata && (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingMetadata(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-slate-700 font-medium transition cursor-pointer"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Edit Info</span>
+                  </button>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleDeleteClick(detailItem)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 font-semibold transition cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Asset</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setDetailItem(null)}
+                  className="px-4 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium transition cursor-pointer"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE MODAL */}
       <ConfirmDeleteModal
         isOpen={!!deleteTarget}
-        title="Remove Media Asset"
+        title="Delete Media Asset Permanently"
         itemName={deleteTarget?.title}
-        message="Are you sure you want to remove this asset from the media library?"
-        confirmLabel="Remove Asset"
+        message="Are you sure you want to permanently delete this media asset? It will be removed from Firestore and Firebase Storage immediately. Any website pages referencing this URL will no longer be able to display it."
+        confirmLabel={isDeleting ? 'Deleting...' : 'Delete Permanently'}
         onConfirm={confirmDeleteMedia}
         onCancel={() => setDeleteTarget(null)}
       />
