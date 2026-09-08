@@ -12,7 +12,9 @@ import {
   RotateCcw,
   ExternalLink,
   UserCheck,
+  Camera,
 } from 'lucide-react';
+import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 
 interface AdminHeaderProps {
   activeTab?: string;
@@ -48,10 +50,12 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
     addToast,
     isFirebaseConnected,
     firebaseSyncStatus,
+    updateAdminAvatar,
   } = usePCM();
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
   const pendingApps = applications.filter(
     (a) => a.status === 'Submitted' || a.status === 'Under Review'
@@ -285,6 +289,32 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             <span>Public Site</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </button>
+
+          {/* Admin Avatar & Photo Change Trigger */}
+          <button
+            id="admin-header-avatar-btn"
+            type="button"
+            onClick={() => setIsAvatarModalOpen(true)}
+            className="flex items-center gap-2 bg-[#10261D] hover:bg-[#0A1812] text-white px-2.5 py-1.5 rounded-lg border border-[#588B76]/40 hover:border-[#588B76] transition cursor-pointer font-medium text-xs group"
+            title="Click to change admin profile photo"
+          >
+            <div className="w-5 h-5 rounded-full overflow-hidden bg-[#588B76]/30 flex items-center justify-center text-[10px] font-bold text-[#85AA9B] relative shrink-0 border border-[#588B76]/50">
+              {currentAdminUser?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={currentAdminUser.avatarUrl}
+                  alt={currentAdminUser.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{(currentAdminUser?.name || 'A').charAt(0).toUpperCase()}</span>
+              )}
+            </div>
+            <span className="hidden sm:inline font-semibold text-slate-200 group-hover:text-white">
+              {currentAdminUser?.name?.split(' ')[0] || 'Admin'}
+            </span>
+            <Camera className="w-3.5 h-3.5 text-[#85AA9B] group-hover:text-amber-300 transition" />
+          </button>
         </div>
       </div>
 
@@ -300,6 +330,18 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
           setShowResetConfirm(false);
         }}
         onCancel={() => setShowResetConfirm(false)}
+      />
+
+      {/* Change Admin Avatar Modal */}
+      <ChangeAvatarModal
+        isOpen={isAvatarModalOpen}
+        onClose={() => setIsAvatarModalOpen(false)}
+        currentAvatarUrl={currentAdminUser?.avatarUrl || ''}
+        userName={currentAdminUser?.name || 'Administrator'}
+        userRole="Admin"
+        onSave={async (newUrl) => {
+          await updateAdminAvatar(newUrl);
+        }}
       />
     </header>
   );

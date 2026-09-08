@@ -102,6 +102,7 @@ import {
   signInWithPopup,
   signOut,
   onAuthStateChanged,
+  updateProfile,
   FirebaseUser,
   collection,
   doc,
@@ -383,6 +384,7 @@ interface PCMContextType {
   // Student Profile & Academic Management (Admin / Registrar)
   createStudentProfile: (profile: Omit<StudentProfile, 'id'>) => Promise<StudentProfile>;
   updateStudentProfile: (studentId: string, updates: Partial<StudentProfile>) => Promise<boolean>;
+  updateStudentAvatar: (avatarUrl: string, studentId?: string) => Promise<boolean>;
   deleteStudentProfile: (studentId: string) => Promise<boolean>;
   archiveStudentProfile: (studentId: string) => Promise<boolean>;
   restoreStudentProfile: (studentId: string) => Promise<boolean>;
@@ -475,6 +477,8 @@ interface PCMContextType {
   setAdminUsers: React.Dispatch<React.SetStateAction<AdminUser[]>>;
   addAdminUser: (user: Omit<AdminUser, 'id' | 'createdAt'>) => AdminUser;
   updateAdminUser: (id: string, updates: Partial<AdminUser>) => void;
+  updateAdminAvatar: (avatarUrl: string, adminId?: string) => Promise<boolean>;
+  updateUserAvatar: (avatarUrl: string) => Promise<boolean>;
   deleteAdminUser: (id: string) => void;
   changeAdminPassword: (userId: string, newPass: string) => boolean;
   canPerformAction: (requiredRole: AdminRole) => boolean;
@@ -3751,7 +3755,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateStudentProfile = async (studentId: string, updates: Partial<StudentProfile>): Promise<boolean> => {
-    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId ? studentProfile : null);
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId || studentProfile.studentId === studentId ? studentProfile : null);
     if (!target) return false;
 
     const updated: StudentProfile = cleanFirestoreData({
@@ -3762,7 +3766,29 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (target.id === studentProfile.id || target.studentId === studentProfile.studentId) {
       setStudentProfile(updated);
     }
-    setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
+    setStudents((prev) => prev.map((s) => (s.id === updated.id || s.studentId === updated.studentId ? updated : s)));
+
+    // Synchronize avatar across user accounts and Google/Firebase profile if updated
+    if (updates.avatarUrl !== undefined) {
+      const newPhoto = updates.avatarUrl || '';
+      setCurrentUserAccount((prev) => {
+        if (!prev) return prev;
+        if (prev.role === 'Student' || prev.studentId === target.studentId || prev.email === target.email) {
+          return { ...prev, photoURL: newPhoto, avatarUrl: newPhoto };
+        }
+        return prev;
+      });
+      setUserAccounts((prev) =>
+        prev.map((acc) =>
+          acc.studentId === target.studentId || acc.email === target.email
+            ? { ...acc, photoURL: newPhoto, avatarUrl: newPhoto }
+            : acc
+        )
+      );
+      if (auth.currentUser && (currentUserAccount?.email === target.email || currentUserAccount?.studentId === target.studentId)) {
+        updateProfile(auth.currentUser, { photoURL: newPhoto }).catch((err) => console.warn('Auth photoURL sync notice:', err));
+      }
+    }
 
     try {
       await safeSetDoc(doc(db, 'studentProfiles', updated.id), updated, { merge: true });
@@ -3770,9 +3796,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Update student profile sync notice:', e);
     }
 
-    logActivity('UPDATE', 'Student Profile', updated.id, updated.fullName || updated.name || 'Student', 'Updated student record and academic information.');
+    logActivity('UPDATE', 'Student Profile', updated.id, updated.fullName || updated.name || 'Student', updates.avatarUrl !== undefined ? 'Updated student profile photo.' : 'Updated student record and academic information.');
     addToast('success', 'Profile Updated', `Updated record for ${updated.fullName || updated.name || 'Student'}.`);
     return true;
+  };
+
+  const updateStudentAvatar = async (avatarUrl: string, studentId?: string): Promise<boolean> => {
+    const targetId = studentId || studentProfile.studentId || studentProfile.id;
+    return await updateStudentProfile(targetId, { avatarUrl });
   };
 
   const deleteStudentProfile = async (studentId: string): Promise<boolean> => {
@@ -4276,9 +4307,52 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAdminUsers((prev) =>
       prev.map((u) => (u.id === id ? { ...u, ...updates } : u))
     );
+
+    // If updating current logged in admin user, update currentAdminUser state
+    if (currentAdminUser?.id === id) {
+      setCurrentAdminUser((prev) => ({ ...prev, ...updates }));
+    }
+
+    // Synchronize avatar across user accounts and Google/Firebase profile if updated
+    if (updates.avatarUrl !== undefined) {
+      const newPhoto = updates.avatarUrl || '';
+      const targetUser = adminUsers.find((u) => u.id === id) || currentAdminUser;
+      setCurrentUserAccount((prev) => {
+        if (!prev) return prev;
+        if (prev.role === 'Admin' || prev.email === targetUser?.email) {
+          return { ...prev, photoURL: newPhoto, avatarUrl: newPhoto };
+        }
+        return prev;
+      });
+      setUserAccounts((prev) =>
+        prev.map((acc) =>
+          acc.email === targetUser?.email || (acc.role === 'Admin' && currentAdminUser?.id === id)
+            ? { ...acc, photoURL: newPhoto, avatarUrl: newPhoto }
+            : acc
+        )
+      );
+      if (auth.currentUser && (currentUserAccount?.email === targetUser?.email || currentUserAccount?.role === 'Admin')) {
+        updateProfile(auth.currentUser, { photoURL: newPhoto }).catch((err) => console.warn('Auth photoURL sync notice:', err));
+      }
+    }
+
     setDoc(doc(db, 'adminUsers', id), sanitized, { merge: true }).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'Admin User', id, updates.name || 'Admin', 'Updated user role or permissions.');
+    logActivity('UPDATE', 'Admin User', id, updates.name || currentAdminUser?.name || 'Admin', updates.avatarUrl !== undefined ? 'Updated administrator profile photo.' : 'Updated user role or permissions.');
     addToast('success', 'Admin Profile Updated', 'Admin account updated.');
+  };
+
+  const updateAdminAvatar = async (avatarUrl: string, adminId?: string): Promise<boolean> => {
+    const targetId = adminId || currentAdminUser.id;
+    updateAdminUser(targetId, { avatarUrl });
+    return true;
+  };
+
+  const updateUserAvatar = async (avatarUrl: string): Promise<boolean> => {
+    if (currentUserAccount?.role === 'Student' || (!isAdminLoggedIn && isStudentLoggedIn)) {
+      return await updateStudentAvatar(avatarUrl);
+    } else {
+      return await updateAdminAvatar(avatarUrl);
+    }
   };
 
   const deleteAdminUser = (id: string) => {
@@ -5437,6 +5511,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Student Profile & Academic Record Management
         createStudentProfile,
         updateStudentProfile,
+        updateStudentAvatar,
         deleteStudentProfile,
         archiveStudentProfile,
         restoreStudentProfile,
@@ -5529,6 +5604,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAdminUsers,
         addAdminUser,
         updateAdminUser,
+        updateAdminAvatar,
+        updateUserAvatar,
         deleteAdminUser,
         changeAdminPassword,
         canPerformAction,

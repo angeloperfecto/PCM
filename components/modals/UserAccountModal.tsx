@@ -17,7 +17,9 @@ import {
   Clock,
   IdCard,
   Building,
+  Camera,
 } from 'lucide-react';
+import { ChangeAvatarModal } from './ChangeAvatarModal';
 
 export const UserAccountModal: React.FC = () => {
   const {
@@ -31,6 +33,8 @@ export const UserAccountModal: React.FC = () => {
     isAdminLoggedIn,
     isStudentLoggedIn,
     studentProfile,
+    currentAdminUser,
+    updateUserAvatar,
     linkStudentIdToUser,
     addToast,
   } = usePCM();
@@ -38,6 +42,7 @@ export const UserAccountModal: React.FC = () => {
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [studentIdInput, setStudentIdInput] = useState('');
   const [isLinking, setIsLinking] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
   if (!userAccountModalOpen) return null;
 
@@ -113,18 +118,41 @@ export const UserAccountModal: React.FC = () => {
             <div className="space-y-6">
               {/* Profile Card */}
               <div className="flex items-start gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-200/80">
-                {currentUserAccount?.photoURL || firebaseAuthUser?.photoURL ? (
-                  <img
-                    src={currentUserAccount?.photoURL || firebaseAuthUser?.photoURL || ''}
-                    alt={currentUserAccount?.name || 'User Avatar'}
-                    className="w-16 h-16 rounded-full object-cover border-2 border-[#18392B]/20 shadow-xs"
-                    referrerPolicy="no-referrer"
-                  />
-                ) : (
-                  <div className="w-16 h-16 rounded-full bg-[#18392B] text-[#97D4B6] font-bold text-xl flex items-center justify-center shadow-xs">
-                    {(currentUserAccount?.name || firebaseAuthUser?.displayName || 'U').charAt(0).toUpperCase()}
+                <div className="relative group shrink-0">
+                  <div
+                    onClick={() => setIsAvatarModalOpen(true)}
+                    title="Click to change profile picture"
+                    className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#18392B]/20 shadow-xs cursor-pointer relative bg-[#18392B]"
+                  >
+                    {currentUserAccount?.photoURL || currentUserAccount?.avatarUrl || firebaseAuthUser?.photoURL || (currentUserAccount?.role === 'Admin' || isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl) ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={currentUserAccount?.photoURL || currentUserAccount?.avatarUrl || firebaseAuthUser?.photoURL || (currentUserAccount?.role === 'Admin' || isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl) || ''}
+                        alt={currentUserAccount?.name || 'User Avatar'}
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <div className="w-full h-full text-[#97D4B6] font-bold text-xl flex items-center justify-center">
+                        {(currentUserAccount?.name || firebaseAuthUser?.displayName || 'U').charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                    {/* Hover overlay */}
+                    <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                      <Camera className="w-5 h-5 drop-shadow" />
+                    </div>
                   </div>
-                )}
+
+                  <button
+                    id="btn-account-modal-avatar-badge"
+                    type="button"
+                    onClick={() => setIsAvatarModalOpen(true)}
+                    title="Change Photo"
+                    className="absolute -bottom-1 -right-1 p-1.5 bg-[#18392B] hover:bg-[#234E3D] text-amber-300 hover:text-white rounded-full border-2 border-white shadow-xs transition cursor-pointer"
+                  >
+                    <Camera className="w-3 h-3" />
+                  </button>
+                </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -151,7 +179,7 @@ export const UserAccountModal: React.FC = () => {
                     {currentUserAccount?.email || firebaseAuthUser?.email}
                   </p>
 
-                  <div className="flex items-center gap-3 mt-2 text-[11px] text-slate-500">
+                  <div className="flex flex-wrap items-center gap-3 mt-2 text-[11px] text-slate-500">
                     <span className="flex items-center gap-1">
                       <Clock className="w-3 h-3 text-slate-400" />
                       Status: <strong className="text-emerald-700 font-semibold">{currentUserAccount?.status || 'Active'}</strong>
@@ -160,6 +188,15 @@ export const UserAccountModal: React.FC = () => {
                       <CheckCircle2 className="w-3 h-3 text-emerald-600" />
                       Google Verified
                     </span>
+                    <button
+                      id="btn-account-modal-change-photo"
+                      type="button"
+                      onClick={() => setIsAvatarModalOpen(true)}
+                      className="text-[#18392B] hover:text-[#234E3D] font-semibold underline flex items-center gap-1 cursor-pointer transition"
+                    >
+                      <Camera className="w-3 h-3" />
+                      Change Photo
+                    </button>
                   </div>
                 </div>
               </div>
@@ -351,6 +388,28 @@ export const UserAccountModal: React.FC = () => {
           </span>
         </div>
       </div>
+
+      {/* Change Avatar Modal for Current User (Student or Admin) */}
+      <ChangeAvatarModal
+        isOpen={isAvatarModalOpen}
+        onClose={() => setIsAvatarModalOpen(false)}
+        currentAvatarUrl={
+          currentUserAccount?.photoURL ||
+          currentUserAccount?.avatarUrl ||
+          firebaseAuthUser?.photoURL ||
+          (currentUserAccount?.role === 'Admin' || isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl) ||
+          ''
+        }
+        userName={
+          currentUserAccount?.name ||
+          firebaseAuthUser?.displayName ||
+          (currentUserAccount?.role === 'Admin' || isAdminLoggedIn ? currentAdminUser?.name || 'Administrator' : studentProfile?.fullName || 'Student')
+        }
+        userRole={currentUserAccount?.role === 'Admin' || isAdminLoggedIn ? 'Admin' : 'Student'}
+        onSave={async (newUrl) => {
+          await updateUserAvatar(newUrl);
+        }}
+      />
     </div>
   );
 };

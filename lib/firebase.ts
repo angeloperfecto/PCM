@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, updateProfile, User as FirebaseUser } from 'firebase/auth';
 import {
   getFirestore,
   doc,
@@ -54,6 +54,7 @@ export {
   signInWithPopup,
   signOut,
   onAuthStateChanged,
+  updateProfile,
 };
 export type { FirebaseUser };
 

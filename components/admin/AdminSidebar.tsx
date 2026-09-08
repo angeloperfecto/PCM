@@ -30,7 +30,9 @@ import {
   CloudCheck,
   RefreshCw,
   Tv,
+  Camera,
 } from 'lucide-react';
+import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 
 export type AdminTabType =
   | 'overview'
@@ -101,9 +103,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     enrollments,
     videos,
     firebaseSyncStatus,
+    updateAdminAvatar,
   } = usePCM();
 
   const [searchFilter, setSearchFilter] = useState('');
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
   const pendingApps = applications.filter(
     (a) => a.status === 'Submitted' || a.status === 'Under Review'
@@ -282,18 +286,53 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         {!isCollapsed ? (
           <div className="px-4 py-3 border-b border-[#1E4434] bg-[#0E2319] shrink-0">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#588B76]/20 border border-[#588B76]/40 flex items-center justify-center text-[#85AA9B] font-bold text-sm font-mono shrink-0">
-                {(currentAdminUser?.name || 'A').charAt(0).toUpperCase()}
+              <div className="relative group shrink-0">
+                <div
+                  id="btn-admin-sidebar-avatar"
+                  onClick={() => setIsAvatarModalOpen(true)}
+                  title="Click to update administrator profile image"
+                  className="w-9 h-9 rounded-xl bg-[#588B76]/20 border border-[#588B76]/40 flex items-center justify-center text-[#85AA9B] font-bold text-sm font-mono overflow-hidden cursor-pointer relative"
+                >
+                  {currentAdminUser?.avatarUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={currentAdminUser.avatarUrl}
+                      alt={currentAdminUser.name}
+                      className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                    />
+                  ) : (
+                    <span>{(currentAdminUser?.name || 'A').charAt(0).toUpperCase()}</span>
+                  )}
+                  {/* Hover overlay */}
+                  <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                    <Camera className="w-3.5 h-3.5" />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAvatarModalOpen(true)}
+                  title="Change Admin Photo"
+                  className="absolute -bottom-1 -right-1 p-0.5 bg-[#18392B] hover:bg-[#23533E] text-amber-300 rounded-full border border-[#2B5E47] shadow-xs cursor-pointer"
+                >
+                  <Camera className="w-2.5 h-2.5" />
+                </button>
               </div>
+
               <div className="truncate flex-1">
-                <div className="text-xs font-bold text-white truncate">
-                  {currentAdminUser?.name || 'Administrator'}
+                <div className="text-xs font-bold text-white truncate flex items-center justify-between">
+                  <span className="truncate">{currentAdminUser?.name || 'Administrator'}</span>
                 </div>
                 <div className="flex items-center gap-1.5 mt-0.5">
                   <span className="text-[10px] bg-[#588B76]/30 text-[#85AA9B] border border-[#588B76]/50 px-1.5 py-0.2 rounded font-medium inline-flex items-center gap-1">
                     <Shield className="w-2.5 h-2.5" />
                     {currentAdminUser?.role || 'Super Admin'}
                   </span>
+                  <button
+                    onClick={() => setIsAvatarModalOpen(true)}
+                    className="text-[10px] text-amber-300 hover:text-white underline cursor-pointer"
+                  >
+                    Edit Photo
+                  </button>
                 </div>
               </div>
             </div>
@@ -301,10 +340,24 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
         ) : (
           <div className="py-3 flex justify-center border-b border-[#1E4434] bg-[#0E2319] shrink-0">
             <div
-              className="w-9 h-9 rounded-xl bg-[#588B76]/20 border border-[#588B76]/40 flex items-center justify-center text-[#85AA9B] font-bold text-sm font-mono"
-              title={`${currentAdminUser?.name || 'Admin'} (${currentAdminUser?.role || 'Super Admin'})`}
+              id="btn-admin-sidebar-avatar-collapsed"
+              onClick={() => setIsAvatarModalOpen(true)}
+              className="w-9 h-9 rounded-xl bg-[#588B76]/20 border border-[#588B76]/40 flex items-center justify-center text-[#85AA9B] font-bold text-sm font-mono overflow-hidden cursor-pointer relative group"
+              title={`${currentAdminUser?.name || 'Admin'} - Click to change photo`}
             >
-              {(currentAdminUser?.name || 'A').charAt(0).toUpperCase()}
+              {currentAdminUser?.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={currentAdminUser.avatarUrl}
+                  alt={currentAdminUser.name}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <span>{(currentAdminUser?.name || 'A').charAt(0).toUpperCase()}</span>
+              )}
+              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                <Camera className="w-3.5 h-3.5" />
+              </div>
             </div>
           </div>
         )}
@@ -478,6 +531,18 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           </div>
         </div>
       </aside>
+
+      {/* Change Admin Avatar Modal */}
+      <ChangeAvatarModal
+        isOpen={isAvatarModalOpen}
+        onClose={() => setIsAvatarModalOpen(false)}
+        currentAvatarUrl={currentAdminUser?.avatarUrl || ''}
+        userName={currentAdminUser?.name || 'Administrator'}
+        userRole="Admin"
+        onSave={async (newUrl) => {
+          await updateAdminAvatar(newUrl);
+        }}
+      />
     </>
   );
 };

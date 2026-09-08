@@ -47,6 +47,8 @@ export const Header: React.FC = () => {
     siteConfig,
     currentUserAccount,
     firebaseAuthUser,
+    currentAdminUser,
+    studentProfile,
     setUserAccountModalOpen,
     signInWithGoogle,
   } = usePCM();
@@ -324,9 +326,10 @@ export const Header: React.FC = () => {
             className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 border border-emerald-500/30 text-white transition font-medium cursor-pointer text-[11px]"
             title="Google Account & Role Management"
           >
-            {currentUserAccount?.photoURL || firebaseAuthUser?.photoURL ? (
+            {currentUserAccount?.photoURL || currentUserAccount?.avatarUrl || firebaseAuthUser?.photoURL || (isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl) ? (
+              // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={currentUserAccount?.photoURL || firebaseAuthUser?.photoURL || ''}
+                src={currentUserAccount?.photoURL || currentUserAccount?.avatarUrl || firebaseAuthUser?.photoURL || (isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl) || ''}
                 alt="Profile"
                 className="w-4 h-4 rounded-full object-cover"
                 referrerPolicy="no-referrer"

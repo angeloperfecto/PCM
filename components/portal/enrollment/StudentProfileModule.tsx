@@ -19,14 +19,17 @@ import {
   Save,
   X,
   GraduationCap,
+  Camera,
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import { StudentProfile } from '@/lib/types';
+import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 
 export const StudentProfileModule: React.FC = () => {
   const { studentProfile, updateStudentProfile, addToast } = usePCM();
   const [isEditing, setIsEditing] = useState(false);
   const [copiedId, setCopiedId] = useState(false);
+  const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
   // Form edit state
   const [formData, setFormData] = useState({
@@ -71,14 +74,46 @@ export const StudentProfileModule: React.FC = () => {
 
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-            <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#18392B] to-[#588B76] text-white flex items-center justify-center font-serif text-2xl font-bold shadow-md ring-4 ring-purple-100">
-              {studentProfile.fullName
-                ? studentProfile.fullName
-                    .split(' ')
-                    .map((n) => n[0])
-                    .join('')
-                    .slice(0, 2)
-                : 'ST'}
+            <div className="relative group">
+              <div
+                onClick={() => setIsAvatarModalOpen(true)}
+                title="Click to update profile image"
+                className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[#18392B] to-[#588B76] text-white flex items-center justify-center font-serif text-2xl font-bold shadow-md ring-4 ring-purple-100 overflow-hidden cursor-pointer relative"
+              >
+                {studentProfile.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={studentProfile.avatarUrl}
+                    alt={studentProfile.fullName}
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                  />
+                ) : (
+                  <span>
+                    {studentProfile.fullName
+                      ? studentProfile.fullName
+                          .split(' ')
+                          .map((n) => n[0])
+                          .join('')
+                          .slice(0, 2)
+                      : 'ST'}
+                  </span>
+                )}
+                {/* Hover overlay */}
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
+                  <Camera className="w-6 h-6 drop-shadow" />
+                </div>
+              </div>
+
+              {/* Quick change button badge */}
+              <button
+                id="btn-open-student-avatar-modal"
+                type="button"
+                onClick={() => setIsAvatarModalOpen(true)}
+                title="Change Student Photo"
+                className="absolute -bottom-1.5 -right-1.5 p-1.5 bg-[#18392B] hover:bg-[#234E3D] text-amber-300 hover:text-white rounded-full border-2 border-white shadow-md transition cursor-pointer flex items-center justify-center z-10"
+              >
+                <Camera className="w-3.5 h-3.5" />
+              </button>
             </div>
 
             <div className="space-y-1">
@@ -471,6 +506,18 @@ export const StudentProfileModule: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Change Avatar Modal for Student */}
+      <ChangeAvatarModal
+        isOpen={isAvatarModalOpen}
+        onClose={() => setIsAvatarModalOpen(false)}
+        currentAvatarUrl={studentProfile.avatarUrl || ''}
+        userName={studentProfile.fullName || 'Student'}
+        userRole="Student"
+        onSave={async (newUrl) => {
+          await updateStudentProfile(studentProfile.studentId, { avatarUrl: newUrl });
+        }}
+      />
     </div>
   );
 };
