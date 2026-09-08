@@ -1133,7 +1133,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setFirebaseSyncStatus('syncing');
 
         // Set up real-time onSnapshot listeners ONLY for core public CMS collections
-        // 1. Site Config
+        // 1. Site Config & Slideshow Single Source of Truth
         logFirestoreOp('listen', 'siteConfig/global', 'Public Site Config Real-Time Sync');
         const uConfig = onSnapshot(
           doc(db, 'siteConfig', 'global'),
@@ -1152,6 +1152,27 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         );
         unsubs.push(uConfig);
+
+        // 1b. Authoritative Slideshow Listener from siteContent/slideshow
+        logFirestoreOp('listen', 'siteContent/slideshow', 'Public Slideshow Real-Time Sync');
+        const uSlideshow = onSnapshot(
+          doc(db, 'siteContent', 'slideshow'),
+          (snap) => {
+            if (snap.exists()) {
+              const data = snap.data();
+              if (data?.slides && Array.isArray(data.slides) && data.slides.length > 0) {
+                setSiteConfig((prev) => ({
+                  ...prev,
+                  heroSlides: data.slides,
+                }));
+              }
+            }
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.GET, 'siteContent/slideshow');
+          }
+        );
+        unsubs.push(uSlideshow);
 
         // 2. Programs
         logFirestoreOp('listen', 'programs', 'Academic Programs Real-Time Sync');
@@ -2077,6 +2098,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSiteConfig(updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      if (newConfig.heroSlides && Array.isArray(newConfig.heroSlides)) {
+        await setDoc(
+          doc(db, 'siteContent', 'slideshow'),
+          {
+            slides: newConfig.heroSlides,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
+            isPublished: true,
+          },
+          { merge: true }
+        );
+      }
     } catch (e) {
       console.warn('Firestore write error:', e);
     }

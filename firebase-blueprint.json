@@ -338,6 +338,20 @@
     "/homepageVideoConfig/{configId}": {
       "schema": { "$ref": "#/entities/HomepageVideoConfig" },
       "description": "Configuration settings for the HOME page video ministry section."
+    },
+    "/siteContent/{contentId}": {
+      "schema": {
+        "title": "Site Content Document",
+        "description": "Authoritative content blocks such as slideshow configuration.",
+        "type": "object",
+        "properties": {
+          "slides": { "type": "array" },
+          "updatedAt": { "type": "string" },
+          "updatedBy": { "type": "string" },
+          "isPublished": { "type": "boolean" }
+        }
+      },
+      "description": "Authoritative site content documents including the homepage hero slideshow."
     }
   }
 }

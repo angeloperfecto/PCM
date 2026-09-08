@@ -20,7 +20,12 @@ service cloud.firestore {
     // Public readable content collections (Website CMS)
     match /siteConfig/{configId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow write: if true;
+    }
+
+    match /siteContent/{contentId} {
+      allow read: if true;
+      allow write: if true;
     }
 
     match /programs/{programId} {

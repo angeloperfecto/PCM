@@ -896,6 +896,9 @@ export interface HeroSlide {
   secondaryBtnLink?: string;
   active: boolean;
   order?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
 }
 
 export interface NavMenuItem {

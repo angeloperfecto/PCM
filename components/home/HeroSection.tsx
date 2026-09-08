@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { usePCM } from '@/lib/store';
+import { subscribeToSlideshow, DEFAULT_HERO_SLIDES } from '@/lib/slideshowService';
+import { HeroSlide } from '@/lib/types';
 import {
   ArrowRight,
   GraduationCap,
@@ -13,51 +15,28 @@ import {
   Play,
 } from 'lucide-react';
 
-const DEFAULT_HERO_SLIDES = [
-  {
-    image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600&auto=format&fit=crop',
-    tag: 'Accredited Theological Education',
-    headline: 'EQUIPPING SERVANTS FOR KINGDOM IMPACT',
-    subtext:
-      'Philippine College of Ministry exists to equip men and women with biblical knowledge, spiritual maturity, and practical ministry skills for faithful service to Christ, the Church, and the community.',
-    primaryBtnText: 'APPLY NOW FOR 2026–2027',
-    primaryBtnLink: 'apply',
-    secondaryBtnText: 'EXPLORE PROGRAMS',
-    secondaryBtnLink: 'academics',
-    active: true,
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1600&auto=format&fit=crop',
-    tag: 'Spiritual Formation & Worship',
-    headline: 'ROOTED IN TRUTH. PASSIONATE IN WORSHIP.',
-    subtext:
-      'Cultivating humble shepherd hearts through daily corporate chapel, intensive Greek & Hebrew exegesis, and intimate faculty discipleship mentorship.',
-    primaryBtnText: 'VIEW STATEMENT OF FAITH',
-    primaryBtnLink: 'about',
-    secondaryBtnText: 'FACULTY & STAFF',
-    secondaryBtnLink: 'about',
-    active: true,
-  },
-  {
-    image: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?q=80&w=1600&auto=format&fit=crop',
-    tag: 'Hands-On Pastoral Apprenticeship',
-    headline: 'REAL-WORLD MINISTRY IN 85+ LOCAL CHURCHES',
-    subtext:
-      'Every PCM student participates in supervised weekly pulpit ministry, urban church planting, youth discipleship, and compassionate community missions.',
-    primaryBtnText: 'ADMISSIONS OVERVIEW',
-    primaryBtnLink: 'apply',
-    secondaryBtnText: 'CAMPUS RESOURCES',
-    secondaryBtnLink: 'resources',
-    active: true,
-  },
-];
-
 export const HeroSection: React.FC = () => {
-  const { navigateTo, setRequestInfoModalOpen, setSelectedSermon, sermons, siteConfig } = usePCM();
+  const { navigateTo, setSelectedSermon, sermons, siteConfig } = usePCM();
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [liveSlides, setLiveSlides] = useState<HeroSlide[]>(() => {
+    return siteConfig?.heroSlides && siteConfig.heroSlides.length > 0
+      ? siteConfig.heroSlides
+      : DEFAULT_HERO_SLIDES;
+  });
 
-  const rawSlides = siteConfig?.heroSlides && siteConfig.heroSlides.length > 0 ? siteConfig.heroSlides : DEFAULT_HERO_SLIDES;
-  const activeSlides = rawSlides.filter((s) => s.active !== false);
+  // Subscribe to real-time slideshow updates from Firestore (siteContent/slideshow)
+  useEffect(() => {
+    const unsubscribe = subscribeToSlideshow((updatedSlides) => {
+      if (updatedSlides && updatedSlides.length > 0) {
+        setLiveSlides(updatedSlides);
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Filter for active slides only
+  const activeSlides = liveSlides.filter((s) => s.active !== false);
   const slides = activeSlides.length > 0 ? activeSlides : DEFAULT_HERO_SLIDES;
 
   // Auto-advance slides every 7 seconds
@@ -71,6 +50,21 @@ export const HeroSection: React.FC = () => {
 
   const slideIndex = currentSlide % slides.length;
   const slide = slides[slideIndex] || slides[0];
+
+  const handleLinkClick = (target?: string) => {
+    if (!target) {
+      navigateTo('apply');
+      return;
+    }
+    const clean = target.trim().toLowerCase();
+    if (clean === 'apply') navigateTo('apply');
+    else if (clean === 'academics') navigateTo('academics');
+    else if (clean === 'about') navigateTo('about');
+    else if (clean === 'resources') navigateTo('resources');
+    else if (clean === 'contact') navigateTo('contact');
+    else if (clean === 'portal') navigateTo('portal');
+    else navigateTo('apply');
+  };
 
   return (
     <section className="relative w-full min-h-[560px] lg:min-h-[640px] bg-[#18392B] text-white overflow-hidden flex items-center">
@@ -122,12 +116,7 @@ export const HeroSection: React.FC = () => {
           <div className="pt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-3.5">
             <button
               id="hero-cta-apply"
-              onClick={() => {
-                if (slide.primaryBtnLink === 'apply') navigateTo('apply');
-                else if (slide.primaryBtnLink === 'academics') navigateTo('academics');
-                else if (slide.primaryBtnLink === 'about') navigateTo('about');
-                else navigateTo('apply');
-              }}
+              onClick={() => handleLinkClick(slide.primaryBtnLink)}
               className="flex items-center justify-center gap-2 bg-[#588B76] text-white font-bold px-6 sm:px-7 py-3 sm:py-3.5 uppercase text-xs tracking-widest hover:bg-[#46705F] rounded-sm shadow-md transition cursor-pointer text-center"
             >
               <span>{slide.primaryBtnText || 'APPLY NOW FOR 2026–2027'}</span>
@@ -136,12 +125,7 @@ export const HeroSection: React.FC = () => {
 
             <button
               id="hero-cta-explore"
-              onClick={() => {
-                if (slide.secondaryBtnLink === 'academics') navigateTo('academics');
-                else if (slide.secondaryBtnLink === 'about') navigateTo('about');
-                else if (slide.secondaryBtnLink === 'resources') navigateTo('resources');
-                else navigateTo('academics');
-              }}
+              onClick={() => handleLinkClick(slide.secondaryBtnLink)}
               className="flex items-center justify-center gap-2 border border-[#D0DED8] text-white font-bold px-5 sm:px-6 py-3 sm:py-3.5 uppercase text-xs tracking-widest hover:bg-white hover:text-[#18392B] rounded-sm transition cursor-pointer text-center"
             >
               <BookOpen className="w-4 h-4 text-[#85AA9B]" />
