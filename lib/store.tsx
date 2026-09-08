@@ -53,6 +53,8 @@ import {
   InstructorRecord,
   EnrollmentSystemConfig,
   EnrollmentAdminSubTab,
+  YouTubeVideo,
+  HomepageVideoConfig,
 } from './types';
 import {
   INITIAL_PROGRAMS,
@@ -89,7 +91,10 @@ import {
   INITIAL_CLASS_SECTIONS,
   INITIAL_INSTRUCTORS,
   INITIAL_ENROLLMENT_SYSTEM_CONFIG,
+  INITIAL_VIDEOS,
+  INITIAL_HOMEPAGE_VIDEO_CONFIG,
 } from './initialData';
+import { extractYouTubeVideoId, getYouTubeThumbnailUrl, generateVideoId, getCurrentTimestamp } from './youtube';
 import {
   db,
   auth,
@@ -498,6 +503,21 @@ interface PCMContextType {
     message?: string
   ) => void;
   removeToast: (id: string) => void;
+
+  // YouTube Video Management & Homepage Video Control
+  videos: YouTubeVideo[];
+  setVideos: React.Dispatch<React.SetStateAction<YouTubeVideo[]>>;
+  homepageVideoConfig: HomepageVideoConfig;
+  setHomepageVideoConfig: React.Dispatch<React.SetStateAction<HomepageVideoConfig>>;
+  featuredVideo: YouTubeVideo | null;
+  addYouTubeVideo: (video: Omit<YouTubeVideo, 'id' | 'createdAt' | 'updatedAt'>) => Promise<YouTubeVideo>;
+  updateYouTubeVideo: (id: string, updates: Partial<YouTubeVideo>) => Promise<boolean>;
+  deleteYouTubeVideo: (id: string) => Promise<boolean>;
+  togglePublishYouTubeVideo: (id: string) => Promise<boolean>;
+  setFeaturedYouTubeVideo: (id: string) => Promise<boolean>;
+  reorderYouTubeVideos: (orderedIds: string[]) => Promise<boolean>;
+  updateHomepageVideoConfig: (updates: Partial<HomepageVideoConfig>) => Promise<boolean>;
+  syncVideosToFirebase: (customVideos?: YouTubeVideo[]) => Promise<boolean>;
 }
 
 const PCMContext = createContext<PCMContextType | undefined>(undefined);
@@ -554,6 +574,21 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [scrapbook, setScrapbook] = useState<ScrapbookItem[]>(INITIAL_SCRAPBOOK);
   const [selectedScrapbookItem, setSelectedScrapbookItem] = useState<ScrapbookItem | null>(null);
   const [migrationAudit, setMigrationAudit] = useState<MigrationAuditItem[]>(INITIAL_MIGRATION_AUDIT);
+
+  // YouTube Videos & Homepage Video Settings
+  const [videos, setVideos] = useState<YouTubeVideo[]>(INITIAL_VIDEOS);
+  const [homepageVideoConfig, setHomepageVideoConfig] = useState<HomepageVideoConfig>(INITIAL_HOMEPAGE_VIDEO_CONFIG);
+
+  const featuredVideo = React.useMemo(() => {
+    if (homepageVideoConfig.featuredVideoId) {
+      const match = videos.find((v) => v.id === homepageVideoConfig.featuredVideoId);
+      if (match) return match;
+    }
+    const explicit = videos.find((v) => v.isFeatured && v.isPublished);
+    if (explicit) return explicit;
+    const firstPublished = videos.find((v) => v.isPublished);
+    return firstPublished || videos[0] || null;
+  }, [videos, homepageVideoConfig.featuredVideoId]);
 
   // Applications
   const [applications, setApplications] = useState<AdmissionApplication[]>(INITIAL_APPLICATIONS);
@@ -1250,7 +1285,52 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         unsubs.push(uDonSettings);
 
-        // 9. Listen to Firebase Auth state & Single User Profile (Targeted Read / Subscription)
+        // 9. YouTube Videos Real-Time Sync
+        logFirestoreOp('listen', 'videos', 'YouTube Video Management Real-Time Sync');
+        const uVideos = onSnapshot(
+          collection(db, 'videos'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as YouTubeVideo[];
+              list.sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+              setVideos(list);
+              setIsFirebaseConnected(true);
+              setFirebaseSyncStatus('synced');
+              setLastSyncedAt(new Date());
+            } else {
+              setIsFirebaseConnected(true);
+              setFirebaseSyncStatus('synced');
+            }
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'videos');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+          }
+        );
+        unsubs.push(uVideos);
+
+        // 10. Homepage Video Settings Real-Time Sync
+        logFirestoreOp('listen', 'homepageVideoConfig/global', 'Homepage Video Settings Real-Time Sync');
+        const uHomeVideoConfig = onSnapshot(
+          doc(db, 'homepageVideoConfig', 'global'),
+          (snap) => {
+            if (snap.exists()) {
+              setHomepageVideoConfig(snap.data() as HomepageVideoConfig);
+              setIsFirebaseConnected(true);
+              setFirebaseSyncStatus('synced');
+              setLastSyncedAt(new Date());
+            }
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.GET, 'homepageVideoConfig/global');
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+          }
+        );
+        unsubs.push(uHomeVideoConfig);
+
+        // 11. Listen to Firebase Auth state & Single User Profile (Targeted Read / Subscription)
         const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
           setFirebaseAuthUser(fbUser);
 
@@ -4428,6 +4508,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       donationMethods,
       donations,
       donationSettings,
+      videos,
+      homepageVideoConfig,
     };
     return JSON.stringify(fullDb, null, 2);
   };
@@ -4718,6 +4800,207 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     addToast('success', 'Subscription Active', 'Thank you for subscribing to PCM News and Ministry Updates.');
     return true;
+  };
+
+  // YouTube Video Management Handlers
+  const addYouTubeVideo = async (
+    videoData: Omit<YouTubeVideo, 'id' | 'createdAt' | 'updatedAt'>
+  ): Promise<YouTubeVideo> => {
+    const id = generateVideoId();
+    const now = getCurrentTimestamp();
+    const vidId = videoData.youtubeVideoId || extractYouTubeVideoId(videoData.youtubeUrl) || '';
+    const newVideo: YouTubeVideo = cleanFirestoreData({
+      ...videoData,
+      id,
+      youtubeVideoId: vidId,
+      thumbnailUrl:
+        videoData.thumbnailUrl || getYouTubeThumbnailUrl(vidId, 'hq'),
+      displayOrder: videoData.displayOrder ?? videos.length + 1,
+      isFeatured: !!videoData.isFeatured,
+      isPublished: videoData.isPublished !== undefined ? videoData.isPublished : true,
+      showOnHome: videoData.showOnHome !== undefined ? videoData.showOnHome : true,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    if (newVideo.isFeatured) {
+      setVideos((prev) => [newVideo, ...prev.map((v) => ({ ...v, isFeatured: false }))]);
+      updateHomepageVideoConfig({ featuredVideoId: id });
+    } else {
+      setVideos((prev) => [...prev, newVideo]);
+    }
+
+    await safeSetDoc(doc(db, 'videos', id), newVideo, { merge: true });
+    logActivity('CREATE', 'YouTube Video', id, newVideo.title, `Added YouTube video "${newVideo.title}" (${newVideo.youtubeVideoId}).`);
+    addToast('success', 'Video Added', `"${newVideo.title}" saved and synced to database.`);
+    return newVideo;
+  };
+
+  const updateYouTubeVideo = async (
+    id: string,
+    updates: Partial<YouTubeVideo>
+  ): Promise<boolean> => {
+    const now = getCurrentTimestamp();
+    const sanitizedUpdates: Partial<YouTubeVideo> = cleanFirestoreData({
+      ...updates,
+      updatedAt: now,
+    });
+
+    if (sanitizedUpdates.youtubeUrl && !sanitizedUpdates.youtubeVideoId) {
+      const extracted = extractYouTubeVideoId(sanitizedUpdates.youtubeUrl);
+      if (extracted) {
+        sanitizedUpdates.youtubeVideoId = extracted;
+        if (!sanitizedUpdates.thumbnailUrl) {
+          sanitizedUpdates.thumbnailUrl = getYouTubeThumbnailUrl(extracted, 'hq');
+        }
+      }
+    }
+
+    setVideos((prev) =>
+      prev.map((v) => {
+        if (v.id === id) {
+          return { ...v, ...sanitizedUpdates };
+        }
+        if (sanitizedUpdates.isFeatured) {
+          return { ...v, isFeatured: false };
+        }
+        return v;
+      })
+    );
+
+    if (sanitizedUpdates.isFeatured) {
+      updateHomepageVideoConfig({ featuredVideoId: id });
+    }
+
+    const success = await safeSetDoc(doc(db, 'videos', id), sanitizedUpdates, { merge: true });
+    logActivity('UPDATE', 'YouTube Video', id, updates.title || 'Video', `Updated YouTube video details.`);
+    addToast('success', 'Video Updated', 'YouTube video details updated successfully.');
+    return success;
+  };
+
+  const deleteYouTubeVideo = async (id: string): Promise<boolean> => {
+    const target = videos.find((v) => v.id === id);
+    setVideos((prev) => prev.filter((v) => v.id !== id));
+
+    if (homepageVideoConfig.featuredVideoId === id) {
+      const remaining = videos.filter((v) => v.id !== id);
+      if (remaining.length > 0) {
+        updateHomepageVideoConfig({ featuredVideoId: remaining[0].id });
+      }
+    }
+
+    const success = await safeDeleteDoc(doc(db, 'videos', id));
+    logActivity('DELETE', 'YouTube Video', id, target?.title || 'Video', `Deleted YouTube video from database.`);
+    addToast('info', 'Video Deleted', 'YouTube video deleted from database.');
+    return success;
+  };
+
+  const togglePublishYouTubeVideo = async (id: string): Promise<boolean> => {
+    const video = videos.find((v) => v.id === id);
+    if (!video) return false;
+    const newStatus = !video.isPublished;
+    return updateYouTubeVideo(id, { isPublished: newStatus });
+  };
+
+  const setFeaturedYouTubeVideo = async (id: string): Promise<boolean> => {
+    const now = getCurrentTimestamp();
+    setVideos((prev) =>
+      prev.map((v) => ({
+        ...v,
+        isFeatured: v.id === id,
+        updatedAt: v.id === id ? now : v.updatedAt,
+      }))
+    );
+
+    try {
+      const batch = writeBatch(db);
+      videos.forEach((v) => {
+        const ref = doc(db, 'videos', v.id);
+        batch.set(ref, { isFeatured: v.id === id, updatedAt: now }, { merge: true });
+      });
+      await batch.commit();
+    } catch {
+      await safeSetDoc(doc(db, 'videos', id), { isFeatured: true, updatedAt: now }, { merge: true });
+    }
+
+    await updateHomepageVideoConfig({ featuredVideoId: id });
+    const match = videos.find((v) => v.id === id);
+    logActivity('UPDATE', 'YouTube Video', id, match?.title || 'Video', `Set as Homepage Featured Video.`);
+    addToast('success', 'Featured Video Set', `"${match?.title || 'Video'}" is now the HOME featured video.`);
+    return true;
+  };
+
+  const reorderYouTubeVideos = async (orderedIds: string[]): Promise<boolean> => {
+    const now = getCurrentTimestamp();
+    setVideos((prev) => {
+      const map = new Map(prev.map((v) => [v.id, v]));
+      const reordered: YouTubeVideo[] = [];
+      orderedIds.forEach((id, index) => {
+        const item = map.get(id);
+        if (item) {
+          reordered.push({ ...item, displayOrder: index + 1, updatedAt: now });
+          map.delete(id);
+        }
+      });
+      map.forEach((item) => {
+        reordered.push({ ...item, displayOrder: reordered.length + 1 });
+      });
+      return reordered;
+    });
+
+    try {
+      const batch = writeBatch(db);
+      orderedIds.forEach((id, index) => {
+        const docRef = doc(db, 'videos', id);
+        batch.set(docRef, { displayOrder: index + 1, updatedAt: now }, { merge: true });
+      });
+      await batch.commit();
+    } catch {
+      for (let i = 0; i < orderedIds.length; i++) {
+        await safeSetDoc(doc(db, 'videos', orderedIds[i]), { displayOrder: i + 1, updatedAt: now }, { merge: true });
+      }
+    }
+    addToast('success', 'Sequence Saved', 'Video sequence updated and saved.');
+    return true;
+  };
+
+  const updateHomepageVideoConfig = async (
+    updates: Partial<HomepageVideoConfig>
+  ): Promise<boolean> => {
+    const now = getCurrentTimestamp();
+    const newConfig: HomepageVideoConfig = cleanFirestoreData({
+      ...homepageVideoConfig,
+      ...updates,
+      updatedAt: now,
+    });
+    setHomepageVideoConfig(newConfig);
+    const success = await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), newConfig, { merge: true });
+    logActivity('UPDATE', 'HomepageVideoConfig', 'global', 'Homepage Video Settings', 'Updated homepage video settings & display options.');
+    return success;
+  };
+
+  const syncVideosToFirebase = async (customVideos?: YouTubeVideo[]): Promise<boolean> => {
+    const listToSync = customVideos || videos;
+    try {
+      const batch = writeBatch(db);
+      listToSync.forEach((v) => {
+        const ref = doc(db, 'videos', v.id);
+        batch.set(ref, cleanFirestoreData(v), { merge: true });
+      });
+      const configRef = doc(db, 'homepageVideoConfig', 'global');
+      batch.set(configRef, cleanFirestoreData(homepageVideoConfig), { merge: true });
+      await batch.commit();
+      addToast('success', 'Firebase Synchronized', `Saved ${listToSync.length} videos and settings to Firestore.`);
+      return true;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'videos');
+      for (const v of listToSync) {
+        await safeSetDoc(doc(db, 'videos', v.id), v, { merge: true });
+      }
+      await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), homepageVideoConfig, { merge: true });
+      addToast('success', 'Firebase Synchronized', 'Videos synced successfully.');
+      return true;
+    }
   };
 
   return (
@@ -5061,6 +5344,21 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         registerForEvent,
         newsletterEmails,
         subscribeNewsletter,
+
+        // YouTube Video Management & Homepage Video Control
+        videos,
+        setVideos,
+        homepageVideoConfig,
+        setHomepageVideoConfig,
+        featuredVideo,
+        addYouTubeVideo,
+        updateYouTubeVideo,
+        deleteYouTubeVideo,
+        togglePublishYouTubeVideo,
+        setFeaturedYouTubeVideo,
+        reorderYouTubeVideos,
+        updateHomepageVideoConfig,
+        syncVideosToFirebase,
 
         toasts,
         addToast,

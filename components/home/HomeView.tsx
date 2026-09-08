@@ -8,6 +8,7 @@ import { QuickAccessSection } from './QuickAccessSection';
 import { FeaturedProgramsSection } from './FeaturedProgramsSection';
 import { AboutSection } from './AboutSection';
 import { MissionVisionValuesSection } from './MissionVisionValuesSection';
+import { HomeVideoSection } from './HomeVideoSection';
 import { NewsSection } from './NewsSection';
 import { EventsSection } from './EventsSection';
 import { CTASection } from './CTASection';
@@ -29,6 +30,7 @@ export const HomeView: React.FC = () => {
       <FeaturedProgramsSection />
       <AboutSection />
       <MissionVisionValuesSection />
+      <HomeVideoSection />
       <NewsSection />
       <EventsSection />
       <CTASection />

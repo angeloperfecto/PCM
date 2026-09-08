@@ -88,6 +88,17 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // YouTube Video Management & Homepage Video Settings
+    match /videos/{videoId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /homepageVideoConfig/{configId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
     // Authenticated Users and Profiles
     // Direct document lookup for user's own profile; list queries restricted to Admin
     match /users/{userId} {

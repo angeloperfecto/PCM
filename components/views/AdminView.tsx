@@ -15,6 +15,7 @@ import { AdminEventsTab } from '@/components/admin/AdminEventsTab';
 import { AdminAnnouncementsTab } from '@/components/admin/AdminAnnouncementsTab';
 import { AdminMediaTab } from '@/components/admin/AdminMediaTab';
 import { AdminDownloadsTab } from '@/components/admin/AdminDownloadsTab';
+import { AdminYouTubeTab } from '@/components/admin/AdminYouTubeTab';
 import { AdminApplicationsTab } from '@/components/admin/AdminApplicationsTab';
 import { AdminEnrollmentsTab } from '@/components/admin/AdminEnrollmentsTab';
 import { AdminUsersTab } from '@/components/admin/AdminUsersTab';
@@ -404,6 +405,7 @@ export const AdminView: React.FC = () => {
             {activeTab === 'announcements' && <AdminAnnouncementsTab />}
             {activeTab === 'media' && <AdminMediaTab />}
             {activeTab === 'downloads' && <AdminDownloadsTab />}
+            {activeTab === 'youtube' && <AdminYouTubeTab />}
             {activeTab === 'applications' && <AdminApplicationsTab />}
             {activeTab === 'enrollments' && <AdminEnrollmentsTab />}
             {activeTab === 'donations' && <AdminDonationsTab />}

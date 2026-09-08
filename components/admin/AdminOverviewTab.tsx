@@ -21,6 +21,7 @@ import {
   TrendingUp,
   Sparkles,
   Heart,
+  Tv,
 } from 'lucide-react';
 
 interface AdminOverviewTabProps {
@@ -41,6 +42,7 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
     events,
     mediaLibrary,
     donations,
+    videos,
     activityLogs,
     currentAdminUser,
     stats,
@@ -63,11 +65,11 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
       logFilter === 'all' ||
       (logFilter === 'admissions' && (entity === 'Application' || entity === 'Admissions Application')) ||
       (logFilter === 'content' &&
-        ['News', 'Event', 'Announcement', 'Program', 'Faculty', 'HeroSlide'].includes(
+        ['News', 'Event', 'Announcement', 'Program', 'Faculty', 'HeroSlide', 'YouTube Video', 'Homepage Video Settings'].includes(
           entity
         )) ||
-      (logFilter === 'media' && entity === 'MediaItem') ||
-      (logFilter === 'system' && ['SiteConfig', 'AdminUser', 'Settings'].includes(entity));
+      (logFilter === 'media' && (entity === 'MediaItem' || entity === 'YouTube Video')) ||
+      (logFilter === 'system' && ['SiteConfig', 'AdminUser', 'Settings', 'Homepage Video Settings'].includes(entity));
 
     const matchesSearch =
       !logSearch ||
@@ -200,13 +202,21 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5">
           <button
             onClick={() => onOpenCreateModal ? onOpenCreateModal('news') : onSelectTab('news')}
             className="flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] text-white p-3 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs justify-center"
           >
             <Plus className="w-4 h-4 shrink-0" />
             <span>+ New Article</span>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('youtube')}
+            className="flex items-center gap-2 bg-[#C5A880] hover:bg-[#b0936b] text-white p-3 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs justify-center"
+          >
+            <Tv className="w-4 h-4 shrink-0" />
+            <span>+ YouTube Video</span>
           </button>
 
           <button

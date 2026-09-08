@@ -1150,4 +1150,30 @@ export interface DonationSettings {
   }[];
 }
 
+export interface YouTubeVideo {
+  id: string;
+  title: string;
+  youtubeUrl: string;
+  youtubeVideoId: string;
+  description: string;
+  category: string;
+  thumbnailUrl: string;
+  displayOrder: number;
+  isFeatured: boolean;
+  isPublished: boolean;
+  showOnHome: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HomepageVideoConfig {
+  enabled: boolean;
+  sectionTitle: string;
+  sectionSubtitle: string;
+  featuredVideoId: string;
+  maxDisplayCount: number;
+  layoutStyle: 'featured-playlist' | 'grid';
+  updatedAt?: string;
+}
+
 

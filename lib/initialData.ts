@@ -35,6 +35,8 @@ import {
   ClassSection,
   InstructorRecord,
   EnrollmentSystemConfig,
+  YouTubeVideo,
+  HomepageVideoConfig,
 } from './types';
 
 export const INITIAL_ANNOUNCEMENTS: AnnouncementItem[] = [
@@ -4287,6 +4289,100 @@ export const INITIAL_ENROLLMENT_SYSTEM_CONFIG: EnrollmentSystemConfig = {
   ],
   updatedAt: '2026-08-01T00:00:00Z',
   updatedBy: 'Super Admin',
+};
+
+export const INITIAL_VIDEOS: YouTubeVideo[] = [
+  {
+    id: 'pcm-vid-1',
+    title: 'Philippines College of Ministry — Equipping Servant Leaders for Christ',
+    youtubeUrl: 'https://www.youtube.com/watch?v=e_04ZrNroTo',
+    youtubeVideoId: 'e_04ZrNroTo',
+    description:
+      'Discover the rich history, spiritual heart, and collegiate training that defines the Philippine College of Ministry in Baguio City and beyond.',
+    category: 'Campus Life',
+    thumbnailUrl: 'https://img.youtube.com/vi/e_04ZrNroTo/hqdefault.jpg',
+    displayOrder: 1,
+    isFeatured: true,
+    isPublished: true,
+    showOnHome: true,
+    createdAt: '2026-08-01T08:00:00.000Z',
+    updatedAt: '2026-08-01T08:00:00.000Z',
+  },
+  {
+    id: 'pcm-vid-2',
+    title: 'PCM Semestral Chapel Service — "Faithful to the Heavenly Calling"',
+    youtubeUrl: 'https://www.youtube.com/watch?v=yqUv3Zk1m9U',
+    youtubeVideoId: 'yqUv3Zk1m9U',
+    description:
+      'President Angelo Perfecto delivers an inspiring convocation message on biblical stewardship, ministerial endurance, and pastoral calling from 2 Timothy 4.',
+    category: 'Sermon / Chapel',
+    thumbnailUrl: 'https://img.youtube.com/vi/yqUv3Zk1m9U/hqdefault.jpg',
+    displayOrder: 2,
+    isFeatured: false,
+    isPublished: true,
+    showOnHome: true,
+    createdAt: '2026-08-10T10:30:00.000Z',
+    updatedAt: '2026-08-10T10:30:00.000Z',
+  },
+  {
+    id: 'pcm-vid-3',
+    title: 'Voices of Calling — Student Testimonies from Baguio and the Cordilleras',
+    youtubeUrl: 'https://www.youtube.com/watch?v=b_kK3Fq7c4o',
+    youtubeVideoId: 'b_kK3Fq7c4o',
+    description:
+      'Hear firsthand how God is shaping young men and women into church planters, counselors, and community leaders through the Bachelor of Theology and Christian Education programs.',
+    category: 'Student Testimonies',
+    thumbnailUrl: 'https://img.youtube.com/vi/b_kK3Fq7c4o/hqdefault.jpg',
+    displayOrder: 3,
+    isFeatured: false,
+    isPublished: true,
+    showOnHome: true,
+    createdAt: '2026-08-15T14:00:00.000Z',
+    updatedAt: '2026-08-15T14:00:00.000Z',
+  },
+  {
+    id: 'pcm-vid-4',
+    title: 'PCM Sacred Choir & Worship Ministry — Hymns of Grace & Glory',
+    youtubeUrl: 'https://www.youtube.com/watch?v=fRegM12-f04',
+    youtubeVideoId: 'fRegM12-f04',
+    description:
+      'A special sacred choral presentation by the PCM Student Choir celebrating God’s abiding faithfulness and glory across generations in the Philippines.',
+    category: 'Music & Worship',
+    thumbnailUrl: 'https://img.youtube.com/vi/fRegM12-f04/hqdefault.jpg',
+    displayOrder: 4,
+    isFeatured: false,
+    isPublished: true,
+    showOnHome: true,
+    createdAt: '2026-08-20T16:00:00.000Z',
+    updatedAt: '2026-08-20T16:00:00.000Z',
+  },
+  {
+    id: 'pcm-vid-5',
+    title: 'Theology for Church Planting in the 21st Century — Faculty Lecture Series',
+    youtubeUrl: 'https://www.youtube.com/watch?v=8Zhn27k4y8g',
+    youtubeVideoId: '8Zhn27k4y8g',
+    description:
+      'Insights from our theological faculty on biblical missiology, holistic church growth, contextualized preaching, and community transformation.',
+    category: 'Academic & Lectures',
+    thumbnailUrl: 'https://img.youtube.com/vi/8Zhn27k4y8g/hqdefault.jpg',
+    displayOrder: 5,
+    isFeatured: false,
+    isPublished: true,
+    showOnHome: true,
+    createdAt: '2026-08-25T09:00:00.000Z',
+    updatedAt: '2026-08-25T09:00:00.000Z',
+  },
+];
+
+export const INITIAL_HOMEPAGE_VIDEO_CONFIG: HomepageVideoConfig = {
+  enabled: true,
+  sectionTitle: 'PCM Video Ministry & Chapel',
+  sectionSubtitle:
+    'Experience inspiring worship, biblical chapel messages, student testimonies, and vibrant campus life from the Philippines College of Ministry.',
+  featuredVideoId: 'pcm-vid-1',
+  maxDisplayCount: 6,
+  layoutStyle: 'featured-playlist',
+  updatedAt: '2026-08-25T09:00:00.000Z',
 };
 
 

@@ -29,6 +29,7 @@ import {
   Upload,
   CloudCheck,
   RefreshCw,
+  Tv,
 } from 'lucide-react';
 
 export type AdminTabType =
@@ -42,6 +43,7 @@ export type AdminTabType =
   | 'announcements'
   | 'media'
   | 'downloads'
+  | 'youtube'
   | 'applications'
   | 'enrollments'
   | 'donations'
@@ -97,6 +99,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     mediaLibrary,
     donations,
     enrollments,
+    videos,
     firebaseSyncStatus,
   } = usePCM();
 
@@ -177,6 +180,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     {
       groupTitle: 'Media & Files',
       items: [
+        {
+          id: 'youtube',
+          label: 'YouTube Video Management',
+          icon: Tv,
+          count: videos.length,
+          highlight: true,
+        },
         {
           id: 'media',
           label: 'Media Library',

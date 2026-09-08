@@ -145,6 +145,42 @@
         "churchAffiliation": { "type": "string" }
       },
       "required": ["id", "referenceNumber", "fullName", "email", "program", "status"]
+    },
+    "YouTubeVideo": {
+      "title": "YouTube Video",
+      "description": "YouTube video record for website video management.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 250 },
+        "youtubeUrl": { "type": "string" },
+        "youtubeVideoId": { "type": "string", "maxLength": 30 },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "displayOrder": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "isPublished": { "type": "boolean" },
+        "showOnHome": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "youtubeVideoId"]
+    },
+    "HomepageVideoConfig": {
+      "title": "Homepage Video Configuration",
+      "description": "Settings controlling the public Homepage Videos section.",
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "sectionTitle": { "type": "string", "maxLength": 150 },
+        "sectionSubtitle": { "type": "string", "maxLength": 300 },
+        "featuredVideoId": { "type": "string" },
+        "maxDisplayCount": { "type": "number" },
+        "layoutStyle": { "type": "string", "enum": ["featured-playlist", "grid"] },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["enabled", "sectionTitle"]
     }
   },
   "firestore": {
@@ -263,6 +299,14 @@
     "/users/{userId}": {
       "schema": { "$ref": "#/entities/UserAccount" },
       "description": "Authenticated user accounts and Google profiles."
+    },
+    "/videos/{videoId}": {
+      "schema": { "$ref": "#/entities/YouTubeVideo" },
+      "description": "YouTube videos managed by administrators for display on the website."
+    },
+    "/homepageVideoConfig/{configId}": {
+      "schema": { "$ref": "#/entities/HomepageVideoConfig" },
+      "description": "Configuration settings for the HOME page video ministry section."
     }
   }
 }
