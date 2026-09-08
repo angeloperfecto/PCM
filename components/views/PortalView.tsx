@@ -16,6 +16,10 @@ import { AddDropModule } from '@/components/portal/enrollment/AddDropModule';
 import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModule';
 import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule';
 import {
+  StudentPortalSidebar,
+  StudentPortalTabType,
+} from '@/components/portal/StudentPortalSidebar';
+import {
   GraduationCap,
   Calendar,
   Award,
@@ -46,6 +50,7 @@ import {
   Sparkles,
   Info,
   Link as LinkIcon,
+  Menu,
 } from 'lucide-react';
 
 export const PortalView: React.FC = () => {
@@ -83,9 +88,9 @@ export const PortalView: React.FC = () => {
   const [isLinkingModalOpen, setIsLinkingModalOpen] = useState(false);
 
   // Active Main Navigation Tab
-  const [activeTab, setActiveTab] = useState<
-    'enrollment' | 'schedule' | 'grades' | 'vault' | 'financial' | 'practicum' | 'spiritual' | 'notifications'
-  >('enrollment');
+  const [activeTab, setActiveTab] = useState<StudentPortalTabType>('enrollment');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   // Practicum form state
   const [practicumType, setPracticumType] = useState<
@@ -497,65 +502,82 @@ export const PortalView: React.FC = () => {
 
       {/* Main Student Console */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
-        {/* Important Enrollment Notice Banner */}
-        {isReturnedEnrollment && (
-          <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-rose-900 shadow-xs">
-            <div className="flex items-center gap-3">
-              <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
-              <div>
-                <strong className="block text-sm font-bold text-rose-800">Enrollment Action Required</strong>
-                <p>The Registrar returned your application with comments: &quot;{latestEnrollment?.adminRemarks || 'Please review subject load & clear credentials.'}&quot;</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setIsEnrollmentWizardOpen(true)}
-              className="bg-rose-700 hover:bg-rose-800 text-white font-bold px-4 py-2 rounded-lg transition cursor-pointer shrink-0"
-            >
-              Revise & Resubmit Application
-            </button>
-          </div>
-        )}
+        {/* Mobile Portal Navigation Bar */}
+        <div className="lg:hidden bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between gap-3">
+          <button
+            type="button"
+            id="btn-mobile-student-sidebar-toggle"
+            onClick={() => setIsMobileSidebarOpen(true)}
+            className="flex items-center gap-2 px-3.5 py-2 bg-[#18392B] text-white rounded-xl text-xs font-bold transition hover:bg-[#588B76] cursor-pointer shadow-xs"
+          >
+            <Menu className="w-4 h-4" />
+            <span>Portal Menu</span>
+            {unreadNotifsCount > 0 && (
+              <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-1.5 py-0.2 rounded-full">
+                {unreadNotifsCount}
+              </span>
+            )}
+          </button>
 
-        {/* Navigation Tabs Bar */}
-        <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-1.5 overflow-x-auto text-xs font-bold scrollbar-none">
-          {[
-            { id: 'enrollment', label: 'Online Enrollment Hub', icon: GraduationCap, badge: isEnrolled ? 'Enrolled' : 'Active Term' },
-            { id: 'schedule', label: 'Class Schedule', icon: Calendar, count: studentProfile.courses?.length || 0 },
-            { id: 'grades', label: 'Grades & Evaluation', icon: Award },
-            { id: 'vault', label: 'Document Vault', icon: FileText, count: studentProfile.documents?.length || 0 },
-            { id: 'financial', label: 'Tuition & Billing', icon: DollarSign },
-            { id: 'practicum', label: `Practicum Log (${totalPracticumHours}h)`, icon: Flame },
-            { id: 'spiritual', label: 'Mentorship & Church', icon: BookOpen },
-            { id: 'notifications', label: 'Notifications', icon: Bell, count: unreadNotifsCount, isBadgeCount: true },
-          ].map((t) => {
-            const Icon = t.icon;
-            const isActive = activeTab === t.id;
-            return (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id as any)}
-                className={`px-3.5 py-2.5 rounded-xl flex items-center gap-2 whitespace-nowrap transition cursor-pointer shrink-0 ${
-                  isActive
-                    ? 'bg-[#18392B] text-white shadow-xs'
-                    : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-[#85AA9B]' : 'text-[#588B76]'}`} />
-                <span>{t.label}</span>
-                {t.badge && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${isActive ? 'bg-white/20 text-white' : 'bg-emerald-100 text-emerald-800'}`}>
-                    {t.badge}
-                  </span>
-                )}
-                {t.count !== undefined && t.count > 0 && (
-                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${isActive ? 'bg-white/20 text-white' : t.isBadgeCount ? 'bg-amber-500 text-white font-bold' : 'bg-slate-100 text-slate-700'}`}>
-                    {t.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+          <div className="text-right">
+            <span className="text-[10px] font-mono text-slate-400 block uppercase">Active Section</span>
+            <span className="text-xs font-bold text-slate-800">
+              {activeTab === 'enrollment' && 'Online Enrollment Hub'}
+              {activeTab === 'schedule' && 'Class Schedule'}
+              {activeTab === 'grades' && 'Grades & Evaluation'}
+              {activeTab === 'vault' && 'Document Vault'}
+              {activeTab === 'financial' && 'Tuition & Billing'}
+              {activeTab === 'practicum' && 'Practicum Log'}
+              {activeTab === 'spiritual' && 'Mentorship & Church'}
+              {activeTab === 'notifications' && 'Notifications'}
+            </span>
+          </div>
         </div>
+
+        {/* Two-Column Sidebar + Content Layout */}
+        <div className="flex flex-col lg:flex-row items-start gap-6">
+          {/* Dedicated Student Portal Sidebar */}
+          <StudentPortalSidebar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
+            enrollmentActiveSubTab={enrollmentActiveSubTab}
+            setEnrollmentActiveSubTab={setEnrollmentActiveSubTab}
+            studentProfile={studentProfile}
+            isEnrolled={isEnrolled}
+            isPendingEnrollment={isPendingEnrollment}
+            isReturnedEnrollment={isReturnedEnrollment}
+            unreadNotifsCount={unreadNotifsCount}
+            totalPracticumHours={totalPracticumHours}
+            remainingBalance={remainingBalance}
+            onOpenCORModal={() => setIsCORModalOpen(true)}
+            onOpenEnrollmentWizard={() => setIsEnrollmentWizardOpen(true)}
+            studentLogout={studentLogout}
+            isCollapsed={isSidebarCollapsed}
+            setIsCollapsed={setIsSidebarCollapsed}
+            isMobileOpen={isMobileSidebarOpen}
+            setIsMobileOpen={setIsMobileSidebarOpen}
+          />
+
+          {/* Main Content Area */}
+          <main className="flex-1 min-w-0 w-full space-y-6">
+            {/* Important Enrollment Notice Banner */}
+            {isReturnedEnrollment && (
+              <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-rose-900 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <AlertCircle className="w-6 h-6 text-rose-600 shrink-0" />
+                  <div>
+                    <strong className="block text-sm font-bold text-rose-800">Enrollment Action Required</strong>
+                    <p>The Registrar returned your application with comments: &quot;{latestEnrollment?.adminRemarks || 'Please review subject load & clear credentials.'}&quot;</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsEnrollmentWizardOpen(true)}
+                  className="bg-rose-700 hover:bg-rose-800 text-white font-bold px-4 py-2 rounded-lg transition cursor-pointer shrink-0"
+                >
+                  Revise & Resubmit Application
+                </button>
+              </div>
+            )}
 
         {/* TAB 1: ENROLLMENT SECTION (6 SUBMENU MODULES) */}
         {activeTab === 'enrollment' && (
@@ -1010,6 +1032,8 @@ export const PortalView: React.FC = () => {
             </div>
           </div>
         )}
+          </main>
+        </div>
       </div>
 
       {/* --- MODAL 1: ONLINE ENROLLMENT WIZARD --- */}
