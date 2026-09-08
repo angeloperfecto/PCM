@@ -149,11 +149,12 @@ export const AdminProgramsTab: React.FC = () => {
   const filteredPrograms = programs.filter((p) => {
     const desc = p.description || p.shortDescription || p.fullDescription || '';
     const level = p.degreeLevel || p.level || '';
+    const q = (search || '').toLowerCase().trim();
     const matchesSearch =
-      !search ||
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      desc.toLowerCase().includes(search.toLowerCase()) ||
-      (p.code && p.code.toLowerCase().includes(search.toLowerCase()));
+      !q ||
+      (p.name && p.name.toLowerCase().includes(q)) ||
+      desc.toLowerCase().includes(q) ||
+      (p.code && p.code.toLowerCase().includes(q));
 
     const matchesLevel =
       levelFilter === 'all' || level.toLowerCase() === levelFilter.toLowerCase();

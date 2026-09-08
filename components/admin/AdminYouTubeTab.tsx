@@ -97,12 +97,14 @@ export const AdminYouTubeTab: React.FC = () => {
 
   // Filtered list of videos
   const filteredVideos = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase().trim();
     return videos
       .filter((v) => {
         const matchesSearch =
-          v.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          v.youtubeVideoId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (v.description && v.description.toLowerCase().includes(searchQuery.toLowerCase()));
+          !q ||
+          (v.title && v.title.toLowerCase().includes(q)) ||
+          (v.youtubeVideoId && v.youtubeVideoId.toLowerCase().includes(q)) ||
+          (v.description && v.description.toLowerCase().includes(q));
 
         const matchesCat = categoryFilter === 'All' || v.category === categoryFilter;
 

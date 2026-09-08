@@ -71,12 +71,13 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
       (logFilter === 'media' && (entity === 'MediaItem' || entity === 'YouTube Video')) ||
       (logFilter === 'system' && ['SiteConfig', 'AdminUser', 'Settings', 'Homepage Video Settings'].includes(entity));
 
+    const q = (logSearch || '').toLowerCase().trim();
     const matchesSearch =
-      !logSearch ||
-      log.action.toLowerCase().includes(logSearch.toLowerCase()) ||
-      details.toLowerCase().includes(logSearch.toLowerCase()) ||
-      userName.toLowerCase().includes(logSearch.toLowerCase()) ||
-      entity.toLowerCase().includes(logSearch.toLowerCase());
+      !q ||
+      (log.action && log.action.toLowerCase().includes(q)) ||
+      (details && details.toLowerCase().includes(q)) ||
+      (userName && userName.toLowerCase().includes(q)) ||
+      (entity && entity.toLowerCase().includes(q));
 
     return matchesFilter && matchesSearch;
   });

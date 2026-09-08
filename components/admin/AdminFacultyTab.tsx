@@ -414,9 +414,9 @@ export const AdminFacultyTab: React.FC = () => {
     if (!mediaPickerSearch.trim()) return true;
     const q = mediaPickerSearch.toLowerCase();
     return (
-      m.title.toLowerCase().includes(q) ||
-      m.category.toLowerCase().includes(q) ||
-      m.altText.toLowerCase().includes(q)
+      (m.title || '').toLowerCase().includes(q) ||
+      (m.category || '').toLowerCase().includes(q) ||
+      (m.altText || '').toLowerCase().includes(q)
     );
   });
 

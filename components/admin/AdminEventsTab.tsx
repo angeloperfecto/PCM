@@ -140,14 +140,15 @@ export const AdminEventsTab: React.FC = () => {
   };
 
   const filteredEvents = events.filter((ev) => {
+    const q = (search || '').toLowerCase().trim();
     const matchesSearch =
-      !search ||
-      ev.title.toLowerCase().includes(search.toLowerCase()) ||
-      ev.location.toLowerCase().includes(search.toLowerCase()) ||
-      ev.description.toLowerCase().includes(search.toLowerCase());
+      !q ||
+      (ev.title && ev.title.toLowerCase().includes(q)) ||
+      (ev.location && ev.location.toLowerCase().includes(q)) ||
+      (ev.description && ev.description.toLowerCase().includes(q));
 
     const matchesCategory =
-      categoryFilter === 'all' || ev.category?.toLowerCase() === categoryFilter.toLowerCase();
+      categoryFilter === 'all' || (ev.category && ev.category.toLowerCase() === categoryFilter.toLowerCase());
 
     return matchesSearch && matchesCategory;
   });

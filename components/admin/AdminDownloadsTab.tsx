@@ -88,13 +88,14 @@ export const AdminDownloadsTab: React.FC = () => {
   };
 
   const filteredDownloads = downloads.filter((d) => {
+    const q = (search || '').toLowerCase().trim();
     const matchesSearch =
-      !search ||
-      d.title.toLowerCase().includes(search.toLowerCase()) ||
-      d.description.toLowerCase().includes(search.toLowerCase());
+      !q ||
+      (d.title && d.title.toLowerCase().includes(q)) ||
+      (d.description && d.description.toLowerCase().includes(q));
 
     const matchesCategory =
-      categoryFilter === 'all' || d.category?.toLowerCase() === categoryFilter.toLowerCase();
+      categoryFilter === 'all' || (d.category && d.category.toLowerCase() === categoryFilter.toLowerCase());
 
     return matchesSearch && matchesCategory;
   });

@@ -113,15 +113,16 @@ export const AdminApplicationsTab: React.FC = () => {
   };
 
   const filteredApps = applications.filter((app) => {
+    const q = (search || '').toLowerCase().trim();
     const matchesSearch =
-      !search ||
-      app.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      (app.trackingNumber && app.trackingNumber.toLowerCase().includes(search.toLowerCase())) ||
-      (app.referenceNumber && app.referenceNumber.toLowerCase().includes(search.toLowerCase())) ||
-      app.email.toLowerCase().includes(search.toLowerCase()) ||
-      ((app.programName || app.program || '').toLowerCase().includes(search.toLowerCase())) ||
-      (app.churchName && app.churchName.toLowerCase().includes(search.toLowerCase())) ||
-      (app.homeChurch && app.homeChurch.toLowerCase().includes(search.toLowerCase()));
+      !q ||
+      (app.fullName && app.fullName.toLowerCase().includes(q)) ||
+      (app.trackingNumber && app.trackingNumber.toLowerCase().includes(q)) ||
+      (app.referenceNumber && app.referenceNumber.toLowerCase().includes(q)) ||
+      (app.email && app.email.toLowerCase().includes(q)) ||
+      ((app.programName || app.program || '').toLowerCase().includes(q)) ||
+      (app.churchName && app.churchName.toLowerCase().includes(q)) ||
+      (app.homeChurch && app.homeChurch.toLowerCase().includes(q));
 
     const matchesStatus = statusFilter === 'all' || app.status === statusFilter;
 

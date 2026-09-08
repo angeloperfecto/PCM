@@ -77,12 +77,24 @@ export const AdminDonationsTab: React.FC = () => {
   const [settingsForm, setSettingsForm] = useState<DonationSettings>(donationSettings);
 
   // Filtered Donations
-  const filteredDonations = donations.filter((d) => {
+  const filteredDonations = (donations || []).filter((d) => {
+    if (!d) return false;
+    const q = (searchTerm || '').toLowerCase().trim();
+    const donorName = (d.donorName || '').toLowerCase();
+    const donorEmail = (d.donorEmail || '').toLowerCase();
+    const trackingCode = (d.trackingCode || '').toLowerCase();
+    const transactionRef = (d.transactionRef || '').toLowerCase();
+    const purpose = (d.purpose || '').toLowerCase();
+    const paymentMethodName = (d.paymentMethodName || '').toLowerCase();
+
     const matchesSearch =
-      d.donorName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.donorEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      d.trackingCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (d.transactionRef && d.transactionRef.toLowerCase().includes(searchTerm.toLowerCase()));
+      !q ||
+      donorName.includes(q) ||
+      donorEmail.includes(q) ||
+      trackingCode.includes(q) ||
+      transactionRef.includes(q) ||
+      purpose.includes(q) ||
+      paymentMethodName.includes(q);
 
     const matchesStatus = statusFilter === 'all' || d.status === statusFilter;
     const matchesMethod = methodFilter === 'all' || d.paymentMethodId === methodFilter;
@@ -91,9 +103,12 @@ export const AdminDonationsTab: React.FC = () => {
   });
 
   // Stats Calculations
-  const totalAmountPhp = donations.reduce((sum, d) => sum + (d.currency === 'PHP' ? d.amount : d.amount * 56), 0);
-  const pendingCount = donations.filter((d) => d.status === 'Pending Verification').length;
-  const verifiedCount = donations.filter((d) => d.status === 'Verified & Acknowledged').length;
+  const totalAmountPhp = (donations || []).reduce(
+    (sum, d) => sum + (Number(d?.amount) || 0) * (d?.currency === 'USD' ? 56 : 1),
+    0
+  );
+  const pendingCount = (donations || []).filter((d) => d?.status === 'Pending Verification').length;
+  const verifiedCount = (donations || []).filter((d) => d?.status === 'Verified & Acknowledged').length;
 
   const handleOpenEditMethod = (method: DonationPaymentMethod) => {
     setEditingMethod(method);
@@ -177,19 +192,19 @@ export const AdminDonationsTab: React.FC = () => {
 
   const handleExportCsv = () => {
     const headers = ['Tracking Code', 'Date', 'Donor Name', 'Email', 'Phone', 'Amount', 'Currency', 'Method', 'Purpose', 'Ref Number', 'Status', 'Receipt Requested'];
-    const rows = donations.map((d) => [
-      `"${d.trackingCode}"`,
-      `"${d.createdAt}"`,
-      `"${d.donorName}"`,
-      `"${d.donorEmail}"`,
-      `"${d.donorPhone || ''}"`,
-      d.amount,
-      `"${d.currency}"`,
-      `"${d.paymentMethodName}"`,
-      `"${d.purpose}"`,
-      `"${d.transactionRef || ''}"`,
-      `"${d.status}"`,
-      (d.receiptRequested || (d as any).requestOfficialReceipt) ? 'Yes' : 'No',
+    const rows = (donations || []).map((d) => [
+      `"${d?.trackingCode || ''}"`,
+      `"${d?.createdAt || ''}"`,
+      `"${d?.donorName || 'Anonymous'}"`,
+      `"${d?.donorEmail || ''}"`,
+      `"${d?.donorPhone || ''}"`,
+      Number(d?.amount) || 0,
+      `"${d?.currency || 'PHP'}"`,
+      `"${d?.paymentMethodName || ''}"`,
+      `"${d?.purpose || ''}"`,
+      `"${d?.transactionRef || ''}"`,
+      `"${d?.status || ''}"`,
+      (d?.receiptRequested || (d as any)?.requestOfficialReceipt) ? 'Yes' : 'No',
     ]);
 
     const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
@@ -382,28 +397,28 @@ export const AdminDonationsTab: React.FC = () => {
                     filteredDonations.map((d) => (
                       <tr key={d.id} className="hover:bg-slate-50/70 transition">
                         <td className="py-3 px-4 space-y-0.5">
-                          <span className="font-mono font-bold text-[#18392B] block">{d.trackingCode}</span>
-                          <span className="text-[11px] text-slate-400">{d.createdAt}</span>
+                          <span className="font-mono font-bold text-[#18392B] block">{d.trackingCode || '—'}</span>
+                          <span className="text-[11px] text-slate-400">{d.createdAt || '—'}</span>
                         </td>
 
                         <td className="py-3 px-4 space-y-0.5">
                           <span className="font-bold text-slate-800 block">
-                            {d.donorName}
+                            {d.donorName || 'Anonymous Donor'}
                             {d.isAnonymous && (
                               <span className="ml-1 text-[9px] bg-slate-100 text-slate-600 px-1.5 py-0.2 rounded">
                                 Anon
                               </span>
                             )}
                           </span>
-                          <span className="text-[11px] text-slate-500 block">{d.donorEmail}</span>
+                          <span className="text-[11px] text-slate-500 block">{d.donorEmail || '—'}</span>
                           {d.donorPhone && <span className="text-[10px] text-slate-400">{d.donorPhone}</span>}
                         </td>
 
                         <td className="py-3 px-4 space-y-0.5">
                           <span className="font-bold text-emerald-700 text-sm block">
-                            {d.currency === 'PHP' ? '₱' : '$'}{d.amount.toLocaleString()} {d.currency}
+                            {d.currency === 'PHP' ? '₱' : '$'}{(Number(d.amount) || 0).toLocaleString()} {d.currency || 'PHP'}
                           </span>
-                          <span className="text-[11px] text-slate-600 block">{d.purpose}</span>
+                          <span className="text-[11px] text-slate-600 block">{d.purpose || 'General Offering'}</span>
                         </td>
 
                         <td className="py-3 px-4 space-y-0.5">
@@ -678,17 +693,17 @@ export const AdminDonationsTab: React.FC = () => {
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80">
                 <div>
                   <span className="text-[10px] text-slate-400 block uppercase">Donor Name</span>
-                  <span className="font-bold text-slate-800 text-sm">{selectedRecord.donorName}</span>
+                  <span className="font-bold text-slate-800 text-sm">{selectedRecord.donorName || 'Anonymous Donor'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block uppercase">Gift Amount</span>
                   <span className="font-bold text-emerald-700 text-base">
-                    {selectedRecord.currency === 'PHP' ? '₱' : '$'}{selectedRecord.amount.toLocaleString()} {selectedRecord.currency}
+                    {selectedRecord.currency === 'PHP' ? '₱' : '$'}{(Number(selectedRecord.amount) || 0).toLocaleString()} {selectedRecord.currency || 'PHP'}
                   </span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block uppercase">Email</span>
-                  <span className="font-medium text-slate-700">{selectedRecord.donorEmail}</span>
+                  <span className="font-medium text-slate-700">{selectedRecord.donorEmail || 'None'}</span>
                 </div>
                 <div>
                   <span className="text-[10px] text-slate-400 block uppercase">Phone</span>

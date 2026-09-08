@@ -153,14 +153,15 @@ export const AdminNewsTab: React.FC = () => {
   };
 
   const filteredNews = news.filter((n) => {
+    const q = (search || '').toLowerCase().trim();
     const matchesSearch =
-      !search ||
-      n.title.toLowerCase().includes(search.toLowerCase()) ||
-      n.excerpt.toLowerCase().includes(search.toLowerCase()) ||
-      (n.author && n.author.toLowerCase().includes(search.toLowerCase()));
+      !q ||
+      (n.title && n.title.toLowerCase().includes(q)) ||
+      (n.excerpt && n.excerpt.toLowerCase().includes(q)) ||
+      (n.author && n.author.toLowerCase().includes(q));
 
     const matchesCategory =
-      categoryFilter === 'all' || n.category?.toLowerCase() === categoryFilter.toLowerCase();
+      categoryFilter === 'all' || (n.category && n.category.toLowerCase() === categoryFilter.toLowerCase());
 
     return matchesSearch && matchesCategory;
   });
