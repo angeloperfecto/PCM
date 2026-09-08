@@ -38,15 +38,18 @@ export const ScrapbookView: React.FC = () => {
   ];
 
   const filteredItems = useMemo(() => {
+    const catLower = (selectedCategory || '').toLowerCase();
+    const q = (searchQuery || '').trim().toLowerCase();
     return scrapbook.filter((item) => {
+      const itemCat = (item.category || '').toLowerCase();
       const matchCat =
-        selectedCategory === 'all' || item.category.toLowerCase() === selectedCategory.toLowerCase();
+        selectedCategory === 'all' || itemCat === catLower;
       const matchQuery =
-        !searchQuery ||
-        item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.caption.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.location?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.year?.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        (item.title || '').toLowerCase().includes(q) ||
+        (item.caption || '').toLowerCase().includes(q) ||
+        (item.location || '').toLowerCase().includes(q) ||
+        (item.year || '').toLowerCase().includes(q);
       return matchCat && matchQuery;
     });
   }, [scrapbook, selectedCategory, searchQuery]);

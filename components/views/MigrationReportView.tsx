@@ -33,16 +33,23 @@ export const MigrationReportView: React.FC = () => {
   const totalLinks = migrationAudit.reduce((acc, curr) => acc + (curr.linksCount || 0), 0);
 
   const filteredAudits = migrationAudit.filter((item) => {
+    const catLower = (filterCategory || '').toLowerCase();
+    const q = (searchQuery || '').trim().toLowerCase();
+    const source = (item.sourceUrl || '').toLowerCase();
+    const target = (item.targetPage || '').toLowerCase();
+    const title = (item.pageTitle || '').toLowerCase();
+    const notes = (item.notes || '').toLowerCase();
+
     const matchCat =
       filterCategory === 'all' ||
-      item.sourceUrl.toLowerCase().includes(filterCategory.toLowerCase()) ||
-      item.targetPage.toLowerCase().includes(filterCategory.toLowerCase());
+      source.includes(catLower) ||
+      target.includes(catLower);
     const matchSearch =
-      !searchQuery ||
-      item.pageTitle.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.sourceUrl.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.targetPage.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.notes.toLowerCase().includes(searchQuery.toLowerCase());
+      !q ||
+      title.includes(q) ||
+      source.includes(q) ||
+      target.includes(q) ||
+      notes.includes(q);
     return matchCat && matchSearch;
   });
 

@@ -29,14 +29,14 @@ export const NewsEventsView: React.FC = () => {
     if (!sub) return;
 
     if (sub === 'conference') {
-      const confEvent = events.find((e) => e.title.toLowerCase().includes('theology') || e.title.toLowerCase().includes('conference'));
+      const confEvent = events.find((e) => (e.title || '').toLowerCase().includes('theology') || (e.title || '').toLowerCase().includes('conference'));
       if (confEvent) setSelectedEvent(confEvent);
     }
   }, [sub, events, setSelectedEvent]);
 
   const filteredNews = news.filter((n) => {
     if (categoryFilter === 'all') return true;
-    return n.category.toLowerCase() === categoryFilter.toLowerCase();
+    return (n.category || '').toLowerCase() === (categoryFilter || '').toLowerCase();
   });
 
   return (

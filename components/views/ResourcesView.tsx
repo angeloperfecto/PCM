@@ -42,18 +42,22 @@ export const ResourcesView: React.FC = () => {
     }
   }, [sub]);
 
+  const q = (searchQuery || '').trim().toLowerCase();
+
   const filteredDownloads = downloads.filter(
     (b) =>
-      b.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      b.description.toLowerCase().includes(searchQuery.toLowerCase())
+      !q ||
+      (b.title || '').toLowerCase().includes(q) ||
+      (b.category || '').toLowerCase().includes(q) ||
+      (b.description || '').toLowerCase().includes(q)
   );
 
   const filteredSermons = sermons.filter(
     (s) =>
-      s.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.speaker.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      s.passage.toLowerCase().includes(searchQuery.toLowerCase())
+      !q ||
+      (s.title || '').toLowerCase().includes(q) ||
+      (s.speaker || '').toLowerCase().includes(q) ||
+      (s.passage || '').toLowerCase().includes(q)
   );
 
   const handleDownload = (title: string, format: string = 'PDF') => {

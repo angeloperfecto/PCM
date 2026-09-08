@@ -186,7 +186,7 @@ export async function safeDeleteDoc(docRef: any): Promise<boolean> {
 }
 
 // Compress client image before upload to avoid memory and network bandwidth bottlenecks
-async function compressImageFile(file: File | Blob, maxWidth = 1920, maxHeight = 1080, quality = 0.85): Promise<Blob> {
+export async function compressImageFile(file: File | Blob, maxWidth = 1920, maxHeight = 1080, quality = 0.85): Promise<Blob> {
   if (typeof window === 'undefined' || !(file instanceof Blob) || !file.type.startsWith('image/')) {
     return file;
   }

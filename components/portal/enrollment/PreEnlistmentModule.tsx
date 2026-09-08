@@ -31,22 +31,22 @@ export const PreEnlistmentModule: React.FC = () => {
 
   // Find student's active pre-enlistment if any
   const existingRecord = preEnlistments.find(
-    (p) => p.studentId === studentProfile.studentId && p.semester === '1st Semester'
+    (p) => p && p.studentId === studentProfile?.studentId && p.semester === '1st Semester'
   );
 
   // Selected subject IDs in current working draft
   const initialSelectedIds = useMemo(() => {
     if (existingRecord?.selectedSubjectCodes && existingRecord.selectedSubjectCodes.length > 0) {
       const codes = existingRecord.selectedSubjectCodes;
-      return academicSubjects
-        .filter((s) => codes.includes(s.code))
+      return (academicSubjects || [])
+        .filter((s) => s && s.code && codes.includes(s.code))
         .map((s) => s.id);
     }
     // Default to currently enrolled or standard 1st sem subjects
-    const enrolledCodes = (studentProfile.courses || []).map((c) => c.code);
-    const matched = academicSubjects.filter((s) => enrolledCodes.includes(s.code));
-    return matched.length > 0 ? matched.map((s) => s.id) : academicSubjects.slice(0, 5).map((s) => s.id);
-  }, [existingRecord, academicSubjects, studentProfile.courses]);
+    const enrolledCodes = ((studentProfile && studentProfile.courses) || []).map((c) => c?.code).filter(Boolean);
+    const matched = (academicSubjects || []).filter((s) => s && s.code && enrolledCodes.includes(s.code));
+    return matched.length > 0 ? matched.map((s) => s.id) : (academicSubjects || []).slice(0, 5).map((s) => s.id);
+  }, [existingRecord, academicSubjects, studentProfile?.courses]);
 
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>(initialSelectedIds);
   const [searchQuery, setSearchQuery] = useState('');
@@ -56,34 +56,46 @@ export const PreEnlistmentModule: React.FC = () => {
 
   const MAX_UNITS = 21;
 
-  // Filter subjects
+  // Filter subjects safely without throwing if fields are missing or undefined
   const filteredSubjects = useMemo(() => {
-    return academicSubjects.filter((subj) => {
+    const q = (searchQuery || '').trim().toLowerCase();
+    return (academicSubjects || []).filter((subj) => {
+      if (!subj) return false;
+      const code = (subj.code || '').toLowerCase();
+      const title = (subj.title || '').toLowerCase();
+      const instructor = (subj.instructor || '').toLowerCase();
+      const category = (subj.category || '').toLowerCase();
+      const description = (subj.description || '').toLowerCase();
+
       const matchSearch =
-        subj.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        subj.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        subj.instructor.toLowerCase().includes(searchQuery.toLowerCase());
+        !q ||
+        code.includes(q) ||
+        title.includes(q) ||
+        instructor.includes(q) ||
+        category.includes(q) ||
+        description.includes(q);
+
       const matchCategory =
-        selectedCategory === 'All' || subj.category === selectedCategory;
+        selectedCategory === 'All' || (subj.category || '') === selectedCategory;
       return matchSearch && matchCategory;
     });
   }, [academicSubjects, searchQuery, selectedCategory]);
 
   // Selected subjects objects
   const selectedSubjects = useMemo(() => {
-    return academicSubjects.filter((s) => selectedSubjectIds.includes(s.id));
+    return (academicSubjects || []).filter((s) => s && selectedSubjectIds.includes(s.id));
   }, [academicSubjects, selectedSubjectIds]);
 
   const totalSelectedUnits = useMemo(() => {
-    return selectedSubjects.reduce((sum, s) => sum + s.units, 0);
+    return selectedSubjects.reduce((sum, s) => sum + (s.units || 0), 0);
   }, [selectedSubjects]);
 
   const toggleSubject = (subjectId: string) => {
     const isSelected = selectedSubjectIds.includes(subjectId);
-    const targetSubject = academicSubjects.find((s) => s.id === subjectId);
+    const targetSubject = (academicSubjects || []).find((s) => s && s.id === subjectId);
 
     if (!isSelected && targetSubject) {
-      if (totalSelectedUnits + targetSubject.units > MAX_UNITS) {
+      if (totalSelectedUnits + (targetSubject.units || 0) > MAX_UNITS) {
         addToast(
           'warning',
           'Unit Limit Exceeded',
@@ -105,14 +117,14 @@ export const PreEnlistmentModule: React.FC = () => {
 
     setIsSubmitting(true);
     const recordPayload: Omit<PreEnlistmentRecord, 'id' | 'createdAt'> = {
-      studentId: studentProfile.studentId,
-      studentName: studentProfile.fullName,
-      program: studentProfile.degreeProgram || studentProfile.program || 'Bachelor of Theology',
-      degreeProgram: studentProfile.degreeProgram || studentProfile.program || 'Bachelor of Theology',
-      yearLevel: studentProfile.yearLevel,
+      studentId: studentProfile?.studentId || 'PCM-STU-CURRENT',
+      studentName: studentProfile?.fullName || 'Student User',
+      program: studentProfile?.degreeProgram || studentProfile?.program || 'Bachelor of Theology',
+      degreeProgram: studentProfile?.degreeProgram || studentProfile?.program || 'Bachelor of Theology',
+      yearLevel: studentProfile?.yearLevel || '1st Year',
       academicYear: '2026–2027',
       semester: '1st Semester',
-      selectedSubjectCodes: selectedSubjects.map((s) => s.code),
+      selectedSubjectCodes: selectedSubjects.map((s) => s.code).filter(Boolean) as string[],
       totalUnits: totalSelectedUnits,
       status: 'Submitted',
       submittedAt: new Date().toISOString(),
@@ -313,7 +325,7 @@ export const PreEnlistmentModule: React.FC = () => {
               <tbody className="divide-y divide-slate-200 text-slate-700">
                 {filteredSubjects.map((subject) => {
                   const isChecked = selectedSubjectIds.includes(subject.id);
-                  const isFull = (subject.enrolledCount || 0) >= subject.capacity;
+                  const isFull = (subject.enrolledCount || 0) >= (subject.capacity || 40);
 
                   return (
                     <tr
@@ -334,26 +346,26 @@ export const PreEnlistmentModule: React.FC = () => {
                         />
                       </td>
                       <td className="p-3.5 font-mono font-bold text-[#18392B]">
-                        {subject.code}
+                        {subject.code || 'N/A'}
                       </td>
                       <td className="p-3.5">
-                        <div className="font-semibold text-slate-900">{subject.title}</div>
+                        <div className="font-semibold text-slate-900">{subject.title || 'Untitled Course'}</div>
                         <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
-                          {subject.category}
+                          {subject.category || 'General'}
                         </span>
                       </td>
                       <td className="p-3.5 font-mono font-bold text-slate-900">
-                        {subject.units} Units
+                        {subject.units || 0} Units
                       </td>
                       <td className="p-3.5 text-slate-500 font-mono text-[11px]">
                         {subject.prerequisite || 'None'}
                       </td>
                       <td className="p-3.5">
-                        <div className="font-medium text-slate-900">{subject.schedule}</div>
+                        <div className="font-medium text-slate-900">{subject.schedule || 'TBA'}</div>
                       </td>
                       <td className="p-3.5">
-                        <div className="text-slate-900 font-medium">{subject.room}</div>
-                        <div className="text-slate-500 text-[11px]">{subject.instructor}</div>
+                        <div className="text-slate-900 font-medium">{subject.room || 'TBA'}</div>
+                        <div className="text-slate-500 text-[11px]">{subject.instructor || 'TBA'}</div>
                       </td>
                       <td className="p-3.5 text-center">
                         <span
@@ -363,7 +375,7 @@ export const PreEnlistmentModule: React.FC = () => {
                               : 'bg-emerald-50 text-emerald-800'
                           }`}
                         >
-                          {subject.enrolledCount || 0}/{subject.capacity}
+                          {subject.enrolledCount || 0}/{subject.capacity || 40}
                         </span>
                       </td>
                     </tr>
