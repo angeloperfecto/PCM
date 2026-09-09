@@ -51,6 +51,10 @@ export {
   orderBy,
   where,
   limit,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
   signInWithPopup,
   signOut,
   onAuthStateChanged,
@@ -235,6 +239,14 @@ export async function compressImageFile(file: File | Blob, maxWidth = 1920, maxH
 
 export function cleanFirestoreData<T>(data: T): T {
   if (data === null || data === undefined) return data;
+  if (typeof data === 'string') {
+    // Hard guard: Prevent Base64 data URIs from polluting Firestore documents
+    if (data.startsWith('data:') && data.length > 10000) {
+      console.warn('Blocked large Base64 string from Firestore document payload.');
+      return '' as unknown as T;
+    }
+    return data;
+  }
   if (Array.isArray(data)) {
     return data.map(cleanFirestoreData) as unknown as T;
   }
@@ -286,25 +298,9 @@ export async function uploadFileToFirebaseStorage(
     const snapshot = await uploadBytes(storageRef, optimizedBlob, metadata);
     const downloadUrl = await getDownloadURL(snapshot.ref);
     return downloadUrl;
-  } catch (error) {
-    console.warn('Firebase Storage direct client upload notice, using server-side Storage API:', error);
-    try {
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', 'images');
-      const res = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!res.ok) {
-        throw new Error('Server Storage upload API returned an error');
-      }
-      const data = await res.json();
-      return data.downloadURL || data.url;
-    } catch (fallbackError) {
-      console.error('All storage upload methods failed:', fallbackError);
-      throw new Error('Failed to upload file to storage. Base64 strings cannot be stored in Firestore.');
-    }
+  } catch (error: any) {
+    console.error('Firebase storage upload failed:', error);
+    throw new Error(error?.message || 'Firebase Storage upload failed. File binary must not be saved to database.');
   }
 }
 

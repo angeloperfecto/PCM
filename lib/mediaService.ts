@@ -1,61 +1,31 @@
-import { doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
-import { db, cleanFirestoreData, getImageDimensions } from './firebase';
+import {
+  db,
+  storage,
+  doc,
+  ref,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+  compressImageFile,
+  getImageDimensions,
+  safeSetDoc,
+  safeDeleteDoc,
+  cleanFirestoreData,
+} from './firebase';
 import { MediaItem } from './types';
 
-export const MAX_MEDIA_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+export const MAX_MEDIA_FILE_SIZE = 10 * 1024 * 1024; // 10 MB limit
+export const ALLOWED_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+  'image/svg+xml',
+];
 
-export interface MediaValidationResult {
-  valid: boolean;
-  error?: string;
-  sizeFormatted?: string;
-}
-
-/**
- * Validates file size and format before any upload or processing occurs
- */
-export function validateMediaFile(
-  file: File | Blob,
-  options?: {
-    maxSizeBytes?: number;
-    allowedTypes?: string[];
-  }
-): MediaValidationResult {
-  const maxSize = options?.maxSizeBytes || MAX_MEDIA_FILE_SIZE;
-  const size = file.size || 0;
-  const type = file.type || '';
-
-  const sizeFormatted =
-    size < 1024 * 1024
-      ? `${(size / 1024).toFixed(1)} KB`
-      : `${(size / (1024 * 1024)).toFixed(1)} MB`;
-
-  if (size > maxSize) {
-    const limitFormatted = `${(maxSize / (1024 * 1024)).toFixed(0)} MB`;
-    return {
-      valid: false,
-      error: `File size (${sizeFormatted}) exceeds the maximum allowed limit of ${limitFormatted}. Please select an optimized image.`,
-      sizeFormatted,
-    };
-  }
-
-  const isImage = type.startsWith('image/');
-  const isDoc = type === 'application/pdf' || type.includes('document') || type.includes('msword');
-  const isVideo = type.startsWith('video/');
-
-  if (!isImage && !isDoc && !isVideo) {
-    return {
-      valid: false,
-      error: 'Unsupported file format. Please upload an image (PNG, JPG, WEBP, GIF, SVG), PDF document, or MP4 video.',
-      sizeFormatted,
-    };
-  }
-
-  return { valid: true, sizeFormatted };
-}
-
-export interface UploadMediaOptions {
-  title?: string;
+export interface MediaUploadOptions {
   category?: string;
+  title?: string;
   altText?: string;
   caption?: string;
   folder?: string;
@@ -65,85 +35,121 @@ export interface UploadMediaOptions {
 }
 
 /**
- * Uploads a media file to Storage and records ONLY lightweight metadata in Firestore
- * NEVER stores Base64 or binary data inside Firestore documents
+ * Validates file size and image mime type before upload
+ */
+export function validateMediaFile(file: File | Blob): { valid: boolean; error?: string } {
+  if (!file) {
+    return { valid: false, error: 'No file provided for upload.' };
+  }
+
+  // Size validation
+  if (file.size > MAX_MEDIA_FILE_SIZE) {
+    const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
+    return {
+      valid: false,
+      error: `File size (${sizeInMB} MB) exceeds maximum allowed upload size of 10 MB.`,
+    };
+  }
+
+  // MIME type validation
+  const fileType = file.type || '';
+  if (fileType && !ALLOWED_IMAGE_TYPES.includes(fileType)) {
+    return {
+      valid: false,
+      error: `Unsupported format (${fileType}). Please upload a JPEG, PNG, WebP, GIF, or SVG image.`,
+    };
+  }
+
+  return { valid: true };
+}
+
+/**
+ * Uploads an image file to Firebase Storage and records its metadata in Firestore.
+ * Conforms to strict rule: File binary is stored ONLY in Firebase Storage,
+ * never inside Firestore documents.
  */
 export async function uploadMediaAsset(
   file: File | Blob,
-  options: UploadMediaOptions = {}
+  options: MediaUploadOptions = {}
 ): Promise<MediaItem> {
-  // 1. Strict validation
   const validation = validateMediaFile(file);
   if (!validation.valid) {
-    throw new Error(validation.error || 'Invalid file.');
+    throw new Error(validation.error || 'Invalid media file.');
   }
 
-  const mediaId = `med-${Date.now()}`;
-  const rawFileName = (file as File).name || `pcm_asset_${Date.now()}.jpg`;
+  const rawFileName = (file as File).name || `pcm_media_${Date.now()}.jpg`;
+  const cleanFileName = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
   const cleanTitle =
     options.title?.trim() ||
     rawFileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+  const id = `med-${Date.now()}`;
+  const storagePath = `mediaLibrary/${id}_${cleanFileName}`;
 
-  // 2. Upload file via the server API to Storage
-  const formData = new FormData();
-  formData.append('file', file);
-  formData.append('mediaId', mediaId);
-  if (options.folder) {
-    formData.append('folder', options.folder);
+  // Compress image before upload (unless SVG)
+  const isSvg = file.type === 'image/svg+xml';
+  const processedBlob = isSvg ? file : await compressImageFile(file, 1920, 1080, 0.85);
+
+  // Compute image dimensions
+  let dimensions = '1600x1067';
+  let width = 1600;
+  let height = 1067;
+  try {
+    const dims = await getImageDimensions(file);
+    if (dims.width && dims.height) {
+      dimensions = `${dims.width}x${dims.height}`;
+      width = dims.width;
+      height = dims.height;
+    }
+  } catch (e) {
+    console.warn('Dimensions calculation notice:', e);
   }
 
-  const res = await fetch('/api/media/upload', {
-    method: 'POST',
-    body: formData,
-  });
+  // Upload to Firebase Storage
+  const storageRef = ref(storage, storagePath);
+  const metadata = {
+    contentType: file.type || 'image/jpeg',
+    customMetadata: {
+      originalName: rawFileName,
+      category: options.category || 'General',
+      uploadedBy: options.uploadedBy || 'Administrator',
+    },
+  };
 
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({ error: 'Upload failed' }));
-    throw new Error(errData.error || `Upload failed with status ${res.status}`);
-  }
-
-  const uploadResult = await res.json();
-  const {
-    downloadURL,
-    storagePath,
-    fileName,
-    originalFileName,
-    folder,
-    contentType,
-    fileSize,
-    fileSizeBytes,
-    width,
-    height,
-    dimensions,
-  } = uploadResult;
+  const uploadSnapshot = await uploadBytes(storageRef, processedBlob, metadata);
+  const downloadUrl = await getDownloadURL(uploadSnapshot.ref);
 
   const now = new Date();
-  const dateStr = now.toISOString().split('T')[0];
-  const isoStr = now.toISOString();
+  const formattedSize = file.size
+    ? file.size < 1024 * 1024
+      ? `${(file.size / 1024).toFixed(1)} KB`
+      : `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+    : 'Custom Asset';
 
-  // 3. Construct lightweight metadata object (strictly no base64)
-  const newMediaItem: MediaItem = cleanFirestoreData({
-    id: mediaId,
+  const category = options.category || 'General';
+
+  // Firestore Document contains ONLY metadata and the downloadURL
+  const newMedia: MediaItem = cleanFirestoreData({
+    id,
     title: cleanTitle,
-    fileName,
-    originalFileName: originalFileName || rawFileName,
+    fileName: cleanFileName,
+    originalFileName: rawFileName,
     storagePath,
-    downloadURL,
-    url: downloadURL,
-    category: options.category || 'General',
-    folder: folder || 'images',
-    altText: options.altText?.trim() || cleanTitle,
+    downloadURL: downloadUrl,
+    url: downloadUrl,
+    category,
+    folder: options.folder || 'images',
+    altText: options.altText?.trim() || `PCM ${cleanTitle}`,
     caption: options.caption?.trim() || '',
-    fileSize,
-    fileSizeBytes: fileSizeBytes || file.size || 0,
-    dimensions: dimensions || `${width || 1600}x${height || 1067}`,
-    width: width || 1600,
-    height: height || 1067,
-    contentType: contentType || file.type || 'image/jpeg',
-    uploadDate: dateStr,
-    uploadedAt: isoStr,
-    createdAt: isoStr,
-    updatedAt: isoStr,
+    fileSize: formattedSize,
+    fileSizeBytes: file.size || 0,
+    dimensions,
+    width,
+    height,
+    contentType: file.type || 'image/jpeg',
+    uploadDate: now.toISOString().split('T')[0],
+    uploadedAt: now.toISOString(),
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
     uploadedBy: options.uploadedBy || 'Administrator',
     uploadedByUid: options.uploadedByUid || '',
     isActive: true,
@@ -151,26 +157,15 @@ export async function uploadMediaAsset(
     tags: options.tags || [],
   });
 
-  // 4. Save metadata to Firestore in both collections
-  try {
-    await setDoc(doc(db, 'mediaLibrary', mediaId), newMediaItem);
-    await setDoc(doc(db, 'mediaItems', mediaId), newMediaItem);
-  } catch (firestoreError: any) {
-    console.error('Firestore metadata write failed, attempting cleanup of uploaded storage file:', firestoreError);
-    // Rollback storage file so no orphan asset is left
-    if (storagePath) {
-      fetch(`/api/media/upload?storagePath=${encodeURIComponent(storagePath)}`, {
-        method: 'DELETE',
-      }).catch(() => {});
-    }
-    throw new Error(`Failed to save media metadata: ${firestoreError.message || firestoreError}`);
-  }
+  // Persist metadata to Firestore
+  await safeSetDoc(doc(db, 'mediaLibrary', newMedia.id), newMedia);
+  await safeSetDoc(doc(db, 'mediaItems', newMedia.id), newMedia);
 
-  return newMediaItem;
+  return newMedia;
 }
 
 /**
- * Replaces the storage file for an existing media item, maintaining IDs and updating metadata
+ * Replaces an existing media file in Firebase Storage and updates Firestore metadata
  */
 export async function replaceMediaAsset(
   id: string,
@@ -179,83 +174,94 @@ export async function replaceMediaAsset(
 ): Promise<MediaItem> {
   const validation = validateMediaFile(newFile);
   if (!validation.valid) {
-    throw new Error(validation.error || 'Invalid replacement file.');
+    throw new Error(validation.error || 'Invalid media file.');
   }
 
-  const formData = new FormData();
-  formData.append('file', newFile);
-  formData.append('mediaId', id);
-  if (existingItem.folder) {
-    formData.append('folder', existingItem.folder);
+  const rawFileName = (newFile as File).name || `pcm_media_${Date.now()}.jpg`;
+  const cleanFileName = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const storagePath = `mediaLibrary/${id}_${cleanFileName}`;
+
+  const isSvg = newFile.type === 'image/svg+xml';
+  const processedBlob = isSvg ? newFile : await compressImageFile(newFile, 1920, 1080, 0.85);
+
+  let dimensions = existingItem.dimensions || '1600x1067';
+  let width = existingItem.width || 1600;
+  let height = existingItem.height || 1067;
+  try {
+    const dims = await getImageDimensions(newFile);
+    if (dims.width && dims.height) {
+      dimensions = `${dims.width}x${dims.height}`;
+      width = dims.width;
+      height = dims.height;
+    }
+  } catch (e) {
+    console.warn('Dimensions calculation notice:', e);
   }
 
-  const res = await fetch('/api/media/upload', {
-    method: 'POST',
-    body: formData,
-  });
+  const storageRef = ref(storage, storagePath);
+  const metadata = {
+    contentType: newFile.type || 'image/jpeg',
+  };
 
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({ error: 'Replacement upload failed' }));
-    throw new Error(errData.error || 'Replacement upload failed');
+  const uploadSnapshot = await uploadBytes(storageRef, processedBlob, metadata);
+  const downloadUrl = await getDownloadURL(uploadSnapshot.ref);
+
+  // Try to delete old storage file if path changed
+  if (existingItem.storagePath && existingItem.storagePath !== storagePath) {
+    try {
+      await deleteObject(ref(storage, existingItem.storagePath));
+    } catch (e) {
+      console.warn('Could not remove previous storage file:', e);
+    }
   }
 
-  const uploadResult = await res.json();
-  const {
-    downloadURL,
+  const now = new Date();
+  const formattedSize = newFile.size
+    ? newFile.size < 1024 * 1024
+      ? `${(newFile.size / 1024).toFixed(1)} KB`
+      : `${(newFile.size / (1024 * 1024)).toFixed(1)} MB`
+    : existingItem.fileSize;
+
+  const updatedMedia: MediaItem = cleanFirestoreData({
+    ...existingItem,
+    fileName: cleanFileName,
     storagePath,
-    fileName,
-    originalFileName,
-    fileSize,
-    fileSizeBytes,
+    downloadURL: downloadUrl,
+    url: downloadUrl,
+    fileSize: formattedSize,
+    fileSizeBytes: newFile.size || existingItem.fileSizeBytes,
+    dimensions,
     width,
     height,
-    dimensions,
-    contentType,
-  } = uploadResult;
-
-  const oldStoragePath = existingItem.storagePath;
-  const now = new Date().toISOString();
-
-  const updatedItem: MediaItem = cleanFirestoreData({
-    ...existingItem,
-    fileName,
-    originalFileName: originalFileName || existingItem.originalFileName,
-    storagePath,
-    downloadURL,
-    url: downloadURL,
-    fileSize,
-    fileSizeBytes,
-    width: width || existingItem.width || 1600,
-    height: height || existingItem.height || 1067,
-    dimensions: dimensions || existingItem.dimensions,
-    contentType: contentType || existingItem.contentType,
-    updatedAt: now,
+    contentType: newFile.type || existingItem.contentType || 'image/jpeg',
+    updatedAt: now.toISOString(),
   });
 
-  // Save new metadata first
-  await setDoc(doc(db, 'mediaLibrary', id), updatedItem, { merge: true });
-  await setDoc(doc(db, 'mediaItems', id), updatedItem, { merge: true });
+  await safeSetDoc(doc(db, 'mediaLibrary', id), updatedMedia, { merge: true });
+  await safeSetDoc(doc(db, 'mediaItems', id), updatedMedia, { merge: true });
 
-  // Only delete old storage file after successful update and only if path changed
-  if (oldStoragePath && oldStoragePath !== storagePath) {
-    fetch(`/api/media/upload?storagePath=${encodeURIComponent(oldStoragePath)}`, {
-      method: 'DELETE',
-    }).catch(() => {});
-  }
-
-  return updatedItem;
+  return updatedMedia;
 }
 
 /**
- * Deletes a media asset from Firestore and Storage
+ * Deletes a media asset from Firestore and Firebase Storage
  */
-export async function deleteMediaAsset(id: string, storagePath?: string): Promise<void> {
-  await deleteDoc(doc(db, 'mediaLibrary', id)).catch(() => {});
-  await deleteDoc(doc(db, 'mediaItems', id)).catch(() => {});
+export async function deleteMediaAsset(
+  id: string,
+  storagePath?: string
+): Promise<boolean> {
+  // Delete from Firestore
+  await safeDeleteDoc(doc(db, 'mediaLibrary', id));
+  await safeDeleteDoc(doc(db, 'mediaItems', id));
 
+  // Delete from Firebase Storage if storagePath exists
   if (storagePath) {
-    fetch(`/api/media/upload?storagePath=${encodeURIComponent(storagePath)}`, {
-      method: 'DELETE',
-    }).catch(() => {});
+    try {
+      await deleteObject(ref(storage, storagePath));
+    } catch (err) {
+      console.warn('Notice: Storage file deletion skipped or not found:', err);
+    }
   }
+
+  return true;
 }
