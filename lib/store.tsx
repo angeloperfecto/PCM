@@ -126,6 +126,12 @@ import {
   safeUpdateDoc,
   safeDeleteDoc,
 } from './firebase';
+import {
+  uploadMediaAsset,
+  replaceMediaAsset,
+  deleteMediaAsset,
+  validateMediaFile,
+} from './mediaService';
 
 export interface ToastNotification {
   id: string;
@@ -192,7 +198,9 @@ interface PCMContextType {
     category?: string,
     title?: string,
     altText?: string,
-    tags?: string[]
+    tags?: string[],
+    folder?: string,
+    caption?: string
   ) => Promise<string>;
 
   // Site Configuration (Homepage, About, Contact, SEO, Navigation, Footer, CTAs)
@@ -993,13 +1001,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           try {
             const mediaBatch = writeBatch(db);
             st.mediaItems.forEach((m: any) => {
-              const cleaned = cleanFirestoreData({
-                ...m,
-                downloadURL: m.downloadURL || m.url || '',
-                url: m.downloadURL || m.url || '',
-              });
-              mediaBatch.set(doc(db, 'mediaLibrary', m.id), cleaned, { merge: true });
-              mediaBatch.set(doc(db, 'mediaItems', m.id), cleaned, { merge: true });
+              const fileUrl = m.downloadURL || m.url || '';
+              if (!fileUrl.startsWith('data:')) {
+                const cleaned = cleanFirestoreData({
+                  ...m,
+                  downloadURL: fileUrl,
+                  url: fileUrl,
+                });
+                mediaBatch.set(doc(db, 'mediaLibrary', m.id), cleaned, { merge: true });
+                mediaBatch.set(doc(db, 'mediaItems', m.id), cleaned, { merge: true });
+              }
             });
             await mediaBatch.commit();
           } catch (e) {
@@ -1419,12 +1430,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     return timeB - timeA;
                   });
                   setMediaItems(list);
-                  // Mirror to mediaLibrary
-                  const batch = writeBatch(db);
+                  // Safely mirror clean metadata to mediaLibrary without base64
                   list.forEach((item) => {
-                    batch.set(doc(db, 'mediaLibrary', item.id), cleanFirestoreData(item), { merge: true });
+                    if (item.url && !item.url.startsWith('data:')) {
+                      safeSetDoc(doc(db, 'mediaLibrary', item.id), cleanFirestoreData(item), { merge: true }).catch(() => {});
+                    }
                   });
-                  batch.commit().catch((e) => console.warn('Media migration notice:', e));
                 } else {
                   // Firestore has no documents in mediaLibrary or mediaItems.
                   // Only seed once if mediaLibraryMeta document does not exist yet.
@@ -1894,63 +1905,24 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     category: string = 'General',
     title?: string,
     altText?: string,
-    tags?: string[]
+    tags?: string[],
+    folder?: string,
+    caption?: string
   ): Promise<string> => {
-    const rawFileName = (file as File).name || `pcm_media_${Date.now()}.jpg`;
-    const cleanFileName = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const cleanTitle = title?.trim() || rawFileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
-    const id = `med-${Date.now()}`;
-    const storagePath = `mediaLibrary/${id}_${cleanFileName}`;
-
-    // Calculate dimensions
-    let dimensions = '1600x1067';
-    try {
-      const dims = await getImageDimensions(file);
-      if (dims.width && dims.height) {
-        dimensions = `${dims.width}x${dims.height}`;
-      }
-    } catch (e) {
-      console.warn('Dimensions calculation notice:', e);
-    }
-
-    const downloadUrl = await uploadFileToFirebaseStorage(file, storagePath, {
-      contentType: file.type || 'image/jpeg',
-    });
-
-    const now = new Date();
-    const formattedSize = file.size
-      ? file.size < 1024 * 1024
-        ? `${(file.size / 1024).toFixed(1)} KB`
-        : `${(file.size / (1024 * 1024)).toFixed(1)} MB`
-      : 'Custom Asset';
-
-    const newMedia: MediaItem = cleanFirestoreData({
-      id,
-      title: cleanTitle,
-      fileName: cleanFileName,
-      storagePath,
-      downloadURL: downloadUrl,
-      url: downloadUrl,
+    const newMedia = await uploadMediaAsset(file, {
       category,
-      altText: altText?.trim() || `PCM ${cleanTitle}`,
-      fileSize: formattedSize,
-      fileSizeBytes: file.size || 0,
-      dimensions,
-      contentType: file.type || 'image/jpeg',
-      uploadDate: now.toISOString().split('T')[0],
-      createdAt: now.toISOString(),
-      updatedAt: now.toISOString(),
+      title,
+      altText,
+      caption,
+      folder: (folder as any) || 'images',
+      tags,
       uploadedBy: currentAdminUser?.name || 'Administrator',
       uploadedByUid: auth.currentUser?.uid || currentAdminUser?.id || '',
-      tags: tags || [],
     });
 
-    setMediaItems((prev) => [newMedia, ...prev.filter((m) => m.id !== id)]);
-    await safeSetDoc(doc(db, 'mediaLibrary', newMedia.id), newMedia);
-    await safeSetDoc(doc(db, 'mediaItems', newMedia.id), newMedia);
-
+    setMediaItems((prev) => [newMedia, ...prev.filter((m) => m.id !== newMedia.id)]);
     logActivity('CREATE', 'Media Asset', newMedia.id, newMedia.title, `Uploaded media asset to ${category} Media Library.`);
-    return downloadUrl;
+    return newMedia.downloadURL || newMedia.url;
   };
 
   // Replace existing media file in Firebase Storage & update Firestore document
@@ -1961,52 +1933,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const existing = mediaItems.find((m) => m.id === id);
     if (!existing) throw new Error('Media asset not found');
 
-    const rawFileName = (newFile as File).name || `pcm_media_${Date.now()}.jpg`;
-    const cleanFileName = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
-    const storagePath = `mediaLibrary/${id}_${cleanFileName}`;
-
-    let dimensions = existing.dimensions || '1600x1067';
-    try {
-      const dims = await getImageDimensions(newFile);
-      if (dims.width && dims.height) {
-        dimensions = `${dims.width}x${dims.height}`;
-      }
-    } catch (e) {
-      console.warn('Dimensions calculation notice:', e);
-    }
-
-    const downloadUrl = await uploadFileToFirebaseStorage(newFile, storagePath, {
-      contentType: newFile.type || 'image/jpeg',
-    });
-
-    if (existing.storagePath && existing.storagePath !== storagePath) {
-      deleteFileFromFirebaseStorage(existing.storagePath).catch(() => {});
-    }
-
-    const now = new Date();
-    const formattedSize = newFile.size
-      ? newFile.size < 1024 * 1024
-        ? `${(newFile.size / 1024).toFixed(1)} KB`
-        : `${(newFile.size / (1024 * 1024)).toFixed(1)} MB`
-      : existing.fileSize;
-
-    const updatedMedia: MediaItem = cleanFirestoreData({
-      ...existing,
-      fileName: cleanFileName,
-      storagePath,
-      downloadURL: downloadUrl,
-      url: downloadUrl,
-      fileSize: formattedSize,
-      fileSizeBytes: newFile.size || existing.fileSizeBytes || 0,
-      dimensions,
-      contentType: newFile.type || existing.contentType || 'image/jpeg',
-      updatedAt: now.toISOString(),
-    });
-
+    const updatedMedia = await replaceMediaAsset(id, newFile, existing);
     setMediaItems((prev) => prev.map((m) => (m.id === id ? updatedMedia : m)));
-    await safeSetDoc(doc(db, 'mediaLibrary', id), updatedMedia, { merge: true });
-    await safeSetDoc(doc(db, 'mediaItems', id), updatedMedia, { merge: true });
-
     logActivity('UPDATE', 'Media Asset', id, updatedMedia.title, `Replaced image file for "${updatedMedia.title}".`);
     addToast('success', 'Image Replaced', `File replaced for "${updatedMedia.title}".`);
     return updatedMedia;
@@ -2254,16 +2182,23 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Media Library CRUD (Persistent Cloud Database)
   const addMediaItem = (item: Omit<MediaItem, 'id' | 'uploadDate'>): MediaItem => {
+    const itemUrl = item.downloadURL || item.url || '';
+    if (itemUrl.startsWith('data:')) {
+      throw new Error('Base64 image data cannot be saved to Firestore. Please use the file upload option.');
+    }
     const id = `med-${Date.now()}`;
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
-    const itemUrl = item.downloadURL || item.url || '';
     const newItem: MediaItem = cleanFirestoreData({
       ...item,
       id,
       url: itemUrl,
       downloadURL: itemUrl,
+      folder: item.folder || 'images',
+      isActive: item.isActive !== undefined ? item.isActive : true,
+      displayOrder: item.displayOrder || 0,
       uploadDate: dateStr,
+      uploadedAt: now.toISOString(),
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
       uploadedBy: currentAdminUser?.name || 'Administrator',
@@ -2278,6 +2213,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateMediaItem = (id: string, updates: Partial<MediaItem>) => {
+    if ((updates.url && updates.url.startsWith('data:')) || (updates.downloadURL && updates.downloadURL.startsWith('data:'))) {
+      throw new Error('Base64 image data cannot be saved to Firestore.');
+    }
     const now = new Date().toISOString();
     const normalizedUpdates: Partial<MediaItem> = {
       ...updates,
@@ -2298,11 +2236,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteMediaItem = (id: string) => {
     const item = mediaItems.find((m) => m.id === id);
     setMediaItems((prev) => prev.filter((m) => m.id !== id));
-    safeDeleteDoc(doc(db, 'mediaLibrary', id)).catch((e) => console.warn(e));
-    safeDeleteDoc(doc(db, 'mediaItems', id)).catch((e) => console.warn(e));
-    if (item?.storagePath) {
-      deleteFileFromFirebaseStorage(item.storagePath).catch((e) => console.warn(e));
-    }
+    deleteMediaAsset(id, item?.storagePath).catch((e) => console.warn(e));
     logActivity('DELETE', 'Media Library', id, item?.title || 'Media Asset', 'Removed image asset from media library.');
     addToast('info', 'Media Deleted', 'Image asset removed from library.');
   };

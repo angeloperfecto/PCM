@@ -287,14 +287,24 @@ export async function uploadFileToFirebaseStorage(
     const downloadUrl = await getDownloadURL(snapshot.ref);
     return downloadUrl;
   } catch (error) {
-    console.warn('Firebase storage direct upload notice, using optimized fallback:', error);
-    const optimizedBlob = await compressImageFile(file, 1200, 800, 0.75);
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target?.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(optimizedBlob);
-    });
+    console.warn('Firebase Storage direct client upload notice, using server-side Storage API:', error);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'images');
+      const res = await fetch('/api/media/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      if (!res.ok) {
+        throw new Error('Server Storage upload API returned an error');
+      }
+      const data = await res.json();
+      return data.downloadURL || data.url;
+    } catch (fallbackError) {
+      console.error('All storage upload methods failed:', fallbackError);
+      throw new Error('Failed to upload file to storage. Base64 strings cannot be stored in Firestore.');
+    }
   }
 }
 

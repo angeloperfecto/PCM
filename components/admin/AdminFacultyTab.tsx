@@ -145,32 +145,13 @@ export const AdminFacultyTab: React.FC = () => {
         message: 'Portrait image uploaded and synced with PCM Media Library.',
         type: 'success',
       });
-    } catch (uploadError) {
-      console.warn('Direct upload fallback to data URL:', uploadError);
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (typeof event.target?.result === 'string') {
-          const dataUrl = event.target.result;
-          setFormImage(dataUrl);
-
-          const assetTitle = `${formName || 'Faculty'} Portrait`;
-          addMediaItem({
-            title: assetTitle,
-            url: dataUrl,
-            category: 'Faculty',
-            altText: `Portrait of ${formName || 'Faculty Member'}`,
-            fileSize: `${Math.round(file.size / 1024)} KB`,
-            dimensions: 'Portrait',
-          });
-
-          addToast({
-            title: 'Photo Loaded',
-            message: 'Portrait image updated.',
-            type: 'success',
-          });
-        }
-      };
-      reader.readAsDataURL(file);
+    } catch (uploadError: any) {
+      console.error('Faculty photo upload error:', uploadError);
+      addToast({
+        title: 'Upload Failed',
+        message: uploadError?.message || 'Failed to upload photo to storage. Please try a smaller image.',
+        type: 'error',
+      });
     } finally {
       setIsUploadingPhoto(false);
     }

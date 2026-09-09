@@ -121,31 +121,30 @@ export const ChangeAvatarModal: React.FC<ChangeAvatarModalProps> = ({
     setUploadError(null);
 
     try {
-      // Compress and optimize image to ensure fast loading and reliable storage
-      const compressedBlob = await compressImageFile(file, 600, 600, 0.85);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
-        setSelectedUrl(dataUrl);
-        setCustomUrlInput(dataUrl);
-        setIsUploading(false);
-      };
-      reader.onerror = () => {
-        setUploadError('Failed to read image file.');
-        setIsUploading(false);
-      };
-      reader.readAsDataURL(compressedBlob);
-    } catch (err) {
-      console.warn('Avatar compression error:', err);
-      // Fallback: direct reader
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const dataUrl = e.target?.result as string;
-        setSelectedUrl(dataUrl);
-        setCustomUrlInput(dataUrl);
-        setIsUploading(false);
-      };
-      reader.readAsDataURL(file);
+      // Upload avatar directly to persistent storage
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder', 'images');
+      formData.append('mediaId', `avatar-${Date.now()}`);
+
+      const res = await fetch('/api/media/upload', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (!res.ok) {
+        throw new Error('Avatar upload to storage failed');
+      }
+
+      const uploadData = await res.json();
+      const finalUrl = uploadData.downloadURL || uploadData.url;
+      setSelectedUrl(finalUrl);
+      setCustomUrlInput(finalUrl);
+    } catch (err: any) {
+      console.error('Avatar upload error:', err);
+      setUploadError(err.message || 'Failed to process avatar file.');
+    } finally {
+      setIsUploading(false);
     }
   };
 

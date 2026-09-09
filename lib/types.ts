@@ -846,20 +846,28 @@ export interface MediaItem {
   id: string;
   title: string;
   fileName?: string;
+  originalFileName?: string;
   storagePath?: string;
   downloadURL?: string;
   url: string;
   category: 'Banner' | 'Faculty' | 'Campus' | 'Events' | 'Documents' | 'Logos' | 'General' | 'Chapel' | 'Archive' | string;
+  folder?: string;
   altText: string;
+  caption?: string;
   fileSize: string;
   fileSizeBytes?: number;
   dimensions?: string;
+  width?: number;
+  height?: number;
   contentType?: string;
   uploadDate?: string;
+  uploadedAt?: string;
   createdAt?: string;
   updatedAt?: string;
   uploadedBy?: string;
   uploadedByUid?: string;
+  isActive?: boolean;
+  displayOrder?: number;
   usedInLocations?: string[];
   tags?: string[];
 }
