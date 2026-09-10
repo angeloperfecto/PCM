@@ -997,7 +997,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             st.mediaItems
               .filter((m: any) => {
                 const targetUrl = m.downloadURL || m.url || '';
-                return targetUrl && !targetUrl.startsWith('data:') && !targetUrl.startsWith('/uploads/');
+                return !!targetUrl;
               })
               .forEach((m: any) => {
                 const cleaned = cleanFirestoreData({
@@ -1423,7 +1423,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     })
                     .filter((item) => {
                       const u = item.url || item.downloadURL || '';
-                      return u && !u.startsWith('data:') && !u.startsWith('/uploads/');
+                      return !!u;
                     });
                   list.sort((a, b) => {
                     const timeA = new Date(a.createdAt || a.uploadDate || 0).getTime();
@@ -1947,6 +1947,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       storagePath,
       downloadURL: downloadUrl,
       url: downloadUrl,
+      dataUrl: downloadUrl.startsWith('data:') ? downloadUrl : undefined,
       category,
       folder: folder || '',
       caption: caption || '',
@@ -2014,6 +2015,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       storagePath,
       downloadURL: downloadUrl,
       url: downloadUrl,
+      dataUrl: downloadUrl.startsWith('data:') ? downloadUrl : existing.dataUrl,
       fileSize: formattedSize,
       fileSizeBytes: newFile.size || existing.fileSizeBytes || 0,
       dimensions,

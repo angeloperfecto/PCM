@@ -246,9 +246,9 @@ export async function compressImageFile(file: File | Blob, maxWidth = 1920, maxH
 export function cleanFirestoreData<T>(data: T): T {
   if (data === null || data === undefined) return data;
   if (typeof data === 'string') {
-    // Hard guard: Prevent Base64 data URIs from polluting Firestore documents
-    if (data.startsWith('data:') && data.length > 10000) {
-      console.warn('Blocked large Base64 string from Firestore document payload.');
+    // Guard: Prevent Base64 strings from exceeding Firestore 1MB document limit
+    if (data.startsWith('data:') && data.length > 900000) {
+      console.warn('Blocked oversized Base64 string from Firestore document payload.');
       return '' as unknown as T;
     }
     return data;

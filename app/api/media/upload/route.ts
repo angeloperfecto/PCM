@@ -93,13 +93,36 @@ export async function POST(req: NextRequest) {
 
     const publicUrl = `/uploads/${sanitizedFolder}/${uniqueFilename}`;
 
+    // 4. Generate resilient base64 data URL for cross-environment rendering (if image)
+    let dataUrl = '';
+    const isImage = (file.type && file.type.startsWith('image/')) || /\.(jpe?g|png|webp|gif|svg)$/i.test(ext);
+    if (isImage) {
+      try {
+        const sharpModule = await import('sharp');
+        const sharp = sharpModule.default;
+        const compressed = await sharp(buffer)
+          .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
+          .jpeg({ quality: 80, progressive: true })
+          .toBuffer();
+        dataUrl = `data:image/jpeg;base64,${compressed.toString('base64')}`;
+      } catch {
+        if (buffer.length < 600000) {
+          dataUrl = `data:${file.type || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+        }
+      }
+    }
+
+    const finalUrl = dataUrl || publicUrl;
+
     return NextResponse.json({
       success: true,
-      url: publicUrl,
-      downloadURL: publicUrl,
+      url: finalUrl,
+      downloadURL: finalUrl,
+      publicUrl: publicUrl,
+      dataUrl: dataUrl,
       storagePath: `uploads/${sanitizedFolder}/${uniqueFilename}`,
       filename: uniqueFilename,
-      provider: 'local_public',
+      provider: dataUrl ? 'hybrid_optimized' : 'local_public',
     });
   } catch (error: any) {
     console.error('Error in /api/media/upload:', error);

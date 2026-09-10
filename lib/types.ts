@@ -850,6 +850,7 @@ export interface MediaItem {
   storagePath?: string;
   downloadURL?: string;
   url: string;
+  dataUrl?: string;
   category: 'Banner' | 'Faculty' | 'Campus' | 'Events' | 'Documents' | 'Logos' | 'General' | 'Chapel' | 'Archive' | string;
   folder?: string;
   altText: string;

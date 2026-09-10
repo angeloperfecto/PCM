@@ -4,23 +4,34 @@ import path from 'path';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const storagePath = body.storagePath;
-    if (!storagePath || typeof storagePath !== 'string') {
-      return NextResponse.json({ success: true, message: 'No file path provided' });
+    const { storagePath, url } = await req.json();
+    
+    // Target could be storagePath or local URL
+    let relativePath = storagePath || url || '';
+    if (relativePath.startsWith('/uploads/')) {
+      relativePath = relativePath.replace('/uploads/', '');
+    }
+    if (relativePath.startsWith('uploads/')) {
+      relativePath = relativePath.replace('uploads/', '');
     }
 
-    let relPath = storagePath.replace(/^\//, '');
-    if (relPath.startsWith('uploads/')) {
-      const fullPath = path.join(process.cwd(), 'public', relPath);
+    if (relativePath && !relativePath.includes('..')) {
+      const fullPath = path.join(process.cwd(), 'public', 'uploads', relativePath);
       try {
         await fs.unlink(fullPath);
-      } catch {
-        // File may have already been removed
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') {
+          console.warn('Error deleting local file:', err.message);
+        }
       }
     }
+
     return NextResponse.json({ success: true });
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error?.message || 'Delete error' }, { status: 500 });
+    console.error('Error in /api/media/delete:', error);
+    return NextResponse.json(
+      { error: error.message || 'Delete error' },
+      { status: 500 }
+    );
   }
 }

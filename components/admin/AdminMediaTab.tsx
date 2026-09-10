@@ -103,6 +103,7 @@ export const AdminMediaTab: React.FC = () => {
   const [editTags, setEditTags] = useState('');
   const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isReplacingFile, setIsReplacingFile] = useState(false);
+  const [previewImgError, setPreviewImgError] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const replaceFileInputRef = useRef<HTMLInputElement>(null);
@@ -303,6 +304,7 @@ export const AdminMediaTab: React.FC = () => {
   // Open Details Modal
   const handleOpenDetail = (item: MediaItem) => {
     setDetailItem(item);
+    setPreviewImgError(false);
     setIsEditingMetadata(false);
     setEditTitle(item.title);
     setEditCategory((item.category as any) || 'Campus');
@@ -354,7 +356,8 @@ export const AdminMediaTab: React.FC = () => {
     try {
       const updated = await replaceMediaFile(detailItem.id, file);
       setDetailItem(updated);
-      addToast('success', 'File Replaced', 'New image uploaded and saved to Firebase Storage.');
+      setPreviewImgError(false);
+      addToast('success', 'File Replaced', 'New image uploaded and saved successfully.');
     } catch (err: any) {
       addToast('error', 'Replacement Failed', err.message || 'Could not replace file.');
     } finally {
@@ -649,7 +652,7 @@ export const AdminMediaTab: React.FC = () => {
         /* Grid View */
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAndSortedMedia.map((m) => {
-            const displayUrl = m.downloadURL || m.url;
+            const displayUrl = m.dataUrl || m.downloadURL || m.url;
             return (
               <div
                 key={m.id}
@@ -739,7 +742,7 @@ export const AdminMediaTab: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {filteredAndSortedMedia.map((m) => {
-                const displayUrl = m.downloadURL || m.url;
+                const displayUrl = m.dataUrl || m.downloadURL || m.url;
                 return (
                   <tr key={m.id} className="hover:bg-slate-50 transition">
                     <td className="py-2.5 px-4">
@@ -1106,23 +1109,48 @@ export const AdminMediaTab: React.FC = () => {
             </div>
 
             {/* Image Preview Box */}
-            <div className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200">
-              <img
-                src={detailItem.downloadURL || detailItem.url}
-                alt={detailItem.altText || detailItem.title}
-                className="max-h-full max-w-full object-contain"
-              />
-              <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
-                <a
-                  href={detailItem.downloadURL || detailItem.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white transition flex items-center gap-1 text-[10px]"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>Open Full View</span>
-                </a>
-              </div>
+            <div className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200 group">
+              {!previewImgError ? (
+                <img
+                  src={detailItem.dataUrl || detailItem.downloadURL || detailItem.url}
+                  alt={detailItem.altText || detailItem.title}
+                  className="max-h-full max-w-full object-contain"
+                  onError={() => {
+                    console.warn('Preview image failed to load for:', detailItem.title);
+                    setPreviewImgError(true);
+                  }}
+                />
+              ) : (
+                <div className="flex flex-col items-center justify-center p-6 text-center text-slate-300">
+                  <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 text-amber-400">
+                    <ImageIcon className="w-6 h-6" />
+                  </div>
+                  <p className="font-semibold text-sm text-white mb-1">{detailItem.title}</p>
+                  <p className="text-xs text-slate-400 max-w-xs mb-3">
+                    Asset image is currently optimizing or unavailable from remote storage.
+                  </p>
+                  <button
+                    onClick={() => replaceFileInputRef.current?.click()}
+                    className="px-3 py-1.5 rounded-lg bg-[#588B76] hover:bg-[#18392B] text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-sm"
+                  >
+                    <Upload className="w-3.5 h-3.5" />
+                    <span>Upload New Image File</span>
+                  </button>
+                </div>
+              )}
+              {!previewImgError && (detailItem.dataUrl || detailItem.downloadURL || detailItem.url) && (
+                <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                  <a
+                    href={detailItem.dataUrl || detailItem.downloadURL || detailItem.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-lg bg-black/60 hover:bg-black/80 text-white transition flex items-center gap-1 text-[10px]"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    <span>Open Full View</span>
+                  </a>
+                </div>
+              )}
             </div>
 
             {/* Details & Metadata */}
