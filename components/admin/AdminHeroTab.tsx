@@ -179,14 +179,14 @@ export const AdminHeroTab: React.FC = () => {
     setIsUploading(true);
     setUploadError(null);
 
-    const uploadRes = await uploadSlideshowImage(file);
+    const uploadRes = await uploadSlideshowImage(file, editingSlide?.id);
     setIsUploading(false);
 
-    if (uploadRes.success && uploadRes.url) {
-      setFormImage(uploadRes.url);
+    if (uploadRes.success && (uploadRes.url || uploadRes.dataUrl)) {
+      setFormImage(uploadRes.url || uploadRes.dataUrl || '');
       addToast({
         title: 'Image Uploaded',
-        message: 'Image uploaded to permanent storage successfully.',
+        message: 'Image uploaded and synchronized across all users.',
         type: 'success',
       });
     } else {
@@ -215,13 +215,13 @@ export const AdminHeroTab: React.FC = () => {
 
     addToast({
       title: 'Uploading Replacement Image',
-      message: 'Uploading to permanent Firebase Storage...',
+      message: 'Uploading and synchronizing image to Firebase...',
       type: 'info',
     });
 
-    const uploadRes = await uploadSlideshowImage(file);
-    if (uploadRes.success && uploadRes.url) {
-      const uploadedUrl: string = uploadRes.url;
+    const uploadRes = await uploadSlideshowImage(file, quickReplaceSlideId);
+    if (uploadRes.success && (uploadRes.url || uploadRes.dataUrl)) {
+      const uploadedUrl: string = uploadRes.url || uploadRes.dataUrl!;
       const updated: HeroSlide[] = slides.map((s) =>
         s.id === quickReplaceSlideId ? { ...s, image: uploadedUrl } : s
       );

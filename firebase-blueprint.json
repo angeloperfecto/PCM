@@ -352,6 +352,21 @@
         }
       },
       "description": "Authoritative site content documents including the homepage hero slideshow."
+    },
+    "/slideshowImages/{imageId}": {
+      "schema": {
+        "title": "Slideshow Image Document",
+        "description": "Dedicated binary image document for hero slides to avoid 1MB document payload limits.",
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "image": { "type": "string" },
+          "filename": { "type": "string" },
+          "updatedAt": { "type": "string" }
+        },
+        "required": ["id", "image"]
+      },
+      "description": "Dedicated image document for hero slideshow slides."
     }
   }
 }

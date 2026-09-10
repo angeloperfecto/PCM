@@ -48,6 +48,16 @@ export const HeroSection: React.FC = () => {
     return () => clearInterval(timer);
   }, [slides.length]);
 
+  const getSlideImageUrl = (s: HeroSlide) => {
+    if (s.image && s.image.trim()) {
+      if (s.image.startsWith('/uploads/slideshow/')) {
+        return `/api/slideshow/image?id=${s.id}`;
+      }
+      return s.image;
+    }
+    return `/api/slideshow/image?id=${s.id}`;
+  };
+
   const slideIndex = currentSlide % slides.length;
   const slide = slides[slideIndex] || slides[0];
 
@@ -76,7 +86,7 @@ export const HeroSection: React.FC = () => {
             idx === slideIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
           }`}
           style={{
-            backgroundImage: `url(${s.image})`,
+            backgroundImage: `url(${getSlideImageUrl(s)})`,
             backgroundSize: 'cover',
             backgroundPosition: 'center 30%',
           }}

@@ -5,7 +5,7 @@ import { HeroSlide } from './types';
 export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   {
     id: 'hero-1',
-    image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600&auto=format&fit=crop',
+    image: '/api/slideshow/image?id=hero-1',
     tag: 'Accredited Theological Education',
     headline: 'EQUIPPING SERVANTS FOR KINGDOM IMPACT',
     subtext:
@@ -22,7 +22,7 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   },
   {
     id: 'hero-2',
-    image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1600&auto=format&fit=crop',
+    image: '/api/slideshow/image?id=hero-2',
     tag: 'Spiritual Formation & Worship',
     headline: 'ROOTED IN TRUTH. PASSIONATE IN WORSHIP.',
     subtext:
@@ -39,7 +39,7 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   },
   {
     id: 'hero-3',
-    image: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?q=80&w=1600&auto=format&fit=crop',
+    image: '/api/slideshow/image?id=hero-3',
     tag: 'Hands-On Pastoral Apprenticeship',
     headline: 'REAL-WORLD MINISTRY IN 85+ LOCAL CHURCHES',
     subtext:
@@ -64,19 +64,26 @@ export interface SlideshowDocument {
 }
 
 /**
- * Strips huge base64 strings if any exist in the image URL to protect Firestore's 1MB limit
+ * Normalizes slide URLs and ensures image accessibility across all users & devices
  */
 export function sanitizeSlide(slide: HeroSlide, index: number): HeroSlide {
+  const slideId = slide.id || `hero-${Date.now()}-${index}`;
   let cleanImage = slide.image;
-  // If an image is a base64 string longer than 50KB, substitute a safe fallback to prevent document bloat
-  if (cleanImage && cleanImage.startsWith('data:') && cleanImage.length > 50000) {
-    cleanImage = 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600&auto=format&fit=crop';
+
+  // If slide was stored as an ephemeral local path /uploads/slideshow/..., redirect it to the authoritative API endpoint
+  if (cleanImage && cleanImage.startsWith('/uploads/slideshow/')) {
+    cleanImage = `/api/slideshow/image?id=${slideId}`;
+  }
+
+  // If no image is provided, default to API route with fallback
+  if (!cleanImage || cleanImage.trim() === '') {
+    cleanImage = `/api/slideshow/image?id=${slideId}`;
   }
 
   return {
-    id: slide.id || `hero-${Date.now()}-${index}`,
-    image: cleanImage || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600&auto=format&fit=crop',
-    tag: slide.tag || 'Philippines College of Ministry',
+    id: slideId,
+    image: cleanImage,
+    tag: slide.tag || 'Philippine College of Ministry',
     headline: slide.headline || 'Equipping Servants for Kingdom Impact',
     subtext: slide.subtext || '',
     primaryBtnText: slide.primaryBtnText || 'APPLY NOW FOR 2026–2027',
@@ -92,6 +99,11 @@ export function sanitizeSlide(slide: HeroSlide, index: number): HeroSlide {
 }
 
 /**
+ * In-memory image cache for fast synchronous rendering of base64 images
+ */
+const slideImageCache: Record<string, string> = {};
+
+/**
  * Subscribes to real-time slideshow updates from Firestore.
  * `siteContent/slideshow` is the single source of truth.
  */
@@ -103,14 +115,45 @@ export function subscribeToSlideshow(
 
   return onSnapshot(
     slideshowDocRef,
-    (snapshot) => {
+    async (snapshot) => {
       if (snapshot.exists()) {
         const data = snapshot.data() as SlideshowDocument;
         if (data && Array.isArray(data.slides) && data.slides.length > 0) {
           const sorted = [...data.slides]
             .map((s, idx) => sanitizeSlide(s, idx))
             .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+          // Apply any cached full-res dataUrls
+          sorted.forEach((s) => {
+            if (slideImageCache[s.id]) {
+              s.image = slideImageCache[s.id];
+            }
+          });
+
           onUpdate(sorted);
+
+          // Proactively fetch high-res image documents from siteContent/slideshow_image_<id> if needed
+          sorted.forEach(async (s) => {
+            if (!slideImageCache[s.id]) {
+              try {
+                const imgDoc = await getDoc(doc(db, 'siteContent', `slideshow_image_${s.id}`));
+                if (imgDoc.exists()) {
+                  const val = imgDoc.data()?.image;
+                  if (val && typeof val === 'string' && val.startsWith('data:')) {
+                    slideImageCache[s.id] = val;
+                    // Trigger update with cached high-res data URL
+                    const reUpdated = sorted.map((item) =>
+                      item.id === s.id ? { ...item, image: val } : item
+                    );
+                    onUpdate(reUpdated);
+                  }
+                }
+              } catch (fetchErr) {
+                // Ignore background image pre-fetch error as API fallback URL is already active
+              }
+            }
+          });
+
           return;
         }
       }
@@ -138,7 +181,6 @@ export function subscribeToSlideshow(
     (error) => {
       console.warn('Real-time slideshow listener notice:', error);
       if (onError) onError(error);
-      // Fallback to default
       onUpdate(DEFAULT_HERO_SLIDES);
     }
   );
@@ -147,6 +189,7 @@ export function subscribeToSlideshow(
 /**
  * Writes the slideshow configuration permanently to Firestore.
  * Updates both `siteContent/slideshow` and `siteConfig/global` (for cross-component compatibility).
+ * Also stores individual image documents into `siteContent/slideshow_image_<id>` to prevent 1MB overflow.
  */
 export async function saveSlideshowToFirestore(
   slides: HeroSlide[],
@@ -157,33 +200,69 @@ export async function saveSlideshowToFirestore(
       return { success: false, error: 'Cannot save an empty slideshow.' };
     }
 
-    const sanitizedSlides = slides.map((s, idx) => ({
-      ...sanitizeSlide(s, idx),
-      order: idx,
-      updatedAt: new Date().toISOString(),
-      updatedBy,
-    }));
+    const timestamp = Date.now();
+
+    // 1. For any slides with embedded data URLs, store them in individual documents siteContent/slideshow_image_<id>
+    for (let i = 0; i < slides.length; i++) {
+      const s = slides[i];
+      const slideId = s.id || `hero-${timestamp}-${i}`;
+      s.id = slideId;
+
+      if (s.image && s.image.startsWith('data:')) {
+        slideImageCache[slideId] = s.image;
+        try {
+          const imgDocRef = doc(db, 'siteContent', `slideshow_image_${slideId}`);
+          await setDoc(
+            imgDocRef,
+            {
+              id: slideId,
+              image: s.image,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        } catch (imgSaveErr) {
+          console.warn('Notice saving dedicated slide image doc:', imgSaveErr);
+        }
+      }
+    }
+
+    // 2. Prepare lean payload for siteContent/slideshow: use clean API endpoint for `image` so the document never exceeds 1MB
+    const leanSlides = slides.map((s, idx) => {
+      const slideId = s.id || `hero-${timestamp}-${idx}`;
+      let targetImage = s.image;
+      if (targetImage.startsWith('data:') || targetImage.startsWith('/uploads/')) {
+        targetImage = `/api/slideshow/image?id=${slideId}&v=${timestamp}`;
+      }
+
+      return {
+        ...sanitizeSlide({ ...s, image: targetImage }, idx),
+        order: idx,
+        updatedAt: new Date().toISOString(),
+        updatedBy,
+      };
+    });
 
     const payload: SlideshowDocument = {
-      slides: sanitizedSlides,
+      slides: leanSlides,
       updatedAt: new Date().toISOString(),
       updatedBy,
       isPublished: true,
     };
 
-    // 1. Write to authoritative document siteContent/slideshow
+    // 3. Write to authoritative document siteContent/slideshow
     const slideshowDocRef = doc(db, 'siteContent', 'slideshow');
     await setDoc(slideshowDocRef, payload, { merge: true });
 
-    // 2. Also keep siteConfig/global.heroSlides in sync with sanitized slides
+    // 4. Also keep siteConfig/global.heroSlides in sync with lean slides
     try {
       const configDocRef = doc(db, 'siteConfig', 'global');
-      await setDoc(configDocRef, { heroSlides: sanitizedSlides }, { merge: true });
+      await setDoc(configDocRef, { heroSlides: leanSlides }, { merge: true });
     } catch (cfgErr) {
       console.warn('Secondary siteConfig heroSlides update notice:', cfgErr);
     }
 
-    // 3. Verify write by reading back
+    // 5. Verify write by reading back
     const verifySnap = await getDoc(slideshowDocRef);
     if (!verifySnap.exists()) {
       throw new Error('Verification failed: Document could not be confirmed in Firestore.');
@@ -203,11 +282,15 @@ export async function saveSlideshowToFirestore(
  * Uploads an image file to the server/storage endpoint and returns a permanent URL.
  */
 export async function uploadSlideshowImage(
-  file: File
-): Promise<{ success: boolean; url?: string; error?: string }> {
+  file: File,
+  slideId?: string
+): Promise<{ success: boolean; url?: string; dataUrl?: string; error?: string }> {
   try {
     const formData = new FormData();
     formData.append('file', file);
+    if (slideId) {
+      formData.append('slideId', slideId);
+    }
 
     const response = await fetch('/api/slideshow/upload', {
       method: 'POST',
@@ -221,7 +304,10 @@ export async function uploadSlideshowImage(
 
     const data = await response.json();
     if (data.url) {
-      return { success: true, url: data.url };
+      if (slideId && data.dataUrl) {
+        slideImageCache[slideId] = data.dataUrl;
+      }
+      return { success: true, url: data.url, dataUrl: data.dataUrl };
     }
 
     return { success: false, error: 'No URL returned from upload server' };

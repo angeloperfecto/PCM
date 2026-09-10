@@ -28,6 +28,11 @@ service cloud.firestore {
       allow write: if true;
     }
 
+    match /slideshowImages/{imageId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
     match /programs/{programId} {
       allow read: if true;
       allow write: if isAdmin();
