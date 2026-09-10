@@ -244,7 +244,7 @@ export const AdminMediaTab: React.FC = () => {
           mediaCaption.trim()
         );
 
-        addToast('success', 'Asset Saved Permanently', `"${mediaTitle}" uploaded to Firebase Storage.`);
+        addToast('success', 'Asset Saved Permanently', `"${mediaTitle}" saved to media library.`);
         setIsUploadModalOpen(false);
         resetUploadForm();
       } catch (err: any) {

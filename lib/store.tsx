@@ -192,7 +192,9 @@ interface PCMContextType {
     category?: string,
     title?: string,
     altText?: string,
-    tags?: string[]
+    tags?: string[],
+    folder?: string,
+    caption?: string
   ) => Promise<string>;
 
   // Site Configuration (Homepage, About, Contact, SEO, Navigation, Footer, CTAs)
@@ -1906,7 +1908,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     category: string = 'General',
     title?: string,
     altText?: string,
-    tags?: string[]
+    tags?: string[],
+    folder?: string,
+    caption?: string
   ): Promise<string> => {
     const rawFileName = (file as File).name || `pcm_media_${Date.now()}.jpg`;
     const cleanFileName = rawFileName.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -1944,6 +1948,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       downloadURL: downloadUrl,
       url: downloadUrl,
       category,
+      folder: folder || '',
+      caption: caption || '',
       altText: altText?.trim() || `PCM ${cleanTitle}`,
       fileSize: formattedSize,
       fileSizeBytes: file.size || 0,

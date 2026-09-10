@@ -33,8 +33,14 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
-// Initialize Storage
+// Initialize Storage with low retry limits to avoid hanging if bucket is unprovisioned
 export const storage = getStorage(app);
+try {
+  storage.maxUploadRetryTime = 3000;
+  storage.maxOperationRetryTime = 3000;
+} catch {
+  // Ignore in environments where properties cannot be assigned
+}
 
 export {
   doc,
@@ -289,26 +295,120 @@ export async function uploadFileToFirebaseStorage(
 ): Promise<string> {
   try {
     const optimizedBlob = await compressImageFile(file);
-    const storageRef = ref(storage, storagePath);
-    const metadata = options?.contentType
-      ? { contentType: options.contentType }
-      : (file instanceof File && file.type)
-      ? { contentType: file.type }
-      : { contentType: 'image/jpeg' };
-    const snapshot = await uploadBytes(storageRef, optimizedBlob, metadata);
-    const downloadUrl = await getDownloadURL(snapshot.ref);
-    return downloadUrl;
+
+    // Primary: Resilient server upload route /api/media/upload
+    if (typeof window !== 'undefined') {
+      let lastErrorMsg = '';
+
+      for (let attempt = 1; attempt <= 2; attempt++) {
+        try {
+          const formData = new FormData();
+          const fileName =
+            file instanceof File && file.name
+              ? file.name
+              : `asset_${Date.now()}.jpg`;
+          formData.append('file', optimizedBlob, fileName);
+          if (storagePath) {
+            const parts = storagePath.split('/');
+            const folder = parts.length > 1 ? parts[0] : 'media';
+            formData.append('folder', folder);
+            formData.append('storagePath', storagePath);
+          }
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 45000);
+
+          const res = await fetch('/api/media/upload', {
+            method: 'POST',
+            body: formData,
+            signal: controller.signal,
+          });
+          clearTimeout(timeoutId);
+
+          if (res.ok) {
+            const data = await res.json();
+            const downloadUrl = data.downloadURL || data.url;
+            if (downloadUrl) {
+              return downloadUrl;
+            }
+          } else {
+            const errData = await res.json().catch(() => ({}));
+            lastErrorMsg = errData.error || `Server responded with ${res.status}`;
+            // If client error (4xx), do not retry
+            if (res.status >= 400 && res.status < 500) {
+              throw new Error(lastErrorMsg);
+            }
+          }
+        } catch (fetchErr: any) {
+          if (fetchErr.name === 'AbortError') {
+            lastErrorMsg = 'Upload timed out. Please check your network or upload a smaller file.';
+          } else if (fetchErr.message && !fetchErr.message.includes('fetch')) {
+            lastErrorMsg = fetchErr.message;
+          }
+          if (attempt === 1) {
+            await new Promise((resolve) => setTimeout(resolve, 600));
+          }
+        }
+      }
+
+      if (lastErrorMsg && !lastErrorMsg.includes('fetch')) {
+        console.warn('Server upload notice:', lastErrorMsg);
+      }
+    }
+
+    // Direct Firebase Storage fallback ONLY if external bucket is explicitly active
+    const isFirebaseStorageActive =
+      !!firebaseConfig.storageBucket &&
+      !firebaseConfig.storageBucket.includes('intelligent-park-95fd2');
+
+    if (isFirebaseStorageActive) {
+      try {
+        storage.maxUploadRetryTime = 2500;
+        storage.maxOperationRetryTime = 2500;
+        const storageRef = ref(storage, storagePath);
+        const metadata = options?.contentType
+          ? { contentType: options.contentType }
+          : file instanceof File && file.type
+          ? { contentType: file.type }
+          : { contentType: 'image/jpeg' };
+        const snapshot = await uploadBytes(storageRef, optimizedBlob, metadata);
+        return await getDownloadURL(snapshot.ref);
+      } catch (storageErr) {
+        console.warn('Firebase Storage upload notice:', storageErr);
+      }
+    }
+
+    throw new Error('Upload could not be saved to storage. Please try again with a smaller file.');
   } catch (error: any) {
-    console.error('Firebase storage upload failed:', error);
-    throw new Error(error?.message || 'Firebase Storage upload failed. File binary must not be saved to database.');
+    console.error('Storage upload failed:', error?.message || error);
+    throw new Error(error?.message || 'Storage upload failed. Please try again.');
   }
 }
 
 export async function deleteFileFromFirebaseStorage(storagePath: string): Promise<boolean> {
   if (!storagePath) return false;
   try {
-    const storageRef = ref(storage, storagePath);
-    await deleteObject(storageRef);
+    let relPath = storagePath.replace(/^\//, '');
+    if (relPath.startsWith('uploads/')) {
+      if (typeof window !== 'undefined') {
+        fetch('/api/media/delete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ storagePath: relPath }),
+        }).catch(() => {});
+      }
+      return true;
+    }
+
+    const isFirebaseStorageActive =
+      !!firebaseConfig.storageBucket &&
+      !firebaseConfig.storageBucket.includes('intelligent-park-95fd2');
+
+    if (isFirebaseStorageActive) {
+      const storageRef = ref(storage, storagePath);
+      await deleteObject(storageRef);
+      return true;
+    }
     return true;
   } catch (err) {
     console.warn('Firebase storage delete file notice:', err);

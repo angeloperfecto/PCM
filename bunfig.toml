@@ -1,0 +1,5 @@
+[install]
+network-concurrency = 8
+
+[install.cache]
+dir = "/root/.bun/install/cache"

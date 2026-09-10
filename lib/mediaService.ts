@@ -1,11 +1,8 @@
 import {
   db,
-  storage,
   doc,
-  ref,
-  uploadBytes,
-  getDownloadURL,
-  deleteObject,
+  uploadFileToFirebaseStorage,
+  deleteFileFromFirebaseStorage,
   compressImageFile,
   getImageDimensions,
   safeSetDoc,
@@ -104,19 +101,10 @@ export async function uploadMediaAsset(
     console.warn('Dimensions calculation notice:', e);
   }
 
-  // Upload to Firebase Storage
-  const storageRef = ref(storage, storagePath);
-  const metadata = {
+  // Upload to Storage via unified helper
+  const downloadUrl = await uploadFileToFirebaseStorage(processedBlob, storagePath, {
     contentType: file.type || 'image/jpeg',
-    customMetadata: {
-      originalName: rawFileName,
-      category: options.category || 'General',
-      uploadedBy: options.uploadedBy || 'Administrator',
-    },
-  };
-
-  const uploadSnapshot = await uploadBytes(storageRef, processedBlob, metadata);
-  const downloadUrl = await getDownloadURL(uploadSnapshot.ref);
+  });
 
   const now = new Date();
   const formattedSize = file.size
@@ -198,21 +186,15 @@ export async function replaceMediaAsset(
     console.warn('Dimensions calculation notice:', e);
   }
 
-  const storageRef = ref(storage, storagePath);
-  const metadata = {
+  const downloadUrl = await uploadFileToFirebaseStorage(processedBlob, storagePath, {
     contentType: newFile.type || 'image/jpeg',
-  };
-
-  const uploadSnapshot = await uploadBytes(storageRef, processedBlob, metadata);
-  const downloadUrl = await getDownloadURL(uploadSnapshot.ref);
+  });
 
   // Try to delete old storage file if path changed
   if (existingItem.storagePath && existingItem.storagePath !== storagePath) {
-    try {
-      await deleteObject(ref(storage, existingItem.storagePath));
-    } catch (e) {
+    deleteFileFromFirebaseStorage(existingItem.storagePath).catch((e) => {
       console.warn('Could not remove previous storage file:', e);
-    }
+    });
   }
 
   const now = new Date();
@@ -254,13 +236,9 @@ export async function deleteMediaAsset(
   await safeDeleteDoc(doc(db, 'mediaLibrary', id));
   await safeDeleteDoc(doc(db, 'mediaItems', id));
 
-  // Delete from Firebase Storage if storagePath exists
+  // Delete from Storage if storagePath exists
   if (storagePath) {
-    try {
-      await deleteObject(ref(storage, storagePath));
-    } catch (err) {
-      console.warn('Notice: Storage file deletion skipped or not found:', err);
-    }
+    await deleteFileFromFirebaseStorage(storagePath);
   }
 
   return true;
