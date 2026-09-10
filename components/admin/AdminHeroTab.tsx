@@ -131,7 +131,8 @@ export const AdminHeroTab: React.FC = () => {
 
   // Open Modal to Add New Slide
   const openNewSlideModal = () => {
-    setEditingSlide(null);
+    const generatedId = `hero-${Date.now()}`;
+    setEditingSlide({ id: generatedId } as HeroSlide);
     setFormHeadline('');
     setFormTag('Accredited Theological Education');
     setFormSubtext(
@@ -182,8 +183,8 @@ export const AdminHeroTab: React.FC = () => {
     const uploadRes = await uploadSlideshowImage(file, editingSlide?.id);
     setIsUploading(false);
 
-    if (uploadRes.success && (uploadRes.url || uploadRes.dataUrl)) {
-      setFormImage(uploadRes.url || uploadRes.dataUrl || '');
+    if (uploadRes.success && (uploadRes.dataUrl || uploadRes.url)) {
+      setFormImage(uploadRes.dataUrl || uploadRes.url || '');
       addToast({
         title: 'Image Uploaded',
         message: 'Image uploaded and synchronized across all users.',
@@ -220,10 +221,10 @@ export const AdminHeroTab: React.FC = () => {
     });
 
     const uploadRes = await uploadSlideshowImage(file, quickReplaceSlideId);
-    if (uploadRes.success && (uploadRes.url || uploadRes.dataUrl)) {
-      const uploadedUrl: string = uploadRes.url || uploadRes.dataUrl!;
+    if (uploadRes.success && (uploadRes.dataUrl || uploadRes.url)) {
+      const uploadedUrl: string = uploadRes.dataUrl || uploadRes.url!;
       const updated: HeroSlide[] = slides.map((s) =>
-        s.id === quickReplaceSlideId ? { ...s, image: uploadedUrl } : s
+        s.id === quickReplaceSlideId ? { ...s, image: uploadedUrl, updatedAt: new Date().toISOString() } : s
       );
       await persistSlides(updated, 'Slide image replaced');
     } else {
@@ -263,8 +264,9 @@ export const AdminHeroTab: React.FC = () => {
     }
 
     let updatedSlides: HeroSlide[];
+    const isExisting = editingSlide && slides.some((s) => s.id === editingSlide.id);
 
-    if (editingSlide) {
+    if (isExisting && editingSlide) {
       updatedSlides = slides.map((s) =>
         s.id === editingSlide.id
           ? {
@@ -278,12 +280,13 @@ export const AdminHeroTab: React.FC = () => {
               secondaryBtnText: formSecondaryText.trim(),
               secondaryBtnLink: formSecondaryLink.trim(),
               active: formActive,
+              updatedAt: new Date().toISOString(),
             }
           : s
       );
     } else {
       const newSlide: HeroSlide = {
-        id: `hero-${Date.now()}`,
+        id: editingSlide?.id || `hero-${Date.now()}`,
         headline: formHeadline.trim(),
         tag: formTag.trim(),
         subtext: formSubtext.trim(),

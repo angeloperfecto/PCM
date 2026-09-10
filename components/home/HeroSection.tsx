@@ -35,6 +35,13 @@ export const HeroSection: React.FC = () => {
     return () => unsubscribe();
   }, []);
 
+  // Also sync whenever siteConfig.heroSlides updates via store
+  useEffect(() => {
+    if (siteConfig?.heroSlides && siteConfig.heroSlides.length > 0) {
+      setLiveSlides(siteConfig.heroSlides);
+    }
+  }, [siteConfig?.heroSlides]);
+
   // Filter for active slides only
   const activeSlides = liveSlides.filter((s) => s.active !== false);
   const slides = activeSlides.length > 0 ? activeSlides : DEFAULT_HERO_SLIDES;
@@ -51,7 +58,7 @@ export const HeroSection: React.FC = () => {
   const getSlideImageUrl = (s: HeroSlide) => {
     if (s.image && s.image.trim()) {
       if (s.image.startsWith('/uploads/slideshow/')) {
-        return `/api/slideshow/image?id=${s.id}`;
+        return `/api/slideshow/image?id=${s.id}&t=${encodeURIComponent(s.updatedAt || '')}`;
       }
       return s.image;
     }
@@ -81,7 +88,7 @@ export const HeroSection: React.FC = () => {
       {/* Background Slideshow with Smooth Crossfade */}
       {slides.map((s, idx) => (
         <div
-          key={idx}
+          key={`${s.id}-${s.image || ''}-${idx}`}
           className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
             idx === slideIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
           }`}

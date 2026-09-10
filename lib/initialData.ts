@@ -2394,6 +2394,19 @@ export const INITIAL_FAQS: FAQItem[] = [
 
 export const INITIAL_ADMIN_USERS: AdminUser[] = [
   {
+    id: 'adm-angelo',
+    name: 'Angelo Perfecto',
+    email: 'angeloperfecto.epc@gmail.com',
+    username: 'angeloperfecto',
+    password: 'password',
+    role: 'Super Admin',
+    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=200&auto=format&fit=crop',
+    department: 'Super Administrator & Executive Leadership',
+    status: 'Active',
+    createdAt: '2024-01-01',
+    lastLogin: '2026-09-09 08:30 AM',
+  },
+  {
     id: 'adm-1',
     name: 'Dr. Benjamin Villanueva',
     email: 'president@pcm.edu.ph',

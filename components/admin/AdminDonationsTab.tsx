@@ -228,7 +228,7 @@ export const AdminDonationsTab: React.FC = () => {
             <span className="font-serif text-2xl font-bold text-[#18392B]">₱{(Number(totalAmountPhp) || 0).toLocaleString()}</span>
             <span className="text-xs text-emerald-600 font-medium">PHP Eqv.</span>
           </div>
-          <p className="text-[11px] text-slate-400">{donations?.length || 0} total pledge records</p>
+          <p className="text-[11px] text-slate-400">{(donations || []).length} total pledge records</p>
         </div>
 
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-1">
@@ -1032,7 +1032,7 @@ export const AdminDonationsTab: React.FC = () => {
         onConfirm={() => {
           if (deleteTargetRecord) {
             deleteDonationRecord(deleteTargetRecord.id);
-            addToast({ title: 'Record Deleted', message: `Donation ${deleteTargetRecord.trackingCode || 'record'} removed.`, type: 'info' });
+            addToast({ title: 'Record Deleted', message: `Donation ${deleteTargetRecord.trackingCode} removed.`, type: 'info' });
             setDeleteTargetRecord(null);
           }
         }}

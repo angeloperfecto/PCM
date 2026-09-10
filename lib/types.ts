@@ -706,13 +706,39 @@ export interface StudentNotification {
 
 export type AdminRole =
   | 'Super Admin'
+  | 'Admin'
+  | 'Staff/Editor'
   | 'Registrar'
   | 'Finance'
   | 'Academic Admin'
   | 'Content Admin'
   | 'Editor';
 
-export type UserRole = 'Admin' | 'Student' | 'Faculty' | 'Alumni' | 'Member';
+export type UserRole =
+  | 'Super Admin'
+  | 'Admin'
+  | 'Staff/Editor'
+  | 'Student/User'
+  | 'Pending User'
+  | 'Student'
+  | 'Faculty'
+  | 'Alumni'
+  | 'Member';
+
+export type AccountStatus =
+  | 'Active'
+  | 'Approved'
+  | 'Pending'
+  | 'Pending Verification'
+  | 'Rejected'
+  | 'Disabled'
+  | 'Inactive';
+
+export type VerificationStatus =
+  | 'Pending'
+  | 'Approved'
+  | 'Rejected'
+  | 'Verified';
 
 export interface UserAccount {
   id: string; // Firebase UID
@@ -727,9 +753,17 @@ export interface UserAccount {
   studentId?: string;
   department?: string;
   homeChurch?: string;
-  status: 'Active' | 'Pending' | 'Inactive' | string;
+  status: AccountStatus;
+  verificationStatus?: VerificationStatus;
+  authMethod?: 'password' | 'google.com' | string;
   provider: string; // 'google.com' | 'password'
   emailVerified?: boolean;
+  requestedRole?: UserRole | AdminRole;
+  requestedAt?: string;
+  rejectionReason?: string;
+  permissions?: string[];
+  approvedBy?: string;
+  approvedAt?: string;
   createdAt: string;
   lastLogin?: string;
 }
@@ -744,11 +778,16 @@ export type NewUserAccountInput = {
   studentId?: string;
   department?: string;
   homeChurch?: string;
-  status?: 'Active' | 'Pending' | 'Inactive' | string;
+  status?: AccountStatus;
+  verificationStatus?: VerificationStatus;
+  authMethod?: 'password' | 'google.com' | string;
   provider?: string;
   photoURL?: string;
   avatarUrl?: string;
   emailVerified?: boolean;
+  requestedRole?: UserRole | AdminRole;
+  requestedAt?: string;
+  permissions?: string[];
   lastLogin?: string;
 };
 

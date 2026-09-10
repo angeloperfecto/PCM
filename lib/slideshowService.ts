@@ -123,37 +123,29 @@ export function subscribeToSlideshow(
             .map((s, idx) => sanitizeSlide(s, idx))
             .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
-          // Apply any cached full-res dataUrls
-          sorted.forEach((s) => {
-            if (slideImageCache[s.id]) {
-              s.image = slideImageCache[s.id];
-            }
-          });
-
-          onUpdate(sorted);
-
-          // Proactively fetch high-res image documents from siteContent/slideshow_image_<id> if needed
-          sorted.forEach(async (s) => {
-            if (!slideImageCache[s.id]) {
+          // Parallel fetch of dedicated slide images for any not in memory cache
+          const resolvedSlides = await Promise.all(
+            sorted.map(async (s) => {
+              if (slideImageCache[s.id]) {
+                return { ...s, image: slideImageCache[s.id] };
+              }
               try {
                 const imgDoc = await getDoc(doc(db, 'siteContent', `slideshow_image_${s.id}`));
                 if (imgDoc.exists()) {
                   const val = imgDoc.data()?.image;
                   if (val && typeof val === 'string' && val.startsWith('data:')) {
                     slideImageCache[s.id] = val;
-                    // Trigger update with cached high-res data URL
-                    const reUpdated = sorted.map((item) =>
-                      item.id === s.id ? { ...item, image: val } : item
-                    );
-                    onUpdate(reUpdated);
+                    return { ...s, image: val };
                   }
                 }
               } catch (fetchErr) {
-                // Ignore background image pre-fetch error as API fallback URL is already active
+                // Ignore background image pre-fetch error as fallback URL is active
               }
-            }
-          });
+              return s;
+            })
+          );
 
+          onUpdate(resolvedSlides);
           return;
         }
       }
@@ -284,7 +276,7 @@ export async function saveSlideshowToFirestore(
 export async function uploadSlideshowImage(
   file: File,
   slideId?: string
-): Promise<{ success: boolean; url?: string; dataUrl?: string; error?: string }> {
+): Promise<{ success: boolean; url?: string; dataUrl?: string; error?: string; slideId?: string }> {
   try {
     const formData = new FormData();
     formData.append('file', file);
@@ -304,10 +296,25 @@ export async function uploadSlideshowImage(
 
     const data = await response.json();
     if (data.url) {
-      if (slideId && data.dataUrl) {
-        slideImageCache[slideId] = data.dataUrl;
+      const targetId = slideId || data.slideId;
+      if (targetId && data.dataUrl) {
+        slideImageCache[targetId] = data.dataUrl;
+        try {
+          await setDoc(
+            doc(db, 'siteContent', `slideshow_image_${targetId}`),
+            {
+              id: targetId,
+              image: data.dataUrl,
+              filename: data.filename || `slide_${targetId}.webp`,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true }
+          );
+        } catch (fsClientErr) {
+          console.warn('Client-side Firestore slide sync notice:', fsClientErr);
+        }
       }
-      return { success: true, url: data.url, dataUrl: data.dataUrl };
+      return { success: true, url: data.url, dataUrl: data.dataUrl, slideId: targetId };
     }
 
     return { success: false, error: 'No URL returned from upload server' };

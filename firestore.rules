@@ -6,15 +6,31 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function isAdmin() {
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "angeloperfecto.epc@gmail.com" ||
+        request.auth.token.email == "president@pcm.edu.ph" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Super Admin" &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status in ["Active", "Approved"])
+      );
+    }
+
+    function isApprovedAdmin() {
       return isSignedIn() && (
         request.auth.token.email == "angeloperfecto.epc@gmail.com" ||
         request.auth.token.email == "president@pcm.edu.ph" ||
         request.auth.token.email == "admin@pcm.ph" ||
-        exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) ||
         (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Admin")
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["Super Admin", "Admin", "Staff/Editor", "Editor", "Content Admin", "Academic Admin", "Registrar", "Finance"] &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status in ["Active", "Approved"]) ||
+        (exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.status in ["Active", "Approved"])
       );
+    }
+
+    function isAdmin() {
+      return isApprovedAdmin();
     }
 
     // Public readable content collections (Website CMS)
@@ -117,10 +133,20 @@ service cloud.firestore {
     // Authenticated Users and Profiles
     // Direct document lookup for user's own profile; list queries restricted to Admin
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
-      allow create, update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow delete: if isAdmin();
+      allow get: if isSignedIn() && (request.auth.uid == userId || isApprovedAdmin());
+      allow list: if isApprovedAdmin();
+      allow create: if isSignedIn() && (
+        isSuperAdmin() || (
+          request.auth.uid == userId && 
+          request.resource.data.role != "Super Admin" &&
+          (request.resource.data.role in ["Admin", "Staff/Editor"] ? request.resource.data.status in ["Pending", "Pending Verification"] : true)
+        )
+      );
+      allow update: if isSuperAdmin() || (
+        isSignedIn() && request.auth.uid == userId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'adminRole', 'status', 'verificationStatus', 'permissions', 'approvedBy', 'approvedAt'])
+      );
+      allow delete: if isSuperAdmin() && resource.data.email != "angeloperfecto.epc@gmail.com";
     }
 
     match /studentProfiles/{studentId} {
@@ -183,8 +209,8 @@ service cloud.firestore {
     }
 
     match /adminUsers/{adminId} {
-      allow get, list: if isAdmin() || (isSignedIn() && request.auth.uid == adminId);
-      allow write: if isAdmin();
+      allow get, list: if isApprovedAdmin() || (isSignedIn() && request.auth.uid == adminId);
+      allow write: if isSuperAdmin();
     }
 
     match /applications/{applicationId} {

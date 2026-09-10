@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
                 headers: {
                   'Content-Type': contentType,
                   'Content-Length': buffer.length.toString(),
-                  'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+                  'Cache-Control': 'no-cache, no-store, must-revalidate',
                 },
               });
             }

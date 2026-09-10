@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { usePCM } from '@/lib/store';
-import { AdminUser, AdminRole, UserRole, UserAccount } from '@/lib/types';
+import { AdminUser, AdminRole, UserRole, UserAccount, AccountStatus } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   ShieldCheck,
@@ -24,7 +24,17 @@ import {
   BadgeCheck,
   Building2,
   IdCard,
+  Check,
+  X,
+  AlertTriangle,
+  UserX,
+  Ban,
+  ShieldAlert,
+  AlertCircle,
+  XCircle,
 } from 'lucide-react';
+
+const PRIMARY_SUPER_ADMIN_EMAIL = 'angeloperfecto.epc@gmail.com';
 
 export const AdminUsersTab: React.FC = () => {
   const {
@@ -42,6 +52,11 @@ export const AdminUsersTab: React.FC = () => {
     addToast,
     canPerformAction,
     syncAllDataToFirestore,
+    approveUserAccess,
+    rejectUserAccess,
+    activateUser,
+    deactivateUser,
+    changeUserRole,
   } = usePCM();
 
   // Legacy Admin creation modal
@@ -60,9 +75,19 @@ export const AdminUsersTab: React.FC = () => {
   // User Accounts Directory State
   const [searchAccountQuery, setSearchAccountQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<'All' | UserRole>('All');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'All' | 'Pending' | 'Active' | 'Rejected' | 'Disabled'>('All');
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [deleteTargetAccount, setDeleteTargetAccount] = useState<UserAccount | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Approval & Rejection Modal State
+  const [approvalTargetUser, setApprovalTargetUser] = useState<UserAccount | null>(null);
+  const [assignRoleChoice, setAssignRoleChoice] = useState<AdminRole | 'Student' | 'Faculty'>('Editor');
+  const [rejectionTargetUser, setRejectionTargetUser] = useState<UserAccount | null>(null);
+  const [rejectionReasonInput, setRejectionReasonInput] = useState('');
+  const [deactivateTargetUser, setDeactivateTargetUser] = useState<UserAccount | null>(null);
+  const [reactivateTargetUser, setReactivateTargetUser] = useState<UserAccount | null>(null);
+  const [isProcessingAction, setIsProcessingAction] = useState(false);
 
   // New Account form state
   const [accName, setAccName] = useState('');
@@ -72,12 +97,58 @@ export const AdminUsersTab: React.FC = () => {
   const [accStudentId, setAccStudentId] = useState('');
   const [accStatus, setAccStatus] = useState<'Active' | 'Inactive' | 'Pending'>('Active');
 
+  // Pending verification requests
+  const pendingRequests = useMemo(() => {
+    return userAccounts.filter((u) => u.status === 'Pending' || u.status === 'Pending Verification');
+  }, [userAccounts]);
+
+  const activeCount = useMemo(() => {
+    return userAccounts.filter((u) => u.status === 'Active' || u.status === 'Approved' || !u.status).length;
+  }, [userAccounts]);
+
+  const pendingCount = pendingRequests.length;
+
+  const rejectedCount = useMemo(() => {
+    return userAccounts.filter((u) => u.status === 'Rejected').length;
+  }, [userAccounts]);
+
+  const disabledCount = useMemo(() => {
+    return userAccounts.filter((u) => u.status === 'Disabled' || u.status === 'Inactive').length;
+  }, [userAccounts]);
+
   // Filtered accounts
   const filteredAccounts = useMemo(() => {
     return userAccounts.filter((acc) => {
-      const matchRole = selectedRoleFilter === 'All' || acc.role === selectedRoleFilter;
+      // Role filter
+      let matchRole = true;
+      if (selectedRoleFilter !== 'All') {
+        if (selectedRoleFilter === 'Admin') {
+          matchRole =
+            acc.role === 'Admin' ||
+            acc.role === 'Super Admin' ||
+            acc.role === 'Staff/Editor' ||
+            (acc.role as string) === 'Content Admin' ||
+            (acc.role as string) === 'Editor' ||
+            !!acc.adminRole;
+        } else {
+          matchRole = acc.role === selectedRoleFilter || (acc.adminRole as string) === selectedRoleFilter;
+        }
+      }
+
+      // Status filter
+      let matchStatus = true;
+      if (selectedStatusFilter === 'Pending') {
+        matchStatus = acc.status === 'Pending' || acc.status === 'Pending Verification';
+      } else if (selectedStatusFilter === 'Active') {
+        matchStatus = acc.status === 'Active' || acc.status === 'Approved' || !acc.status;
+      } else if (selectedStatusFilter === 'Rejected') {
+        matchStatus = acc.status === 'Rejected';
+      } else if (selectedStatusFilter === 'Disabled') {
+        matchStatus = acc.status === 'Disabled' || acc.status === 'Inactive';
+      }
+
       const q = searchAccountQuery.toLowerCase().trim();
-      if (!q) return matchRole;
+      if (!q) return matchRole && matchStatus;
       const matchQuery =
         acc.name?.toLowerCase().includes(q) ||
         acc.email?.toLowerCase().includes(q) ||
@@ -85,9 +156,9 @@ export const AdminUsersTab: React.FC = () => {
         acc.role?.toLowerCase().includes(q) ||
         acc.adminRole?.toLowerCase().includes(q) ||
         acc.uid?.toLowerCase().includes(q);
-      return matchRole && matchQuery;
+      return matchRole && matchStatus && matchQuery;
     });
-  }, [userAccounts, searchAccountQuery, selectedRoleFilter]);
+  }, [userAccounts, searchAccountQuery, selectedRoleFilter, selectedStatusFilter]);
 
   if (currentUserAccount?.role === 'Student' || !canPerformAction('Super Admin')) {
     return (
@@ -244,7 +315,143 @@ export const AdminUsersTab: React.FC = () => {
     addToast({ title: 'Role Updated', message: `Role changed to ${newRoleValue}.`, type: 'success' });
   };
 
-  const adminCount = userAccounts.filter((u) => u.role === 'Admin').length;
+  const handleOpenApprove = (user: UserAccount) => {
+    setApprovalTargetUser(user);
+    if (user.requestedRole) {
+      if (
+        user.requestedRole === 'Super Admin' ||
+        user.requestedRole === 'Content Admin' ||
+        user.requestedRole === 'Editor'
+      ) {
+        setAssignRoleChoice(user.requestedRole);
+      } else if (user.requestedRole === 'Student' || user.requestedRole === 'Faculty') {
+        setAssignRoleChoice(user.requestedRole);
+      } else {
+        setAssignRoleChoice('Editor');
+      }
+    } else {
+      setAssignRoleChoice(user.adminRole || 'Editor');
+    }
+  };
+
+  const handleConfirmApprove = async () => {
+    if (!approvalTargetUser) return;
+    setIsProcessingAction(true);
+    const uid = approvalTargetUser.uid || approvalTargetUser.id;
+    try {
+      if (assignRoleChoice === 'Student') {
+        await changeUserRole(uid, 'Student');
+        await activateUser(uid);
+      } else if (assignRoleChoice === 'Faculty') {
+        await changeUserRole(uid, 'Faculty');
+        await activateUser(uid);
+      } else {
+        await approveUserAccess(uid, assignRoleChoice as AdminRole);
+      }
+      setApprovalTargetUser(null);
+    } catch (err: any) {
+      addToast({
+        title: 'Approval Failed',
+        message: err?.message || 'Could not approve user account.',
+        type: 'error',
+      });
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  const handleOpenReject = (user: UserAccount) => {
+    setRejectionTargetUser(user);
+    setRejectionReasonInput('');
+  };
+
+  const handleConfirmReject = async () => {
+    if (!rejectionTargetUser) return;
+    setIsProcessingAction(true);
+    const uid = rejectionTargetUser.uid || rejectionTargetUser.id;
+    try {
+      await rejectUserAccess(uid, rejectionReasonInput.trim() || undefined);
+      setRejectionTargetUser(null);
+      setRejectionReasonInput('');
+    } catch (err: any) {
+      addToast({
+        title: 'Rejection Failed',
+        message: err?.message || 'Could not reject user account.',
+        type: 'error',
+      });
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  const handleOpenDeactivate = (user: UserAccount) => {
+    if (user.email === PRIMARY_SUPER_ADMIN_EMAIL) {
+      addToast({
+        title: 'Protected Account',
+        message: 'The Primary Super Administrator cannot be deactivated.',
+        type: 'error',
+      });
+      return;
+    }
+    setDeactivateTargetUser(user);
+  };
+
+  const handleConfirmDeactivate = async () => {
+    if (!deactivateTargetUser) return;
+    setIsProcessingAction(true);
+    const uid = deactivateTargetUser.uid || deactivateTargetUser.id;
+    try {
+      await deactivateUser(uid);
+      setDeactivateTargetUser(null);
+    } catch (err: any) {
+      addToast({
+        title: 'Action Failed',
+        message: err?.message || 'Could not deactivate user account.',
+        type: 'error',
+      });
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  const handleOpenReactivate = (user: UserAccount) => {
+    setReactivateTargetUser(user);
+  };
+
+  const handleConfirmReactivate = async () => {
+    if (!reactivateTargetUser) return;
+    setIsProcessingAction(true);
+    const uid = reactivateTargetUser.uid || reactivateTargetUser.id;
+    try {
+      await activateUser(uid);
+      setReactivateTargetUser(null);
+    } catch (err: any) {
+      addToast({
+        title: 'Action Failed',
+        message: err?.message || 'Could not reactivate user account.',
+        type: 'error',
+      });
+    } finally {
+      setIsProcessingAction(false);
+    }
+  };
+
+  const handleUserRoleChange = async (account: UserAccount, newRole: UserRole, newAdminRole?: AdminRole) => {
+    if (account.email === PRIMARY_SUPER_ADMIN_EMAIL) {
+      addToast({
+        title: 'Protected Account',
+        message: 'The Primary Super Administrator role cannot be modified.',
+        type: 'error',
+      });
+      return;
+    }
+    const uid = account.uid || account.id;
+    await changeUserRole(uid, newRole, newAdminRole);
+  };
+
+  const adminCount = userAccounts.filter(
+    (u) => u.role === 'Admin' || u.role === 'Super Admin' || u.role === 'Staff/Editor' || !!u.adminRole
+  ).length;
   const studentCount = userAccounts.filter((u) => u.role === 'Student').length;
   const facultyCount = userAccounts.filter((u) => u.role === 'Faculty').length;
 
@@ -291,7 +498,7 @@ export const AdminUsersTab: React.FC = () => {
             Super Admin
           </div>
           <p className="text-[11px] text-purple-700 leading-relaxed">
-            Full system control, database backups, user accounts directory, site reset, and security roles.
+            Full system control, database backups, user accounts directory, account verification, and security roles.
           </p>
         </div>
 
@@ -316,34 +523,203 @@ export const AdminUsersTab: React.FC = () => {
         </div>
       </div>
 
+      {/* Dedicated Pending Verification Section (Highlights pending requests) */}
+      {pendingRequests.length > 0 && (
+        <div className="bg-amber-50/80 border border-amber-300 rounded-2xl p-5 space-y-4 shadow-xs">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-amber-200/70 pb-3">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 shadow-2xs">
+                <Clock className="w-5 h-5 text-amber-700 animate-pulse" />
+              </div>
+              <div>
+                <h3 className="font-serif text-sm font-bold text-amber-950 flex items-center gap-2">
+                  Pending Verification Requests ({pendingRequests.length})
+                  <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-amber-200 text-amber-900 border border-amber-300">
+                    Requires Review
+                  </span>
+                </h3>
+                <p className="text-[11px] text-amber-800">
+                  Newly registered admin accounts are restricted until an authorized Super Administrator reviews and approves them.
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setSelectedStatusFilter('Pending');
+              }}
+              className="text-xs font-bold text-amber-900 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg border border-amber-300 transition cursor-pointer"
+            >
+              Filter in Directory
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {pendingRequests.map((req) => (
+              <div
+                key={req.uid || req.id}
+                className="bg-white p-4 rounded-xl border border-amber-200 shadow-2xs flex flex-col justify-between gap-3"
+              >
+                <div className="flex items-start gap-3">
+                  {req.photoURL ? (
+                    <img
+                      src={req.photoURL}
+                      alt={req.name}
+                      className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center justify-center font-bold text-sm shrink-0">
+                      {req.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-slate-900 text-xs truncate flex items-center gap-1.5">
+                      <span>{req.name}</span>
+                      <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                        {req.provider === 'google.com' ? 'Google' : 'Email/Pass'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-500 truncate flex items-center gap-1">
+                      <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                      <span className="truncate">{req.email}</span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 mt-1">
+                      Requested Role: <strong className="text-amber-900">{req.requestedRole || req.adminRole || req.role || 'Admin'}</strong>
+                      {req.requestedAt && (
+                        <span className="ml-2 font-mono">• {new Date(req.requestedAt).toLocaleDateString()}</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    onClick={() => handleOpenApprove(req)}
+                    className="flex-1 flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white py-1.5 px-3 rounded-lg text-xs font-bold transition shadow-xs cursor-pointer"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Approve Access</span>
+                  </button>
+                  <button
+                    onClick={() => handleOpenReject(req)}
+                    className="flex items-center justify-center gap-1.5 bg-red-50 hover:bg-red-100 text-red-700 py-1.5 px-3 rounded-lg text-xs font-bold transition border border-red-200 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Reject</span>
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Google / Firestore User Accounts & Live Identity Directory */}
       <div className="space-y-4 pt-2">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          {/* Filter Tabs */}
-          <div className="flex items-center gap-1.5 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs overflow-x-auto max-w-full">
+        {/* Filter Section: Role & Status Tabs */}
+        <div className="space-y-3">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+            {/* Status Filter Pills */}
+            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs overflow-x-auto max-w-full">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2">Status:</span>
+              <button
+                onClick={() => setSelectedStatusFilter('All')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+                  selectedStatusFilter === 'All'
+                    ? 'bg-white text-[#18392B] shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                All ({userAccounts.length})
+              </button>
+              <button
+                onClick={() => setSelectedStatusFilter('Pending')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                  selectedStatusFilter === 'Pending'
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'text-amber-800 hover:text-amber-950'
+                }`}
+              >
+                <span>Pending</span>
+                {pendingCount > 0 && (
+                  <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                    selectedStatusFilter === 'Pending' ? 'bg-amber-700 text-white' : 'bg-amber-200 text-amber-900'
+                  }`}>
+                    {pendingCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setSelectedStatusFilter('Active')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+                  selectedStatusFilter === 'Active'
+                    ? 'bg-emerald-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Active ({activeCount})
+              </button>
+              <button
+                onClick={() => setSelectedStatusFilter('Rejected')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+                  selectedStatusFilter === 'Rejected'
+                    ? 'bg-red-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Rejected ({rejectedCount})
+              </button>
+              <button
+                onClick={() => setSelectedStatusFilter('Disabled')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+                  selectedStatusFilter === 'Disabled'
+                    ? 'bg-slate-700 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                Disabled ({disabledCount})
+              </button>
+            </div>
+
+            {/* Search Field */}
+            <div className="relative w-full lg:w-72">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchAccountQuery}
+                onChange={(e) => setSearchAccountQuery(e.target.value)}
+                placeholder="Search name, email, role, or UID..."
+                className="w-full pl-8.5 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:border-[#588B76] focus:outline-none placeholder:text-slate-400"
+              />
+            </div>
+          </div>
+
+          {/* Role Filter Tabs */}
+          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs overflow-x-auto max-w-full">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2">Role:</span>
             <button
               onClick={() => setSelectedRoleFilter('All')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap text-xs ${
                 selectedRoleFilter === 'All'
-                  ? 'bg-white text-[#18392B] shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              All ({userAccounts.length})
-            </button>
-            <button
-              onClick={() => setSelectedRoleFilter('Admin')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
-                selectedRoleFilter === 'Admin'
                   ? 'bg-[#18392B] text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
-              Admin ({adminCount})
+              All Roles
+            </button>
+            <button
+              onClick={() => setSelectedRoleFilter('Admin')}
+              className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap text-xs ${
+                selectedRoleFilter === 'Admin'
+                  ? 'bg-purple-800 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Admins ({adminCount})
             </button>
             <button
               onClick={() => setSelectedRoleFilter('Student')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap text-xs ${
                 selectedRoleFilter === 'Student'
                   ? 'bg-emerald-700 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -353,7 +729,7 @@ export const AdminUsersTab: React.FC = () => {
             </button>
             <button
               onClick={() => setSelectedRoleFilter('Faculty')}
-              className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1 rounded-lg font-semibold transition cursor-pointer whitespace-nowrap text-xs ${
                 selectedRoleFilter === 'Faculty'
                   ? 'bg-blue-700 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
@@ -362,18 +738,6 @@ export const AdminUsersTab: React.FC = () => {
               Faculty ({facultyCount})
             </button>
           </div>
-
-          {/* Search Field */}
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              value={searchAccountQuery}
-              onChange={(e) => setSearchAccountQuery(e.target.value)}
-              placeholder="Search name, email, ID..."
-              className="w-full pl-8.5 pr-3 py-1.5 text-xs rounded-xl border border-slate-200 bg-white focus:border-[#588B76] focus:outline-none placeholder:text-slate-400"
-            />
-          </div>
         </div>
 
         <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto bg-white">
@@ -381,10 +745,9 @@ export const AdminUsersTab: React.FC = () => {
             <thead>
               <tr className="bg-slate-50 text-slate-600 font-serif border-b border-slate-200">
                 <th className="py-3 px-4 font-bold">Registered Account</th>
-                <th className="py-3 px-4 font-bold">Email Address</th>
-                <th className="py-3 px-4 font-bold">System Role</th>
+                <th className="py-3 px-4 font-bold">Email & Auth</th>
+                <th className="py-3 px-4 font-bold">Role Assignment</th>
                 <th className="py-3 px-4 font-bold">Admin Privileges</th>
-                <th className="py-3 px-4 font-bold">Linked Student ID</th>
                 <th className="py-3 px-4 font-bold">Status</th>
                 <th className="py-3 px-4 font-bold text-right">Actions</th>
               </tr>
@@ -392,147 +755,229 @@ export const AdminUsersTab: React.FC = () => {
             <tbody className="divide-y divide-slate-100 text-slate-700">
               {filteredAccounts.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400">
-                    No user accounts match the selected criteria.
+                  <td colSpan={6} className="py-8 text-center text-slate-400">
+                    No user accounts match the selected filters.
                   </td>
                 </tr>
               ) : (
-                filteredAccounts.map((account) => (
-                  <tr key={account.uid || account.id} className="hover:bg-slate-50/75 transition">
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-3">
-                        {account.photoURL ? (
-                          <img
-                            src={account.photoURL}
-                            alt={account.name}
-                            className="w-8 h-8 rounded-full object-cover border border-slate-200"
-                            referrerPolicy="no-referrer"
-                          />
-                        ) : (
-                          <div className={`w-8 h-8 rounded-full text-white flex items-center justify-center font-bold text-xs ${
-                            account.role === 'Admin' ? 'bg-[#18392B]' : account.role === 'Student' ? 'bg-emerald-600' : 'bg-blue-600'
-                          }`}>
-                            {account.name.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div className="font-bold text-[#18392B] flex items-center gap-1.5 flex-wrap">
-                            <span>{account.name}</span>
-                            {account.role === 'Admin' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200">
-                                <Shield className="w-3 h-3 text-purple-700" />
-                                Registered Admin
-                              </span>
-                            )}
-                            {account.role === 'Student' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-200">
-                                <GraduationCap className="w-3 h-3 text-emerald-700" />
-                                Registered Student
-                              </span>
-                            )}
-                            {account.role === 'Faculty' && (
-                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
-                                <FileText className="w-3 h-3 text-blue-700" />
-                                Faculty
-                              </span>
-                            )}
-                            {account.emailVerified && (
-                              <span title="Verified Identity">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" />
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-[11px] text-slate-600 font-medium">
-                            {account.department || (account.role === 'Student' ? 'Undergraduate Theology (B.Th.)' : 'Institutional Administration')}
-                          </div>
-                          <div className="text-[10px] font-mono text-slate-400">
-                            {account.provider === 'google.com' ? 'Google Auth' : 'PCM System'} • UID: {(account.uid || account.id)?.substring(0, 12)}...
+                filteredAccounts.map((account) => {
+                  const isPrimarySuperAdmin = account.email === PRIMARY_SUPER_ADMIN_EMAIL;
+                  const isPending = account.status === 'Pending' || account.status === 'Pending Verification';
+                  const isRejected = account.status === 'Rejected';
+                  const isDisabled = account.status === 'Disabled' || account.status === 'Inactive';
+                  const isActive = !isPending && !isRejected && !isDisabled;
+
+                  return (
+                    <tr key={account.uid || account.id} className={`transition ${isPending ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-slate-50/75'}`}>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-3">
+                          {account.photoURL ? (
+                            <img
+                              src={account.photoURL}
+                              alt={account.name}
+                              className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
+                              referrerPolicy="no-referrer"
+                            />
+                          ) : (
+                            <div className={`w-9 h-9 rounded-full text-white flex items-center justify-center font-bold text-xs shrink-0 ${
+                              isPrimarySuperAdmin ? 'bg-amber-700' : account.role === 'Admin' ? 'bg-[#18392B]' : account.role === 'Student' ? 'bg-emerald-600' : 'bg-blue-600'
+                            }`}>
+                              {account.name?.charAt(0)?.toUpperCase() || 'U'}
+                            </div>
+                          )}
+                          <div>
+                            <div className="font-bold text-[#18392B] flex items-center gap-1.5 flex-wrap">
+                              <span>{account.name}</span>
+                              {isPrimarySuperAdmin && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                                  <Shield className="w-3 h-3 text-amber-700" />
+                                  Primary Super Admin
+                                </span>
+                              )}
+                              {!isPrimarySuperAdmin && (account.role === 'Admin' || account.role === 'Super Admin') && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-purple-100 text-purple-900 border border-purple-200">
+                                  <Shield className="w-3 h-3 text-purple-700" />
+                                  {account.adminRole || 'Admin'}
+                                </span>
+                              )}
+                              {account.role === 'Student' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-200">
+                                  <GraduationCap className="w-3 h-3 text-emerald-700" />
+                                  Student
+                                </span>
+                              )}
+                              {account.role === 'Faculty' && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-blue-100 text-blue-900 border border-blue-200">
+                                  <FileText className="w-3 h-3 text-blue-700" />
+                                  Faculty
+                                </span>
+                              )}
+                              {account.emailVerified && (
+                                <span title="Verified Identity">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" />
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              {account.department || (account.role === 'Student' ? 'Student Body' : 'Administration')}
+                              {account.studentId && (
+                                <span className="ml-2 font-mono text-emerald-700">ID: {account.studentId}</span>
+                              )}
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-400">
+                              UID: {(account.uid || account.id)?.substring(0, 12)}...
+                              {account.lastLogin && ` • Last active: ${new Date(account.lastLogin).toLocaleDateString()}`}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    </td>
-                    <td className="py-3 px-4 text-slate-600 font-medium">
-                      <div className="flex items-center gap-1.5">
-                        <Mail className="w-3.5 h-3.5 text-slate-400" />
-                        {account.email}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">
-                      <select
-                        value={account.role}
-                        onChange={(e) =>
-                          updateUserAccountRole(
-                            account.uid || account.id,
-                            e.target.value as UserRole,
-                            account.adminRole
-                          )
-                        }
-                        className="p-1.5 rounded-lg border border-slate-200 font-bold text-[11px] bg-white text-[#18392B] focus:border-[#588B76] focus:outline-none"
-                      >
-                        <option value="Admin">Admin</option>
-                        <option value="Student">Student</option>
-                        <option value="Faculty">Faculty</option>
-                        <option value="Alumni">Alumni</option>
-                        <option value="Member">Member</option>
-                      </select>
-                    </td>
-                    <td className="py-3 px-4">
-                      {account.role === 'Admin' ? (
-                        <select
-                          value={account.adminRole || 'Super Admin'}
-                          onChange={(e) =>
-                            updateUserAccountRole(
-                              account.uid || account.id,
-                              'Admin',
-                              e.target.value as AdminRole
-                            )
-                          }
-                          className="p-1 rounded border border-amber-300 font-semibold text-[10px] bg-amber-50 text-amber-900 focus:outline-none"
-                        >
-                          <option value="Super Admin">Super Admin</option>
-                          <option value="Content Admin">Content Admin</option>
-                          <option value="Editor">Editor</option>
-                        </select>
-                      ) : (
-                        <span className="text-slate-400 text-[11px] italic">N/A</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
-                      {account.role === 'Student' ? (
-                        account.studentId ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold">
-                            <IdCard className="w-3 h-3 text-emerald-600" />
-                            {account.studentId}
+                      </td>
+
+                      <td className="py-3 px-4 text-slate-600 font-medium">
+                        <div className="flex items-center gap-1.5">
+                          <Mail className="w-3.5 h-3.5 text-slate-400" />
+                          <span className="font-mono text-xs">{account.email}</span>
+                        </div>
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          {account.provider === 'google.com' ? 'Google Sign-In' : 'Email/Password'}
+                        </div>
+                      </td>
+
+                      <td className="py-3 px-4">
+                        {isPrimarySuperAdmin ? (
+                          <span className="font-bold text-xs text-amber-900 bg-amber-50 px-2 py-1 rounded border border-amber-200">
+                            Super Admin
                           </span>
                         ) : (
-                          <span className="text-amber-600 font-medium">Unlinked</span>
-                        )
-                      ) : (
-                        <span className="text-slate-400 italic">None</span>
-                      )}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
-                        account.status === 'Active'
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : account.status === 'Pending'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {account.status || 'Active'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setDeleteTargetAccount(account)}
-                        className="p-1.5 rounded bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer transition"
-                        title="Delete User Account"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                          <select
+                            value={account.role}
+                            onChange={(e) =>
+                              handleUserRoleChange(
+                                account,
+                                e.target.value as UserRole,
+                                account.adminRole
+                              )
+                            }
+                            className="p-1.5 rounded-lg border border-slate-200 font-bold text-[11px] bg-white text-[#18392B] focus:border-[#588B76] focus:outline-none"
+                          >
+                            <option value="Admin">Admin</option>
+                            <option value="Student">Student</option>
+                            <option value="Faculty">Faculty</option>
+                            <option value="Alumni">Alumni</option>
+                            <option value="Member">Member</option>
+                          </select>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4">
+                        {account.role === 'Admin' || account.role === 'Super Admin' ? (
+                          isPrimarySuperAdmin ? (
+                            <span className="font-bold text-[11px] text-purple-900 bg-purple-50 px-2 py-0.5 rounded border border-purple-200">
+                              Super Admin
+                            </span>
+                          ) : (
+                            <select
+                              value={account.adminRole || 'Editor'}
+                              onChange={(e) =>
+                                handleUserRoleChange(
+                                  account,
+                                  'Admin',
+                                  e.target.value as AdminRole
+                                )
+                              }
+                              className="p-1 rounded border border-purple-200 font-semibold text-[10px] bg-purple-50 text-purple-900 focus:outline-none"
+                            >
+                              <option value="Super Admin">Super Admin</option>
+                              <option value="Content Admin">Content Admin</option>
+                              <option value="Editor">Editor / Staff</option>
+                            </select>
+                          )
+                        ) : (
+                          <span className="text-slate-400 text-[11px] italic">N/A</span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4">
+                        {isPending ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                            <Clock className="w-3 h-3 text-amber-700 animate-pulse" />
+                            Pending Verification
+                          </span>
+                        ) : isRejected ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-red-100 text-red-900 border border-red-300">
+                            <XCircle className="w-3 h-3 text-red-700" />
+                            Rejected
+                          </span>
+                        ) : isDisabled ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-300">
+                            <Ban className="w-3 h-3 text-slate-500" />
+                            Disabled
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-700" />
+                            Active / Approved
+                          </span>
+                        )}
+                      </td>
+
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          {isPending && (
+                            <>
+                              <button
+                                onClick={() => handleOpenApprove(account)}
+                                className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] flex items-center gap-1 transition cursor-pointer shadow-2xs"
+                                title="Approve Account & Grant Access"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Approve</span>
+                              </button>
+                              <button
+                                onClick={() => handleOpenReject(account)}
+                                className="px-2 py-1 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 font-bold text-[11px] flex items-center gap-1 transition border border-red-200 cursor-pointer"
+                                title="Reject Account Access"
+                              >
+                                <X className="w-3 h-3" />
+                                <span>Reject</span>
+                              </button>
+                            </>
+                          )}
+
+                          {isActive && !isPrimarySuperAdmin && (
+                            <button
+                              onClick={() => handleOpenDeactivate(account)}
+                              className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 transition cursor-pointer border border-amber-200"
+                              title="Deactivate / Suspend User Access"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {(isDisabled || isRejected) && !isPrimarySuperAdmin && (
+                            <button
+                              onClick={() => handleOpenReactivate(account)}
+                              className="px-2 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-[11px] flex items-center gap-1 transition border border-emerald-200 cursor-pointer"
+                              title="Reactivate Account"
+                            >
+                              <Check className="w-3 h-3" />
+                              <span>Reactivate</span>
+                            </button>
+                          )}
+
+                          {!isPrimarySuperAdmin && account.id !== currentUserAccount?.id && (
+                            <button
+                              onClick={() => setDeleteTargetAccount(account)}
+                              className="p-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 cursor-pointer transition border border-red-200"
+                              title="Delete User Record"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -940,6 +1385,231 @@ export const AdminUsersTab: React.FC = () => {
         onConfirm={confirmDeleteAccount}
         onCancel={() => setDeleteTargetAccount(null)}
       />
+
+      {/* Approve User Modal */}
+      {approvalTargetUser && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center gap-2.5 text-emerald-800">
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <Check className="w-5 h-5 text-emerald-700" />
+              </div>
+              <div>
+                <h3 className="font-serif text-base font-bold text-[#18392B]">
+                  Approve User & Grant Access
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Select the authorized role level to grant this user.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1 text-xs">
+              <div className="font-bold text-slate-800">{approvalTargetUser.name}</div>
+              <div className="text-slate-600 font-mono text-[11px]">{approvalTargetUser.email}</div>
+              <div className="text-[10px] text-slate-400">
+                Auth Method: {approvalTargetUser.provider === 'google.com' ? 'Google Account' : 'Email & Password'}
+                {approvalTargetUser.requestedRole && (
+                  <span className="ml-2 font-semibold text-amber-700">
+                    • Requested: {approvalTargetUser.requestedRole}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-700">
+                Select Role to Assign
+              </label>
+              <select
+                value={assignRoleChoice}
+                onChange={(e) => setAssignRoleChoice(e.target.value as any)}
+                className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none bg-white font-medium"
+              >
+                <option value="Editor">Editor / Staff (Manage news, announcements)</option>
+                <option value="Content Admin">Content Admin (Manage academics, faculty, sermons)</option>
+                <option value="Super Admin">Super Admin (Full system & user access)</option>
+                <option value="Student">Student (Student portal access)</option>
+                <option value="Faculty">Faculty (Faculty portal access)</option>
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isProcessingAction}
+                onClick={() => setApprovalTargetUser(null)}
+                className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isProcessingAction}
+                onClick={handleConfirmApprove}
+                className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>{isProcessingAction ? 'Approving...' : 'Approve & Activate'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reject User Modal */}
+      {rejectionTargetUser && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center gap-2.5 text-red-800">
+              <div className="w-9 h-9 rounded-xl bg-red-100 flex items-center justify-center">
+                <X className="w-5 h-5 text-red-700" />
+              </div>
+              <div>
+                <h3 className="font-serif text-base font-bold text-red-900">
+                  Reject Access Request
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  This user will be restricted from accessing the administration portal.
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1 text-xs">
+              <div className="font-bold text-slate-800">{rejectionTargetUser.name}</div>
+              <div className="text-slate-600 font-mono text-[11px]">{rejectionTargetUser.email}</div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                Reason for Rejection (Optional)
+              </label>
+              <textarea
+                value={rejectionReasonInput}
+                onChange={(e) => setRejectionReasonInput(e.target.value)}
+                placeholder="e.g. Unverified identity, unauthorized email, or wrong department."
+                rows={3}
+                className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-red-400 text-xs focus:outline-none placeholder:text-slate-400"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isProcessingAction}
+                onClick={() => {
+                  setRejectionTargetUser(null);
+                  setRejectionReasonInput('');
+                }}
+                className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isProcessingAction}
+                onClick={handleConfirmReject}
+                className="px-5 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold text-xs cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <X className="w-3.5 h-3.5" />
+                <span>{isProcessingAction ? 'Rejecting...' : 'Confirm Rejection'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivate User Modal */}
+      {deactivateTargetUser && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center gap-2.5 text-amber-800">
+              <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center">
+                <Ban className="w-5 h-5 text-amber-700" />
+              </div>
+              <div>
+                <h3 className="font-serif text-base font-bold text-amber-950">
+                  Deactivate User Account
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Suspend this user's access to the PCM system.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Are you sure you want to deactivate <strong className="text-slate-900">{deactivateTargetUser.name}</strong> (<span className="font-mono">{deactivateTargetUser.email}</span>)?
+              The user will not be able to sign in until reactivated by a Super Admin.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isProcessingAction}
+                onClick={() => setDeactivateTargetUser(null)}
+                className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isProcessingAction}
+                onClick={handleConfirmDeactivate}
+                className="px-5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>{isProcessingAction ? 'Deactivating...' : 'Deactivate Account'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reactivate User Modal */}
+      {reactivateTargetUser && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center gap-2.5 text-emerald-800">
+              <div className="w-9 h-9 rounded-xl bg-emerald-100 flex items-center justify-center">
+                <Check className="w-5 h-5 text-emerald-700" />
+              </div>
+              <div>
+                <h3 className="font-serif text-base font-bold text-[#18392B]">
+                  Reactivate User Account
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Restore access privileges for this user.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Reactivate <strong className="text-slate-900">{reactivateTargetUser.name}</strong> (<span className="font-mono">{reactivateTargetUser.email}</span>)?
+              Access will be restored with the role <strong className="text-emerald-800">{reactivateTargetUser.adminRole || reactivateTargetUser.role}</strong>.
+            </p>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isProcessingAction}
+                onClick={() => setReactivateTargetUser(null)}
+                className="px-4 py-2 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium text-xs cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isProcessingAction}
+                onClick={handleConfirmReactivate}
+                className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer shadow-xs flex items-center gap-1.5"
+              >
+                <Check className="w-3.5 h-3.5" />
+                <span>{isProcessingAction ? 'Reactivating...' : 'Reactivate Access'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
