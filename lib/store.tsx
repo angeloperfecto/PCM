@@ -1720,10 +1720,40 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uDonations = onSnapshot(
       collection(db, 'donations'),
       (snap) => {
-        const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationRecord[])
-          : INITIAL_DONATIONS;
-        setDonations(list);
+        if (snap.empty || snap.docs.length === 0) {
+          setDonations(INITIAL_DONATIONS);
+          return;
+        }
+        const initialMap = new Map(INITIAL_DONATIONS.map((d) => [d.id, d]));
+        const firestoreList: DonationRecord[] = snap.docs.map((d) => {
+          const data = d.data() as Partial<DonationRecord>;
+          const fallback = initialMap.get(d.id);
+          return {
+            id: d.id,
+            trackingCode: data.trackingCode || fallback?.trackingCode || `PCM-GIVE-${d.id.slice(0, 8)}`,
+            donorName: data.donorName || fallback?.donorName || 'Anonymous Donor',
+            donorEmail: data.donorEmail || fallback?.donorEmail || '',
+            donorPhone: data.donorPhone || fallback?.donorPhone || '',
+            amount: typeof data.amount === 'number' ? data.amount : (Number(fallback?.amount) || 0),
+            currency: data.currency || fallback?.currency || 'PHP',
+            paymentMethodId: data.paymentMethodId || fallback?.paymentMethodId || '',
+            paymentMethodName: data.paymentMethodName || fallback?.paymentMethodName || 'Direct Giving',
+            purpose: data.purpose || fallback?.purpose || 'General Stewardship Fund',
+            message: data.message || fallback?.message || '',
+            status: data.status || fallback?.status || 'Pending Verification',
+            createdAt: data.createdAt || fallback?.createdAt || new Date().toISOString(),
+            ...data,
+          } as DonationRecord;
+        });
+
+        // Also ensure any initial donations not yet in Firestore are merged
+        INITIAL_DONATIONS.forEach((init) => {
+          if (!firestoreList.some((d) => d.id === init.id)) {
+            firestoreList.push(init);
+          }
+        });
+
+        setDonations(firestoreList);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'donations')
     );
@@ -5040,10 +5070,19 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateDonationRecord = async (id: string, updates: Partial<DonationRecord>) => {
-    const sanitized = cleanFirestoreData(updates);
+    let mergedRecord: DonationRecord | undefined;
     setDonations((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
+      prev.map((d) => {
+        if (d.id === id) {
+          mergedRecord = { ...d, ...updates };
+          return mergedRecord;
+        }
+        return d;
+      })
     );
+
+    const recordToSave = mergedRecord || updates;
+    const sanitized = cleanFirestoreData(recordToSave);
 
     try {
       await setDoc(doc(db, 'donations', id), sanitized, { merge: true });
@@ -5051,7 +5090,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Firestore donation record update error:', e);
     }
 
-    logActivity('UPDATE', 'Donation Record', id, updates.donorName || 'Donor', `Updated donation status to ${updates.status || 'updated'}.`);
+    logActivity('UPDATE', 'Donation Record', id, updates.donorName || mergedRecord?.donorName || 'Donor', `Updated donation status to ${updates.status || 'updated'}.`);
     addToast('success', 'Donation Status Updated', 'Donation record status updated.');
   };
 

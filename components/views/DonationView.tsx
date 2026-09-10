@@ -629,7 +629,7 @@ export const DonationView: React.FC = () => {
                   <span className="text-slate-500">Amount / Currency:</span>
                   <span className="font-bold text-emerald-700 text-sm">
                     {submittedDonation.currency === 'PHP' ? '₱' : '$'}
-                    {submittedDonation.amount.toLocaleString()} {submittedDonation.currency}
+                    {(Number(submittedDonation.amount) || 0).toLocaleString()} {submittedDonation.currency || 'PHP'}
                   </span>
                 </div>
                 <div className="flex justify-between">

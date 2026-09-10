@@ -20,7 +20,7 @@ export const ProgramDetailModal: React.FC = () => {
   if (!selectedProgram) return null;
 
   const tuitionDisplay = selectedProgram.tuitionPerUnit
-    ? `₱${selectedProgram.tuitionPerUnit.toLocaleString()}/unit`
+    ? `₱${(Number(selectedProgram.tuitionPerUnit) || 0).toLocaleString()}/unit`
     : 'Inquire with Admissions';
 
   const creditsDisplay = selectedProgram.credits || selectedProgram.totalUnits || selectedProgram.units || 0;

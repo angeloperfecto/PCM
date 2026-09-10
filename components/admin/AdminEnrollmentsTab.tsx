@@ -1282,7 +1282,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
                         {fee.category}
                       </span>
                     </td>
-                    <td className="p-3.5 font-mono font-bold text-slate-900">₱{fee.amount.toLocaleString()}</td>
+                    <td className="p-3.5 font-mono font-bold text-slate-900">₱{(Number(fee.amount) || 0).toLocaleString()}</td>
                     <td className="p-3.5 text-slate-600">{fee.isPerUnit ? 'Per Unit Course' : 'Fixed Per Term'}</td>
                     <td className="p-3.5">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
