@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { DonationRecord, DonationPaymentMethod, PaymentMethodType } from '@/lib/types';
+import { normalizeInstructions } from '@/lib/utils';
 import {
   Heart,
   QrCode,
@@ -555,26 +556,36 @@ export const DonationView: React.FC = () => {
                 </div>
 
                 {/* Step by Step Instructions */}
-                {selectedMethod.instructions && (
-                  <div className="pt-4 border-t border-slate-100 space-y-2">
-                    <h4 className="font-serif font-bold text-sm text-[#18392B] flex items-center gap-1.5">
-                      <CheckCircle2 className="w-4 h-4 text-[#588B76]" />
-                      <span>Step-by-Step Giving Instructions:</span>
-                    </h4>
-                    <ol className="space-y-1.5 text-xs text-slate-600 pl-5 list-decimal leading-relaxed">
-                      {(Array.isArray(selectedMethod.instructions)
-                        ? selectedMethod.instructions
-                        : typeof selectedMethod.instructions === 'string'
-                        ? selectedMethod.instructions.split('\n')
-                        : []
-                      ).map((inst, idx) => (
-                        <li key={idx} className="pl-1">
-                          {inst}
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
-                )}
+                {(() => {
+                  const steps = normalizeInstructions(selectedMethod.instructions);
+                  if (steps.length === 0) return null;
+                  return (
+                    <div className="pt-5 border-t border-slate-100 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-serif font-bold text-sm text-[#18392B] flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-[#588B76]" />
+                          <span>Step-by-Step Giving Instructions</span>
+                        </h4>
+                        <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                          {steps.length} {steps.length === 1 ? 'Step' : 'Steps'}
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {steps.map((inst, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-start gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-700 leading-relaxed transition hover:border-[#588B76]/30 hover:bg-emerald-50/20"
+                          >
+                            <span className="w-5 h-5 rounded-full bg-[#18392B] text-white font-bold text-[10px] flex items-center justify-center shrink-0 mt-0.5 shadow-2xs">
+                              {idx + 1}
+                            </span>
+                            <span className="pt-0.5">{inst}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             )}
           </div>

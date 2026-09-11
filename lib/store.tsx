@@ -96,6 +96,7 @@ import {
   INITIAL_HOMEPAGE_VIDEO_CONFIG,
 } from './initialData';
 import { extractYouTubeVideoId, getYouTubeThumbnailUrl, generateVideoId, getCurrentTimestamp } from './youtube';
+import { normalizeInstructions } from './utils';
 import {
   db,
   auth,
@@ -1444,7 +1445,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           collection(db, 'donationPaymentMethods'),
           (snap) => {
             if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationPaymentMethod[];
+              const list = snap.docs.map((d) => {
+                const data = d.data();
+                return {
+                  id: d.id,
+                  ...data,
+                  instructions: normalizeInstructions(data.instructions),
+                };
+              }) as DonationPaymentMethod[];
               list.sort((a, b) => (a.order || 0) - (b.order || 0));
               setDonationMethods(list);
               setIsFirebaseConnected(true);
@@ -6077,8 +6085,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addDonationMethod = async (method: Omit<DonationPaymentMethod, 'id'>): Promise<DonationPaymentMethod> => {
+    const safeInstructions = normalizeInstructions(method.instructions);
     const newMethod: DonationPaymentMethod = cleanFirestoreData({
       ...method,
+      instructions: safeInstructions,
       id: `pay-${Date.now()}`,
       order: method.order || donationMethods.length + 1,
       active: method.active !== undefined ? method.active : true,
@@ -6098,9 +6108,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateDonationMethod = async (id: string, updates: Partial<DonationPaymentMethod>) => {
-    const sanitized = cleanFirestoreData(updates);
+    const safeUpdates = { ...updates };
+    if (safeUpdates.instructions !== undefined) {
+      safeUpdates.instructions = normalizeInstructions(safeUpdates.instructions);
+    }
+    const sanitized = cleanFirestoreData(safeUpdates);
     setDonationMethods((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, ...updates } : m))
+      prev.map((m) => (m.id === id ? { ...m, ...safeUpdates } : m))
     );
 
     try {

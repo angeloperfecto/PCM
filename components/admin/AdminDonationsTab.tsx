@@ -27,7 +27,16 @@ import {
   ExternalLink,
   ShieldCheck,
   Check,
+  ListOrdered,
+  AlignLeft,
+  Sparkles,
+  ArrowUp,
+  ArrowDown,
+  HelpCircle,
+  Smartphone,
+  Globe,
 } from 'lucide-react';
+import { normalizeInstructions, instructionsToText } from '@/lib/utils';
 
 export const AdminDonationsTab: React.FC = () => {
   const {
@@ -73,6 +82,11 @@ export const AdminDonationsTab: React.FC = () => {
     notes: '',
   });
 
+  // Enhanced Instructions State
+  const [instructionsInputText, setInstructionsInputText] = useState<string>('');
+  const [instructionMode, setInstructionMode] = useState<'text' | 'steps'>('text');
+  const [copiedAccountId, setCopiedAccountId] = useState<string | null>(null);
+
   // Settings Form State
   const [settingsForm, setSettingsForm] = useState<DonationSettings>(donationSettings);
 
@@ -112,15 +126,24 @@ export const AdminDonationsTab: React.FC = () => {
 
   const handleOpenEditMethod = (method: DonationPaymentMethod) => {
     setEditingMethod(method);
+    const cleaned = normalizeInstructions(method.instructions);
     setMethodForm({
       ...method,
-      instructions: method.instructions && method.instructions.length > 0 ? [...method.instructions] : [''],
+      instructions: cleaned.length > 0 ? cleaned : [''],
     });
+    setInstructionsInputText(cleaned.join('\n'));
+    setInstructionMode('text');
   };
 
   const handleOpenCreateMethod = () => {
     setIsCreatingMethod(true);
     setEditingMethod(null);
+    const defaultSteps = [
+      'Open your mobile banking or GCash app.',
+      'Enter the account details or scan the QR code above.',
+      'Take a screenshot of the transaction confirmation receipt.',
+      'Submit the donation verification notice on this website to receive your official acknowledgment.',
+    ];
     setMethodForm({
       name: '',
       type: 'gcash',
@@ -130,16 +153,107 @@ export const AdminDonationsTab: React.FC = () => {
       branch: 'La Trinidad / Baguio Branch',
       gcashNumber: '',
       qrCodeUrl: '',
-      instructions: [
-        'Open your mobile banking or GCash app.',
-        'Enter the account details or scan the QR code above.',
-        'Take a screenshot of the transaction receipt.',
-        'Submit the donation notice on our website to receive your acknowledgment.',
-      ],
+      instructions: defaultSteps,
       active: true,
       order: donationMethods.length + 1,
       notes: '',
     });
+    setInstructionsInputText(defaultSteps.join('\n'));
+    setInstructionMode('text');
+  };
+
+  const handleInstructionsTextChange = (text: string) => {
+    setInstructionsInputText(text);
+    const lines = text
+      .split('\n')
+      .map((l) => l.replace(/^(\d+[\.\)]|\-|\*)\s*/, '').trim())
+      .filter((l) => l.length > 0);
+    setMethodForm((prev) => ({
+      ...prev,
+      instructions: lines,
+    }));
+  };
+
+  const applyInstructionsPreset = (presetType: 'gcash' | 'bank' | 'wire') => {
+    let presetSteps: string[] = [];
+    if (presetType === 'gcash') {
+      presetSteps = [
+        'Open your GCash App and log in.',
+        'Tap "Scan QR" to scan the official PCM QR code (or use Express Send to our mobile number).',
+        'Enter the giving amount and input your Full Name in the optional message box.',
+        'Save or screenshot the transaction confirmation receipt.',
+        'Submit your donation notice via the online form below or email finance@pcm.ph.',
+      ];
+    } else if (presetType === 'bank') {
+      presetSteps = [
+        'Log in to your online banking app (BDO, BPI, Metrobank) or visit a branch nationwide.',
+        'Select Fund Transfer via InstaPay (instant) or PESONet to the PCM account details above.',
+        'Include your donor name and designated ministry fund in the transfer remarks.',
+        'Save your validation slip or screenshot the transaction reference number.',
+        'Complete the donation verification form on the PCM website.',
+      ];
+    } else if (presetType === 'wire') {
+      presetSteps = [
+        'Request an international wire transfer from your financial institution using the SWIFT code.',
+        'Designate "Philippine College of Ministry Inc." as the beneficiary account.',
+        'Indicate whether funds are in USD or PHP and note your church / donor designation.',
+        'Send your remittance confirmation advice to info@pcm.ph or pcmpresident1992@gmail.com.',
+      ];
+    }
+    setInstructionsInputText(presetSteps.join('\n'));
+    setMethodForm((prev) => ({
+      ...prev,
+      instructions: presetSteps,
+    }));
+  };
+
+  const handleCopyAccount = (id: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedAccountId(id);
+    addToast('success', 'Copied to Clipboard', `Copied: ${text}`);
+    setTimeout(() => {
+      setCopiedAccountId((curr) => (curr === id ? null : curr));
+    }, 2000);
+  };
+
+  const handleAddInstructionStep = () => {
+    const currentSteps = Array.isArray(methodForm.instructions)
+      ? [...methodForm.instructions]
+      : [];
+    const updated = [...currentSteps, ''];
+    setMethodForm((prev) => ({ ...prev, instructions: updated }));
+    setInstructionsInputText(updated.join('\n'));
+  };
+
+  const handleUpdateInstructionStep = (index: number, val: string) => {
+    const currentSteps = Array.isArray(methodForm.instructions)
+      ? [...methodForm.instructions]
+      : [];
+    currentSteps[index] = val;
+    setMethodForm((prev) => ({ ...prev, instructions: currentSteps }));
+    setInstructionsInputText(currentSteps.join('\n'));
+  };
+
+  const handleRemoveInstructionStep = (index: number) => {
+    const currentSteps = Array.isArray(methodForm.instructions)
+      ? [...methodForm.instructions]
+      : [];
+    const updated = currentSteps.filter((_, i) => i !== index);
+    setMethodForm((prev) => ({ ...prev, instructions: updated }));
+    setInstructionsInputText(updated.join('\n'));
+  };
+
+  const handleMoveInstructionStep = (index: number, direction: 'up' | 'down') => {
+    const currentSteps = Array.isArray(methodForm.instructions)
+      ? [...methodForm.instructions]
+      : [];
+    const targetIdx = direction === 'up' ? index - 1 : index + 1;
+    if (targetIdx < 0 || targetIdx >= currentSteps.length) return;
+    const temp = currentSteps[index];
+    currentSteps[index] = currentSteps[targetIdx];
+    currentSteps[targetIdx] = temp;
+    setMethodForm((prev) => ({ ...prev, instructions: currentSteps }));
+    setInstructionsInputText(currentSteps.join('\n'));
   };
 
   const handleSaveMethod = async (e: React.FormEvent) => {
@@ -149,16 +263,15 @@ export const AdminDonationsTab: React.FC = () => {
       return;
     }
 
-    const rawInst = methodForm.instructions;
-    const cleanedInstructions = (
-      Array.isArray(rawInst)
-        ? rawInst
-        : typeof rawInst === 'string'
-        ? rawInst.split('\n')
-        : []
-    )
-      .map((i) => i.trim())
-      .filter((i) => i.length > 0);
+    let cleanedInstructions: string[] = [];
+    if (instructionMode === 'text') {
+      cleanedInstructions = instructionsInputText
+        .split('\n')
+        .map((l) => l.replace(/^(\d+[\.\)]|\-|\*)\s*/, '').trim())
+        .filter((l) => l.length > 0);
+    } else {
+      cleanedInstructions = normalizeInstructions(methodForm.instructions);
+    }
 
     if (editingMethod) {
       await updateDonationMethod(editingMethod.id, {
@@ -479,107 +592,181 @@ export const AdminDonationsTab: React.FC = () => {
 
       {/* 4. SUB-TAB 2: PAYMENT CHANNELS MANAGER */}
       {activeSubTab === 'channels' && (
-        <div className="space-y-4">
+        <div className="space-y-6">
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-[#588B76]" />
+                <span>Giving Channels & Bank Accounts</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Manage bank accounts, mobile wallets (GCash), and international giving channels. Instructions set here guide donors step-by-step.
+              </p>
+            </div>
+            <button
+              onClick={handleOpenCreateMethod}
+              className="px-4 py-2 text-xs font-bold text-white bg-[#588B76] hover:bg-[#46705F] rounded-lg transition cursor-pointer flex items-center gap-1.5 shadow-xs shrink-0 self-start sm:self-auto"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Payment Channel</span>
+            </button>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {donationMethods.map((m) => (
-              <div
-                key={m.id}
-                className={`bg-white rounded-xl border p-5 shadow-xs space-y-4 flex flex-col justify-between transition ${
-                  m.active ? 'border-slate-200' : 'border-slate-200 opacity-60 bg-slate-50'
-                }`}
-              >
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-lg bg-emerald-50 text-[#18392B] flex items-center justify-center">
-                        {m.type === 'gcash' ? (
-                          <QrCode className="w-5 h-5" />
-                        ) : m.type === 'bank' ? (
-                          <Building2 className="w-5 h-5" />
-                        ) : (
-                          <CreditCard className="w-5 h-5" />
-                        )}
+            {donationMethods.map((m) => {
+              const steps = normalizeInstructions(m.instructions);
+              return (
+                <div
+                  key={m.id}
+                  className={`bg-white rounded-xl border p-5 shadow-xs space-y-4 flex flex-col justify-between transition hover:shadow-md ${
+                    m.active ? 'border-slate-200' : 'border-slate-200 opacity-75 bg-slate-50/70'
+                  }`}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 text-[#18392B] flex items-center justify-center shrink-0 border border-emerald-100">
+                          {m.type === 'gcash' ? (
+                            <QrCode className="w-5 h-5 text-[#588B76]" />
+                          ) : m.type === 'bank' || (m.type as any) === 'bank_transfer' ? (
+                            <Building2 className="w-5 h-5 text-[#18392B]" />
+                          ) : m.type === 'remittance' || (m.type as any) === 'wire' ? (
+                            <Globe className="w-5 h-5 text-blue-700" />
+                          ) : (
+                            <CreditCard className="w-5 h-5 text-indigo-700" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <h4 className="font-bold text-sm text-[#18392B] truncate">{m.name}</h4>
+                          <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded-sm">
+                            {m.type.replace('_', ' ')}
+                          </span>
+                        </div>
                       </div>
-                      <div>
-                        <h4 className="font-bold text-sm text-[#18392B]">{m.name}</h4>
-                        <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500">
-                          {m.type}
+
+                      <span
+                        className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                          m.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                        }`}
+                      >
+                        {m.active ? 'Active on Website' : 'Hidden / Inactive'}
+                      </span>
+                    </div>
+
+                    {/* Account Details Box */}
+                    <div className="bg-slate-50 p-3.5 rounded-lg text-xs space-y-1.5 border border-slate-100">
+                      {m.accountName && (
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-slate-400 text-[11px]">Account Name:</span>
+                          <span className="font-medium text-slate-800 truncate text-right">{m.accountName}</span>
+                        </div>
+                      )}
+                      {m.accountNumber && (
+                        <div className="flex items-center justify-between gap-2 pt-0.5 border-t border-slate-200/60">
+                          <span className="text-slate-400 text-[11px]">Number:</span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-mono font-bold text-[#18392B]">{m.accountNumber}</span>
+                            <button
+                              type="button"
+                              onClick={() => handleCopyAccount(m.id, m.accountNumber || '')}
+                              className="p-1 hover:bg-slate-200 text-slate-500 hover:text-slate-700 rounded transition cursor-pointer"
+                              title="Copy account number"
+                            >
+                              {copiedAccountId === m.id ? (
+                                <Check className="w-3 h-3 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3 h-3" />
+                              )}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {m.bankName && (
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-slate-400 text-[11px]">Bank:</span>
+                          <span className="text-slate-700 truncate">{m.bankName}</span>
+                        </div>
+                      )}
+                      {m.branch && (
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-slate-400 text-[11px]">Branch / SWIFT:</span>
+                          <span className="text-slate-600 truncate text-right text-[11px]">{m.branch}</span>
+                        </div>
+                      )}
+                      {m.gcashNumber && (
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-slate-400 text-[11px]">GCash:</span>
+                          <span className="font-mono font-bold text-blue-900">{m.gcashNumber}</span>
+                        </div>
+                      )}
+                      {m.notes && (
+                        <div className="pt-1 text-[11px] text-amber-800 bg-amber-50/70 p-1.5 rounded border border-amber-100">
+                          {m.notes}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Instructions Summary */}
+                    <div className="p-2.5 rounded-lg bg-emerald-50/40 border border-emerald-100/60 text-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-[11px] text-[#18392B] flex items-center gap-1">
+                          <ListOrdered className="w-3.5 h-3.5 text-[#588B76]" />
+                          <span>Instructions:</span>
+                        </span>
+                        <span className="text-[10px] font-bold text-[#588B76] bg-white px-2 py-0.5 rounded-full border border-emerald-100">
+                          {steps.length} {steps.length === 1 ? 'Step' : 'Steps'}
                         </span>
                       </div>
+                      {steps[0] ? (
+                        <p className="text-[11px] text-slate-600 line-clamp-2 italic">
+                          &ldquo;{steps[0]}&rdquo;
+                        </p>
+                      ) : (
+                        <p className="text-[11px] text-slate-400 italic">No instructions configured</p>
+                      )}
                     </div>
 
-                    <span
-                      className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-                        m.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
-                      }`}
-                    >
-                      {m.active ? 'Active' : 'Disabled'}
-                    </span>
-                  </div>
-
-                  {/* Details */}
-                  <div className="bg-slate-50 p-3 rounded-lg text-xs space-y-1 font-mono">
-                    {m.accountName && (
-                      <p className="truncate text-slate-700">
-                        <span className="text-slate-400 font-sans">Name:</span> {m.accountName}
-                      </p>
-                    )}
-                    {m.accountNumber && (
-                      <p className="truncate text-[#18392B] font-bold">
-                        <span className="text-slate-400 font-sans">Acct:</span> {m.accountNumber}
-                      </p>
-                    )}
-                    {m.bankName && (
-                      <p className="truncate text-slate-700">
-                        <span className="text-slate-400 font-sans">Bank:</span> {m.bankName}
-                      </p>
-                    )}
-                    {m.gcashNumber && (
-                      <p className="truncate text-blue-900 font-bold">
-                        <span className="text-slate-400 font-sans">GCash:</span> {m.gcashNumber}
-                      </p>
+                    {m.qrCodeUrl && (
+                      <div className="flex items-center gap-2 text-xs text-[#588B76] font-medium bg-slate-50 p-2 rounded-md">
+                        <QrCode className="w-4 h-4" />
+                        <span>Official QR Code Configured</span>
+                      </div>
                     )}
                   </div>
 
-                  {m.qrCodeUrl && (
-                    <div className="flex items-center gap-2 text-xs text-[#588B76]">
-                      <QrCode className="w-4 h-4" />
-                      <span>QR Code Configured</span>
+                  {/* Actions */}
+                  <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
+                    <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={m.active}
+                        onChange={(e) => updateDonationMethod(m.id, { active: e.target.checked })}
+                        className="rounded text-[#588B76] focus:ring-[#588B76]"
+                      />
+                      <span className="font-medium text-[11px]">Active</span>
+                    </label>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleOpenEditMethod(m)}
+                        className="px-2.5 py-1 text-xs font-semibold text-[#18392B] bg-slate-100 hover:bg-[#18392B] hover:text-white rounded-md transition cursor-pointer flex items-center gap-1"
+                        title="Edit Channel Details"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        onClick={() => setDeleteTargetMethod(m)}
+                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition cursor-pointer"
+                        title="Delete Channel"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
                     </div>
-                  )}
-                </div>
-
-                {/* Actions */}
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
-                  <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={m.active}
-                      onChange={(e) => updateDonationMethod(m.id, { active: e.target.checked })}
-                      className="rounded text-[#588B76] focus:ring-[#588B76]"
-                    />
-                    <span>Active</span>
-                  </label>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleOpenEditMethod(m)}
-                      className="p-1.5 text-slate-600 hover:text-[#588B76] hover:bg-slate-100 rounded-md transition cursor-pointer"
-                      title="Edit Channel Details"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setDeleteTargetMethod(m)}
-                      className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition cursor-pointer"
-                      title="Delete Channel"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -791,230 +978,426 @@ export const AdminDonationsTab: React.FC = () => {
       {/* 7. MODAL: ADD / EDIT PAYMENT METHOD */}
       {(editingMethod || isCreatingMethod) && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-xl w-full p-6 shadow-2xl border border-slate-200 space-y-5 my-8 animate-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-serif text-lg font-bold text-[#18392B]">
-                {editingMethod ? `Edit ${editingMethod.name}` : 'Add New Giving Channel'}
-              </h3>
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden my-4 animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-5 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-serif text-lg font-bold text-[#18392B] flex items-center gap-2">
+                  <CreditCard className="w-5 h-5 text-[#588B76]" />
+                  <span>{editingMethod ? `Edit ${editingMethod.name}` : 'Add New Giving Channel'}</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Configure account details, payment instructions, and official QR code displayed to donors.
+                </p>
+              </div>
               <button
+                type="button"
                 onClick={() => {
                   setEditingMethod(null);
                   setIsCreatingMethod(false);
                 }}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-md transition cursor-pointer"
+                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-lg transition cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleSaveMethod} className="space-y-4 text-xs">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="block font-bold text-slate-700">Channel Display Name *</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. GCash Official QR or Metrobank Account"
-                    value={methodForm.name}
-                    onChange={(e) => setMethodForm({ ...methodForm, name: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  />
+            {/* Modal Body */}
+            <form onSubmit={handleSaveMethod} className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
+              {/* SECTION 1: Channel Account Details */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100 pb-2">
+                  <Building2 className="w-4 h-4 text-[#588B76]" />
+                  <span>Channel & Account Details</span>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="block font-bold text-slate-700">Method Type *</label>
-                  <select
-                    value={methodForm.type}
-                    onChange={(e) => setMethodForm({ ...methodForm, type: e.target.value as PaymentMethodType })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  >
-                    <option value="gcash">GCash</option>
-                    <option value="bank">Bank Transfer (BDO, Metrobank, BPI)</option>
-                    <option value="paypal">PayPal</option>
-                    <option value="credit-card">Credit / Debit Card</option>
-                    <option value="remittance">International Remittance / Wire</option>
-                    <option value="other">Other / Cheque</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block font-bold text-slate-700">Display Order</label>
-                  <input
-                    type="number"
-                    value={methodForm.order}
-                    onChange={(e) => setMethodForm({ ...methodForm, order: parseInt(e.target.value) || 1 })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  />
-                </div>
-
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="block font-bold text-slate-700">Account Holder Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Philippine College of Ministry, Inc."
-                    value={methodForm.accountName}
-                    onChange={(e) => setMethodForm({ ...methodForm, accountName: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block font-bold text-slate-700">Account / Card Number</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 0542-9182-3810"
-                    value={methodForm.accountNumber}
-                    onChange={(e) => setMethodForm({ ...methodForm, accountNumber: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block font-bold text-slate-700">GCash Mobile Number (if applicable)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. +63 917 582 1992"
-                    value={methodForm.gcashNumber}
-                    onChange={(e) => setMethodForm({ ...methodForm, gcashNumber: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block font-bold text-slate-700">Bank Name (if applicable)</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Metrobank / BDO"
-                    value={methodForm.bankName}
-                    onChange={(e) => setMethodForm({ ...methodForm, bankName: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="block font-bold text-slate-700">Branch Location / SWIFT</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Baguio City Session Branch"
-                    value={methodForm.branch}
-                    onChange={(e) => setMethodForm({ ...methodForm, branch: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  />
-                </div>
-
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="block font-bold text-slate-700">QR Code Image URL / Upload Link</label>
-                  <input
-                    type="url"
-                    placeholder="https://..."
-                    value={methodForm.qrCodeUrl}
-                    onChange={(e) => setMethodForm({ ...methodForm, qrCodeUrl: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  />
-                  {methodForm.qrCodeUrl && (
-                    <div className="p-2 bg-slate-50 border border-slate-200 rounded-lg mt-1 inline-block">
-                      <img src={methodForm.qrCodeUrl} alt="QR Preview" className="w-24 h-24 object-contain" />
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-1 sm:col-span-2">
-                  <label className="block font-bold text-slate-700">Fee / Advisory Notes</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Free transfer via InstaPay / PESONet"
-                    value={methodForm.notes}
-                    onChange={(e) => setMethodForm({ ...methodForm, notes: e.target.value })}
-                    className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                  />
-                </div>
-
-                <div className="space-y-2 sm:col-span-2">
-                  <label className="block font-bold text-slate-700">Step-by-Step Giving Instructions</label>
-                  {(Array.isArray(methodForm.instructions)
-                    ? methodForm.instructions
-                    : typeof methodForm.instructions === 'string'
-                    ? [methodForm.instructions]
-                    : []
-                  ).map((inst, i) => (
-                    <div key={i} className="flex items-center gap-2">
-                      <span className="text-slate-400 font-bold">{i + 1}.</span>
-                      <input
-                        type="text"
-                        value={inst}
-                        onChange={(e) => {
-                          const currentArr = Array.isArray(methodForm.instructions)
-                            ? [...methodForm.instructions]
-                            : [methodForm.instructions || ''];
-                          currentArr[i] = e.target.value;
-                          setMethodForm({ ...methodForm, instructions: currentArr });
-                        }}
-                        className="flex-1 p-2 bg-slate-50 rounded-md border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const currentArr = Array.isArray(methodForm.instructions)
-                            ? methodForm.instructions
-                            : [methodForm.instructions || ''];
-                          const updated = currentArr.filter((_, idx) => idx !== i);
-                          setMethodForm({ ...methodForm, instructions: updated });
-                        }}
-                        className="p-1.5 text-slate-400 hover:text-red-500 transition cursor-pointer"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const currentArr = Array.isArray(methodForm.instructions)
-                        ? methodForm.instructions
-                        : methodForm.instructions
-                        ? [methodForm.instructions]
-                        : [];
-                      setMethodForm({
-                        ...methodForm,
-                        instructions: [...currentArr, ''],
-                      });
-                    }}
-                    className="text-xs text-[#588B76] font-semibold hover:underline flex items-center gap-1 cursor-pointer pt-1"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Add Instruction Step</span>
-                  </button>
-                </div>
-
-                <div className="sm:col-span-2 pt-2">
-                  <label className="flex items-center gap-2 text-slate-700 font-semibold cursor-pointer">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="block font-bold text-slate-700">Channel Display Name *</label>
                     <input
-                      type="checkbox"
-                      checked={methodForm.active}
-                      onChange={(e) => setMethodForm({ ...methodForm, active: e.target.checked })}
-                      className="rounded text-[#588B76] focus:ring-[#588B76]"
+                      type="text"
+                      required
+                      placeholder="e.g. GCash (Official QR), Metrobank Savings, or BDO Account"
+                      value={methodForm.name}
+                      onChange={(e) => setMethodForm({ ...methodForm, name: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
                     />
-                    <span>Publish channel as Active on Website</span>
-                  </label>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-slate-700">Channel Type *</label>
+                    <select
+                      value={methodForm.type}
+                      onChange={(e) => setMethodForm({ ...methodForm, type: e.target.value as PaymentMethodType })}
+                      className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition cursor-pointer"
+                    >
+                      <option value="gcash">GCash (Mobile Wallet / QR)</option>
+                      <option value="bank">Bank Transfer (BDO, Metrobank, BPI, PESONet)</option>
+                      <option value="paypal">PayPal</option>
+                      <option value="credit-card">Credit / Debit Card</option>
+                      <option value="remittance">International Wire / Remittance</option>
+                      <option value="other">Other / Cheque / Direct Giving</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-slate-700">Display Order</label>
+                    <input
+                      type="number"
+                      value={methodForm.order}
+                      onChange={(e) => setMethodForm({ ...methodForm, order: parseInt(e.target.value) || 1 })}
+                      className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="block font-bold text-slate-700">Official Account Holder Name</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Philippine College of Ministry, Inc."
+                      value={methodForm.accountName}
+                      onChange={(e) => setMethodForm({ ...methodForm, accountName: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-slate-700">Account / Card / Reference Number</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. 0542-9182-3810"
+                      value={methodForm.accountNumber}
+                      onChange={(e) => setMethodForm({ ...methodForm, accountNumber: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs font-mono focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-slate-700">GCash Mobile Number (if applicable)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. +63 917 582 1992"
+                      value={methodForm.gcashNumber}
+                      onChange={(e) => setMethodForm({ ...methodForm, gcashNumber: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs font-mono focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-slate-700">Bank Name (if applicable)</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Metropolitan Bank and Trust Company (Metrobank)"
+                      value={methodForm.bankName}
+                      onChange={(e) => setMethodForm({ ...methodForm, bankName: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block font-bold text-slate-700">Branch Location / SWIFT Code</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Session Road, Baguio City / MBTCPHMM"
+                      value={methodForm.branch}
+                      onChange={(e) => setMethodForm({ ...methodForm, branch: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="block font-bold text-slate-700">Fee / Advisory Note for Donors</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Free transfer via InstaPay / PESONet; receipts issued within 24-48 hours"
+                      value={methodForm.notes}
+                      onChange={(e) => setMethodForm({ ...methodForm, notes: e.target.value })}
+                      className="w-full p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label className="block font-bold text-slate-700">QR Code Image URL</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        placeholder="https://... or /images/donation-gcash-qr.png"
+                        value={methodForm.qrCodeUrl}
+                        onChange={(e) => setMethodForm({ ...methodForm, qrCodeUrl: e.target.value })}
+                        className="flex-1 p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
+                      />
+                      {methodForm.qrCodeUrl && (
+                        <div className="w-10 h-10 border border-slate-200 rounded-lg p-0.5 bg-white shrink-0 flex items-center justify-center overflow-hidden">
+                          <img
+                            src={methodForm.qrCodeUrl}
+                            alt="QR"
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLElement).style.display = 'none';
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-slate-100 flex justify-end gap-2">
+              {/* SECTION 2: Step-by-Step Giving Instructions (Enhanced Design) */}
+              <div className="space-y-4 bg-slate-50/80 border border-slate-200 rounded-xl p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/80 pb-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <ListOrdered className="w-4 h-4 text-[#588B76]" />
+                      <h4 className="font-bold text-slate-800 text-sm">Step-by-Step Giving Instructions</h4>
+                    </div>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      Provide clear, numbered instructions for donors when giving through this channel.
+                    </p>
+                  </div>
+
+                  {/* Mode Selector */}
+                  <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 self-start sm:self-auto shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setInstructionMode('text')}
+                      className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer flex items-center gap-1 ${
+                        instructionMode === 'text'
+                          ? 'bg-[#18392B] text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <AlignLeft className="w-3 h-3" />
+                      <span>Text Editor</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInstructionMode('steps')}
+                      className={`px-2.5 py-1 rounded text-[11px] font-semibold transition cursor-pointer flex items-center gap-1 ${
+                        instructionMode === 'steps'
+                          ? 'bg-[#18392B] text-white shadow-2xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <ListOrdered className="w-3 h-3" />
+                      <span>Step Cards</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Quick Presets Toolbar */}
+                <div className="flex items-center flex-wrap gap-1.5 pt-0.5">
+                  <span className="text-[11px] font-semibold text-slate-500 flex items-center gap-1 mr-1">
+                    <Sparkles className="w-3 h-3 text-amber-500" />
+                    <span>Apply Quick Template:</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => applyInstructionsPreset('gcash')}
+                    className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-slate-700 hover:text-[#18392B] border border-slate-200 hover:border-emerald-200 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center gap-1"
+                  >
+                    <Smartphone className="w-3 h-3 text-[#588B76]" />
+                    <span>GCash Steps</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyInstructionsPreset('bank')}
+                    className="px-2.5 py-1 bg-white hover:bg-emerald-50 text-slate-700 hover:text-[#18392B] border border-slate-200 hover:border-emerald-200 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center gap-1"
+                  >
+                    <Building2 className="w-3 h-3 text-[#18392B]" />
+                    <span>Bank Transfer Steps</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyInstructionsPreset('wire')}
+                    className="px-2.5 py-1 bg-white hover:bg-blue-50 text-slate-700 hover:text-blue-800 border border-slate-200 hover:border-blue-200 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center gap-1"
+                  >
+                    <Globe className="w-3 h-3 text-blue-600" />
+                    <span>International Wire Steps</span>
+                  </button>
+                </div>
+
+                {/* Editor Body */}
+                {instructionMode === 'text' ? (
+                  <div className="space-y-2">
+                    <textarea
+                      rows={5}
+                      value={instructionsInputText}
+                      onChange={(e) => handleInstructionsTextChange(e.target.value)}
+                      placeholder="Step 1: Open your mobile banking app...&#10;Step 2: Enter the account details or scan the QR code...&#10;Step 3: Save a screenshot of the confirmation receipt...&#10;Step 4: Submit your donation confirmation notice."
+                      className="w-full p-3 bg-white rounded-lg border border-slate-300 text-xs font-sans leading-relaxed focus:outline-hidden focus:border-[#588B76] focus:ring-1 focus:ring-[#588B76] transition"
+                    />
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <span className="font-semibold text-[#588B76] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
+                        {
+                          instructionsInputText
+                            .split('\n')
+                            .filter((l) => l.trim().length > 0).length
+                        }{' '}
+                        Steps Detected
+                      </span>
+                      <span>Press <strong>Enter</strong> to create a new step. Leading numbers or dashes will be formatted automatically.</span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-2.5">
+                    {(Array.isArray(methodForm.instructions) ? methodForm.instructions : []).map((inst, i) => (
+                      <div key={i} className="flex items-center gap-2 bg-white p-2 rounded-lg border border-slate-200 shadow-2xs">
+                        <span className="w-6 h-6 rounded-full bg-[#18392B] text-white flex items-center justify-center font-bold text-[10px] shrink-0">
+                          {i + 1}
+                        </span>
+                        <input
+                          type="text"
+                          value={inst}
+                          onChange={(e) => handleUpdateInstructionStep(i, e.target.value)}
+                          placeholder={`Step ${i + 1} description...`}
+                          className="flex-1 p-1.5 bg-slate-50 rounded border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleMoveInstructionStep(i, 'up')}
+                          disabled={i === 0}
+                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                          title="Move step up"
+                        >
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveInstructionStep(i, 'down')}
+                          disabled={i === (methodForm.instructions?.length || 0) - 1}
+                          className="p-1 text-slate-400 hover:text-slate-700 disabled:opacity-30 disabled:cursor-not-allowed transition"
+                          title="Move step down"
+                        >
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveInstructionStep(i)}
+                          className="p-1 text-slate-400 hover:text-red-600 transition"
+                          title="Delete step"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={handleAddInstructionStep}
+                      className="text-xs text-[#588B76] hover:text-[#18392B] font-semibold flex items-center gap-1.5 pt-1 cursor-pointer transition"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Add Another Step</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* LIVE DONOR WEBSITE PREVIEW */}
+                <div className="bg-white rounded-xl border border-emerald-100 p-4 space-y-2.5 shadow-2xs">
+                  <div className="flex items-center justify-between border-b border-emerald-50 pb-2">
+                    <span className="font-serif font-bold text-xs text-[#18392B] flex items-center gap-1.5">
+                      <Eye className="w-3.5 h-3.5 text-[#588B76]" />
+                      <span>Live Website Donor Preview</span>
+                    </span>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/50">
+                      As Donors See It
+                    </span>
+                  </div>
+
+                  {(() => {
+                    const currentSteps =
+                      instructionMode === 'text'
+                        ? instructionsInputText
+                            .split('\n')
+                            .map((l) => l.replace(/^(\d+[\.\)]|\-|\*)\s*/, '').trim())
+                            .filter((l) => l.length > 0)
+                        : normalizeInstructions(methodForm.instructions);
+
+                    if (currentSteps.length === 0) {
+                      return (
+                        <p className="text-[11px] text-slate-400 italic py-1">
+                          No instructions entered yet. Type above or click a template to preview.
+                        </p>
+                      );
+                    }
+
+                    return (
+                      <div className="space-y-2 pt-1">
+                        {currentSteps.map((step, idx) => (
+                          <div
+                            key={idx}
+                            className="flex items-start gap-2.5 p-2 rounded-lg bg-emerald-50/30 border border-emerald-100/50"
+                          >
+                            <span className="w-5 h-5 rounded-full bg-[#18392B] text-white flex items-center justify-center font-bold text-[10px] shrink-0 mt-0.5">
+                              {idx + 1}
+                            </span>
+                            <span className="text-xs text-slate-700 leading-relaxed">
+                              {step}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* SECTION 3: Publication Status Toggle */}
+              <div
+                onClick={() => setMethodForm({ ...methodForm, active: !methodForm.active })}
+                className={`p-4 rounded-xl border transition cursor-pointer flex items-center justify-between ${
+                  methodForm.active
+                    ? 'bg-emerald-50/50 border-emerald-200'
+                    : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-5 h-5 rounded flex items-center justify-center transition ${
+                      methodForm.active ? 'bg-[#588B76] text-white' : 'border border-slate-300 bg-white'
+                    }`}
+                  >
+                    {methodForm.active && <Check className="w-3.5 h-3.5" />}
+                  </div>
+                  <div>
+                    <span className="font-bold text-xs text-slate-800">
+                      {methodForm.active ? 'Active & Published on Website' : 'Hidden (Draft Mode)'}
+                    </span>
+                    <p className="text-[11px] text-slate-500">
+                      {methodForm.active
+                        ? 'Donors can select this payment channel on the live giving portal.'
+                        : 'Channel is saved in your admin dashboard but hidden from public visitors.'}
+                    </p>
+                  </div>
+                </div>
+
+                <span
+                  className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider ${
+                    methodForm.active ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
+                  }`}
+                >
+                  {methodForm.active ? 'Active' : 'Disabled'}
+                </span>
+              </div>
+
+              {/* Modal Footer */}
+              <div className="pt-4 border-t border-slate-100 flex items-center justify-end gap-3">
                 <button
                   type="button"
                   onClick={() => {
                     setEditingMethod(null);
                     setIsCreatingMethod(false);
                   }}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-md transition cursor-pointer"
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 bg-[#588B76] hover:bg-[#46705F] text-white text-xs font-bold uppercase tracking-wider rounded-md transition shadow-xs cursor-pointer"
+                  className="px-6 py-2 bg-[#588B76] hover:bg-[#46705F] text-white text-xs font-bold uppercase tracking-wider rounded-lg transition shadow-xs flex items-center gap-1.5 cursor-pointer"
                 >
-                  Save Channel
+                  <Check className="w-4 h-4" />
+                  <span>Save Payment Channel</span>
                 </button>
               </div>
             </form>
