@@ -46,7 +46,7 @@ export const PreEnlistmentModule: React.FC = () => {
     const enrolledCodes = ((studentProfile && studentProfile.courses) || []).map((c) => c?.code).filter(Boolean);
     const matched = (academicSubjects || []).filter((s) => s && s.code && enrolledCodes.includes(s.code));
     return matched.length > 0 ? matched.map((s) => s.id) : (academicSubjects || []).slice(0, 5).map((s) => s.id);
-  }, [existingRecord, academicSubjects, studentProfile?.courses]);
+  }, [existingRecord, academicSubjects, studentProfile]);
 
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>(initialSelectedIds);
   const [searchQuery, setSearchQuery] = useState('');

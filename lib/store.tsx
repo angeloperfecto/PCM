@@ -945,6 +945,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     mediaItems,
     galleryAlbums,
     adminUsers,
+    userAccounts,
     studentProfile,
     students,
     enrollments,
@@ -1267,7 +1268,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return true;
       }
     },
-    [addToast]
+    [addToast, deletedUsers, isUserDeleted]
   );
 
   // Real-time Firestore Subscriptions
@@ -1828,7 +1829,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubs.forEach((unsub) => unsub());
       if (singleUserUnsub) singleUserUnsub();
     };
-  }, [syncAllDataToFirestore]);
+  }, [syncAllDataToFirestore, isUserDeleted]);
 
   // Gated Admin Subscriptions: Only subscribe to Admin/Sensitive collections when Admin is authenticated & active
   useEffect(() => {
@@ -1918,7 +1919,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const list = (!snap.empty && snap.docs.length > 0)
           ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[]).filter((u) => !isUserDeleted(u))
           : INITIAL_USER_ACCOUNTS.filter((u) => !isUserDeleted(u));
-        setUserAccounts(syncWithAdminsAndStudents(list, adminUsers, students));
+        setUserAccounts(syncWithAdminsAndStudents(list, stateRef.current.adminUsers, stateRef.current.students));
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'users')
     );
@@ -1933,7 +1934,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[]).filter((a) => !isUserDeleted(a))
           : INITIAL_ADMIN_USERS.filter((a) => !isUserDeleted(a));
         setAdminUsers(list);
-        setUserAccounts((prev) => syncWithAdminsAndStudents(prev, list, students));
+        setUserAccounts((prev) => syncWithAdminsAndStudents(prev, list, stateRef.current.students));
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'adminUsers')
     );
@@ -1990,7 +1991,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter((s) => !isUserDeleted(s))
           : INITIAL_STUDENTS.filter((s) => !isUserDeleted(s));
         setStudents(list);
-        setUserAccounts((prev) => syncWithAdminsAndStudents(prev, adminUsers, list));
+        setUserAccounts((prev) => syncWithAdminsAndStudents(prev, stateRef.current.adminUsers, list));
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'studentProfiles')
     );
