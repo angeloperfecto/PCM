@@ -5,7 +5,7 @@ import { HeroSlide } from './types';
 export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   {
     id: 'hero-1',
-    image: '/api/slideshow/image?id=hero-1',
+    image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600&auto=format&fit=crop',
     tag: 'Accredited Theological Education',
     headline: 'EQUIPPING SERVANTS FOR KINGDOM IMPACT',
     subtext:
@@ -22,7 +22,7 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   },
   {
     id: 'hero-2',
-    image: '/api/slideshow/image?id=hero-2',
+    image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1600&auto=format&fit=crop',
     tag: 'Spiritual Formation & Worship',
     headline: 'ROOTED IN TRUTH. PASSIONATE IN WORSHIP.',
     subtext:
@@ -39,7 +39,7 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   },
   {
     id: 'hero-3',
-    image: '/api/slideshow/image?id=hero-3',
+    image: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?q=80&w=1600&auto=format&fit=crop',
     tag: 'Hands-On Pastoral Apprenticeship',
     headline: 'REAL-WORLD MINISTRY IN 85+ LOCAL CHURCHES',
     subtext:
@@ -129,6 +129,10 @@ export function subscribeToSlideshow(
               if (slideImageCache[s.id]) {
                 return { ...s, image: slideImageCache[s.id] };
               }
+              // Skip querying Firestore if slide already points to a complete remote URL
+              if (s.image && (s.image.startsWith('https://') || s.image.startsWith('http://'))) {
+                return s;
+              }
               try {
                 const imgDoc = await getDoc(doc(db, 'siteContent', `slideshow_image_${s.id}`));
                 if (imgDoc.exists()) {
@@ -138,8 +142,8 @@ export function subscribeToSlideshow(
                     return { ...s, image: val };
                   }
                 }
-              } catch (fetchErr) {
-                // Ignore background image pre-fetch error as fallback URL is active
+              } catch {
+                // Silently fallback without crashing or spamming console if quota is reached
               }
               return s;
             })

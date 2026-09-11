@@ -635,6 +635,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     [deletedUsers]
   );
 
+  const isUserDeletedRef = useRef(isUserDeleted);
+  useEffect(() => {
+    isUserDeletedRef.current = isUserDeleted;
+  }, [isUserDeleted]);
+
   // User Accounts & Multi-Role Auth
   const [currentUserAccount, setCurrentUserAccount] = useState<UserAccount | null>(null);
   const [firebaseAuthUser, setFirebaseAuthUser] = useState<FirebaseUser | null>(null);
@@ -1573,40 +1578,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   });
                   if (list.length > 0) {
                     setMediaItems(list);
-                    // Mirror to mediaLibrary
-                    const batch = writeBatch(db);
-                    list.forEach((item) => {
-                      batch.set(doc(db, 'mediaLibrary', item.id), cleanFirestoreData(item), { merge: true });
-                    });
-                    batch.commit().catch((e) => console.warn('Media migration notice:', e));
+                  } else {
+                    setMediaItems(INITIAL_MEDIA_ITEMS);
                   }
                 } else {
-                  // Firestore has no documents in mediaLibrary or mediaItems.
-                  // Only seed once if mediaLibraryMeta document does not exist yet.
-                  const metaRef = doc(db, 'siteConfig', 'mediaLibraryMeta');
-                  const metaSnap = await getDoc(metaRef);
-                  if (!metaSnap.exists()) {
-                    const seedBatch = writeBatch(db);
-                    INITIAL_MEDIA_ITEMS.forEach((item) => {
-                      const itemUrl = item.url || '';
-                      seedBatch.set(
-                        doc(db, 'mediaLibrary', item.id),
-                        cleanFirestoreData({
-                          ...item,
-                          downloadURL: itemUrl,
-                          url: itemUrl,
-                          createdAt: new Date().toISOString(),
-                          updatedAt: new Date().toISOString(),
-                        }),
-                        { merge: true }
-                      );
-                    });
-                    seedBatch.set(metaRef, { seededAt: new Date().toISOString(), initialized: true }, { merge: true });
-                    seedBatch.commit().catch((e) => console.warn('Media seed notice:', e));
-                  }
+                  setMediaItems(INITIAL_MEDIA_ITEMS);
                 }
               } catch (e) {
-                console.warn('Media library initialization notice:', e);
+                setMediaItems(INITIAL_MEDIA_ITEMS);
               }
               setIsFirebaseConnected(true);
               setFirebaseSyncStatus('synced');
@@ -1632,7 +1611,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           if (fbUser) {
             const emailLower = fbUser.email?.toLowerCase() || '';
-            if (isUserDeleted(emailLower) || isUserDeleted(fbUser.uid)) {
+            if (isUserDeletedRef.current(emailLower) || isUserDeletedRef.current(fbUser.uid)) {
               setCurrentUserAccount(null);
               setIsAdminLoggedIn(false);
               setIsStudentLoggedIn(false);
@@ -1679,7 +1658,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 acc = {
                   ...acc,
                   ...stored,
-                  lastLogin: new Date().toISOString(),
                 };
                 if (isSuperAdminEmail) {
                   acc.role = 'Super Admin';
@@ -1687,12 +1665,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   acc.status = 'Active';
                   acc.verificationStatus = 'Approved';
                 }
+              } else {
+                logFirestoreOp('write', `users/${fbUser.uid}`, 'Auth state initial user profile create');
+                safeSetDoc(userDocRef, acc, { merge: true }).catch((err) => {
+                  console.warn('Firestore initial user profile notice:', err);
+                });
               }
-              // Attempt to update last login for active user
-              logFirestoreOp('write', `users/${fbUser.uid}`, 'Auth state lastLogin update');
-              setDoc(userDocRef, acc, { merge: true }).catch((err) => {
-                console.warn('Firestore setDoc notice (offline/quota fallback):', err);
-              });
             } catch (e) {
               console.warn('Auth state profile handler warning (quota/offline fallback):', e);
             }
@@ -1829,7 +1807,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubs.forEach((unsub) => unsub());
       if (singleUserUnsub) singleUserUnsub();
     };
-  }, [syncAllDataToFirestore, isUserDeleted]);
+  }, []);
 
   // Gated Admin Subscriptions: Only subscribe to Admin/Sensitive collections when Admin is authenticated & active
   useEffect(() => {
@@ -1850,18 +1828,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // 1. Base / Registered accounts (exclude deleted)
       baseUsers
-        .filter((u) => !isUserDeleted(u))
+        .filter((u) => !isUserDeletedRef.current(u))
         .forEach((u) => {
           const key = (u.email || u.id || u.uid || '').toLowerCase().trim();
-          if (key && !isUserDeleted(key)) map.set(key, u);
+          if (key && !isUserDeletedRef.current(key)) map.set(key, u);
         });
 
       // 2. Ensure all registered admin users are included (exclude deleted)
       currAdmins
-        .filter((adm) => !isUserDeleted(adm))
+        .filter((adm) => !isUserDeletedRef.current(adm))
         .forEach((adm) => {
           const key = (adm.email || adm.id).toLowerCase().trim();
-          if (isUserDeleted(key) || isUserDeleted(adm)) return;
+          if (isUserDeletedRef.current(key) || isUserDeletedRef.current(adm)) return;
           const existing = map.get(key);
           map.set(key, {
             id: existing?.id || `uid-${adm.id}`,
@@ -1884,10 +1862,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // 3. Ensure all registered students are included (exclude deleted)
       currStudents
-        .filter((std) => !isUserDeleted(std))
+        .filter((std) => !isUserDeletedRef.current(std))
         .forEach((std) => {
           const key = (std.email || std.studentId || std.id).toLowerCase().trim();
-          if (isUserDeleted(key) || isUserDeleted(std)) return;
+          if (isUserDeletedRef.current(key) || isUserDeletedRef.current(std)) return;
           const existing = map.get(key);
           map.set(key, {
             id: existing?.id || `uid-${std.id}`,
@@ -1908,7 +1886,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           });
         });
 
-      return Array.from(map.values()).filter((u) => !isUserDeleted(u));
+      return Array.from(map.values()).filter((u) => !isUserDeletedRef.current(u));
     };
 
     // 1. Users collection (for Admin Users & Roles management tab)
@@ -1917,8 +1895,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       collection(db, 'users'),
       (snap) => {
         const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[]).filter((u) => !isUserDeleted(u))
-          : INITIAL_USER_ACCOUNTS.filter((u) => !isUserDeleted(u));
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[]).filter((u) => !isUserDeletedRef.current(u))
+          : INITIAL_USER_ACCOUNTS.filter((u) => !isUserDeletedRef.current(u));
         setUserAccounts(syncWithAdminsAndStudents(list, stateRef.current.adminUsers, stateRef.current.students));
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'users')
@@ -1931,8 +1909,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       collection(db, 'adminUsers'),
       (snap) => {
         const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[]).filter((a) => !isUserDeleted(a))
-          : INITIAL_ADMIN_USERS.filter((a) => !isUserDeleted(a));
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[]).filter((a) => !isUserDeletedRef.current(a))
+          : INITIAL_ADMIN_USERS.filter((a) => !isUserDeletedRef.current(a));
         setAdminUsers(list);
         setUserAccounts((prev) => syncWithAdminsAndStudents(prev, list, stateRef.current.students));
       },
@@ -1988,8 +1966,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       collection(db, 'studentProfiles'),
       (snap) => {
         const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter((s) => !isUserDeleted(s))
-          : INITIAL_STUDENTS.filter((s) => !isUserDeleted(s));
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter((s) => !isUserDeletedRef.current(s))
+          : INITIAL_STUDENTS.filter((s) => !isUserDeletedRef.current(s));
         setStudents(list);
         setUserAccounts((prev) => syncWithAdminsAndStudents(prev, stateRef.current.adminUsers, list));
       },
@@ -2139,7 +2117,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => {
       adminUnsubs.forEach((unsub) => unsub());
     };
-  }, [isAdminLoggedIn, currentUserAccount?.role, currentSection, deletedUsers, isUserDeleted]);
+  }, [isAdminLoggedIn, currentUserAccount?.role, currentSection]);
 
   // Upload media file to Firebase Storage & register in Media Library
   const uploadMediaFile = async (
@@ -5579,10 +5557,19 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           degreeProgram: restoredAccount.department || 'Bachelor of Arts in Theology',
           yearLevel: '1st Year',
           academicStatus: 'Regular',
-          totalUnits: 0,
+          enrollmentStatus: 'Enrolled',
+          currentSemester: '1st Semester, AY 2026–2027',
+          academicYear: '2026–2027',
+          totalUnitsEarned: 0,
           gpa: 0,
           courses: [],
-          status: 'Active',
+          tuitionTotal: 25000,
+          tuitionPaid: 0,
+          tuitionBalance: 25000,
+          homeChurch: 'Philippine College of Ministry Chapel',
+          mentorName: 'Dr. Emmanuel Santos',
+          avatarUrl: restoredAccount.avatarUrl || restoredAccount.photoURL || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
+          practicumEntries: [],
           createdAt: new Date().toISOString(),
         };
         await safeSetDoc(doc(db, 'studentProfiles', restoredStudent.id), cleanFirestoreData(restoredStudent));
