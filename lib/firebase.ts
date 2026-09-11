@@ -176,37 +176,59 @@ export function handleFirestoreError(
   }
 }
 
+// Circuit breaker for Firestore write operations to prevent write stream exhaustion
+let firestoreWriteBlockedUntil = 0;
+const WRITE_CIRCUIT_BREAKER_MS = 2 * 60 * 1000; // 2 minutes
+
 // Resilient safe write wrappers to prevent stream exhaustion
 export async function safeSetDoc(
   docRef: any,
   data: any,
   options: { merge?: boolean } = { merge: true }
 ): Promise<boolean> {
+  if (Date.now() < firestoreWriteBlockedUntil) {
+    return false;
+  }
   try {
     await setDoc(docRef, cleanFirestoreData(data), options);
     return true;
   } catch (err) {
-    handleFirestoreError(err, OperationType.WRITE, docRef.path);
+    if (isFirestoreQuotaError(err)) {
+      firestoreWriteBlockedUntil = Date.now() + WRITE_CIRCUIT_BREAKER_MS;
+    }
+    handleFirestoreError(err, OperationType.WRITE, docRef?.path || null);
     return false;
   }
 }
 
 export async function safeUpdateDoc(docRef: any, data: any): Promise<boolean> {
+  if (Date.now() < firestoreWriteBlockedUntil) {
+    return false;
+  }
   try {
     await updateDoc(docRef, cleanFirestoreData(data));
     return true;
   } catch (err) {
-    handleFirestoreError(err, OperationType.UPDATE, docRef.path);
+    if (isFirestoreQuotaError(err)) {
+      firestoreWriteBlockedUntil = Date.now() + WRITE_CIRCUIT_BREAKER_MS;
+    }
+    handleFirestoreError(err, OperationType.UPDATE, docRef?.path || null);
     return false;
   }
 }
 
 export async function safeDeleteDoc(docRef: any): Promise<boolean> {
+  if (Date.now() < firestoreWriteBlockedUntil) {
+    return false;
+  }
   try {
     await deleteDoc(docRef);
     return true;
   } catch (err) {
-    handleFirestoreError(err, OperationType.DELETE, docRef.path);
+    if (isFirestoreQuotaError(err)) {
+      firestoreWriteBlockedUntil = Date.now() + WRITE_CIRCUIT_BREAKER_MS;
+    }
+    handleFirestoreError(err, OperationType.DELETE, docRef?.path || null);
     return false;
   }
 }
