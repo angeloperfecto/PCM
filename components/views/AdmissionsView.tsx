@@ -129,24 +129,25 @@ export const AdmissionsView: React.FC = () => {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Senior High School */}
-            <div id="vouchers" className="bg-white rounded-sm p-6 border border-slate-200 shadow-xs space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-4xl mx-auto">
+            {/* Degree Requirements */}
+            <div className="bg-white rounded-sm p-6 border border-slate-200 shadow-xs space-y-4">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
                 <span className="text-xs font-mono font-bold uppercase bg-[#18392B] text-white px-2.5 py-1 rounded-sm">
-                  Senior High (GAS)
+                  Degree Admissions
                 </span>
               </div>
               <h3 className="font-serif text-base font-bold text-[#18392B]">
-                Grade 11 & 12 Applicants
+                Bachelor of Arts in Theology (B.Th. 4-Year)
               </h3>
               <ul className="space-y-2.5 text-xs text-slate-700">
                 {[
-                  'Junior High School Completion Certificate & Form 138 (Report Card)',
-                  'DepEd ESC Voucher / QVR Certificate (100% or 80% coverage)',
-                  'Certificate of Good Moral Character from Junior High School Principal',
-                  'PSA Birth Certificate (Copy) & 2x2 ID Pictures',
-                  'Parent / Guardian Endorsement & Consent Form',
+                  'Duly completed PCM Online Admissions Application',
+                  'High School / Senior High School Graduate (or College Transferee Transcript)',
+                  'Personal Christian Testimony of faith in Jesus Christ and ministerial calling',
+                  'Official Recommendation Letter from your current home church pastor',
+                  'Passing score in PCM Bible Knowledge and English Comprehension Assessment',
+                  'Formal Admission Interview with the Faculty Admissions Committee',
                 ].map((req, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-[#588B76] shrink-0 mt-0.5" />
@@ -156,53 +157,27 @@ export const AdmissionsView: React.FC = () => {
               </ul>
             </div>
 
-            {/* Undergraduate */}
+            {/* Document Requirements */}
             <div className="bg-white rounded-sm p-6 border border-slate-200 shadow-xs space-y-4">
               <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
                 <span className="text-xs font-mono font-bold uppercase bg-[#588B76] text-white px-2.5 py-1 rounded-sm">
-                  Undergraduate
+                  Documentary Credentials
                 </span>
               </div>
               <h3 className="font-serif text-base font-bold text-[#18392B]">
-                B.Th., SCM & Associate Applicants
+                Required Verification Documents
               </h3>
               <ul className="space-y-2.5 text-xs text-slate-700">
                 {[
-                  'Duly completed PCM Online Application Form',
-                  'Senior High School Diploma / Form 138 or Official College Transcript if transferee',
-                  'Personal Christian Testimony (500 words on salvation and ministry calling)',
-                  'Recommendation Letter from current Local Church Pastor',
-                  'PSA Birth Certificate & 2x2 ID Pictures',
-                  'Satisfactory Entrance Interview with PCM Admissions Committee',
+                  'Original PSA / NSO Birth Certificate (and 2 photocopies)',
+                  'Form 138 (Report Card) or Official Transcript of Records (TOR) with S.O. number',
+                  'Certificate of Good Moral Character from previous school or institution',
+                  'Four (4) recent 2x2 colored ID pictures (white background with collar)',
+                  'Medical Clearance Certificate from a licensed physician',
+                  'Church Membership Certificate or Baptismal Record',
                 ].map((req, i) => (
                   <li key={i} className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-[#588B76] shrink-0 mt-0.5" />
-                    <span>{req}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-
-            {/* Graduate School */}
-            <div className="bg-white rounded-sm p-6 border border-slate-200 shadow-xs space-y-4">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <span className="text-xs font-mono font-bold uppercase bg-[#10261D] text-[#588B76] px-2.5 py-1 rounded-sm border border-[#588B76]/40">
-                  Graduate School
-                </span>
-              </div>
-              <h3 className="font-serif text-base font-bold text-[#18392B]">
-                M.Div. & M.C.L. Applicants
-              </h3>
-              <ul className="space-y-2.5 text-xs text-slate-700">
-                {[
-                  'Bachelor’s Degree Transcript of Records from an accredited institution',
-                  'Minimum of 2 years active pastoral or ministry leadership experience',
-                  'Two Letters of Recommendation (1 Denominational Leader / 1 Colleague)',
-                  'Theological Statement & Research Essay (750 words)',
-                  'Comprehensive Graduate Interview with Academic Dean',
-                ].map((req, i) => (
-                  <li key={i} className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <span>{req}</span>
                   </li>
                 ))}
@@ -234,19 +209,14 @@ export const AdmissionsView: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
                   <tr>
-                    <td className="p-3.5 font-semibold text-[#18392B]">Senior High School (GAS Strand)</td>
-                    <td className="p-3.5 font-mono font-bold text-emerald-700">100% DepEd Voucher Covered</td>
-                    <td className="p-3.5 text-slate-500">No out-of-pocket tuition for qualified public Junior High completers</td>
+                    <td className="p-3.5 font-semibold text-[#18392B]">Bachelor of Arts in Theology (B.Th.) Tuition</td>
+                    <td className="p-3.5 font-mono font-bold text-emerald-800">₱650 – ₱850 / unit</td>
+                    <td className="p-3.5 text-slate-500">Standard full-load is 18–21 units per semester (subsidized by endowment)</td>
                   </tr>
                   <tr>
-                    <td className="p-3.5 font-semibold text-[#18392B]">Undergraduate Tuition (B.Th. / SCM / Assoc.)</td>
-                    <td className="p-3.5 font-mono font-bold">₱650 – ₱850 / unit</td>
-                    <td className="p-3.5 text-slate-500">Standard full-load is 18–21 units per semester</td>
-                  </tr>
-                  <tr>
-                    <td className="p-3.5 font-semibold text-[#18392B]">Graduate School Tuition (M.Div. / M.C.L.)</td>
-                    <td className="p-3.5 font-mono font-bold">₱1,200 – ₱1,400 / unit</td>
-                    <td className="p-3.5 text-slate-500">Standard full-load is 9–12 units per semester</td>
+                    <td className="p-3.5 font-semibold text-[#18392B]">Ministerial Scholarship Grant (Needy Pastoral Candidates)</td>
+                    <td className="p-3.5 font-mono font-bold text-emerald-700">Up to 100% Tuition Subsidy</td>
+                    <td className="p-3.5 text-slate-500">Requires home church recommendation & work-study ministry commitment</td>
                   </tr>
                   <tr>
                     <td className="p-3.5 font-semibold text-[#18392B]">Registration & Basic Miscellaneous</td>
@@ -256,7 +226,7 @@ export const AdmissionsView: React.FC = () => {
                   <tr>
                     <td className="p-3.5 font-semibold text-[#18392B]">On-Campus Dormitory & Board</td>
                     <td className="p-3.5 font-mono font-bold">₱3,500 / month</td>
-                    <td className="p-3.5 text-slate-500">Includes student dormitory bedspace and dining utilities</td>
+                    <td className="p-3.5 text-slate-500">Includes student dormitory bedspace and dining utilities in Lamtang</td>
                   </tr>
                 </tbody>
               </table>

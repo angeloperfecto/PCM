@@ -80,173 +80,8 @@ export const INITIAL_ANNOUNCEMENTS: AnnouncementItem[] = [
 
 export const INITIAL_PROGRAMS: AcademicProgram[] = [
   {
-    id: 'prog-shs-gas',
-    name: 'Senior High School — General Academic Strand (GAS)',
-    code: 'SHS-GAS',
-    level: 'senior-high',
-    duration: '2 Years (Grades 11 & 12)',
-    credits: 80,
-    studyMode: 'On-Campus Full-Time',
-    shortDescription:
-      'DepEd-accredited Senior High School program with Christian values integration, preparation for college theological and liberal arts courses, and full Government ESC Voucher support.',
-    fullDescription:
-      'Philippine College of Ministry offers the General Academic Strand (GAS) for Senior High School students seeking quality, Christ-centered education in the Cordillera and Baguio-La Trinidad area. Qualified Grade 10 completers from public schools and ESC participating private schools can study with zero to minimal tuition through DepEd vouchers.',
-    objectives: [
-      'Provide a solid academic foundation across humanities, social sciences, and natural sciences.',
-      'Instill Christian character, moral integrity, and biblical discernment in adolescent youth.',
-      'Prepare graduates seamlessly for collegiate theological education, pastoral training, or general higher education degrees.',
-      'Offer leadership training, student ministry involvement, and community service activities.',
-    ],
-    curriculum: [
-      {
-        yearOrModule: 'Grade 11 (Core & Applied Subjects)',
-        courses: [
-          { code: 'GAS-101', title: 'Oral Communication & Reading and Writing Skills', units: 4 },
-          { code: 'GAS-102', title: 'General Mathematics & Statistics and Probability', units: 4 },
-          { code: 'GAS-103', title: 'Earth and Life Science / Physical Science', units: 4 },
-          { code: 'GAS-104', title: 'Understanding Culture, Society and Politics', units: 4 },
-          { code: 'GAS-105', title: 'Christian Values Education & Bible Survey I', units: 3 },
-          { code: 'GAS-106', title: 'Physical Education and Health 1 & 2', units: 2 },
-        ],
-      },
-      {
-        yearOrModule: 'Grade 12 (Specialized Humanities & Applied Disciplines)',
-        courses: [
-          { code: 'GAS-201', title: 'Introduction to World Religions and Belief Systems', units: 4 },
-          { code: 'GAS-202', title: 'Disciplines and Ideas in the Social Sciences', units: 4 },
-          { code: 'GAS-203', title: 'Empowerment Technologies & Practical Research', units: 4 },
-          { code: 'GAS-204', title: 'Philippine Politics and Governance', units: 4 },
-          { code: 'GAS-205', title: 'Christian Ethics & Ministry Immersion', units: 3 },
-          { code: 'GAS-206', title: 'Work Immersion / Culminating Activity', units: 4 },
-        ],
-      },
-    ],
-    careerOpportunities: [
-      'Pathway to Bachelor of Theology (B.Th.) / BCM at PCM',
-      'Entry to University Degree Programs (Education, Psychology, Communications)',
-      'Youth Ministry and Campus Fellowship Leadership',
-      'Christian School and Community Organization Staff',
-    ],
-    admissionRequirements: [
-      'Grade 10 Report Card (Form 138) with Certificate of Completion',
-      'DepEd Voucher Certificate (for Private School Completers) or Public School Diploma',
-      'PSA Birth Certificate and Good Moral Character Certificate',
-      'Parent/Guardian Consent and Student Interview',
-    ],
-    tuitionPerUnit: 0,
-    featured: true,
-  },
-  {
-    id: 'prog-assoc-th',
-    name: 'Associate of Theology (A.Th.)',
-    code: 'ATH-201',
-    level: 'undergraduate',
-    duration: '2 Years (4 Semesters)',
-    credits: 68,
-    studyMode: 'On-Campus Full-Time',
-    shortDescription:
-      'A two-year ministerial program specifically designed for associate ministry, local church workers, and ministry in rural or pioneering settings.',
-    fullDescription:
-      'The Associate of Theology provides focused biblical and practical ministry training for individuals preparing for rural ministry, assistant pastoral duties, and church planting. All units ladder directly into the four-year Bachelor of Theology program.',
-    objectives: [
-      'Master the foundational narratives and core doctrines of the Old and New Testaments.',
-      'Develop practical skills in preaching, teaching, small group discipleship, and evangelism.',
-      'Equip servants for rural and indigenous ministry contexts across northern Luzon and the Philippines.',
-    ],
-    curriculum: [
-      {
-        yearOrModule: 'First Year (Foundations)',
-        courses: [
-          { code: 'BIB-101', title: 'Old Testament Survey', units: 3 },
-          { code: 'BIB-102', title: 'New Testament Survey', units: 3 },
-          { code: 'THE-101', title: 'Introduction to Christian Doctrine', units: 3 },
-          { code: 'HERM-101', title: 'Principles of Biblical Interpretation', units: 3 },
-          { code: 'EVN-101', title: 'Evangelism and Discipleship in Rural Settings', units: 3 },
-          { code: 'PRA-101', title: 'Weekend Ministry Practicum I', units: 2 },
-        ],
-      },
-      {
-        yearOrModule: 'Second Year (Ministry Application)',
-        courses: [
-          { code: 'HOM-201', title: 'Basic Homiletics and Preaching', units: 3 },
-          { code: 'PAS-201', title: 'Pastoral Care in the Local Church', units: 3 },
-          { code: 'HIS-201', title: 'Survey of Church History & Restoration Movement', units: 3 },
-          { code: 'CED-201', title: 'Teaching the Bible to Children and Youth', units: 3 },
-          { code: 'PRA-202', title: 'Field Ministry Practicum II (180 Hours)', units: 4 },
-        ],
-      },
-    ],
-    careerOpportunities: [
-      'Associate / Assistant Pastor in Local Churches',
-      'Rural Community Preacher and Pioneer Worker',
-      'Church Sunday School Coordinator and Youth Leader',
-      'Ladderized Entry to 3rd Year Bachelor of Theology',
-    ],
-    admissionRequirements: [
-      'High School Diploma / Senior High School Certificate or equivalent',
-      'Christian Testimony and Pastoral Endorsement Letter',
-      'Entrance Assessment & Admissions Committee Interview',
-    ],
-    tuitionPerUnit: 1350,
-    featured: true,
-  },
-  {
-    id: 'prog-bth-scm',
-    name: 'Bachelor of Arts in Theology, Specialized Chaplaincy Ministry (BTh SCM)',
-    code: 'BTH-SCM-403',
-    level: 'undergraduate',
-    duration: '4 Years (8 Semesters)',
-    credits: 142,
-    studyMode: 'On-Campus Full-Time',
-    shortDescription:
-      'A specialized 4-year degree combining thorough biblical-theological grounding with intensive clinical pastoral education, crisis intervention, and institutional chaplaincy.',
-    fullDescription:
-      'The BTh Specialized Chaplaincy Ministry program equips dedicated ministers for institutional service in hospitals, military units, police detachments, correctional institutions, corporate settings, and emergency disaster relief organizations.',
-    objectives: [
-      'Provide sound biblical exegesis and systematic theology for multi-cultural institutional environments.',
-      'Develop competencies in Clinical Pastoral Education (CPE), grief therapy, and trauma counseling.',
-      'Understand civil protocols, ethics, and chaplaincy policies in government, uniformed services, and corporate settings.',
-      'Cultivate empathetic, compassionate ministry to suffering and marginalized populations.',
-    ],
-    curriculum: [
-      {
-        yearOrModule: 'First & Second Year (Theological & Counseling Foundations)',
-        courses: [
-          { code: 'BIB-101', title: 'Old & New Testament Exegesis', units: 6 },
-          { code: 'THE-201', title: 'Systematic Theology & Ethics', units: 6 },
-          { code: 'CHP-101', title: 'Introduction to Institutional Chaplaincy', units: 3 },
-          { code: 'PSY-201', title: 'Developmental Psychology & Pastoral Counseling', units: 3 },
-        ],
-      },
-      {
-        yearOrModule: 'Third & Fourth Year (Clinical Chaplaincy & Practicum)',
-        courses: [
-          { code: 'CHP-301', title: 'Hospital & Healthcare Chaplaincy (Clinical Pastoral Care)', units: 3 },
-          { code: 'CHP-302', title: 'Military, Police & Uniformed Services Ministry', units: 3 },
-          { code: 'CHP-401', title: 'Prison, Correctional & Crisis De-escalation Care', units: 3 },
-          { code: 'PRA-490', title: 'Supervised Hospital / Institutional Residency (300 Hours)', units: 6 },
-        ],
-      },
-    ],
-    careerOpportunities: [
-      'Hospital and Hospice Healthcare Chaplain',
-      'Military and Police Service Chaplain',
-      'Correctional Institution & Prison Chaplain',
-      'Corporate and Industrial Workplace Chaplain',
-      'Disaster Relief and Trauma Response Counselor',
-    ],
-    admissionRequirements: [
-      'High School / Senior High School Graduate with good moral character',
-      'Written testimony of calling to institutional and compassionate service',
-      'Pastoral and Character Recommendation Letters',
-      'Psychological Assessment and Faculty Admissions Panel Interview',
-    ],
-    tuitionPerUnit: 1500,
-    featured: true,
-  },
-  {
     id: 'prog-bth',
-    name: 'Bachelor of Theology (B.Th.)',
+    name: 'Bachelor of Arts in Theology',
     code: 'BTH-401',
     level: 'undergraduate',
     duration: '4 Years (8 Semesters)',
@@ -326,305 +161,6 @@ export const INITIAL_PROGRAMS: AcademicProgram[] = [
     ],
     tuitionPerUnit: 1450,
     featured: true,
-  },
-  {
-    id: 'prog-bcm',
-    name: 'Bachelor of Christian Ministry (B.C.M.)',
-    code: 'BCM-402',
-    level: 'undergraduate',
-    duration: '4 Years (8 Semesters)',
-    credits: 132,
-    studyMode: 'On-Campus Full-Time',
-    shortDescription:
-      'A practice-oriented ministry degree focusing on discipleship, worship leadership, Christian education, community development, and church organizational management.',
-    fullDescription:
-      'The Bachelor of Christian Ministry prepares holistic ministry leaders capable of mobilizing church departments, leading contemporary discipleship movements, organizing compassionate community outreaches, and directing non-profit Christian agencies throughout the Philippines and Southeast Asia.',
-    objectives: [
-      'Equip leaders with solid biblical interpretation and theological understanding.',
-      'Develop competencies in leadership dynamics, team mobilization, and ministry governance.',
-      'Cultivate specialized skills in Christian education, youth ministries, and community development.',
-      'Integrate faith and compassionate outreach to address societal brokenness.',
-    ],
-    curriculum: [
-      {
-        yearOrModule: 'First & Second Year (Biblical Foundations)',
-        courses: [
-          { code: 'BIB-101', title: 'Old & New Testament Introductions', units: 6 },
-          { code: 'THE-101', title: 'Christian Doctrine & Worldview', units: 3 },
-          { code: 'CED-101', title: 'Principles of Christian Education', units: 3 },
-          { code: 'LEA-201', title: 'Biblical Servant Leadership', units: 3 },
-          { code: 'PRA-101', title: 'Field Ministry Practicum', units: 4 },
-        ],
-      },
-      {
-        yearOrModule: 'Third & Fourth Year (Advanced Ministry Practice)',
-        courses: [
-          { code: 'YTH-301', title: 'Next-Generation & Youth Ministry', units: 3 },
-          { code: 'WOR-301', title: 'Theology of Christian Worship & Liturgy', units: 3 },
-          { code: 'COM-401', title: 'Community Development & Holistic Missions', units: 3 },
-          { code: 'NPO-401', title: 'Non-Profit Management & Church Finance', units: 3 },
-          { code: 'CAP-499', title: 'Integrated Ministry Project & Internship', units: 6 },
-        ],
-      },
-    ],
-    careerOpportunities: [
-      'Church Ministry Coordinator & Administrator',
-      'Christian Education Director',
-      'Youth & Campus Ministry Pastor',
-      'NGO & Christian Non-Profit Program Manager',
-      'Community Outreach & Relief Coordinator',
-    ],
-    admissionRequirements: [
-      'High School Report Card (Form 138) / Transcript of Records',
-      'Born-Again Christian with minimum 2 years active church involvement',
-      'Pastor & Church Leader Endorsement Letters',
-      'Admissions Interview & Christian Service Evaluation',
-    ],
-    tuitionPerUnit: 1400,
-    featured: true,
-  },
-  {
-    id: 'prog-mdiv',
-    name: 'Master of Divinity (M.Div.)',
-    code: 'MDIV-801',
-    level: 'graduate',
-    duration: '3 Years (Full-Time) / 4–5 Years (Modular Hybrid)',
-    credits: 90,
-    studyMode: 'Modular / Hybrid',
-    shortDescription:
-      'The premier professional graduate theological degree designed for pastors, scholars, and church leaders seeking in-depth original language exegesis, advanced theology, and strategic ministry leadership.',
-    fullDescription:
-      'The Master of Divinity at PCM is designed to produce scholarly pastors and visionary kingdom leaders. Offered in both resident and flexible modular formats for bi-vocational and active ministry practitioners, the program integrates advanced Hebrew and Greek exegesis, historical-dogmatic theology, and contemporary contextual application for the Philippine and Asian ministry landscapes.',
-    objectives: [
-      'Conduct rigorous grammatical-historical exegesis of Old and New Testament Scriptures in original languages.',
-      'Synthesize biblical, historical, and systematic theology to formulate sound theological paradigms.',
-      'Execute high-level expository preaching and persuasive pastoral communication.',
-      'Lead congregations through revitalization, strategic mission initiatives, and complex ethical challenges.',
-    ],
-    curriculum: [
-      {
-        yearOrModule: 'Core Exegesis & Biblical Studies',
-        courses: [
-          { code: 'OT-501', title: 'Advanced Old Testament Theology & Exegesis', units: 3 },
-          { code: 'NT-501', title: 'Advanced New Testament Theology & Greek Exegesis', units: 3 },
-          { code: 'HEB-501', title: 'Hebrew Exegetical Methods in Prophetic Literature', units: 3 },
-          { code: 'GRK-501', title: 'Pauline Epistles Greek Exegesis', units: 3 },
-        ],
-      },
-      {
-        yearOrModule: 'Historical & Systematic Theology',
-        courses: [
-          { code: 'ST-601', title: 'Advanced Dogmatics: Doctrine of God & Trinity', units: 3 },
-          { code: 'ST-602', title: 'Covenant Theology & Dispensational Perspectives', units: 3 },
-          { code: 'CH-601', title: 'History of the Church & Philippine Evangelical Movement', units: 3 },
-          { code: 'AP-601', title: 'Contemporary Apologetics & Cultural Engagement', units: 3 },
-        ],
-      },
-      {
-        yearOrModule: 'Pastoral Praxis & Thesis',
-        courses: [
-          { code: 'PR-701', title: 'Advanced Expository Homiletics', units: 3 },
-          { code: 'PC-701', title: 'Pastoral Counseling & Crisis Intervention', units: 3 },
-          { code: 'ML-701', title: 'Strategic Leadership & Church Governance', units: 3 },
-          { code: 'TH-799', title: 'Master of Divinity Thesis / Major Expository Project', units: 6 },
-        ],
-      },
-    ],
-    careerOpportunities: [
-      'Senior Pastor & Preaching Minister',
-      'Theological Seminary / Bible College Professor',
-      'Denominational Director / Bishop / Overseer',
-      'Military, Hospital, or Corporate Chaplain',
-      'Doctor of Ministry (D.Min.) / Ph.D. in Theology Candidate',
-    ],
-    admissionRequirements: [
-      'Bachelor’s Degree from an accredited college or university (any discipline)',
-      'Official Transcript of Records with GPA 2.5 or better',
-      'Written Statement of Christian Faith and Calling into Pastoral/Theological Ministry',
-      'Three Recommendation Letters (Pastor, Academic Professor, Ministry Colleague)',
-      'Theological Admissions Writing Assessment & Faculty Interview',
-    ],
-    tuitionPerUnit: 1850,
-    featured: true,
-  },
-  {
-    id: 'prog-mcl',
-    name: 'Master of Christian Leadership (M.C.L.)',
-    code: 'MCL-802',
-    level: 'graduate',
-    duration: '2 Years (4 Semesters / Weekend Cohorts)',
-    credits: 48,
-    studyMode: 'Evening & Weekend',
-    shortDescription:
-      'A professional master’s degree empowering marketplace professionals, ministry directors, and church board elders with kingdom leadership models and organizational wisdom.',
-    fullDescription:
-      'Designed specifically for working professionals, marketplace ministers, and senior church leaders, the MCL combines biblical principles of governance, ethical stewardship, conflict transformation, and visionary strategic planning to multiply kingdom impact across sectors.',
-    objectives: [
-      'Integrate biblical theology with organizational leadership principles.',
-      'Develop emotional intelligence, spiritual maturity, and team-building capacities.',
-      'Master financial stewardship, legal compliance, and strategic board governance.',
-      'Cultivate impactful ministry leadership in corporate, ecclesiastical, and civil sectors.',
-    ],
-    curriculum: [
-      {
-        yearOrModule: 'Year 1 (Leadership Core)',
-        courses: [
-          { code: 'LDR-501', title: 'Biblical Foundations of Leadership', units: 3 },
-          { code: 'ORG-502', title: 'Organizational Behavior & Church Culture', units: 3 },
-          { code: 'ETH-503', title: 'Executive Ethics & Corporate Integrity', units: 3 },
-          { code: 'STR-504', title: 'Strategic Visioning & Change Management', units: 3 },
-        ],
-      },
-      {
-        yearOrModule: 'Year 2 (Applied Kingdom Leadership)',
-        courses: [
-          { code: 'GOV-601', title: 'Church Governance, Policy & Risk Management', units: 3 },
-          { code: 'CNF-602', title: 'Conflict Resolution & Peacemaking', units: 3 },
-          { code: 'MKP-603', title: 'Marketplace Ministry & Faith at Work', units: 3 },
-          { code: 'CAP-699', title: 'Organizational Transformation Capstone Project', units: 6 },
-        ],
-      },
-    ],
-    careerOpportunities: [
-      'Executive Pastor / Church Business Administrator',
-      'Marketplace Ministry Director & Chaplain',
-      'Christian School / College Administrator',
-      'Faith-Based NGO Executive Director',
-      'Church Board Chairman / Elder Board Member',
-    ],
-    admissionRequirements: [
-      'Bachelor\'s Degree in any field from an accredited institution',
-      'Minimum 2 years of recognized leadership or professional experience',
-      'Endorsement from Home Church Senior Pastor',
-      'Admissions Interview with Program Director',
-    ],
-    tuitionPerUnit: 1800,
-    featured: false,
-  },
-  {
-    id: 'prog-dip',
-    name: 'Diploma in Ministry (Dip.Min.)',
-    code: 'DIP-201',
-    level: 'diploma',
-    duration: '2 Years (4 Semesters)',
-    credits: 64,
-    studyMode: 'On-Campus Full-Time',
-    shortDescription:
-      'A practical two-year diploma program providing essential foundational Bible survey, evangelism, teaching methods, and ministry practicum.',
-    fullDescription:
-      'The Diploma in Ministry is ideal for local church workers, lay leaders, and ministry assistants seeking sound biblical foundation and hands-on ministerial skills in an accelerated timeframe. All units earned ladder seamlessly into the Bachelor of Theology program.',
-    objectives: [
-      'Provide solid understanding of the entire biblical narrative.',
-      'Equip students with practical evangelism, discipleship, and teaching skills.',
-      'Instill spiritual disciplines and love for the local church body.',
-    ],
-    curriculum: [
-      {
-        yearOrModule: 'Full 2-Year Program',
-        courses: [
-          { code: 'BIB-101', title: 'Old & New Testament Survey', units: 6 },
-          { code: 'THE-101', title: 'Essential Christian Doctrines', units: 3 },
-          { code: 'EVN-101', title: 'Personal Evangelism & Discipleship', units: 3 },
-          { code: 'MIN-201', title: 'Church Leadership & Small Group Dynamics', units: 3 },
-          { code: 'PRA-200', title: 'Field Ministry Practicum (120 Hours)', units: 4 },
-        ],
-      },
-    ],
-    careerOpportunities: [
-      'Lay Preacher & Small Group Overseer',
-      'Assistant Pastor & Ministry Worker',
-      'Church Sunday School Superintendent',
-      'Church Outreach Worker',
-    ],
-    admissionRequirements: [
-      'High School Graduate or equivalent',
-      'Testimony of Salvation and Church Membership',
-      'Pastoral Letter of Endorsement',
-    ],
-    tuitionPerUnit: 1300,
-    featured: false,
-  },
-  {
-    id: 'prog-cert',
-    name: 'Certificate in Biblical Studies (C.B.S.)',
-    code: 'CBS-101',
-    level: 'certificate',
-    duration: '1 Year (2 Semesters / Modular)',
-    credits: 30,
-    studyMode: 'Online & Modular',
-    shortDescription:
-      'An accessible 1-year foundational certificate covering Old & New Testament surveys, basic hermeneutics, personal discipleship, and Christian worldview.',
-    fullDescription:
-      'Perfect for Sunday school teachers, cell group leaders, professionals, and church volunteers who desire systematic Bible knowledge without enrolling in a multi-year degree. Fully available in flexible modular and online formats.',
-    objectives: [
-      'Understand the broad scope and redemptive themes of the Bible.',
-      'Learn how to properly read, interpret, and apply the Scriptures.',
-      'Deepen personal devotion, prayer life, and spiritual vitality.',
-    ],
-    curriculum: [
-      {
-        yearOrModule: 'Semester 1 & 2 Modules',
-        courses: [
-          { code: 'BIB-01', title: 'How to Study the Bible (Hermeneutics for Laymen)', units: 3 },
-          { code: 'BIB-02', title: 'Old Testament Essentials', units: 3 },
-          { code: 'BIB-03', title: 'New Testament Essentials', units: 3 },
-          { code: 'THE-01', title: 'Core Beliefs of Christianity', units: 3 },
-          { code: 'MIN-01', title: 'Practical Discipleship in Daily Life', units: 3 },
-        ],
-      },
-    ],
-    careerOpportunities: [
-      'Small Group / Bible Study Leader',
-      'Sunday School Teacher & Youth Counselor',
-      'Equipped Lay Servant in Local Church',
-      'Foundation for Diploma / Degree Programs',
-    ],
-    admissionRequirements: [
-      'Open to all born-again believers with high school diploma or equivalent',
-      'Recommendation from Church Pastor / Elder',
-    ],
-    tuitionPerUnit: 1200,
-    featured: true,
-  },
-  {
-    id: 'prog-grad-cert',
-    name: 'Graduate Certificate in Theological Studies',
-    code: 'GCTS-501',
-    level: 'graduate',
-    duration: '1 Year (Modular / Hybrid)',
-    credits: 24,
-    studyMode: 'Modular / Hybrid',
-    shortDescription:
-      'A focused post-baccalaureate certificate providing graduate-level theological and hermeneutical training for bi-vocational leaders and ministry specialists.',
-    fullDescription:
-      'The Graduate Certificate in Theological Studies offers concentrated graduate courses for degreed individuals seeking theological enrichment or transitioning into formal ministry. All 24 units transfer directly into the Master of Divinity program.',
-    objectives: [
-      'Engage with advanced biblical interpretation and theological reflection.',
-      'Evaluate cultural issues through a rigorous Reformed and Evangelical framework.',
-      'Strengthen teaching ministries within local church communities.',
-    ],
-    curriculum: [
-      {
-        yearOrModule: 'Graduate Modules',
-        courses: [
-          { code: 'ST-501', title: 'Systematic Theology Overview', units: 3 },
-          { code: 'BT-502', title: 'Biblical Theology of Redemption', units: 3 },
-          { code: 'AP-503', title: 'Christian Apologetics & Cultural Engagement', units: 3 },
-          { code: 'EX-504', title: 'Advanced Hermeneutics & Exegetical Principles', units: 3 },
-        ],
-      },
-    ],
-    careerOpportunities: [
-      'Theological Educator in Local Churches',
-      'Christian Ministry Director',
-      'Direct Pathway to Master of Divinity (M.Div.)',
-    ],
-    admissionRequirements: [
-      'Recognized Bachelor\'s Degree in any discipline',
-      'Christian Testimony & Pastoral Recommendation',
-    ],
-    tuitionPerUnit: 1800,
-    featured: false,
   },
 ];
 
@@ -2959,13 +2495,7 @@ export const INITIAL_SITE_CONFIG: SiteConfig = {
       isVisible: true,
       order: 4,
       dropdown: [
-        { id: 'sub-all-programs', label: 'All Academic Programs', subSection: 'all-programs', actionType: 'navigate', order: 1, isVisible: true },
-        { id: 'sub-shs', label: 'Senior High School (GAS Strand)', subSection: 'shs', actionType: 'navigate', order: 2, isVisible: true },
-        { id: 'sub-assoc', label: 'Associate of Theology (2-Year)', subSection: 'assoc', actionType: 'navigate', order: 3, isVisible: true },
-        { id: 'sub-undergrad', label: 'Bachelor of Theology (B.Th. 4-Year)', subSection: 'undergrad', actionType: 'navigate', order: 4, isVisible: true },
-        { id: 'sub-chaplaincy', label: 'BTh Specialized Chaplaincy Ministry', subSection: 'chaplaincy', actionType: 'navigate', order: 5, isVisible: true },
-        { id: 'sub-grad', label: 'Graduate Programs (M.Div. & M.C.L.)', subSection: 'grad', actionType: 'navigate', order: 6, isVisible: true },
-        { id: 'sub-certs', label: 'Certificate & Diploma Programs', subSection: 'certs', actionType: 'navigate', order: 7, isVisible: true },
+        { id: 'sub-undergrad', label: 'Bachelor of Arts in Theology (B.Th. 4-Year)', subSection: 'undergrad', actionType: 'navigate', order: 1, isVisible: true },
       ],
     },
     {
@@ -3194,12 +2724,7 @@ export const INITIAL_DONATION_METHODS: DonationPaymentMethod[] = [
     accountName: 'Philippine College of Ministry, Inc.',
     accountNumber: '0917 582 1992',
     qrCodeUrl: 'https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?q=80&w=800&auto=format&fit=crop',
-    instructions: [
-      'Open your GCash App and tap "Send Money" > "Express Send" or tap the QR scanner icon to scan our official PCM QR code.',
-      'Enter the giving amount and input your Full Name in the optional message box.',
-      'Take a screenshot of the transaction confirmation receipt.',
-      'Submit your donation notice using the online form below or email finance@pcm.ph with your receipt.',
-    ],
+    instructions: 'Open your GCash App, tap "Send Money" > "Express Send" or tap the QR scanner icon to scan our official PCM QR code. Enter the amount, input your Full Name in the optional message box, and take a screenshot of your transaction receipt.',
     active: true,
     order: 1,
     badge: 'Instant QR & Mobile',
@@ -3213,13 +2738,7 @@ export const INITIAL_DONATION_METHODS: DonationPaymentMethod[] = [
     bankBranch: 'BDO Baguio – Session Road Branch',
     swiftCode: 'BNORPHMM',
     qrCodeUrl: 'https://images.unsplash.com/photo-1559526324-4b87b5e36e44?q=80&w=800&auto=format&fit=crop',
-    instructions: [
-      'Log in to your BDO Online Banking app or visit any BDO branch nationwide for over-the-counter deposit.',
-      'Choose Fund Transfer via InstaPay or PESONet to the PCM account details listed above.',
-      'Use "Philippine College of Ministry Inc." as the recipient account name and note your donor name in the remarks.',
-      'Save your deposit slip or transaction validation reference.',
-      'Complete the online donation verification form with your reference number.',
-    ],
+    instructions: 'Transfer via BDO Online Banking, InstaPay, PESONet, or over-the-counter deposit at any BDO branch nationwide. Use "Philippine College of Ministry Inc." as the recipient account name and keep your validation slip or transaction reference.',
     active: true,
     order: 2,
     badge: 'Preferred for Major Gifts',
@@ -3233,12 +2752,7 @@ export const INITIAL_DONATION_METHODS: DonationPaymentMethod[] = [
     bankBranch: 'BPI Baguio – Harrison Road Branch',
     swiftCode: 'BOPIPHMM',
     qrCodeUrl: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?q=80&w=800&auto=format&fit=crop',
-    instructions: [
-      'Send money through BPI Online app, BPI to BPI fund transfer, or InstaPay from any participating Philippine bank.',
-      'Include your donor name and designated ministry purpose in the remarks field.',
-      'Save the confirmation screenshot with reference number.',
-      'Notify the cashier via the donation notice form below.',
-    ],
+    instructions: 'Send money through BPI Online app, BPI to BPI fund transfer, or InstaPay from any participating Philippine bank. Please include your donor name in the remarks field.',
     active: true,
     order: 3,
     badge: 'Zero-Fee Transfer (BPI)',
@@ -3251,12 +2765,7 @@ export const INITIAL_DONATION_METHODS: DonationPaymentMethod[] = [
     accountNumber: '142 3 14251920 4',
     bankBranch: 'Metrobank La Trinidad Benguet Branch',
     swiftCode: 'MBTCPHMM',
-    instructions: [
-      'Send via Metrobank Mobile Banking app or transfer from any Philippine commercial bank via PESONet or InstaPay.',
-      'Ensure account name is entered as "Philippine College of Ministry Inc."',
-      'Capture and save your electronic receipt validation.',
-      'Submit the donation notice on our website to receive an official receipt.',
-    ],
+    instructions: 'Send via Metrobank Mobile Banking app or transfer from any Philippine commercial bank via PESONet / InstaPay.',
     active: true,
     order: 4,
     badge: 'Local Benguet Branch',
@@ -3269,12 +2778,7 @@ export const INITIAL_DONATION_METHODS: DonationPaymentMethod[] = [
     accountNumber: '0012 8004 9271 (USD / PHP Account)',
     bankBranch: 'BDO Unibank, Baguio Session Road, Philippines',
     swiftCode: 'BNORPHMM',
-    instructions: [
-      'For international partners, mission boards, and alumni in the United States, Canada, Australia, and overseas.',
-      'Request an international wire transfer from your financial institution using the SWIFT/BIC code BNORPHMM.',
-      'Designate "Philippine College of Ministry Inc." as the recipient beneficiary account.',
-      'Notify info@pcm.ph or pcmpresident1992@gmail.com with your wire transfer remittance advice to obtain an official acknowledgment receipt.',
-    ],
+    instructions: 'For partners, Christian Church / Churches of Christ mission boards, and alumni in the United States, Canada, Australia, and overseas. Please notify info@pcm.ph or pcmpresident1992@gmail.com with your remittance advice so we can furnish a formal acknowledgment receipt.',
     active: true,
     order: 5,
     badge: 'Global Partners & Mission Boards',

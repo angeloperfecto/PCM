@@ -192,10 +192,10 @@ export const Footer: React.FC = () => {
           <ul className="space-y-2 text-[#D0DED8]">
             <li>
               <button
-                onClick={() => navigateTo('academics', 'shs')}
-                className="hover:text-white transition text-left cursor-pointer"
+                onClick={() => navigateTo('academics', 'undergrad')}
+                className="hover:text-white transition text-left cursor-pointer font-medium text-white"
               >
-                Senior High School (GAS Strand)
+                Bachelor of Arts in Theology (B.Th.)
               </button>
             </li>
             <li>
@@ -203,39 +203,31 @@ export const Footer: React.FC = () => {
                 onClick={() => navigateTo('academics', 'undergrad')}
                 className="hover:text-white transition text-left cursor-pointer"
               >
-                Bachelor of Theology (B.Th.)
+                Biblical Greek & Hebrew Exegesis
               </button>
             </li>
             <li>
               <button
-                onClick={() => navigateTo('academics', 'chaplaincy')}
+                onClick={() => navigateTo('academics', 'undergrad')}
                 className="hover:text-white transition text-left cursor-pointer"
               >
-                BTh Specialized Chaplaincy (SCM)
+                Pastoral Ministry & Internship
               </button>
             </li>
             <li>
               <button
-                onClick={() => navigateTo('academics', 'assoc')}
+                onClick={() => navigateTo('academics', 'calendar')}
                 className="hover:text-white transition text-left cursor-pointer"
               >
-                Associate of Theology (2-Year)
+                Academic Calendar (AY 2026–2027)
               </button>
             </li>
             <li>
               <button
-                onClick={() => navigateTo('academics', 'grad')}
-                className="hover:text-white transition text-left cursor-pointer"
+                onClick={() => navigateTo('apply')}
+                className="hover:text-white transition text-left cursor-pointer text-[#85AA9B] font-semibold"
               >
-                Master of Divinity (M.Div.)
-              </button>
-            </li>
-            <li>
-              <button
-                onClick={() => navigateTo('admissions', 'vouchers')}
-                className="hover:text-white transition text-left cursor-pointer"
-              >
-                DepEd Senior High Vouchers
+                Apply for B.Th. Admissions →
               </button>
             </li>
             <li>

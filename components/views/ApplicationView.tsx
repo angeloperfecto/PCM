@@ -31,8 +31,8 @@ export const ApplicationView: React.FC = () => {
 
   // Application Form State
   const [formData, setFormData] = useState({
-    programId: programs[0]?.id || 'bth',
-    programName: programs[0]?.name || 'Bachelor of Theology',
+    programId: programs[0]?.id || 'prog-bth',
+    programName: programs[0]?.name || 'Bachelor of Arts in Theology',
     programLevel: (programs[0]?.level || 'undergraduate') as ProgramLevel,
     fullName: '',
     email: '',
@@ -299,8 +299,8 @@ export const ApplicationView: React.FC = () => {
                       setSubmittedRef(null);
                       setStep(1);
                       setFormData({
-                        programId: programs[0]?.id || 'bth',
-                        programName: programs[0]?.name || 'Bachelor of Theology',
+                        programId: programs[0]?.id || 'prog-bth',
+                        programName: programs[0]?.name || 'Bachelor of Arts in Theology',
                         programLevel: 'undergraduate',
                         fullName: '',
                         email: '',

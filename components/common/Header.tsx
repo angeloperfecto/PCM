@@ -38,6 +38,8 @@ export const Header: React.FC = () => {
   const {
     currentSection,
     navigateTo,
+    programs,
+    setSelectedProgram,
     setSearchModalOpen,
     isAdminLoggedIn,
     isStudentLoggedIn,
@@ -102,16 +104,29 @@ export const Header: React.FC = () => {
     {
       id: 'academics',
       label: 'ACADEMICS',
-      dropdown: [
-        { label: 'All Academic Programs', subSection: 'all-programs' },
-        { label: 'Senior High School (GAS Strand)', subSection: 'shs' },
-        { label: 'Associate of Theology (2-Year)', subSection: 'assoc' },
-        { label: 'Bachelor of Theology (B.Th. 4-Year)', subSection: 'undergrad' },
-        { label: 'BTh Specialized Chaplaincy Ministry', subSection: 'chaplaincy' },
-        { label: 'Graduate Programs (M.Div. & M.C.L.)', subSection: 'grad' },
-        { label: 'Certificate & Diploma Programs', subSection: 'certs' },
-        { label: 'Academic Calendar (AY 2026–2027)', subSection: 'calendar', icon: Calendar },
-      ],
+      dropdown: (programs && programs.length > 0 ? programs : [
+        {
+          id: 'prog-bth',
+          name: 'Bachelor of Arts in Theology',
+          code: 'BTH-401',
+          duration: '4 Years (8 Semesters)',
+        } as any,
+      ]).map((prog) => {
+        const hasTheology = prog.name.toLowerCase().includes('theology');
+        const has4Years = prog.name.includes('4-Year') || (prog.duration && prog.duration.includes('4'));
+        const label = hasTheology && !has4Years
+          ? `${prog.name} (B.Th. 4-Year)`
+          : prog.name;
+
+        return {
+          label,
+          action: () => {
+            setSelectedProgram(prog);
+            navigateTo('academics', prog.id);
+          },
+          icon: GraduationCap,
+        };
+      }),
     },
     {
       id: 'admissions',
@@ -496,7 +511,7 @@ export const Header: React.FC = () => {
                 {hasDropdown && activeDropdown === item.id && (
                   <div className="absolute left-0 top-full w-72 bg-white border border-[#D0DED8] shadow-2xl rounded-sm py-2 text-[#18392B] z-50 animate-in fade-in slide-in-from-top-1 duration-150">
                     <div className="px-3 py-1.5 mb-1 border-b border-[#D0DED8] text-[10px] text-[#588B76] font-mono tracking-widest uppercase font-bold">
-                      {item.label} DIRECTORY
+                      {item.id === 'academics' ? 'ACADEMIC DIRECTORY' : `${item.label} DIRECTORY`}
                     </div>
                     {item.dropdown?.map((sub, idx) => {
                       const Icon = sub.icon;

@@ -42,6 +42,31 @@ export const AcademicsView: React.FC = () => {
     }
   }, [sub, programs, setSelectedProgram]);
 
+  const availableLevels = React.useMemo(() => {
+    const levels = new Set<string>();
+    programs.forEach((p) => {
+      if (p.level) levels.add(p.level);
+    });
+    return levels;
+  }, [programs]);
+
+  const tabs = React.useMemo(() => {
+    const list: { id: 'all' | ProgramLevel; label: string }[] = [{ id: 'all', label: 'All Programs' }];
+    if (availableLevels.has('undergraduate')) {
+      list.push({ id: 'undergraduate', label: 'Undergraduate Degrees (B.Th.)' });
+    }
+    if (availableLevels.has('senior-high')) {
+      list.push({ id: 'senior-high', label: 'Senior High School (GAS)' });
+    }
+    if (availableLevels.has('graduate')) {
+      list.push({ id: 'graduate', label: 'Graduate School (Master’s)' });
+    }
+    if (availableLevels.has('certificate')) {
+      list.push({ id: 'certificate', label: 'Certificates & Associate' });
+    }
+    return list;
+  }, [availableLevels]);
+
   const filtered = programs.filter((p) => {
     if (selectedLevel === 'all') return true;
     return p.level === selectedLevel;
@@ -77,7 +102,7 @@ export const AcademicsView: React.FC = () => {
             ACADEMIC PROGRAMS & CURRICULUM
           </h1>
           <p className="text-xs sm:text-sm text-slate-200 max-w-2xl mx-auto leading-relaxed font-sans font-light">
-            Providing CHED-recognized degrees, Senior High DepEd vouchers, original language study (Greek/Hebrew), and supervised pastoral apprenticeships in Lamtang, Benguet.
+            Providing CHED-recognized ministerial degree training, original biblical language exegesis (Greek & Hebrew), and supervised pastoral apprenticeships in Lamtang, Benguet.
           </p>
         </div>
       </div>
@@ -86,39 +111,42 @@ export const AcademicsView: React.FC = () => {
         {/* Level Filters */}
         <div className="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-200">
           <div className="flex flex-wrap items-center gap-2">
-            {(
-              [
-                { id: 'all', label: 'All Programs' },
-                { id: 'senior-high', label: 'Senior High School (GAS)' },
-                { id: 'undergraduate', label: 'Undergraduate Degrees (B.Th.)' },
-                { id: 'graduate', label: 'Graduate School (Master’s)' },
-                { id: 'certificate', label: 'Certificates & Associate' },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setSelectedLevel(tab.id as any)}
-                className={`px-3.5 py-1.5 rounded-sm text-xs font-bold transition cursor-pointer ${
-                  selectedLevel === tab.id
-                    ? 'bg-[#18392B] text-white shadow-xs'
-                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
+            {tabs.length > 2 ? (
+              tabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSelectedLevel(tab.id as any)}
+                  className={`px-3.5 py-1.5 rounded-sm text-xs font-bold transition cursor-pointer ${
+                    selectedLevel === tab.id
+                      ? 'bg-[#18392B] text-white shadow-xs'
+                      : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-mono font-bold uppercase tracking-wider bg-[#18392B] text-[#85AA9B] px-3 py-1 rounded-sm">
+                  Available Degree Offering
+                </span>
+                <span className="text-xs text-slate-500 font-medium">
+                  {programs.length} CHED-Recognized Theological Degree
+                </span>
+              </div>
+            )}
           </div>
 
           <button
             onClick={() => navigateTo('admissions', 'tuition')}
             className="text-xs font-bold text-[#18392B] hover:text-[#588B76] uppercase tracking-wider flex items-center gap-1 cursor-pointer"
           >
-            <span>View Tuition & Vouchers →</span>
+            <span>View Tuition & Scholarships →</span>
           </button>
         </div>
 
         {/* Programs Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className={`grid grid-cols-1 ${filtered.length === 1 ? 'max-w-2xl mx-auto w-full' : 'md:grid-cols-2 lg:grid-cols-3'} gap-6`}>
           {filtered.map((prog) => (
             <div
               key={prog.id}
