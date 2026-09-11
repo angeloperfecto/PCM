@@ -49,7 +49,7 @@ export const Footer: React.FC = () => {
             </div>
             <div>
               <h3 className="font-serif text-base font-bold text-white tracking-wide uppercase">
-                {siteIdentity?.name || 'Philippine College of Ministry'}
+                {siteIdentity?.name || siteIdentity?.institutionName || 'Philippine College of Ministry'}
               </h3>
               <p className="text-xs text-[#85AA9B] italic font-serif">
                 {siteIdentity?.motto || 'Equipping Servants. Transforming Lives. Advancing God\'s Kingdom.'}
@@ -93,15 +93,28 @@ export const Footer: React.FC = () => {
           <div className="space-y-2 text-[#D0DED8]">
             <div className="flex items-start gap-2.5">
               <MapPin className="w-4 h-4 text-[#85AA9B] shrink-0 mt-0.5" />
-              <span>{contact?.address || 'Lamtang, Puguis, La Trinidad, Benguet, Philippines (P.O. Box 298, Baguio City 2600)'}</span>
+              <span>
+                {contact?.address ||
+                  (contact?.addressLine1
+                    ? `${contact.addressLine1}, ${contact.addressLine2 || ''}${contact.poBox ? ` (${contact.poBox})` : ''}`
+                    : 'Lamtang, Puguis, La Trinidad, Benguet 2601, Philippines (P.O. Box 298, Baguio City 2600)')}
+              </span>
             </div>
             <div className="flex items-center gap-2.5">
               <Phone className="w-4 h-4 text-[#85AA9B] shrink-0" />
-              <span>{contact?.phone || '+63 74 422 2577 / +63 917 582 1992'}</span>
+              <span>
+                {contact?.phone ||
+                  [contact?.phonePrimary, contact?.phoneSecondary].filter(Boolean).join(' / ') ||
+                  '+63 74 422 2577 / +63 917 582 1992'}
+              </span>
             </div>
             <div className="flex items-center gap-2.5">
               <Mail className="w-4 h-4 text-[#85AA9B] shrink-0" />
-              <span>{contact?.email || 'info@pcm.ph | pcmpresident1992@gmail.com | admissions@pcm.ph'}</span>
+              <span>
+                {contact?.email ||
+                  [contact?.emailGeneral, contact?.emailAdmissions].filter(Boolean).join(' | ') ||
+                  'info@pcm.ph | admissions@pcm.ph'}
+              </span>
             </div>
           </div>
         </div>

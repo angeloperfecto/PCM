@@ -1299,9 +1299,9 @@ export const INITIAL_TESTIMONIALS: Testimonial[] = [
 export const INITIAL_STATS: ImpactStat[] = [
   {
     id: 'stat-1',
-    value: '24+',
+    value: '34+',
     label: 'Years of Ministry Excellence',
-    description: 'Providing faithful, Christ-centered theological education since 2002.',
+    description: 'Providing faithful, Christ-centered theological education since 1992.',
     iconName: 'Award',
   },
   {

@@ -33,7 +33,7 @@ export const LifeAtPCMSection: React.FC = () => {
     },
     {
       title: 'Brotherhood & Sisterhood Fellowship',
-      desc: 'Lifelong friendships forged through communal meals, prayer walks in Diliman, and residence hall devotions.',
+      desc: 'Lifelong friendships forged through communal meals, prayer walks along our serene mountain trails in Lamtang, Benguet, and residence hall devotions.',
       icon: Users,
       image: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=600&auto=format&fit=crop',
     },

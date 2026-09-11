@@ -15,7 +15,8 @@ import {
 } from 'lucide-react';
 
 export const AboutSection: React.FC = () => {
-  const { navigateTo } = usePCM();
+  const { navigateTo, siteConfig } = usePCM();
+  const homeAbout = siteConfig?.homeAbout;
 
   const developmentPillars = [
     {
@@ -82,7 +83,7 @@ export const AboutSection: React.FC = () => {
 
             {/* Floating Experience Badge */}
             <div className="absolute -bottom-4 -right-2 sm:right-4 bg-[#18392B] text-white p-3.5 rounded-sm border-2 border-[#588B76] shadow-lg text-center">
-              <span className="block font-serif text-2xl font-bold text-[#85AA9B]">24+</span>
+              <span className="block font-serif text-2xl font-bold text-[#85AA9B]">34+</span>
               <span className="text-[9px] font-bold uppercase tracking-wider text-[#D0DED8]">
                 Years of Faithfulness
               </span>
@@ -99,12 +100,12 @@ export const AboutSection: React.FC = () => {
                 </h2>
               </div>
               <p className="text-xs text-[#588B76] font-bold uppercase tracking-widest font-mono pl-4">
-                About Philippine College of Ministry
+                {homeAbout?.badgeText || 'Institutional Heritage Since 1992'}
               </p>
             </div>
 
             <p className="text-xs sm:text-sm text-[#18392B]/90 leading-relaxed">
-              Founded in 2002, <strong>Philippine College of Ministry (PCM)</strong> stands as a premier theological institution in Northern Luzon and Metro Manila networks, committed to the historic Christian faith, the inerrancy of Holy Scripture, and the urgent imperative of the Great Commission.
+              Founded on June 12, 1992 in Baguio City and situated in Lamtang, Benguet, <strong>Philippine College of Ministry (PCM)</strong> stands as a premier theological institution in Northern Luzon and nationwide networks, committed to the historic Christian faith, the inerrancy of Holy Scripture, and the urgent imperative of the Great Commission.
             </p>
 
             <p className="text-xs text-[#18392B]/75 leading-relaxed">
