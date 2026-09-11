@@ -139,7 +139,7 @@ export const Header: React.FC = () => {
         },
         { label: 'Admission Requirements', subSection: 'requirements' },
         { label: '4-Step Application Process', subSection: 'process' },
-        { label: 'Senior High DepEd Vouchers', subSection: 'vouchers' },
+        { label: 'Required Documents & Credentials', subSection: 'requirements' },
         { label: 'Tuition & Fee Structure', subSection: 'tuition' },
         {
           label: 'Tuition Calculator Tool',
@@ -511,7 +511,7 @@ export const Header: React.FC = () => {
                 {hasDropdown && activeDropdown === item.id && (
                   <div className="absolute left-0 top-full w-72 bg-white border border-[#D0DED8] shadow-2xl rounded-sm py-2 text-[#18392B] z-50 animate-in fade-in slide-in-from-top-1 duration-150">
                     <div className="px-3 py-1.5 mb-1 border-b border-[#D0DED8] text-[10px] text-[#588B76] font-mono tracking-widest uppercase font-bold">
-                      {item.id === 'academics' ? 'ACADEMIC DIRECTORY' : `${item.label} DIRECTORY`}
+                      {item.id === 'academics' ? 'ACADEMIC DIRECTORY' : item.id === 'admissions' ? 'ADMISSION DIRECTORY' : `${item.label} DIRECTORY`}
                     </div>
                     {item.dropdown?.map((sub, idx) => {
                       const Icon = sub.icon;
@@ -527,13 +527,13 @@ export const Header: React.FC = () => {
                             }
                             setActiveDropdown(null);
                           }}
-                          className="w-full text-left px-4 py-2 hover:bg-[#D0DED8]/25 hover:text-[#18392B] transition flex items-center justify-between text-[12px] normal-case font-semibold border-l-2 border-transparent hover:border-[#588B76] cursor-pointer"
+                          className="group w-full text-left px-4 py-2 hover:bg-[#D0DED8]/25 hover:text-[#18392B] transition flex items-center justify-between text-[12px] normal-case font-semibold border-l-2 border-transparent hover:border-[#588B76] cursor-pointer"
                         >
                           <span className="flex items-center gap-2">
                             {Icon && <Icon className="w-3.5 h-3.5 text-[#588B76]" />}
                             <span>{sub.label}</span>
                           </span>
-                          <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 text-[#588B76]" />
+                          <ArrowRight className="w-3 h-3 text-[#588B76]/60 group-hover:text-[#588B76] group-hover:translate-x-0.5 transition-all" />
                         </button>
                       );
                     })}
@@ -721,7 +721,7 @@ export const Header: React.FC = () => {
             >
               <span className="flex items-center gap-2">
                 <Sparkles className="w-3.5 h-3.5 text-[#85AA9B]" />
-                <span>Tuition & Voucher Calculator</span>
+                <span>Tuition & Fee Calculator</span>
               </span>
               <ArrowRight className="w-3.5 h-3.5 text-[#588B76]" />
             </button>

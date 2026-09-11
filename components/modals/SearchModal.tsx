@@ -77,7 +77,7 @@ export const SearchModal: React.FC = () => {
   const quickLinks = [
     {
       title: 'Online Application AY 2026–2027',
-      desc: 'Begin digital application for B.Th., Senior High, or Graduate programs',
+      desc: 'Begin digital application for Bachelor of Arts in Theology (B.Th.)',
       icon: GraduationCap,
       action: () => {
         navigateTo('apply');

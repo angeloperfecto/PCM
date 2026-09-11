@@ -70,8 +70,8 @@ export const ResourcesView: React.FC = () => {
       a: 'Yes. Philippine College of Ministry operates in compliance with the Commission on Higher Education (CHED) standards and is affiliated with the Philippine Association of Bible and Theological Schools (PABATS) and the Philippine Council of Evangelical Churches (PCEC).',
     },
     {
-      q: 'Does PCM accept DepEd Senior High School Vouchers for Grades 11 & 12?',
-      a: 'Yes! Grade 10 completers from public Junior High Schools qualify for 100% DepEd Senior High School ESC/QVR voucher coverage, meaning zero out-of-pocket tuition for the General Academic Strand (GAS).',
+      q: 'What scholarships and financial assistance are available for B.Th. students?',
+      a: 'PCM provides subsidized tuition through our institutional endowment, Pastoral Worker Grants for children of pastors and missionaries, local church matching funds, and on-campus work-study assistantships.',
     },
     {
       q: 'Where is the permanent campus located and how can I visit?',

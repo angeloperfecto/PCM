@@ -51,12 +51,12 @@ export const WhyChoosePCMView: React.FC = () => {
     },
     {
       id: 'reason-3',
-      title: 'Affordable Tuition & Government Voucher Support',
+      title: 'Affordable Tuition & Ministerial Scholarship Support',
       short: 'Ministry Preparation Within Financial Reach',
       icon: Award,
-      desc: 'We believe God’s call to ministry should never be hindered by insurmountable financial debt. PCM offers among the most affordable theological tuition rates in the Philippines, paired with generous pastoral grants and Senior High School DepEd voucher subsidies.',
+      desc: 'We believe God’s call to ministry should never be hindered by insurmountable financial debt. PCM offers among the most affordable theological tuition rates in the Philippines, paired with generous pastoral grants and on-campus work-study subsidies.',
       highlights: [
-        'DepEd ESC / Government Voucher support for Senior High School GAS strand (free or minimal tuition)',
+        'Subsidized tuition rates for Bachelor of Arts in Theology candidates',
         'Pastoral Worker Grants for sons and daughters of pastors and missionaries',
         'On-campus work-study scholarships and church matching support programs',
       ],
@@ -235,7 +235,7 @@ export const WhyChoosePCMView: React.FC = () => {
               <div className="grid grid-cols-3 p-3.5 hover:bg-slate-50 bg-slate-50/50">
                 <div className="font-semibold text-slate-900">Financial Burden</div>
                 <div className="text-slate-600">High tuition causing student debt</div>
-                <div className="text-[#18392B] font-medium">Subsidized tuition, DepEd Senior High vouchers, and pastoral grants</div>
+                <div className="text-[#18392B] font-medium">Subsidized theological tuition, pastoral grants, and work-study aid</div>
               </div>
               <div className="grid grid-cols-3 p-3.5 hover:bg-slate-50">
                 <div className="font-semibold text-slate-900">Faculty Access</div>

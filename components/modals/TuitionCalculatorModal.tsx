@@ -92,7 +92,7 @@ export const TuitionCalculatorModal: React.FC = () => {
                 }}
                 className="w-full p-2 rounded border border-slate-300 bg-white font-medium focus:outline-none focus:border-[#588B76]"
               >
-                <option value="undergraduate">Undergraduate (B.Th. / B.C.M.)</option>
+                <option value="undergraduate">Bachelor of Arts in Theology (B.Th. 4-Year)</option>
                 <option value="graduate">Graduate (M.Div. / M.C.L.)</option>
                 <option value="certificate">Certificate in Biblical Studies</option>
               </select>

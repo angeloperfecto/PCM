@@ -47,7 +47,7 @@ export const AdmissionsView: React.FC = () => {
             ADMISSIONS & FINANCIAL AID
           </h1>
           <p className="text-xs sm:text-sm text-slate-200 max-w-2xl mx-auto leading-relaxed font-sans font-light">
-            Empowering called men and women through affordable tuition, DepEd Senior High vouchers, and generous pastoral scholarship grants.
+            Empowering called men and women through affordable ministerial tuition, pastoral grants, and generous scholarship support.
           </p>
 
           <div className="pt-3 flex flex-wrap items-center justify-center gap-3">
@@ -204,7 +204,7 @@ export const AdmissionsView: React.FC = () => {
                   <tr className="bg-[#18392B] text-white font-serif font-bold text-xs uppercase tracking-wider">
                     <th className="p-3.5">Academic Level / Item</th>
                     <th className="p-3.5">Tuition Rate (PHP)</th>
-                    <th className="p-3.5">Details / Voucher Coverage</th>
+                    <th className="p-3.5">Details / Scholarship Coverage</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
