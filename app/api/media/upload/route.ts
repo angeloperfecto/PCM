@@ -5,6 +5,9 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import firebaseConfig from '@/firebase-applet-config.json';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -16,11 +19,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Limit size to 20MB
-    const MAX_SIZE = 20 * 1024 * 1024;
+    // Limit size to 25MB
+    const MAX_SIZE = 25 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
-        { error: 'File size exceeds 20MB limit' },
+        { error: 'File size exceeds 25MB limit' },
         { status: 400 }
       );
     }
@@ -28,8 +31,9 @@ export async function POST(req: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const ext = path.extname(file.name) || '.jpg';
-    const cleanBase = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const rawFileName = file.name || (formData.get('fileName') as string) || `upload_${Date.now()}.jpg`;
+    const ext = path.extname(rawFileName) || '.jpg';
+    const cleanBase = path.basename(rawFileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_') || `file_${Date.now()}`;
     const timestamp = Date.now();
     const sanitizedFolder = requestedFolder.replace(/[^a-zA-Z0-9_-]/g, '_') || 'media';
     const uniqueFilename = `${sanitizedFolder}_${timestamp}_${cleanBase}${ext}`;
@@ -84,41 +88,54 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Fallback: Save to public/uploads/[folder]/
-    const uploadDir = path.join(process.cwd(), 'public', 'uploads', sanitizedFolder);
-    await fs.mkdir(uploadDir, { recursive: true });
+    // 3. Fallback: Save to public/uploads/[folder]/ with safe error catching for read-only containers
+    let publicUrl = '';
+    try {
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', sanitizedFolder);
+      await fs.mkdir(uploadDir, { recursive: true });
 
-    const filePath = path.join(uploadDir, uniqueFilename);
-    await fs.writeFile(filePath, buffer);
-
-    const publicUrl = `/uploads/${sanitizedFolder}/${uniqueFilename}`;
+      const filePath = path.join(uploadDir, uniqueFilename);
+      await fs.writeFile(filePath, buffer);
+      publicUrl = `/uploads/${sanitizedFolder}/${uniqueFilename}`;
+    } catch (diskErr) {
+      console.warn('Local disk write notice (falling back to memory dataUrl):', diskErr);
+    }
 
     // 4. Generate resilient base64 data URL for cross-environment rendering (if image)
     let dataUrl = '';
-    const isImage = (file.type && file.type.startsWith('image/')) || /\.(jpe?g|png|webp|gif|svg)$/i.test(ext);
-    if (isImage) {
-      try {
-        const sharpModule = await import('sharp');
-        const sharp = sharpModule.default;
-        const compressed = await sharp(buffer)
-          .resize({ width: 1280, height: 1280, fit: 'inside', withoutEnlargement: true })
-          .jpeg({ quality: 80, progressive: true })
-          .toBuffer();
-        dataUrl = `data:image/jpeg;base64,${compressed.toString('base64')}`;
-      } catch {
-        if (buffer.length < 600000) {
-          dataUrl = `data:${file.type || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+    const isSvg = (file.type && file.type.includes('svg')) || /\.svg$/i.test(ext);
+    if (isSvg) {
+      dataUrl = `data:image/svg+xml;base64,${buffer.toString('base64')}`;
+    } else {
+      const isImage = (file.type && file.type.startsWith('image/')) || /\.(jpe?g|png|webp|gif|avif)$/i.test(ext);
+      if (isImage) {
+        try {
+          const sharpModule = await import('sharp');
+          const sharp = sharpModule.default;
+          const compressed = await sharp(buffer)
+            .resize({ width: 1440, height: 1440, fit: 'inside', withoutEnlargement: true })
+            .jpeg({ quality: 82, progressive: true })
+            .toBuffer();
+          dataUrl = `data:image/jpeg;base64,${compressed.toString('base64')}`;
+        } catch {
+          if (buffer.length < 800000) {
+            dataUrl = `data:${file.type || 'image/jpeg'};base64,${buffer.toString('base64')}`;
+          }
         }
       }
     }
 
     const finalUrl = dataUrl || publicUrl;
 
+    if (!finalUrl) {
+      throw new Error('Could not process media file into a usable storage URL.');
+    }
+
     return NextResponse.json({
       success: true,
       url: finalUrl,
       downloadURL: finalUrl,
-      publicUrl: publicUrl,
+      publicUrl: publicUrl || finalUrl,
       dataUrl: dataUrl,
       storagePath: `uploads/${sanitizedFolder}/${uniqueFilename}`,
       filename: uniqueFilename,

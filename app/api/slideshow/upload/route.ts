@@ -7,6 +7,9 @@ import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import firebaseConfig from '@/firebase-applet-config.json';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
@@ -21,10 +24,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File must be an image (PNG, JPG, WEBP, etc.)' }, { status: 400 });
     }
 
-    // Limit size to 15MB
-    const MAX_SIZE = 15 * 1024 * 1024;
+    // Limit size to 20MB
+    const MAX_SIZE = 20 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
-      return NextResponse.json({ error: 'Image file size exceeds 15MB limit' }, { status: 400 });
+      return NextResponse.json({ error: 'Image file size exceeds 20MB limit' }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -32,8 +35,9 @@ export async function POST(req: NextRequest) {
 
     const timestamp = Date.now();
     const slideId = slideIdParam || `hero-${timestamp}`;
-    const ext = path.extname(file.name) || '.jpg';
-    const cleanBase = path.basename(file.name, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const rawFileName = file.name || `slide_${timestamp}.jpg`;
+    const ext = path.extname(rawFileName) || '.jpg';
+    const cleanBase = path.basename(rawFileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
     const uniqueFilename = `slide_${timestamp}_${cleanBase}.webp`;
 
     // 1. Optimize image using sharp for fast delivery & compact storage

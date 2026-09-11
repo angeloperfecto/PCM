@@ -14,7 +14,7 @@ import {
   GraduationCap,
   Image as ImageIcon,
 } from 'lucide-react';
-import { compressImageFile } from '@/lib/firebase';
+import { compressImageFile, uploadFileToFirebaseStorage } from '@/lib/firebase';
 
 interface ChangeAvatarModalProps {
   isOpen: boolean;
@@ -121,23 +121,11 @@ export const ChangeAvatarModal: React.FC<ChangeAvatarModalProps> = ({
     setUploadError(null);
 
     try {
-      // Upload avatar directly to persistent storage
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('folder', 'images');
-      formData.append('mediaId', `avatar-${Date.now()}`);
-
-      const res = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
+      // Compress avatar before upload (avatars are small portraits)
+      const compressedBlob = await compressImageFile(file, 512, 512, 0.85);
+      const finalUrl = await uploadFileToFirebaseStorage(compressedBlob, `avatars/avatar_${Date.now()}.jpg`, {
+        contentType: 'image/jpeg',
       });
-
-      if (!res.ok) {
-        throw new Error('Avatar upload to storage failed');
-      }
-
-      const uploadData = await res.json();
-      const finalUrl = uploadData.downloadURL || uploadData.url;
       setSelectedUrl(finalUrl);
       setCustomUrlInput(finalUrl);
     } catch (err: any) {

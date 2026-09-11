@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, compressImageFile, blobToDataUrl } from './firebase';
 import { HeroSlide } from './types';
 
 export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
@@ -293,36 +293,61 @@ export async function uploadSlideshowImage(
       body: formData,
     });
 
-    if (!response.ok) {
-      const errData = await response.json().catch(() => ({ error: 'Upload failed' }));
-      return { success: false, error: errData.error || `Server returned ${response.status}` };
-    }
-
-    const data = await response.json();
-    if (data.url) {
-      const targetId = slideId || data.slideId;
-      if (targetId && data.dataUrl) {
-        slideImageCache[targetId] = data.dataUrl;
-        try {
-          await setDoc(
-            doc(db, 'siteContent', `slideshow_image_${targetId}`),
-            {
-              id: targetId,
-              image: data.dataUrl,
-              filename: data.filename || `slide_${targetId}.webp`,
-              updatedAt: new Date().toISOString(),
-            },
-            { merge: true }
-          );
-        } catch (fsClientErr) {
-          console.warn('Client-side Firestore slide sync notice:', fsClientErr);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.url) {
+        const targetId = slideId || data.slideId;
+        if (targetId && data.dataUrl) {
+          slideImageCache[targetId] = data.dataUrl;
+          try {
+            await setDoc(
+              doc(db, 'siteContent', `slideshow_image_${targetId}`),
+              {
+                id: targetId,
+                image: data.dataUrl,
+                filename: data.filename || `slide_${targetId}.webp`,
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true }
+            );
+          } catch (fsClientErr) {
+            console.warn('Client-side Firestore slide sync notice:', fsClientErr);
+          }
         }
+        return { success: true, url: data.url, dataUrl: data.dataUrl, slideId: targetId };
       }
-      return { success: true, url: data.url, dataUrl: data.dataUrl, slideId: targetId };
     }
-
-    return { success: false, error: 'No URL returned from upload server' };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Network error during image upload' };
+  } catch (netErr: any) {
+    console.warn('Network upload attempt for slideshow failed, trying client-side fallback:', netErr?.message || netErr);
   }
+
+  // Resilient Client-Side Fallback:
+  // If server route is unavailable or times out, compress image client-side and save to Firestore
+  try {
+    const targetId = slideId || `hero-${Date.now()}`;
+    const compressedBlob = await compressImageFile(file, 1600, 1000, 0.82);
+    const fallbackDataUrl = await blobToDataUrl(compressedBlob);
+    if (fallbackDataUrl && fallbackDataUrl.length < 880000) {
+      slideImageCache[targetId] = fallbackDataUrl;
+      try {
+        await setDoc(
+          doc(db, 'siteContent', `slideshow_image_${targetId}`),
+          {
+            id: targetId,
+            image: fallbackDataUrl,
+            filename: `slide_${targetId}.jpg`,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true }
+        );
+      } catch (fsErr) {
+        console.warn('Firestore fallback sync notice:', fsErr);
+      }
+      return { success: true, url: fallbackDataUrl, dataUrl: fallbackDataUrl, slideId: targetId };
+    }
+  } catch (fallbackErr: any) {
+    console.warn('Client fallback slideshow upload failed:', fallbackErr);
+  }
+
+  return { success: false, error: 'Could not upload image. Please try again with a smaller image or enter a direct image URL.' };
 }
