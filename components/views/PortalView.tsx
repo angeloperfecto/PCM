@@ -1002,8 +1002,19 @@ export const PortalView: React.FC = () => {
                 <span>Student Notifications & Registrar Bulletins</span>
               </h3>
               <button
-                onClick={() => markAllNotificationsRead(studentProfile.id)}
-                className="text-xs font-semibold text-[#588B76] hover:underline cursor-pointer"
+                type="button"
+                id="portal-mark-all-read-btn"
+                onClick={() => {
+                  markAllNotificationsRead(studentProfile.studentId || studentProfile.id);
+                  addToast('info', 'Notifications Marked Read', 'All student notifications and bulletins have been marked as read.');
+                }}
+                disabled={unreadNotifsCount === 0}
+                className={`text-xs font-semibold transition ${
+                  unreadNotifsCount === 0
+                    ? 'text-slate-400 cursor-default opacity-60'
+                    : 'text-[#588B76] hover:text-[#18392B] hover:underline cursor-pointer'
+                }`}
+                title={unreadNotifsCount === 0 ? 'All notifications are already read' : 'Mark all notifications as read'}
               >
                 Mark all as read
               </button>
@@ -1016,13 +1027,25 @@ export const PortalView: React.FC = () => {
                 studentNotifs.map((n) => (
                   <div
                     key={n.id}
-                    onClick={() => markNotificationRead(n.id)}
+                    id={`student-notif-${n.id}`}
+                    onClick={() => {
+                      if (!n.read) {
+                        markNotificationRead(n.id);
+                      }
+                    }}
                     className={`p-4 rounded-xl border text-xs space-y-1 transition cursor-pointer ${
-                      n.read ? 'bg-white border-slate-200 text-slate-600' : 'bg-amber-50/70 border-amber-200 text-amber-950 font-medium'
+                      n.read
+                        ? 'bg-white border-slate-200 text-slate-600'
+                        : 'bg-amber-50/80 border-amber-200 text-amber-950 font-medium shadow-xs hover:border-amber-300'
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="font-bold font-serif text-slate-900">{n.title}</span>
+                      <div className="flex items-center gap-2">
+                        {!n.read && (
+                          <span className="w-2 h-2 rounded-full bg-amber-500 inline-block" title="Unread Notice" />
+                        )}
+                        <span className="font-bold font-serif text-slate-900">{n.title}</span>
+                      </div>
                       <span className="font-mono text-[10px] text-slate-400">{n.createdAt?.split('T')[0]}</span>
                     </div>
                     <p>{n.message}</p>

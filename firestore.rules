@@ -204,7 +204,7 @@ service cloud.firestore {
 
     match /studentNotifications/{notifId} {
       allow read: if true;
-      allow create, update: if isSignedIn() || isAdmin();
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 

@@ -38,7 +38,10 @@ export const HeroSection: React.FC = () => {
   // Also sync whenever siteConfig.heroSlides updates via store
   useEffect(() => {
     if (siteConfig?.heroSlides && siteConfig.heroSlides.length > 0) {
-      setLiveSlides(siteConfig.heroSlides);
+      const timer = setTimeout(() => {
+        setLiveSlides(siteConfig.heroSlides);
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [siteConfig?.heroSlides]);
 

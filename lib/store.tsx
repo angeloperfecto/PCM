@@ -479,7 +479,7 @@ interface PCMContextType {
   setStudentNotifications: React.Dispatch<React.SetStateAction<StudentNotification[]>>;
   addStudentNotification: (studentId: string, notif: Omit<StudentNotification, 'id' | 'createdAt' | 'read' | 'studentId'>) => Promise<void>;
   markNotificationRead: (notifId: string) => Promise<void>;
-  markAllNotificationsRead: (studentId: string) => Promise<void>;
+  markAllNotificationsRead: (studentId?: string) => Promise<void>;
 
   // Admin CMS & RBAC
   isAdminLoggedIn: boolean;
@@ -3143,18 +3143,56 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const markAllNotificationsRead = async (studentId: string): Promise<void> => {
-    setStudentNotifications((prev) => prev.map((n) => (n.studentId === studentId ? { ...n, read: true } : n)));
+  const markAllNotificationsRead = async (targetStudentId?: string): Promise<void> => {
+    // Collect all candidate student identification keys
+    const matchIds = new Set<string>();
+    if (targetStudentId) {
+      matchIds.add(targetStudentId);
+      matchIds.add(targetStudentId.trim().toLowerCase());
+      matchIds.add(targetStudentId.trim().toUpperCase());
+    }
+    if (studentProfile?.id) {
+      matchIds.add(studentProfile.id);
+      matchIds.add(studentProfile.id.trim().toLowerCase());
+    }
+    if (studentProfile?.studentId) {
+      matchIds.add(studentProfile.studentId);
+      matchIds.add(studentProfile.studentId.trim().toLowerCase());
+      matchIds.add(studentProfile.studentId.trim().toUpperCase());
+    }
+    if (currentUserAccount?.studentId) {
+      matchIds.add(currentUserAccount.studentId);
+      matchIds.add(currentUserAccount.studentId.trim().toUpperCase());
+    }
+    if (currentUserAccount?.uid) matchIds.add(currentUserAccount.uid);
+    if (currentUserAccount?.id) matchIds.add(currentUserAccount.id);
+
+    const isMatch = (n: StudentNotification) => {
+      // If notification has no specific studentId or no filter keys were determined, treat as matching active student
+      if (!n.studentId) return true;
+      if (matchIds.size === 0) return true;
+      return (
+        matchIds.has(n.studentId) ||
+        matchIds.has(n.studentId.trim().toLowerCase()) ||
+        matchIds.has(n.studentId.trim().toUpperCase())
+      );
+    };
+
+    setStudentNotifications((prev) =>
+      prev.map((n) => (isMatch(n) ? { ...n, read: true } : n))
+    );
+
     try {
-      const batch = writeBatch(db);
-      studentNotifications
-        .filter((n) => n.studentId === studentId && !n.read)
-        .forEach((n) => {
-          batch.update(doc(db, 'studentNotifications', n.id), { read: true });
+      const toUpdate = studentNotifications.filter((n) => !n.read && isMatch(n));
+      if (toUpdate.length > 0) {
+        const batch = writeBatch(db);
+        toUpdate.forEach((n) => {
+          batch.set(doc(db, 'studentNotifications', n.id), { read: true }, { merge: true });
         });
-      await batch.commit();
+        await batch.commit();
+      }
     } catch (e) {
-      console.warn(e);
+      console.warn('Syncing markAllNotificationsRead to Firestore:', e);
     }
   };
 

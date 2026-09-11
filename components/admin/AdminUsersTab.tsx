@@ -1532,7 +1532,7 @@ export const AdminUsersTab: React.FC = () => {
                   Deactivate User Account
                 </h3>
                 <p className="text-[11px] text-slate-500">
-                  Suspend this user's access to the PCM system.
+                  Suspend this user&apos;s access to the PCM system.
                 </p>
               </div>
             </div>
