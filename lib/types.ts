@@ -791,6 +791,21 @@ export type NewUserAccountInput = {
   lastLogin?: string;
 };
 
+export interface DeletedUserRecord {
+  id: string;
+  uid?: string;
+  email: string;
+  name: string;
+  role: UserRole | string;
+  adminRole?: AdminRole | string;
+  department?: string;
+  studentId?: string;
+  deletedAt: string;
+  deletedBy: string;
+  reason?: string;
+  originalAccount?: UserAccount;
+}
+
 export interface AdminUser {
   id: string;
   name: string;

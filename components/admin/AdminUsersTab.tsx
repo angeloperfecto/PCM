@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { usePCM } from '@/lib/store';
-import { AdminUser, AdminRole, UserRole, UserAccount, AccountStatus } from '@/lib/types';
+import { AdminUser, AdminRole, UserRole, UserAccount, AccountStatus, DeletedUserRecord } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   ShieldCheck,
@@ -32,6 +32,7 @@ import {
   ShieldAlert,
   AlertCircle,
   XCircle,
+  RotateCcw,
 } from 'lucide-react';
 
 const PRIMARY_SUPER_ADMIN_EMAIL = 'angeloperfecto.epc@gmail.com';
@@ -44,6 +45,8 @@ export const AdminUsersTab: React.FC = () => {
     updateAdminUser,
     deleteAdminUser,
     userAccounts,
+    deletedUsers,
+    restoreUserAccount,
     addUserAccount,
     deleteUserAccount,
     updateUserAccountRole,
@@ -75,9 +78,11 @@ export const AdminUsersTab: React.FC = () => {
   // User Accounts Directory State
   const [searchAccountQuery, setSearchAccountQuery] = useState('');
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<'All' | UserRole>('All');
-  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'All' | 'Pending' | 'Active' | 'Rejected' | 'Disabled'>('All');
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<'All' | 'Pending' | 'Active' | 'Rejected' | 'Disabled' | 'Deleted'>('All');
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [deleteTargetAccount, setDeleteTargetAccount] = useState<UserAccount | null>(null);
+  const [restoreTargetUser, setRestoreTargetUser] = useState<DeletedUserRecord | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Approval & Rejection Modal State
@@ -115,6 +120,21 @@ export const AdminUsersTab: React.FC = () => {
   const disabledCount = useMemo(() => {
     return userAccounts.filter((u) => u.status === 'Disabled' || u.status === 'Inactive').length;
   }, [userAccounts]);
+
+  const deletedCount = deletedUsers.length;
+
+  const filteredDeletedUsers = useMemo(() => {
+    const q = searchAccountQuery.toLowerCase().trim();
+    if (!q) return deletedUsers;
+    return deletedUsers.filter(
+      (d) =>
+        d.name?.toLowerCase().includes(q) ||
+        d.email?.toLowerCase().includes(q) ||
+        d.role?.toLowerCase().includes(q) ||
+        d.studentId?.toLowerCase().includes(q) ||
+        d.deletedBy?.toLowerCase().includes(q)
+    );
+  }, [deletedUsers, searchAccountQuery]);
 
   // Filtered accounts
   const filteredAccounts = useMemo(() => {
@@ -296,10 +316,32 @@ export const AdminUsersTab: React.FC = () => {
     setDeleteTargetUser(null);
   };
 
-  const confirmDeleteAccount = () => {
+  const confirmDeleteAccount = async () => {
     if (!deleteTargetAccount) return;
-    deleteUserAccount(deleteTargetAccount.uid || deleteTargetAccount.id);
+    const targetId = deleteTargetAccount.id || deleteTargetAccount.uid || deleteTargetAccount.email;
     setDeleteTargetAccount(null);
+    await deleteUserAccount(targetId);
+  };
+
+  const handleOpenRestore = (user: DeletedUserRecord) => {
+    setRestoreTargetUser(user);
+  };
+
+  const handleConfirmRestore = async () => {
+    if (!restoreTargetUser) return;
+    setIsRestoring(true);
+    try {
+      await restoreUserAccount(restoreTargetUser.email || restoreTargetUser.id);
+      setRestoreTargetUser(null);
+    } catch (err: any) {
+      addToast({
+        title: 'Restore Failed',
+        message: err?.message || 'Could not restore user account.',
+        type: 'error',
+      });
+    } finally {
+      setIsRestoring(false);
+    }
   };
 
   const handleRoleChange = (userId: string, newRoleValue: AdminRole) => {
@@ -679,6 +721,26 @@ export const AdminUsersTab: React.FC = () => {
               >
                 Disabled ({disabledCount})
               </button>
+              <button
+                onClick={() => setSelectedStatusFilter('Deleted')}
+                className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                  selectedStatusFilter === 'Deleted'
+                    ? 'bg-rose-700 text-white shadow-xs'
+                    : 'text-rose-800 hover:text-rose-950'
+                }`}
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Deleted Registry</span>
+                {deletedCount > 0 && (
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                      selectedStatusFilter === 'Deleted' ? 'bg-rose-800 text-white' : 'bg-rose-200 text-rose-900'
+                    }`}
+                  >
+                    {deletedCount}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Search Field */}
@@ -740,8 +802,126 @@ export const AdminUsersTab: React.FC = () => {
           </div>
         </div>
 
-        <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto bg-white">
-          <table className="w-full text-left text-xs border-collapse">
+        {selectedStatusFilter === 'Deleted' ? (
+          <div className="space-y-4">
+            {/* Info Callout Banner */}
+            <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-3.5 text-xs">
+              <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center text-rose-700 shrink-0 shadow-2xs">
+                <Trash2 className="w-4 h-4" />
+              </div>
+              <div className="space-y-1 text-rose-950 flex-1">
+                <div className="font-bold font-serif text-sm text-rose-900 flex items-center gap-2">
+                  <span>Permanent Deletion Registry ({deletedUsers.length} Users)</span>
+                  <span className="text-[10px] font-mono uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-rose-200 text-rose-900 border border-rose-300">
+                    Synced with Firestore
+                  </span>
+                </div>
+                <p className="text-rose-800 leading-relaxed text-[11px]">
+                  When an administrator deletes a user, the user is permanently recorded here and blocked across the entire system.
+                  Deleted users <strong>will NOT be automatically restored</strong> under any circumstance — including page refresh,
+                  website reload, logging out/in, database sync, or background operations.
+                </p>
+                <p className="text-rose-700 text-[11px] font-medium">
+                  A user can only be restored if an authorized Administrator explicitly clicks <strong>&quot;Restore User&quot;</strong> below.
+                </p>
+              </div>
+            </div>
+
+            <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto bg-white shadow-2xs">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-50 text-slate-600 font-serif border-b border-slate-200">
+                    <th className="py-3 px-4 font-bold">Deleted Account</th>
+                    <th className="py-3 px-4 font-bold">Email</th>
+                    <th className="py-3 px-4 font-bold">Former Role</th>
+                    <th className="py-3 px-4 font-bold">Deletion Audit</th>
+                    <th className="py-3 px-4 font-bold">Status</th>
+                    <th className="py-3 px-4 font-bold text-right">Explicit Restore Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-700">
+                  {filteredDeletedUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="py-12 text-center text-slate-400">
+                        {deletedUsers.length === 0
+                          ? 'No users have been deleted. The Deletion Registry is currently empty.'
+                          : 'No deleted users match the search query.'}
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDeletedUsers.map((d) => (
+                      <tr key={d.id || d.uid || d.email} className="hover:bg-slate-50/75 transition">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-full bg-rose-100 text-rose-800 border border-rose-200 flex items-center justify-center font-bold text-xs shrink-0">
+                              {d.name?.charAt(0)?.toUpperCase() || 'U'}
+                            </div>
+                            <div>
+                              <div className="font-bold text-slate-900 line-through decoration-rose-500">
+                                {d.name}
+                              </div>
+                              <div className="text-[11px] text-slate-500">
+                                {d.department || 'General'}
+                                {d.studentId && (
+                                  <span className="ml-2 font-mono text-slate-600">ID: {d.studentId}</span>
+                                )}
+                              </div>
+                              <div className="text-[10px] font-mono text-slate-400">
+                                UID: {(d.uid || d.id)?.substring(0, 14)}...
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4 font-mono text-xs text-slate-600">
+                          <div className="flex items-center gap-1.5">
+                            <Mail className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            <span className="truncate">{d.email}</span>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                            {d.adminRole || d.role || 'User'}
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4 text-[11px] text-slate-500">
+                          <div className="font-medium text-slate-700">
+                            {d.deletedAt ? new Date(d.deletedAt).toLocaleString() : 'Recorded'}
+                          </div>
+                          <div className="text-[10px] text-slate-400">
+                            By: <strong className="text-slate-600">{d.deletedBy || 'Administrator'}</strong>
+                          </div>
+                        </td>
+
+                        <td className="py-3 px-4">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                            <Trash2 className="w-3 h-3 text-rose-600" />
+                            Permanently Deleted
+                          </span>
+                        </td>
+
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            onClick={() => handleOpenRestore(d)}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer shadow-xs"
+                            title="Explicitly restore this user"
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>Restore User</span>
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto bg-white">
+            <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-600 font-serif border-b border-slate-200">
                 <th className="py-3 px-4 font-bold">Registered Account</th>
@@ -982,6 +1162,7 @@ export const AdminUsersTab: React.FC = () => {
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* Legacy Admin Users Section Divider */}
@@ -1378,13 +1559,67 @@ export const AdminUsersTab: React.FC = () => {
 
       <ConfirmDeleteModal
         isOpen={!!deleteTargetAccount}
-        title="Remove Registered Account"
+        title="Permanently Delete User Account"
         itemName={deleteTargetAccount ? `${deleteTargetAccount.name} (${deleteTargetAccount.email})` : undefined}
-        message="Are you sure you want to remove this registered account from the user directory? This will revoke role privileges."
-        confirmLabel="Remove Account"
+        message="Are you sure you want to permanently delete this user account? The user will be recorded in the permanent Deletion Registry and will NOT be automatically restored on page refresh, website reload, database synchronization, or login. Only an explicit admin restore action can restore this account."
+        confirmLabel="Permanently Delete"
         onConfirm={confirmDeleteAccount}
         onCancel={() => setDeleteTargetAccount(null)}
       />
+
+      {/* Explicit Restore User Modal */}
+      {restoreTargetUser && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center gap-2.5 text-emerald-800">
+              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center shrink-0">
+                <RotateCcw className="w-5 h-5 text-emerald-700" />
+              </div>
+              <div>
+                <h3 className="font-serif text-base font-bold text-[#18392B]">
+                  Restore User Account
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Explicit Administrator Action
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1.5">
+              <div><strong className="text-slate-700">Name:</strong> {restoreTargetUser.name}</div>
+              <div><strong className="text-slate-700">Email:</strong> {restoreTargetUser.email}</div>
+              <div><strong className="text-slate-700">Original Role:</strong> {restoreTargetUser.adminRole || restoreTargetUser.role}</div>
+              <div className="text-[11px] text-slate-500">
+                Deleted on {restoreTargetUser.deletedAt ? new Date(restoreTargetUser.deletedAt).toLocaleString() : 'N/A'} by {restoreTargetUser.deletedBy || 'Admin'}
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed">
+              This action will remove the user tombstone from the permanent Deletion Registry in Firestore, recreate their active profile, and restore their system access.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setRestoreTargetUser(null)}
+                disabled={isRestoring}
+                className="px-4 py-2 rounded-lg text-xs font-semibold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isRestoring}
+                onClick={handleConfirmRestore}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold text-white bg-emerald-700 hover:bg-emerald-800 transition cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                <RotateCcw className={`w-3.5 h-3.5 ${isRestoring ? 'animate-spin' : ''}`} />
+                <span>{isRestoring ? 'Restoring User...' : 'Confirm Explicit Restore'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Approve User Modal */}
       {approvalTargetUser && (

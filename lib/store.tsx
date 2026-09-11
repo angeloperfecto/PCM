@@ -28,6 +28,7 @@ import {
   AdminUser,
   UserAccount,
   NewUserAccountInput,
+  DeletedUserRecord,
   UserRole,
   ApplicationStatus,
   ScrapbookItem,
@@ -356,6 +357,9 @@ interface PCMContextType {
   signOutUser: () => Promise<void>;
   addUserAccount: (user: NewUserAccountInput) => Promise<UserAccount> | UserAccount;
   deleteUserAccount: (userId: string) => Promise<void> | void;
+  restoreUserAccount: (userIdOrEmail: string) => Promise<boolean>;
+  isUserDeleted: (identifierOrAccount: string | { id?: string; uid?: string; email?: string; studentId?: string } | null | undefined) => boolean;
+  deletedUsers: DeletedUserRecord[];
   updateUserAccountRole: (userId: string, role: UserRole, adminRole?: AdminRole) => Promise<void>;
   approveUserAccess: (userId: string, assignedAdminRole?: AdminRole) => Promise<boolean>;
   rejectUserAccess: (userId: string, reason?: string) => Promise<boolean>;
@@ -579,10 +583,78 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [firebaseSyncStatus, setFirebaseSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('syncing');
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
+  // Deleted User Accounts Tombstone & Archive Registry
+  const [deletedUsers, setDeletedUsers] = useState<DeletedUserRecord[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const stored = localStorage.getItem('pcm_deleted_users');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Helper to check if any user or email is marked as permanently deleted
+  const isUserDeleted = useCallback(
+    (identifierOrAccount: string | { id?: string; uid?: string; email?: string; studentId?: string } | null | undefined): boolean => {
+      if (!identifierOrAccount) return false;
+      const cleanLower = (s?: string) => (s ? s.trim().toLowerCase() : '');
+      let emailTarget = '';
+      let idTarget = '';
+      let uidTarget = '';
+      let studentIdTarget = '';
+
+      if (typeof identifierOrAccount === 'string') {
+        const val = cleanLower(identifierOrAccount);
+        if (val.includes('@')) {
+          emailTarget = val;
+        } else {
+          idTarget = val;
+          uidTarget = val;
+        }
+      } else {
+        emailTarget = cleanLower(identifierOrAccount.email);
+        idTarget = cleanLower(identifierOrAccount.id);
+        uidTarget = cleanLower(identifierOrAccount.uid);
+        studentIdTarget = cleanLower(identifierOrAccount.studentId);
+      }
+
+      return deletedUsers.some((d) => {
+        const dEmail = cleanLower(d.email);
+        const dId = cleanLower(d.id);
+        const dUid = cleanLower(d.uid);
+        const dStd = cleanLower(d.studentId);
+
+        if (emailTarget && dEmail && emailTarget === dEmail) return true;
+        if (idTarget && (idTarget === dId || idTarget === dUid)) return true;
+        if (uidTarget && (uidTarget === dId || uidTarget === dUid)) return true;
+        if (studentIdTarget && dStd && studentIdTarget === dStd) return true;
+        return false;
+      });
+    },
+    [deletedUsers]
+  );
+
   // User Accounts & Multi-Role Auth
   const [currentUserAccount, setCurrentUserAccount] = useState<UserAccount | null>(null);
   const [firebaseAuthUser, setFirebaseAuthUser] = useState<FirebaseUser | null>(null);
-  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(INITIAL_USER_ACCOUNTS);
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_USER_ACCOUNTS;
+    try {
+      const stored = localStorage.getItem('pcm_deleted_users');
+      const deletedList: DeletedUserRecord[] = stored ? JSON.parse(stored) : [];
+      if (deletedList.length === 0) return INITIAL_USER_ACCOUNTS;
+      const deletedEmails = new Set(deletedList.map((d) => (d.email || '').trim().toLowerCase()));
+      const deletedIds = new Set(deletedList.map((d) => (d.id || d.uid || '').trim().toLowerCase()));
+      return INITIAL_USER_ACCOUNTS.filter((u) => {
+        const uEmail = (u.email || '').trim().toLowerCase();
+        const uId = (u.id || u.uid || '').trim().toLowerCase();
+        return !deletedEmails.has(uEmail) && !deletedIds.has(uId);
+      });
+    } catch {
+      return INITIAL_USER_ACCOUNTS;
+    }
+  });
 
   // Core CMS Data States (initialized identically on SSR and client to prevent hydration mismatch)
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(INITIAL_SITE_CONFIG);
@@ -630,7 +702,25 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Student Portal, Multi-Student Directory, & Online Enrollment System
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false);
-  const [students, setStudents] = useState<StudentProfile[]>(INITIAL_STUDENTS);
+  const [students, setStudents] = useState<StudentProfile[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_STUDENTS;
+    try {
+      const stored = localStorage.getItem('pcm_deleted_users');
+      const deletedList: DeletedUserRecord[] = stored ? JSON.parse(stored) : [];
+      if (deletedList.length === 0) return INITIAL_STUDENTS;
+      const deletedEmails = new Set(deletedList.map((d) => (d.email || '').trim().toLowerCase()));
+      const deletedIds = new Set(deletedList.map((d) => (d.id || d.uid || '').trim().toLowerCase()));
+      const deletedStd = new Set(deletedList.map((d) => (d.studentId || '').trim().toLowerCase()).filter(Boolean));
+      return INITIAL_STUDENTS.filter((s) => {
+        const sEmail = (s.email || '').trim().toLowerCase();
+        const sId = (s.id || '').trim().toLowerCase();
+        const sStd = (s.studentId || '').trim().toLowerCase();
+        return !deletedEmails.has(sEmail) && !deletedIds.has(sId) && (!sStd || !deletedStd.has(sStd));
+      });
+    } catch {
+      return INITIAL_STUDENTS;
+    }
+  });
   const [studentProfile, setStudentProfile] = useState<StudentProfile>(INITIAL_STUDENTS[0] || DEMO_STUDENT_PROFILE);
   const [enrollments, setEnrollments] = useState<OnlineEnrollment[]>(INITIAL_ENROLLMENTS);
   const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>(INITIAL_STUDENT_NOTIFICATIONS);
@@ -655,7 +745,23 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Admin Auth
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(INITIAL_ADMIN_USERS);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(() => {
+    if (typeof window === 'undefined') return INITIAL_ADMIN_USERS;
+    try {
+      const stored = localStorage.getItem('pcm_deleted_users');
+      const deletedList: DeletedUserRecord[] = stored ? JSON.parse(stored) : [];
+      if (deletedList.length === 0) return INITIAL_ADMIN_USERS;
+      const deletedEmails = new Set(deletedList.map((d) => (d.email || '').trim().toLowerCase()));
+      const deletedIds = new Set(deletedList.map((d) => (d.id || d.uid || '').trim().toLowerCase()));
+      return INITIAL_ADMIN_USERS.filter((a) => {
+        const aEmail = (a.email || '').trim().toLowerCase();
+        const aId = (a.id || '').trim().toLowerCase();
+        return !deletedEmails.has(aEmail) && !deletedIds.has(aId);
+      });
+    } catch {
+      return INITIAL_ADMIN_USERS;
+    }
+  });
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(INITIAL_ADMIN_USERS[0]);
 
   // Newsletter
@@ -1043,7 +1149,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (st.adminUsers && st.adminUsers.length > 0) {
           try {
             const admBatch = writeBatch(db);
-            st.adminUsers.forEach((u: any) => admBatch.set(doc(db, 'adminUsers', u.id), cleanFirestoreData(u), { merge: true }));
+            st.adminUsers
+              .filter((u: any) => !isUserDeleted(u))
+              .forEach((u: any) => admBatch.set(doc(db, 'adminUsers', u.id), cleanFirestoreData(u), { merge: true }));
             await admBatch.commit();
           } catch (e) {
             console.warn('Admin users batch sync notice:', e);
@@ -1054,10 +1162,26 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (st.userAccounts && st.userAccounts.length > 0) {
           try {
             const userBatch = writeBatch(db);
-            st.userAccounts.forEach((u: any) => userBatch.set(doc(db, 'users', u.uid || u.id), cleanFirestoreData(u), { merge: true }));
+            st.userAccounts
+              .filter((u: any) => !isUserDeleted(u))
+              .forEach((u: any) => userBatch.set(doc(db, 'users', u.uid || u.id), cleanFirestoreData(u), { merge: true }));
             await userBatch.commit();
           } catch (e) {
             console.warn('User accounts batch sync notice:', e);
+          }
+        }
+
+        // 15c. Deleted Users Registry batch
+        if (deletedUsers && deletedUsers.length > 0) {
+          try {
+            const delBatch = writeBatch(db);
+            deletedUsers.forEach((d: DeletedUserRecord) => {
+              const docId = (d.email || d.uid || d.id).replace(/[/\\?%*:|"<>]/g, '_').toLowerCase();
+              delBatch.set(doc(db, 'deletedUsers', docId), cleanFirestoreData(d), { merge: true });
+            });
+            await delBatch.commit();
+          } catch (e) {
+            console.warn('Deleted users batch sync notice:', e);
           }
         }
 
@@ -1065,12 +1189,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (st.students && st.students.length > 0) {
           try {
             const studentBatch = writeBatch(db);
-            st.students.forEach((s: any) => studentBatch.set(doc(db, 'studentProfiles', s.id), cleanFirestoreData(s), { merge: true }));
+            st.students
+              .filter((s: any) => !isUserDeleted(s))
+              .forEach((s: any) => studentBatch.set(doc(db, 'studentProfiles', s.id), cleanFirestoreData(s), { merge: true }));
             await studentBatch.commit();
           } catch (e) {
             console.warn('Student profiles batch sync notice:', e);
           }
-        } else if (st.studentProfile) {
+        } else if (st.studentProfile && !isUserDeleted(st.studentProfile)) {
           await safeSetDoc(doc(db, 'studentProfiles', st.studentProfile.id), st.studentProfile);
         }
 
@@ -1505,6 +1631,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
           if (fbUser) {
             const emailLower = fbUser.email?.toLowerCase() || '';
+            if (isUserDeleted(emailLower) || isUserDeleted(fbUser.uid)) {
+              setCurrentUserAccount(null);
+              setIsAdminLoggedIn(false);
+              setIsStudentLoggedIn(false);
+              signOut(auth).catch(() => {});
+              return;
+            }
             const isSuperAdminEmail = emailLower === 'angeloperfecto.epc@gmail.com';
             const isInitialConfigAdmin = INITIAL_ADMIN_USERS.find((u) => u.email.toLowerCase() === emailLower);
 
@@ -1642,6 +1775,43 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         unsubs.push(unsubAuth);
 
+        // 12. Listen to deletedUsers collection (Global Deletion Registry)
+        logFirestoreOp('listen', 'deletedUsers', 'Deleted Users Registry Listener');
+        const unsubDeleted = onSnapshot(
+          collection(db, 'deletedUsers'),
+          (snap) => {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DeletedUserRecord[];
+            const map = new Map<string, DeletedUserRecord>();
+            list.forEach((item) => {
+              const key = (item.email || item.id || item.uid || '').toLowerCase().trim();
+              if (key) map.set(key, item);
+            });
+            const merged = Array.from(map.values());
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.setItem('pcm_deleted_users', JSON.stringify(merged));
+              } catch {}
+            }
+            setDeletedUsers(merged);
+
+            const deletedEmails = new Set(merged.map((d) => (d.email || '').toLowerCase().trim()).filter(Boolean));
+            const deletedIds = new Set(merged.map((d) => (d.id || d.uid || '').toLowerCase().trim()).filter(Boolean));
+            const isDel = (u: any) => {
+              if (!u) return false;
+              const em = (u.email || '').toLowerCase().trim();
+              const id = (u.id || u.uid || '').toLowerCase().trim();
+              const std = (u.studentId || '').toLowerCase().trim();
+              return (em && deletedEmails.has(em)) || (id && deletedIds.has(id)) || (std && (deletedIds.has(std) || deletedEmails.has(std)));
+            };
+
+            setUserAccounts((prev) => prev.filter((u) => !isDel(u)));
+            setAdminUsers((prev) => prev.filter((a) => !isDel(a)));
+            setStudents((prev) => prev.filter((s) => !isDel(s)));
+          },
+          (err) => console.warn('deletedUsers listener error:', err)
+        );
+        unsubs.push(unsubDeleted);
+
         setIsFirebaseConnected(true);
         setFirebaseSyncStatus('synced');
         setLastSyncedAt(new Date());
@@ -1677,59 +1847,67 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ): UserAccount[] => {
       const map = new Map<string, UserAccount>();
 
-      // 1. Base / Registered accounts
-      baseUsers.forEach((u) => {
-        const key = (u.email || u.id || u.uid || '').toLowerCase().trim();
-        if (key) map.set(key, u);
-      });
-
-      // 2. Ensure all registered admin users are included
-      currAdmins.forEach((adm) => {
-        const key = (adm.email || adm.id).toLowerCase().trim();
-        const existing = map.get(key);
-        map.set(key, {
-          id: existing?.id || `uid-${adm.id}`,
-          uid: existing?.uid || adm.id,
-          name: adm.name || existing?.name || 'Administrator',
-          displayName: adm.name || existing?.displayName || 'Administrator',
-          email: adm.email,
-          role: 'Admin',
-          adminRole: adm.role || existing?.adminRole || 'Super Admin',
-          department: adm.department || existing?.department || 'Office of Administration',
-          status: (adm.status as any) || existing?.status || 'Active',
-          provider: existing?.provider || (adm.email.endsWith('@pcm.edu.ph') ? 'google.com' : 'password'),
-          emailVerified: true,
-          createdAt: existing?.createdAt || adm.createdAt || '2024-01-15T08:00:00Z',
-          lastLogin: existing?.lastLogin || adm.lastLogin || new Date().toISOString(),
-          avatarUrl: adm.avatarUrl || existing?.avatarUrl || '',
-          photoURL: adm.avatarUrl || existing?.photoURL || '',
+      // 1. Base / Registered accounts (exclude deleted)
+      baseUsers
+        .filter((u) => !isUserDeleted(u))
+        .forEach((u) => {
+          const key = (u.email || u.id || u.uid || '').toLowerCase().trim();
+          if (key && !isUserDeleted(key)) map.set(key, u);
         });
-      });
 
-      // 3. Ensure all registered students are included
-      currStudents.forEach((std) => {
-        const key = (std.email || std.studentId || std.id).toLowerCase().trim();
-        const existing = map.get(key);
-        map.set(key, {
-          id: existing?.id || `uid-${std.id}`,
-          uid: existing?.uid || std.id,
-          name: std.fullName || std.name || existing?.name || 'Student',
-          displayName: std.fullName || std.name || existing?.displayName || 'Student',
-          email: std.email,
-          role: 'Student',
-          studentId: std.studentId,
-          department: std.program || std.degreeProgram || existing?.department || 'Undergraduate Theology',
-          status: (std.academicStatus === 'Probationary' ? 'Pending' : (existing?.status || 'Active')) as any,
-          provider: existing?.provider || (std.email.endsWith('@student.pcm.edu.ph') ? 'google.com' : 'password'),
-          emailVerified: true,
-          createdAt: existing?.createdAt || '2024-08-01T10:00:00Z',
-          lastLogin: existing?.lastLogin || new Date().toISOString(),
-          avatarUrl: std.avatarUrl || existing?.avatarUrl || '',
-          photoURL: std.avatarUrl || existing?.photoURL || '',
+      // 2. Ensure all registered admin users are included (exclude deleted)
+      currAdmins
+        .filter((adm) => !isUserDeleted(adm))
+        .forEach((adm) => {
+          const key = (adm.email || adm.id).toLowerCase().trim();
+          if (isUserDeleted(key) || isUserDeleted(adm)) return;
+          const existing = map.get(key);
+          map.set(key, {
+            id: existing?.id || `uid-${adm.id}`,
+            uid: existing?.uid || adm.id,
+            name: adm.name || existing?.name || 'Administrator',
+            displayName: adm.name || existing?.displayName || 'Administrator',
+            email: adm.email,
+            role: 'Admin',
+            adminRole: adm.role || existing?.adminRole || 'Super Admin',
+            department: adm.department || existing?.department || 'Office of Administration',
+            status: (adm.status as any) || existing?.status || 'Active',
+            provider: existing?.provider || (adm.email.endsWith('@pcm.edu.ph') ? 'google.com' : 'password'),
+            emailVerified: true,
+            createdAt: existing?.createdAt || adm.createdAt || '2024-01-15T08:00:00Z',
+            lastLogin: existing?.lastLogin || adm.lastLogin || new Date().toISOString(),
+            avatarUrl: adm.avatarUrl || existing?.avatarUrl || '',
+            photoURL: adm.avatarUrl || existing?.photoURL || '',
+          });
         });
-      });
 
-      return Array.from(map.values());
+      // 3. Ensure all registered students are included (exclude deleted)
+      currStudents
+        .filter((std) => !isUserDeleted(std))
+        .forEach((std) => {
+          const key = (std.email || std.studentId || std.id).toLowerCase().trim();
+          if (isUserDeleted(key) || isUserDeleted(std)) return;
+          const existing = map.get(key);
+          map.set(key, {
+            id: existing?.id || `uid-${std.id}`,
+            uid: existing?.uid || std.id,
+            name: std.fullName || std.name || existing?.name || 'Student',
+            displayName: std.fullName || std.name || existing?.displayName || 'Student',
+            email: std.email,
+            role: 'Student',
+            studentId: std.studentId,
+            department: std.program || std.degreeProgram || existing?.department || 'Undergraduate Theology',
+            status: (std.academicStatus === 'Probationary' ? 'Pending' : (existing?.status || 'Active')) as any,
+            provider: existing?.provider || (std.email.endsWith('@student.pcm.edu.ph') ? 'google.com' : 'password'),
+            emailVerified: true,
+            createdAt: existing?.createdAt || '2024-08-01T10:00:00Z',
+            lastLogin: existing?.lastLogin || new Date().toISOString(),
+            avatarUrl: std.avatarUrl || existing?.avatarUrl || '',
+            photoURL: std.avatarUrl || existing?.photoURL || '',
+          });
+        });
+
+      return Array.from(map.values()).filter((u) => !isUserDeleted(u));
     };
 
     // 1. Users collection (for Admin Users & Roles management tab)
@@ -1738,8 +1916,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       collection(db, 'users'),
       (snap) => {
         const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[])
-          : INITIAL_USER_ACCOUNTS;
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[]).filter((u) => !isUserDeleted(u))
+          : INITIAL_USER_ACCOUNTS.filter((u) => !isUserDeleted(u));
         setUserAccounts(syncWithAdminsAndStudents(list, adminUsers, students));
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'users')
@@ -1752,8 +1930,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       collection(db, 'adminUsers'),
       (snap) => {
         const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[])
-          : INITIAL_ADMIN_USERS;
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[]).filter((a) => !isUserDeleted(a))
+          : INITIAL_ADMIN_USERS.filter((a) => !isUserDeleted(a));
         setAdminUsers(list);
         setUserAccounts((prev) => syncWithAdminsAndStudents(prev, list, students));
       },
@@ -1809,8 +1987,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       collection(db, 'studentProfiles'),
       (snap) => {
         const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[])
-          : INITIAL_STUDENTS;
+          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter((s) => !isUserDeleted(s))
+          : INITIAL_STUDENTS.filter((s) => !isUserDeleted(s));
         setStudents(list);
         setUserAccounts((prev) => syncWithAdminsAndStudents(prev, adminUsers, list));
       },
@@ -1960,7 +2138,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => {
       adminUnsubs.forEach((unsub) => unsub());
     };
-  }, [isAdminLoggedIn, currentUserAccount?.role, currentSection]);
+  }, [isAdminLoggedIn, currentUserAccount?.role, currentSection, deletedUsers, isUserDeleted]);
 
   // Upload media file to Firebase Storage & register in Media Library
   const uploadMediaFile = async (
@@ -4518,11 +4696,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('error', 'Cannot Delete', 'You cannot delete the only remaining admin account.');
       return;
     }
-    const u = adminUsers.find((user) => user.id === id);
-    setAdminUsers((prev) => prev.filter((user) => user.id !== id));
-    deleteDoc(doc(db, 'adminUsers', id)).catch((e) => console.warn(e));
-    logActivity('DELETE', 'Admin User', id, u?.name || 'Admin', 'Removed admin account.');
-    addToast('info', 'Admin Deleted', 'User access revoked.');
+    deleteUserAccount(id);
   };
 
   // Google / Firebase Authentication & Multi-Role Identity
@@ -5221,8 +5395,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteUserAccount = async (userId: string) => {
-    const target = userAccounts.find((u) => u.id === userId || u.uid === userId);
-    if (target?.email?.toLowerCase() === 'angeloperfecto.epc@gmail.com') {
+    // 1. Locate target account across all user sources
+    const target =
+      userAccounts.find((u) => u.id === userId || u.uid === userId || u.email?.toLowerCase() === userId.toLowerCase()) ||
+      (adminUsers.find((a) => a.id === userId || a.email?.toLowerCase() === userId.toLowerCase()) as any) ||
+      (students.find((s) => s.id === userId || s.studentId === userId || s.email?.toLowerCase() === userId.toLowerCase()) as any);
+
+    const targetEmail = (target?.email || (userId.includes('@') ? userId : '')).toLowerCase().trim();
+
+    if (targetEmail === 'angeloperfecto.epc@gmail.com') {
       addToast({
         title: 'Action Protected',
         message: 'The primary Super Administrator account (angeloperfecto.epc@gmail.com) cannot be deleted.',
@@ -5231,23 +5412,190 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    setUserAccounts((prev) => prev.filter((u) => u.id !== userId && u.uid !== userId));
+    const adminActor = currentAdminUser?.name || currentUserAccount?.name || 'Administrator';
+    const deletedRecord: DeletedUserRecord = {
+      id: target?.id || userId,
+      uid: target?.uid || (target?.id && target.id.startsWith('uid-') ? target.id.replace('uid-', '') : userId),
+      email: targetEmail || `${userId}@pcm.local`,
+      name: target?.name || target?.displayName || target?.fullName || 'User Account',
+      role: target?.role || 'Admin',
+      adminRole: target?.adminRole || (target?.role === 'Super Admin' ? 'Super Admin' : undefined),
+      department: target?.department || target?.degreeProgram,
+      studentId: target?.studentId,
+      deletedAt: new Date().toISOString(),
+      deletedBy: adminActor,
+      originalAccount: target ? { ...target } : undefined,
+    };
 
-    if (target) {
-      setAdminUsers((prev) => prev.filter((a) => a.id !== userId && a.email?.toLowerCase() !== target.email?.toLowerCase()));
-      setStudents((prev) => prev.filter((s) => s.id !== userId && s.studentId !== target.studentId && s.email?.toLowerCase() !== target.email?.toLowerCase()));
-      safeDeleteDoc(doc(db, 'adminUsers', userId)).catch(console.warn);
-      safeDeleteDoc(doc(db, 'studentProfiles', userId)).catch(console.warn);
+    // 2. Add to deletedUsers immediately in state and persistent localStorage
+    setDeletedUsers((prev) => {
+      const next = [
+        ...prev.filter((d) => d.email.toLowerCase() !== deletedRecord.email.toLowerCase() && d.id !== deletedRecord.id),
+        deletedRecord,
+      ];
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('pcm_deleted_users', JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+
+    // 3. Purge immediately from local React active states
+    setUserAccounts((prev) => prev.filter((u) => u.id !== userId && u.uid !== userId && u.email?.toLowerCase() !== targetEmail));
+    setAdminUsers((prev) => prev.filter((a) => a.id !== userId && a.email?.toLowerCase() !== targetEmail));
+    setStudents((prev) => prev.filter((s) => s.id !== userId && s.studentId !== userId && s.email?.toLowerCase() !== targetEmail));
+
+    // 4. Save deletion tombstone to Firestore `deletedUsers` collection
+    const docId = (deletedRecord.email || deletedRecord.uid || deletedRecord.id).replace(/[/\\?%*:|"<>]/g, '_').toLowerCase();
+    try {
+      await safeSetDoc(doc(db, 'deletedUsers', docId), cleanFirestoreData(deletedRecord));
+    } catch (err) {
+      console.warn('Failed to record deleted user tombstone in Firestore:', err);
     }
+
+    // 5. Clean up from Firestore collections: users, adminUsers, studentProfiles
+    const possibleDocIds = new Set<string>();
+    if (userId) possibleDocIds.add(userId);
+    if (deletedRecord.id) possibleDocIds.add(deletedRecord.id);
+    if (deletedRecord.uid) possibleDocIds.add(deletedRecord.uid);
+    if (target?.uid) possibleDocIds.add(target.uid);
+    if (target?.id) possibleDocIds.add(target.id);
+    if (target?.studentId) possibleDocIds.add(target.studentId);
+
+    adminUsers.forEach((a) => {
+      if (a.email?.toLowerCase() === targetEmail || a.id === userId) {
+        possibleDocIds.add(a.id);
+      }
+    });
+
+    students.forEach((s) => {
+      if (s.email?.toLowerCase() === targetEmail || s.id === userId || s.studentId === userId) {
+        possibleDocIds.add(s.id);
+        if (s.studentId) possibleDocIds.add(s.studentId);
+      }
+    });
+
+    for (const dId of possibleDocIds) {
+      safeDeleteDoc(doc(db, 'users', dId)).catch(console.warn);
+      safeDeleteDoc(doc(db, 'adminUsers', dId)).catch(console.warn);
+      safeDeleteDoc(doc(db, 'studentProfiles', dId)).catch(console.warn);
+    }
+
+    logActivity('DELETE', 'User Account', userId, deletedRecord.name, `Permanently deleted user account (${deletedRecord.email}) by ${adminActor}.`);
+    addToast('info', 'User Account Permanently Deleted', `"${deletedRecord.name}" (${deletedRecord.email}) has been permanently deleted and marked in the Deletion Registry.`);
+  };
+
+  const restoreUserAccount = async (userIdOrEmail: string): Promise<boolean> => {
+    const cleanTarget = userIdOrEmail.trim().toLowerCase();
+    const record = deletedUsers.find(
+      (d) =>
+        d.id.toLowerCase() === cleanTarget ||
+        d.uid?.toLowerCase() === cleanTarget ||
+        d.email.toLowerCase() === cleanTarget
+    );
+
+    if (!record) {
+      addToast('error', 'Restore Failed', 'No deleted user record found matching this identifier.');
+      return false;
+    }
+
+    const adminActor = currentAdminUser?.name || currentUserAccount?.name || 'Administrator';
+
+    // 1. Remove from deletedUsers tombstone in Firestore
+    const docId = (record.email || record.uid || record.id).replace(/[/\\?%*:|"<>]/g, '_').toLowerCase();
+    try {
+      await safeDeleteDoc(doc(db, 'deletedUsers', docId));
+    } catch (e) {
+      console.warn('Failed to delete tombstone from deletedUsers:', e);
+    }
+
+    // 2. Remove from deletedUsers state and persistent localStorage
+    setDeletedUsers((prev) => {
+      const next = prev.filter(
+        (d) =>
+          d.id.toLowerCase() !== cleanTarget &&
+          d.uid?.toLowerCase() !== cleanTarget &&
+          d.email.toLowerCase() !== record.email.toLowerCase()
+      );
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('pcm_deleted_users', JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+
+    // 3. Reconstruct active user account
+    const restoredAccount: UserAccount = record.originalAccount || {
+      id: record.uid || record.id,
+      uid: record.uid || record.id,
+      email: record.email,
+      name: record.name,
+      displayName: record.name,
+      role: (record.role as UserRole) || 'Admin',
+      adminRole: (record.adminRole as AdminRole) || undefined,
+      department: record.department,
+      studentId: record.studentId,
+      status: 'Active',
+      verificationStatus: 'Approved',
+      provider: record.email.endsWith('@pcm.edu.ph') ? 'google.com' : 'password',
+      createdAt: new Date().toISOString(),
+      lastLogin: new Date().toISOString(),
+    };
+
+    restoredAccount.status = 'Active';
+    restoredAccount.verificationStatus = 'Approved';
 
     try {
-      await safeDeleteDoc(doc(db, 'users', userId));
-    } catch (e) {
-      console.warn('Delete user account Firestore sync notice:', e);
+      await safeSetDoc(doc(db, 'users', restoredAccount.uid || restoredAccount.id), cleanFirestoreData(restoredAccount));
+
+      // If it was an admin user, also restore into adminUsers
+      if (restoredAccount.role === 'Admin' || restoredAccount.role === 'Super Admin' || record.adminRole) {
+        const restoredAdmin: AdminUser = {
+          id: restoredAccount.uid || restoredAccount.id,
+          name: restoredAccount.name,
+          email: restoredAccount.email,
+          username: restoredAccount.email.split('@')[0],
+          role: (restoredAccount.adminRole || restoredAccount.role || 'Admin') as AdminRole,
+          department: restoredAccount.department || 'Office of Administration',
+          status: 'Active',
+          createdAt: new Date().toISOString(),
+        };
+        await safeSetDoc(doc(db, 'adminUsers', restoredAdmin.id), cleanFirestoreData(restoredAdmin));
+        setAdminUsers((prev) => [...prev.filter((a) => a.email.toLowerCase() !== restoredAdmin.email.toLowerCase() && a.id !== restoredAdmin.id), restoredAdmin]);
+      }
+
+      // If it was a student, restore studentProfile
+      if (restoredAccount.role === 'Student' || restoredAccount.studentId) {
+        const restoredStudent: StudentProfile = {
+          id: restoredAccount.uid || restoredAccount.id,
+          studentId: restoredAccount.studentId || `PCM-STD-${Date.now().toString().slice(-4)}`,
+          fullName: restoredAccount.name,
+          name: restoredAccount.name,
+          email: restoredAccount.email,
+          program: restoredAccount.department || 'Bachelor of Arts in Theology',
+          degreeProgram: restoredAccount.department || 'Bachelor of Arts in Theology',
+          yearLevel: '1st Year',
+          academicStatus: 'Regular',
+          totalUnits: 0,
+          gpa: 0,
+          courses: [],
+          status: 'Active',
+          createdAt: new Date().toISOString(),
+        };
+        await safeSetDoc(doc(db, 'studentProfiles', restoredStudent.id), cleanFirestoreData(restoredStudent));
+        setStudents((prev) => [...prev.filter((s) => s.email.toLowerCase() !== restoredStudent.email.toLowerCase() && s.id !== restoredStudent.id), restoredStudent]);
+      }
+
+      setUserAccounts((prev) => [...prev.filter((u) => u.email.toLowerCase() !== restoredAccount.email.toLowerCase() && u.id !== restoredAccount.id), restoredAccount]);
+    } catch (err) {
+      console.warn('Error saving restored account to Firestore:', err);
     }
 
-    logActivity('DELETE', 'User Account', userId, target?.name || userId, 'Removed user account from system directory.');
-    addToast('info', 'User Account Removed', `Removed ${target?.name || 'user'} from account directory.`);
+    logActivity('RESTORE', 'User Account', restoredAccount.id, restoredAccount.name, `Manually restored user account (${restoredAccount.email}) by ${adminActor}.`);
+    addToast('success', 'User Account Restored', `"${restoredAccount.name}" (${restoredAccount.email}) has been restored as an Active user.`);
+    return true;
   };
 
   const updateUserAccountRole = async (userId: string, role: UserRole, adminRole?: AdminRole) => {
@@ -6282,6 +6630,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         signOutUser,
         addUserAccount,
         deleteUserAccount,
+        restoreUserAccount,
+        isUserDeleted,
+        deletedUsers,
         updateUserAccountRole,
         approveUserAccess,
         rejectUserAccess,
