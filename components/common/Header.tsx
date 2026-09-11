@@ -30,6 +30,8 @@ import {
   Compass,
   Heart,
   DollarSign,
+  Award,
+  Image as ImageIcon,
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -77,18 +79,19 @@ export const Header: React.FC = () => {
       label: 'HOME',
     },
     {
-      id: 'why-choose-pcm',
-      label: 'WHY CHOOSE PCM',
-    },
-    {
       id: 'about',
-      label: 'ABOUT PCM',
+      label: 'ABOUT',
       dropdown: [
+        {
+          label: 'Why Choose PCM (10 Distinctives)',
+          action: () => navigateTo('why-choose-pcm'),
+          icon: Award,
+        },
         { label: 'About Us & Heritage', subSection: 'about-us' },
         { label: 'History & Milestones (1992–Present)', subSection: 'history' },
         { label: 'Vision & Mission', subSection: 'vision-mission' },
         { label: 'Core Values & Pillars', subSection: 'values' },
-        { label: 'Faculty & Academic Staff', subSection: 'faculty' },
+        { label: 'Faculty & Academic Staff', subSection: 'faculty', icon: Users },
         {
           label: 'Statement of Faith (Doctrinal Basis)',
           action: () => setStatementOfFaithModalOpen(true),
@@ -114,7 +117,11 @@ export const Header: React.FC = () => {
       id: 'admissions',
       label: 'ADMISSIONS',
       dropdown: [
-        { label: 'Why Study at PCM?', subSection: 'why-pcm' },
+        {
+          label: 'Why Study at PCM?',
+          action: () => navigateTo('why-choose-pcm'),
+          icon: Award,
+        },
         { label: 'Admission Requirements', subSection: 'requirements' },
         { label: '4-Step Application Process', subSection: 'process' },
         { label: 'Senior High DepEd Vouchers', subSection: 'vouchers' },
@@ -135,7 +142,7 @@ export const Header: React.FC = () => {
     {
       id: 'portal',
       label: 'ENROLLMENT',
-      badge: 'AY 2026–2027',
+      badge: 'AY 26–27',
       dropdown: [
         {
           label: 'Student Online Enrollment Hub',
@@ -177,14 +184,15 @@ export const Header: React.FC = () => {
       ],
     },
     {
-      id: 'scrapbook',
-      label: 'SCRAPBOOK',
-    },
-    {
       id: 'student-life',
       label: 'STUDENT LIFE',
       dropdown: [
         { label: 'Spiritual Formation & Chapel', subSection: 'chapel', icon: Flame },
+        {
+          label: 'Campus Photo Scrapbook & Archive',
+          action: () => navigateTo('scrapbook'),
+          icon: ImageIcon,
+        },
         { label: 'Student Organizations & Council', subSection: 'orgs', icon: Users },
         { label: 'Campus Life & Community', subSection: 'campus' },
         { label: 'Ministry Opportunities', subSection: 'opportunities', icon: Compass },
@@ -219,6 +227,11 @@ export const Header: React.FC = () => {
         { label: 'Download Center (Prospectus & Forms)', subSection: 'downloads', icon: FileText },
         { label: 'Sermons & Chapel Audio Archive', subSection: 'sermons' },
         { label: 'Theological Library & Archives', subSection: 'library' },
+        {
+          label: 'Historical Photo Scrapbook (1992–Present)',
+          action: () => navigateTo('scrapbook'),
+          icon: ImageIcon,
+        },
         { label: 'Veritas et Ministerium Journal', subSection: 'publications' },
         { label: 'Frequently Asked Questions (FAQs)', subSection: 'faqs', icon: HelpCircle },
       ],
@@ -252,7 +265,7 @@ export const Header: React.FC = () => {
   return (
     <header className="w-full sticky top-0 z-50 bg-[#18392B] text-white shadow-xl transition-all duration-300 font-sans border-b border-[#588B76]/30">
       {/* 1. TOP UTILITY BAR (Institutional Standard) */}
-      <div className="bg-[#10261D] text-[#D0DED8] text-[11px] px-4 lg:px-8 py-1.5 flex flex-wrap justify-between items-center border-b border-[#588B76]/25 tracking-wider">
+      <div className="bg-[#10261D] text-[#D0DED8] text-[11px] px-4 lg:px-8 py-1 flex flex-wrap justify-between items-center border-b border-[#588B76]/25 tracking-wider min-h-[30px]">
         {/* Left Links */}
         <div className="flex items-center gap-3 sm:gap-4 font-medium uppercase text-[11px]">
           <button
@@ -413,41 +426,44 @@ export const Header: React.FC = () => {
 
       {/* 2. MAIN BRANDING HEADER & EMBLEM */}
       <div
-        className={`bg-white px-4 lg:px-8 transition-all duration-300 flex items-center justify-between text-[#18392B] border-b border-[#D0DED8] shadow-xs z-10 ${
-          isScrolled ? 'py-2.5' : 'py-3.5'
+        className={`bg-white px-4 lg:px-6 xl:px-8 transition-all duration-200 flex items-center justify-between text-[#18392B] border-b border-[#D0DED8] shadow-xs z-10 ${
+          isScrolled ? 'h-14 py-1' : 'h-16 py-1.5'
         }`}
       >
         {/* Brand identity */}
         <div
           id="header-brand-logo"
           onClick={() => navigateTo('home')}
-          className="flex items-center gap-3 sm:gap-3.5 cursor-pointer group select-none"
+          className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group select-none shrink-0"
           role="button"
           tabIndex={0}
         >
-          <div className="w-12 h-12 flex items-center justify-center shrink-0">
-            <Emblem id="header-pcm-logo" size={48} className="w-12 h-12 transition-transform duration-200 group-hover:scale-105" />
+          <div className="w-10 h-10 flex items-center justify-center shrink-0">
+            <Emblem id="header-pcm-logo" size={40} className="w-10 h-10 transition-transform duration-200 group-hover:scale-105" />
           </div>
-          <div className="flex flex-col">
-            <h1 className="text-[#18392B] font-serif text-lg sm:text-xl font-bold leading-tight group-hover:text-[#588B76] transition-colors">
+          <div className="flex flex-col justify-center">
+            <h1 className="text-[#18392B] font-serif text-base sm:text-lg font-bold leading-tight group-hover:text-[#588B76] transition-colors whitespace-nowrap">
               {siteConfig?.siteIdentity?.name || 'Philippine College of Ministry'}
             </h1>
-            <p className="text-[10px] uppercase tracking-[0.2em] font-semibold text-[#588B76]">
-              {siteConfig?.siteIdentity?.tagline || 'Theological Excellence & Pastoral Formation'}
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-[#588B76] whitespace-nowrap hidden sm:block">
+              Lamtang, Benguet • Founded 1992
             </p>
           </div>
         </div>
 
         {/* Desktop Navigation & Apply CTA */}
-        <div className="hidden lg:flex items-center gap-5 text-[13px] font-bold text-[#18392B] uppercase tracking-tight">
+        <div className="hidden lg:flex items-center gap-1 xl:gap-2 2xl:gap-3 text-[11px] xl:text-[12px] font-bold text-[#18392B] uppercase tracking-tight">
           {navItems.map((item) => {
-            const isActive = currentSection === item.id;
+            const isActive =
+              currentSection === item.id ||
+              (item.id === 'about' && currentSection === 'why-choose-pcm') ||
+              (item.id === 'student-life' && currentSection === 'scrapbook');
             const hasDropdown = item.dropdown && item.dropdown.length > 0;
 
             return (
               <div
                 key={item.id}
-                className="relative group"
+                className="relative group shrink-0"
                 onMouseEnter={() => hasDropdown && setActiveDropdown(item.id)}
                 onMouseLeave={() => setActiveDropdown(null)}
               >
@@ -459,20 +475,20 @@ export const Header: React.FC = () => {
                   }}
                   aria-expanded={activeDropdown === item.id}
                   aria-haspopup={hasDropdown ? 'true' : undefined}
-                  className={`flex items-center gap-1 pb-1 transition-colors duration-150 cursor-pointer ${
+                  className={`flex items-center gap-0.5 xl:gap-1 px-1.5 py-1 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
                     isActive
                       ? 'border-b-2 border-[#588B76] text-[#18392B] font-extrabold'
-                      : 'border-b-2 border-transparent text-[#18392B]/90 hover:text-[#588B76] hover:border-[#588B76]/40'
+                      : 'border-b-2 border-transparent text-[#18392B]/85 hover:text-[#588B76] hover:border-[#588B76]/40'
                   }`}
                 >
-                  <span>{item.label}</span>
+                  <span className="whitespace-nowrap">{item.label}</span>
                   {item.badge && (
-                    <span className="text-[9px] bg-amber-400 text-slate-950 font-extrabold px-1.5 py-0.2 rounded-full uppercase tracking-normal">
+                    <span className="text-[8.5px] bg-amber-400 text-slate-950 font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-normal whitespace-nowrap leading-none inline-block shadow-xs">
                       {item.badge}
                     </span>
                   )}
                   {hasDropdown && (
-                    <ChevronDown className="w-3 h-3 text-[#588B76] group-hover:rotate-180 transition-transform duration-200" />
+                    <ChevronDown className="w-3 h-3 text-[#588B76] group-hover:rotate-180 transition-transform duration-200 shrink-0" />
                   )}
                 </button>
 
@@ -512,15 +528,14 @@ export const Header: React.FC = () => {
             );
           })}
 
-          {/* Upgraded Header Primary CTA Button */}
+          {/* Primary CTA Button */}
           <button
             id="btn-header-apply-now"
             onClick={() => navigateTo('apply')}
-            className="group relative inline-flex items-center justify-center gap-2 bg-[#588B76] hover:bg-[#46705F] active:scale-[0.98] text-white px-4 py-2 rounded-sm shadow-sm hover:shadow-md transition-all duration-200 font-bold text-xs uppercase tracking-wider cursor-pointer border border-[#588B76]/50 focus:outline-hidden focus-visible:ring-2 focus-visible:ring-[#588B76] focus-visible:ring-offset-2"
+            className="group relative inline-flex items-center justify-center gap-1.5 bg-[#588B76] hover:bg-[#46705F] active:scale-[0.98] text-white px-3 py-1.5 rounded-sm shadow-xs hover:shadow-sm transition-all duration-150 font-bold text-xs uppercase tracking-wider cursor-pointer border border-[#588B76]/50 whitespace-nowrap shrink-0 ml-1"
           >
-            <GraduationCap className="w-4 h-4 text-white group-hover:rotate-12 transition-transform duration-200" />
-            <span>APPLY NOW</span>
-            <span className="text-[10px] opacity-80 font-normal hidden xl:inline">| AY 2026–2027</span>
+            <GraduationCap className="w-3.5 h-3.5 text-white group-hover:rotate-12 transition-transform duration-200 shrink-0" />
+            <span className="whitespace-nowrap">APPLY NOW</span>
           </button>
         </div>
 
@@ -606,7 +621,10 @@ export const Header: React.FC = () => {
           {/* Navigation Accordion Items */}
           <div className="space-y-1">
             {navItems.map((item) => {
-              const isActive = currentSection === item.id;
+              const isActive =
+                currentSection === item.id ||
+                (item.id === 'about' && currentSection === 'why-choose-pcm') ||
+                (item.id === 'student-life' && currentSection === 'scrapbook');
               const hasDropdown = item.dropdown && item.dropdown.length > 0;
               const isExpanded = mobileExpandedSection === item.id;
 
@@ -621,11 +639,16 @@ export const Header: React.FC = () => {
                           handleMobileNavClick(item.id);
                         }
                       }}
-                      className={`text-left font-serif text-sm font-semibold tracking-wide flex-1 cursor-pointer ${
+                      className={`text-left font-serif text-sm font-semibold tracking-wide flex-1 cursor-pointer flex items-center gap-2 ${
                         isActive ? 'text-white font-bold' : 'text-[#D0DED8]'
                       }`}
                     >
-                      {item.label}
+                      <span>{item.label}</span>
+                      {item.badge && (
+                        <span className="text-[8.5px] bg-amber-400 text-slate-950 font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-normal leading-none">
+                          {item.badge}
+                        </span>
+                      )}
                     </button>
 
                     {hasDropdown && (
