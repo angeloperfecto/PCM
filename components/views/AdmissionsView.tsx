@@ -16,10 +16,25 @@ import {
   Tag,
   BookOpen,
   Sparkles,
+  Users,
+  Mail,
+  Phone,
+  MapPin,
+  Calendar,
+  Building,
+  GraduationCap,
+  MessageSquare,
+  ExternalLink,
 } from 'lucide-react';
 
 export const AdmissionsView: React.FC = () => {
-  const { navigateTo, setTuitionCalculatorModalOpen, setRequestInfoModalOpen, activeSubSection, currentSubSection } = usePCM();
+  const {
+    navigateTo,
+    setTuitionCalculatorModalOpen,
+    setRequestInfoModalOpen,
+    activeSubSection,
+    currentSubSection,
+  } = usePCM();
 
   React.useEffect(() => {
     const sub = activeSubSection || currentSubSection;
@@ -34,6 +49,61 @@ export const AdmissionsView: React.FC = () => {
       }
     }
   }, [activeSubSection, currentSubSection, navigateTo]);
+
+  const ADMISSION_OFFICERS = [
+    {
+      role: 'Director of Admissions & Church Relations',
+      name: 'Rev. Nathan Valdez, M.Div.',
+      department: 'Office of Admissions & Student Recruitment',
+      email: 'admissions@pcm.ph',
+      phone: '+63 917 582 1992',
+      landline: '+63 74 422 2577 ext. 104',
+      office: 'Room 102, Administration Building, Lamtang Campus',
+      hours: 'Mon – Fri: 8:00 AM – 5:00 PM PHT',
+      scope: 'Inquiries, student recruitment, provincial church endorsements, and admissions counseling.',
+    },
+    {
+      role: 'Admissions Registrar & Document Evaluator',
+      name: 'Sis. Grace Morales',
+      department: 'Office of the College Registrar',
+      email: 'registrar@pcm.ph',
+      phone: '+63 74 422 2577 ext. 103',
+      office: 'Room 101, Records & Registration Hall, Lamtang Campus',
+      hours: 'Mon – Fri: 8:00 AM – 4:30 PM PHT',
+      scope: 'Transcript evaluations, Form 138 verification, honorable dismissal, and enrollment clearance.',
+    },
+    {
+      role: 'Admissions Committee Chair & Academic Dean',
+      name: 'Rev. Dr. Emmanuel Santos',
+      department: 'Office of the Academic Dean',
+      email: 'dean@pcm.edu.ph',
+      phone: '+63 74 422 2577 ext. 102',
+      office: 'Dean\'s Office, 2nd Floor, Academic Wing',
+      hours: 'Tue & Thu: 1:30 PM – 4:30 PM (By appointment)',
+      scope: 'Formal ministerial calling interviews, academic assessment results, and admission approvals.',
+    },
+    {
+      role: 'Financial Aid & Scholarship Coordinator',
+      name: 'Ptr. Joshua Dela Cruz, B.Th.',
+      department: 'Student Financial Aid Desk',
+      email: 'scholarships@pcm.ph',
+      phone: '+63 920 945 8812',
+      landline: '+63 74 422 2577 ext. 105',
+      office: 'Financial Aid Office, Administration Wing',
+      hours: 'Mon – Fri: 9:00 AM – 4:00 PM PHT',
+      scope: 'Ministerial scholarship grants, work-study assistantships, and local church matching funds.',
+    },
+    {
+      role: 'Lamtang Campus Admissions Receptionist',
+      name: 'Sis. Loida Batnag',
+      department: 'Information & Visitor Center',
+      email: 'info@pcm.ph',
+      phone: '+63 74 422 2577',
+      office: 'Main Reception Lobby, Lamtang Campus, La Trinidad, Benguet',
+      hours: 'Mon – Sat: 8:00 AM – 12:00 PM & 1:00 PM – 5:00 PM PHT',
+      scope: 'Campus visit check-in, brochure pickup, in-person test scheduling, and general directions.',
+    },
+  ];
 
   return (
     <div className="w-full bg-[#FFFFFF] font-sans pb-20">
@@ -58,8 +128,18 @@ export const AdmissionsView: React.FC = () => {
               Start Online Application
             </button>
             <button
-              onClick={() => setTuitionCalculatorModalOpen(true)}
+              onClick={() => {
+                const el = document.getElementById('directory');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
               className="bg-[#10261D] hover:bg-[#050b16] text-slate-200 text-xs font-semibold px-4 py-2.5 rounded-sm border border-[#588B76]/40 transition flex items-center gap-2 cursor-pointer"
+            >
+              <Users className="w-3.5 h-3.5 text-[#588B76]" />
+              <span>Admission Directory</span>
+            </button>
+            <button
+              onClick={() => setTuitionCalculatorModalOpen(true)}
+              className="bg-[#10261D] hover:bg-[#050b16] text-slate-200 text-xs font-semibold px-4 py-2.5 rounded-sm border border-slate-700 transition flex items-center gap-2 cursor-pointer"
             >
               <Calculator className="w-3.5 h-3.5 text-[#588B76]" />
               <span>Tuition Calculator</span>
@@ -118,7 +198,7 @@ export const AdmissionsView: React.FC = () => {
           </div>
         </section>
 
-        {/* Sub-section 1: Admission Requirements (3 Columns) */}
+        {/* Sub-section 1: Admission Requirements (2 Columns) */}
         <section id="requirements" className="space-y-6 pt-8 border-t border-slate-200">
           <div className="text-center max-w-2xl mx-auto space-y-1">
             <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#588B76]">
@@ -276,6 +356,150 @@ export const AdmissionsView: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* Sub-section 4: ADMISSION DIRECTORY & RECRUITMENT DESK */}
+        <section id="directory" className="space-y-8 pt-8 border-t border-slate-200">
+          <div className="text-center max-w-2xl mx-auto space-y-1">
+            <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#588B76]">
+              Admissions Directory & Key Contacts
+            </span>
+            <h2 className="font-serif text-2xl sm:text-3xl font-extrabold text-[#18392B]">
+              OFFICIAL ADMISSION DIRECTORY
+            </h2>
+            <p className="text-xs text-slate-600 font-light">
+              Connect directly with our admissions officers, credentials evaluators, academic interview mentors, and financial aid counselors.
+            </p>
+          </div>
+
+          {/* Directory Personnel Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {ADMISSION_OFFICERS.map((officer, idx) => (
+              <div
+                key={idx}
+                className="bg-white border border-slate-200 rounded-sm p-6 shadow-xs flex flex-col justify-between hover:border-[#588B76] transition space-y-4"
+              >
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div>
+                      <span className="text-[10px] font-mono font-bold uppercase text-[#588B76] tracking-wider block">
+                        {officer.department}
+                      </span>
+                      <h3 className="font-serif font-bold text-base text-[#18392B] mt-0.5">
+                        {officer.name}
+                      </h3>
+                      <p className="text-xs text-slate-600 font-medium">
+                        {officer.role}
+                      </p>
+                    </div>
+                    <div className="w-9 h-9 rounded-sm bg-[#18392B] text-white flex items-center justify-center shrink-0">
+                      <Users className="w-4 h-4 text-[#588B76]" />
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-slate-600 leading-relaxed font-light">
+                    {officer.scope}
+                  </p>
+
+                  <div className="space-y-2 text-xs text-slate-700 pt-1">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 text-[#588B76] shrink-0" />
+                      <a
+                        href={`mailto:${officer.email}`}
+                        className="font-mono text-[11px] text-[#18392B] hover:text-[#588B76] hover:underline truncate"
+                      >
+                        {officer.email}
+                      </a>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <Phone className="w-3.5 h-3.5 text-[#588B76] shrink-0" />
+                      <span className="font-mono text-[11px] text-slate-600">
+                        {officer.phone || officer.landline}
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                      <MapPin className="w-3.5 h-3.5 text-[#588B76] shrink-0 mt-0.5" />
+                      <span className="text-[11px] text-slate-600">
+                        {officer.office}
+                      </span>
+                    </div>
+
+                    <div className="flex items-start gap-2">
+                      <Clock className="w-3.5 h-3.5 text-[#588B76] shrink-0 mt-0.5" />
+                      <span className="text-[11px] text-slate-600">
+                        {officer.hours}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
+                  <a
+                    href={`mailto:${officer.email}?subject=PCM%20Admissions%20Inquiry%20AY%202026-2027`}
+                    className="flex-1 text-center bg-slate-100 hover:bg-[#18392B] hover:text-white text-slate-700 text-[11px] font-bold py-1.5 px-2 rounded-sm transition cursor-pointer"
+                  >
+                    Email Officer
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => setRequestInfoModalOpen(true)}
+                    className="flex-1 text-center bg-[#588B76]/10 hover:bg-[#588B76] hover:text-white text-[#588B76] text-[11px] font-bold py-1.5 px-2 rounded-sm transition cursor-pointer"
+                  >
+                    Request Info
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Central Admissions Office Hours & Fast Action Banner */}
+          <div className="bg-[#18392B] text-white p-8 rounded-sm border border-[#588B76]/40 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+            <div className="lg:col-span-8 space-y-3">
+              <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#588B76]">
+                General Admissions Help Desk
+              </span>
+              <h3 className="font-serif text-2xl font-bold text-white">
+                Need Help with Your Admissions Application?
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-200 leading-relaxed font-light">
+                Our Admissions Counselors are ready to walk you through degree selection, entrance assessment requirements, pastoral endorsement letters, and provincial accommodation options.
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 text-xs text-slate-300">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-[#588B76] shrink-0" />
+                  <span>Mon – Fri: 8:00 AM – 5:00 PM | Sat: 8:00 AM – 12:00 PM</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="w-4 h-4 text-[#588B76] shrink-0" />
+                  <span>Hotline: +63 917 582 1992 / +63 74 422 2577</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="lg:col-span-4 flex flex-col gap-3">
+              <button
+                onClick={() => navigateTo('apply')}
+                className="w-full bg-[#588B76] hover:bg-[#46705F] text-white text-xs font-bold py-3 px-4 rounded-sm transition uppercase tracking-wider cursor-pointer shadow-md text-center"
+              >
+                Start Online Application
+              </button>
+              <button
+                onClick={() => navigateTo('resources', 'downloads')}
+                className="w-full bg-[#10261D] hover:bg-[#050b16] text-slate-200 text-xs font-semibold py-2.5 px-4 rounded-sm border border-[#588B76]/40 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-[#588B76]" />
+                <span>Download Admission Forms</span>
+              </button>
+              <button
+                onClick={() => navigateTo('contact')}
+                className="w-full bg-transparent hover:bg-white/10 text-slate-200 text-xs font-semibold py-2 px-4 rounded-sm border border-slate-600 transition flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span>Schedule Campus Visit</span>
+              </button>
+            </div>
           </div>
         </section>
       </div>

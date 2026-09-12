@@ -1,4 +1,5 @@
 import {
+  StudentLifeConfig,
   AcademicProgram,
   AnnouncementItem,
   NewsArticle,
@@ -2266,7 +2267,149 @@ export const INITIAL_MIGRATION_AUDIT: MigrationAuditItem[] = [
   },
 ];
 
+export const INITIAL_STUDENT_LIFE_CONFIG: StudentLifeConfig = {
+  bannerBadge: 'Community & Spiritual Formation',
+  bannerTitle: 'LIFE AT PHILIPPINE COLLEGE OF MINISTRY',
+  bannerSubtitle:
+    'Life at PCM extends beyond the classroom into an intentional, Christ-centered community grounded in fervent prayer, campus devotions, student-led initiatives, and mountain fellowship in Lamtang, Benguet.',
+  applyButtonText: 'Apply to Join PCM',
+  sermonsButtonText: 'Chapel Audio Archive',
+  pillarsBadge: 'Spiritual Life',
+  pillarsTitle: 'SPIRITUAL FORMATION & CHAPEL SERVICES',
+  pillarsSubtitle:
+    'Every student at PCM is immersed in a robust rhythm of corporate devotion, prayer, and pastoral discipleship designed to nurture a lifetime of ministerial endurance.',
+  pillars: [
+    {
+      id: 'chapel-services',
+      title: 'Corporate Chapel Services',
+      description:
+        'Held twice weekly with faculty, students, and visiting evangelists gathering for biblical expository preaching, communal liturgy, and passionate praise.',
+      iconName: 'Flame',
+      actionText: 'Listen to Sermons →',
+      actionUrl: 'sermons',
+    },
+    {
+      id: 'prayer-bands',
+      title: 'Morning Prayer & Discipleship Bands',
+      description:
+        'Small-group accountability circles meeting in the early morning for scripture recitation, intercession for unreached Philippine tribes, and pastoral encouragement.',
+      iconName: 'Users',
+    },
+    {
+      id: 'spiritual-retreats',
+      title: 'Solitary Retreats & Prayer Days',
+      description:
+        'Scheduled days of prayer and fasting across each semester where academic schedules pause to seek personal sanctification and kingdom guidance.',
+      iconName: 'Compass',
+    },
+  ],
+  orgsBadge: 'Student-Led Initiatives',
+  orgsTitle: 'STUDENT ORGANIZATIONS & GUILDS',
+  orgsSubtitle:
+    'Opportunities to develop leadership skills, cultivate musical talents, and serve fellow brothers and sisters in Christ.',
+  organizations: [
+    {
+      id: 'org-council',
+      name: 'PCM Student Council',
+      role: 'Elected Student Governance',
+      description:
+        'The official student representative body coordinating campus fellowships, student welfare, outreach initiatives, and campus sports fests.',
+      iconName: 'ShieldCheck',
+      meetingSchedule: 'Tuesdays 5:00 PM',
+      advisor: 'Dean of Student Affairs',
+    },
+    {
+      id: 'org-choir',
+      name: 'Ministerial Choir & Ensemble',
+      role: 'Choral Music & Hymnology',
+      description:
+        'Leading praise during chapel convocations, ministering in partner churches across Northern Luzon, and recording sacred hymns.',
+      iconName: 'Music',
+      meetingSchedule: 'Wednesdays 4:30 PM & Sundays',
+      advisor: 'Music Ministry Director',
+    },
+    {
+      id: 'org-missions',
+      name: 'Highland Missions Society',
+      role: 'Cross-Cultural Evangelism Guild',
+      description:
+        'Organizes weekend evangelistic treks, vacation Bible schools, and disaster relief operations in remote Mountain Province and Benguet barangays.',
+      iconName: 'Compass',
+      meetingSchedule: 'Thursdays 5:30 PM',
+      advisor: 'Director of Missions',
+    },
+    {
+      id: 'org-library',
+      name: 'Theological Reading & Debate Guild',
+      role: 'Academic & Theological Inquiry',
+      description:
+        'Engaging classic Christian literature, contemporary apologetics, and biblical theology colloquiums under faculty guidance.',
+      iconName: 'BookOpen',
+      meetingSchedule: 'Fridays 4:00 PM',
+      advisor: 'Library Director',
+    },
+  ],
+  dailySchedule: [
+    {
+      id: 'sched-1',
+      time: '6:00 AM – 7:00 AM',
+      activity: 'Personal Devotion & Breakfast',
+      description: 'Individual quiet time in the Word followed by communal breakfast in the campus dining hall.',
+    },
+    {
+      id: 'sched-2',
+      time: '7:30 AM – 8:15 AM',
+      activity: 'Morning Chapel & Prayer Bands',
+      description: 'Corporate worship, faculty-led devotionals, and student intercessory prayer groups.',
+    },
+    {
+      id: 'sched-3',
+      time: '8:30 AM – 12:00 PM',
+      activity: 'Morning Academic Lectures',
+      description: 'Theology, Biblical Greek & Hebrew, Church History, and Homiletics classroom sessions.',
+    },
+    {
+      id: 'sched-4',
+      time: '12:00 PM – 1:30 PM',
+      activity: 'Lunch & Campus Fellowship',
+      description: 'Shared meals, recreation in the courtyard, and library study sessions.',
+    },
+    {
+      id: 'sched-5',
+      time: '1:30 PM – 4:30 PM',
+      activity: 'Afternoon Practicum & Seminars',
+      description: 'Modular pastoral seminars, counseling workshops, and supervised campus work-study duties.',
+    },
+    {
+      id: 'sched-6',
+      time: '6:00 PM – 9:30 PM',
+      activity: 'Dinner & Evening Study Hours',
+      description: 'Quiet library study, research in the theological stacks, and evening dormitory devotion.',
+    },
+  ],
+  dormitoryHeadline: 'LAMTANG MOUNTAIN DORMITORY LIVING',
+  dormitoryDescription:
+    'Our on-campus residence hall perched on the misty ridge of Lamtang provides an ideal setting for spiritual contemplation, lifelong ministerial brotherhood, and cross-cultural friendship. Students from across Luzon, Visayas, and Mindanao live, study, pray, and share chores as one family in Christ.',
+  dormitoryAmenities: [
+    'Separate Male & Female Dormitory Wings',
+    'Quiet Hours for Evening Study & Meditation',
+    'Shared Communal Kitchen & Dining Hall',
+    'Scenic Mountain-View Study Terraces',
+    'Campus High-Speed Research Wi-Fi Access',
+    'Resident Faculty Mentor & Dorm Deans',
+    'Weekly Room Inspections & Labor Stewardship',
+    '24/7 Gated Security & Campus Water System',
+  ],
+  ministryBadge: 'Practical Engagement',
+  ministryTitle: 'WEEKLY MINISTRY OPPORTUNITIES',
+  ministryDescription:
+    'At PCM, classroom theology immediately connects with local church practice. Every weekend, students are dispatched to more than 85 partner congregations across Benguet, Baguio City, Mountain Province, and Pangasinan for pulpit supply, youth ministry, Sunday School teaching, and evangelism.',
+  ministryPrimaryButtonText: 'Learn About Pastoral Practicum →',
+  ministrySecondaryButtonText: 'Schedule Campus Visit',
+};
+
 export const INITIAL_SITE_CONFIG: SiteConfig = {
+  studentLife: INITIAL_STUDENT_LIFE_CONFIG,
   siteIdentity: {
     institutionName: 'Philippine College of Ministry',
     acronym: 'PCM',

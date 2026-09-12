@@ -31,6 +31,7 @@ import {
   RefreshCw,
   Tv,
   Camera,
+  Compass,
 } from 'lucide-react';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 
@@ -43,6 +44,7 @@ export type AdminTabType =
   | 'news'
   | 'events'
   | 'announcements'
+  | 'studentLife'
   | 'media'
   | 'downloads'
   | 'youtube'
@@ -171,6 +173,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           label: 'Ticker Notices',
           icon: Bell,
           count: announcements.filter((a) => a.active).length,
+        },
+        {
+          id: 'studentLife',
+          label: 'Student Life Section',
+          icon: Compass,
+          highlight: true,
         },
         {
           id: 'donations',

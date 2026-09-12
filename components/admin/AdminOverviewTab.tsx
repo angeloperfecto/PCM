@@ -22,6 +22,7 @@ import {
   Sparkles,
   Heart,
   Tv,
+  Compass,
 } from 'lucide-react';
 
 interface AdminOverviewTabProps {
@@ -258,6 +259,14 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
           >
             <ImageIcon className="w-4 h-4 shrink-0" />
             <span>+ Upload Media</span>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('studentLife')}
+            className="flex items-center gap-2 bg-[#18392B] hover:bg-[#10261D] text-white p-3 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs justify-center col-span-2 sm:col-span-1"
+          >
+            <Compass className="w-4 h-4 shrink-0 text-[#588B76]" />
+            <span>Student Life</span>
           </button>
         </div>
       </div>

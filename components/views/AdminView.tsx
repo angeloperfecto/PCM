@@ -20,6 +20,7 @@ import { AdminApplicationsTab } from '@/components/admin/AdminApplicationsTab';
 import { AdminEnrollmentsTab } from '@/components/admin/AdminEnrollmentsTab';
 import { AdminUsersTab } from '@/components/admin/AdminUsersTab';
 import { AdminDonationsTab } from '@/components/admin/AdminDonationsTab';
+import { AdminStudentLifeTab } from '@/components/admin/AdminStudentLifeTab';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   ShieldAlert,
@@ -59,15 +60,37 @@ export const AdminView: React.FC = () => {
   const [loginPass, setLoginPass] = useState('pcm2026');
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<AdminTabType>(() =>
-    activeSubSection === 'enrollments' ? 'enrollments' : 'overview'
-  );
+  const VALID_ADMIN_TABS: AdminTabType[] = [
+    'overview',
+    'siteConfig',
+    'hero',
+    'programs',
+    'faculty',
+    'news',
+    'events',
+    'announcements',
+    'studentLife',
+    'media',
+    'downloads',
+    'youtube',
+    'applications',
+    'enrollments',
+    'donations',
+    'users',
+  ];
+
+  const [activeTab, setActiveTab] = useState<AdminTabType>(() => {
+    if (activeSubSection && VALID_ADMIN_TABS.includes(activeSubSection as AdminTabType)) {
+      return activeSubSection as AdminTabType;
+    }
+    return 'overview';
+  });
   const [prevSubSection, setPrevSubSection] = useState(activeSubSection);
 
   if (activeSubSection !== prevSubSection) {
     setPrevSubSection(activeSubSection);
-    if (activeSubSection === 'enrollments') {
-      setActiveTab('enrollments');
+    if (activeSubSection && VALID_ADMIN_TABS.includes(activeSubSection as AdminTabType)) {
+      setActiveTab(activeSubSection as AdminTabType);
     }
   }
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -409,6 +432,7 @@ export const AdminView: React.FC = () => {
             {activeTab === 'applications' && <AdminApplicationsTab />}
             {activeTab === 'enrollments' && <AdminEnrollmentsTab />}
             {activeTab === 'donations' && <AdminDonationsTab />}
+            {activeTab === 'studentLife' && <AdminStudentLifeTab />}
             {activeTab === 'users' && <AdminUsersTab />}
           </div>
         </main>

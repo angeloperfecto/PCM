@@ -1098,6 +1098,7 @@ export interface SiteConfig {
     }[];
   };
   navigationMenu: NavMenuItem[];
+  studentLife?: StudentLifeConfig;
   footerConfig: {
     campusDescription: string;
     aboutText?: string;
@@ -1107,6 +1108,57 @@ export interface SiteConfig {
     academicLinksTitle: string;
     resourcesLinksTitle: string;
   };
+}
+
+export interface SpiritualPillar {
+  id: string;
+  title: string;
+  description: string;
+  iconName?: string;
+  actionText?: string;
+  actionUrl?: string;
+}
+
+export interface StudentOrganization {
+  id: string;
+  name: string;
+  role: string;
+  description?: string;
+  iconName?: string;
+  meetingSchedule?: string;
+  advisor?: string;
+}
+
+export interface DailyScheduleItem {
+  id: string;
+  time: string;
+  activity: string;
+  description: string;
+}
+
+export interface StudentLifeConfig {
+  bannerBadge?: string;
+  bannerTitle?: string;
+  bannerSubtitle?: string;
+  applyButtonText?: string;
+  sermonsButtonText?: string;
+  pillarsBadge?: string;
+  pillarsTitle?: string;
+  pillarsSubtitle?: string;
+  pillars: SpiritualPillar[];
+  orgsBadge?: string;
+  orgsTitle?: string;
+  orgsSubtitle?: string;
+  organizations: StudentOrganization[];
+  dailySchedule: DailyScheduleItem[];
+  dormitoryHeadline?: string;
+  dormitoryDescription?: string;
+  dormitoryAmenities: string[];
+  ministryBadge?: string;
+  ministryTitle?: string;
+  ministryDescription?: string;
+  ministryPrimaryButtonText?: string;
+  ministrySecondaryButtonText?: string;
 }
 
 export interface MigrationAuditItem {

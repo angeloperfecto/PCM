@@ -13,6 +13,7 @@
         "ctaSections": { "type": "object", "description": "Action banners." },
         "admissionsConfig": { "type": "object", "description": "Tuition, calendar dates, steps." },
         "footerConfig": { "type": "object", "description": "Footer copyright and accreditation." },
+        "studentLife": { "type": "object", "description": "Student life banner, spiritual pillars, organizations, and ministry." },
         "navigationMenu": { "type": "array", "description": "Navbar structure." }
       },
       "required": ["siteIdentity", "contactInfo"]

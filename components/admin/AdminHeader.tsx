@@ -114,6 +114,10 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       title: 'Donations, Giving & Fund Drives',
       subtitle: 'Financial gifts ledger, scholarship sponsorships, and digital giving accounts.',
     },
+    studentLife: {
+      title: 'Student Life, Spiritual Formation & Campus Activities',
+      subtitle: 'Manage chapel services, discipleship pods, student organizations, dormitories, and weekly ministry assignments.',
+    },
     users: {
       title: 'CMS Users, Roles & RBAC Security',
       subtitle: 'Administrator access levels, credential management, and audit logs.',

@@ -56,6 +56,7 @@ import {
   EnrollmentAdminSubTab,
   YouTubeVideo,
   HomepageVideoConfig,
+  StudentLifeConfig,
 } from './types';
 import {
   INITIAL_PROGRAMS,
@@ -94,6 +95,7 @@ import {
   INITIAL_ENROLLMENT_SYSTEM_CONFIG,
   INITIAL_VIDEOS,
   INITIAL_HOMEPAGE_VIDEO_CONFIG,
+  INITIAL_STUDENT_LIFE_CONFIG,
 } from './initialData';
 import { extractYouTubeVideoId, getYouTubeThumbnailUrl, generateVideoId, getCurrentTimestamp } from './youtube';
 import { normalizeInstructions } from './utils';
@@ -216,6 +218,7 @@ interface PCMContextType {
   updateAdmissionsConfig: (newAdm: Partial<SiteConfig['admissionsConfig']>) => void;
   updateFooterConfig: (newFooter: Partial<SiteConfig['footerConfig']>) => void;
   updateNavigationMenu: (newNav: SiteConfig['navigationMenu']) => void;
+  updateStudentLifeConfig: (newStudentLife: Partial<StudentLifeConfig>) => Promise<void>;
 
   // Media Library
   mediaItems: MediaItem[];
@@ -1293,7 +1296,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           doc(db, 'siteConfig', 'global'),
           (snap) => {
             if (snap.exists()) {
-              setSiteConfig(snap.data() as SiteConfig);
+              const data = snap.data() as SiteConfig;
+              setSiteConfig({
+                ...INITIAL_SITE_CONFIG,
+                ...data,
+                studentLife: data.studentLife || INITIAL_STUDENT_LIFE_CONFIG,
+              });
               setFirebaseSyncStatus('synced');
               setIsFirebaseConnected(true);
               setLastSyncedAt(new Date());
@@ -2498,6 +2506,39 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     logActivity('UPDATE', 'Navigation Menu', 'nav-menu', 'Header Navigation Structure', 'Updated menu labels, order, and visibility.');
     addToast('success', 'Navigation Updated', 'Website navbar items updated.');
+  };
+
+  const updateStudentLifeConfig = async (newStudentLife: Partial<StudentLifeConfig>) => {
+    const currentSL = siteConfig.studentLife || INITIAL_STUDENT_LIFE_CONFIG;
+    const updatedSL: StudentLifeConfig = { ...currentSL, ...newStudentLife };
+    const updated = cleanFirestoreData({
+      ...siteConfig,
+      studentLife: updatedSL,
+    });
+    setSiteConfig(updated);
+    try {
+      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await setDoc(
+        doc(db, 'siteContent', 'studentLife'),
+        cleanFirestoreData({
+          ...updatedSL,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
+          isPublished: true,
+        }),
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Firestore write error:', e);
+    }
+    logActivity(
+      'UPDATE',
+      'Student Life Section',
+      'student-life-config',
+      'Spiritual Formation & Student Life',
+      'Updated Student Life banner, spiritual formation pillars, student organizations, and weekly ministry opportunities.'
+    );
+    addToast('success', 'Student Life Section Saved', 'Student Life section configuration has been updated and published.');
   };
 
   // Media Library CRUD (Persistent Cloud Database)
@@ -6498,6 +6539,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateAdmissionsConfig,
         updateFooterConfig,
         updateNavigationMenu,
+        updateStudentLifeConfig,
 
         // Media Library & Albums
         mediaItems,

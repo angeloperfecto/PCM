@@ -148,6 +148,11 @@ export const Header: React.FC = () => {
         },
         { label: 'Scholarships & Ministerial Grants', subSection: 'scholarships' },
         {
+          label: 'Admission Office & Staff Directory',
+          subSection: 'directory',
+          icon: Users,
+        },
+        {
           label: 'Start Online Application',
           action: () => navigateTo('apply'),
           icon: GraduationCap,
