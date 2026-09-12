@@ -1872,7 +1872,11 @@ export const AdminStudentLifeTab: React.FC = () => {
                 <div className="h-44 w-full relative bg-slate-100">
                   {photo.imageUrl ? (
                     <Image
-                      src={photo.imageUrl}
+                      src={
+                        photo.imageUrl.includes('photo-1517649763962-0c623266ddc0')
+                          ? 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800&auto=format&fit=crop'
+                          : photo.imageUrl
+                      }
                       alt={photo.title}
                       fill
                       className="object-cover"

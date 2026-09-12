@@ -90,10 +90,17 @@ export const StudentLifeView: React.FC = () => {
     'Campus',
   ];
 
-  const filteredPhotos = (config.galleryPhotos || []).filter((p) => {
-    if (selectedGalleryCategory === 'All') return true;
-    return p.category === selectedGalleryCategory;
-  });
+  const filteredPhotos = (config.galleryPhotos || [])
+    .map((p) => ({
+      ...p,
+      imageUrl: p.imageUrl?.includes('photo-1517649763962-0c623266ddc0')
+        ? 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800&auto=format&fit=crop'
+        : p.imageUrl,
+    }))
+    .filter((p) => {
+      if (selectedGalleryCategory === 'All') return true;
+      return p.category === selectedGalleryCategory;
+    });
 
   return (
     <div className="w-full bg-[#FFFFFF] font-sans pb-20">
