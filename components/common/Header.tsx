@@ -285,37 +285,37 @@ export const Header: React.FC = () => {
   return (
     <header className="w-full sticky top-0 z-50 bg-[#18392B] text-white shadow-xl transition-all duration-300 font-sans border-b border-[#588B76]/30">
       {/* 1. TOP UTILITY BAR (Institutional Standard) */}
-      <div className="bg-[#10261D] text-[#D0DED8] text-[11px] px-4 lg:px-8 py-1 flex flex-wrap justify-between items-center border-b border-[#588B76]/25 tracking-wider min-h-[30px]">
+      <div className="bg-[#10261D] text-[#D0DED8] text-[10.5px] sm:text-[11px] px-3 sm:px-4 lg:px-6 xl:px-8 py-1 flex items-center justify-between border-b border-[#588B76]/25 tracking-wider min-h-[30px] w-full overflow-x-auto no-scrollbar">
         {/* Left Links */}
-        <div className="flex items-center gap-3 sm:gap-4 font-medium uppercase text-[11px]">
+        <div className="flex items-center gap-2.5 sm:gap-3 md:gap-4 font-medium uppercase text-[10.5px] sm:text-[11px] shrink-0">
           <button
             id="btn-top-student-portal"
             onClick={() => navigateTo('portal')}
-            className="hover:text-white transition cursor-pointer font-semibold text-[#85AA9B] hover:underline"
+            className="hover:text-white transition cursor-pointer font-semibold text-[#85AA9B] hover:underline whitespace-nowrap"
           >
-            {isStudentLoggedIn ? 'MyPCM Portal (Active)' : 'Student Portal'}
+            {isStudentLoggedIn ? 'MyPCM (Active)' : 'Student Portal'}
           </button>
-          <span className="text-[#85AA9B]/40">|</span>
+          <span className="text-[#85AA9B]/40 hidden sm:inline">|</span>
           <button
             id="btn-top-faculty-portal"
             onClick={() => navigateTo('about', 'faculty')}
-            className="hover:text-white transition cursor-pointer text-[#D0DED8]"
+            className="hover:text-white transition cursor-pointer text-[#D0DED8] hidden sm:inline whitespace-nowrap"
           >
             Faculty
           </button>
-          <span className="text-[#85AA9B]/40">|</span>
+          <span className="text-[#85AA9B]/40 hidden sm:inline">|</span>
           <button
             id="nav-utility-alumni"
             onClick={() => navigateTo('about', 'faculty')}
-            className="hover:text-white transition cursor-pointer text-[#D0DED8]"
+            className="hover:text-white transition cursor-pointer text-[#D0DED8] hidden sm:inline whitespace-nowrap"
           >
             Alumni
           </button>
-          <span className="text-[#85AA9B]/40">|</span>
+          <span className="text-[#85AA9B]/40 hidden md:inline">|</span>
           <button
             id="nav-utility-library"
             onClick={() => navigateTo('resources', 'library')}
-            className="hover:text-white transition cursor-pointer text-[#D0DED8]"
+            className="hover:text-white transition cursor-pointer text-[#D0DED8] hidden md:inline whitespace-nowrap"
           >
             Library
           </button>
@@ -323,16 +323,17 @@ export const Header: React.FC = () => {
           <button
             id="nav-utility-give"
             onClick={() => navigateTo('donation')}
-            className="hover:text-amber-300 transition cursor-pointer text-amber-300 font-bold flex items-center gap-1"
+            className="hover:text-amber-300 transition cursor-pointer text-amber-300 font-bold flex items-center gap-1 whitespace-nowrap"
           >
-            <Heart className="w-3 h-3 fill-amber-300/40 text-amber-300" />
-            <span>Give to PCM</span>
+            <Heart className="w-3 h-3 fill-amber-300/40 text-amber-300 shrink-0" />
+            <span className="hidden xs:inline">Give to PCM</span>
+            <span className="xs:hidden">Give</span>
           </button>
         </div>
 
         {/* Right Portals & Actions */}
-        <div className="flex items-center gap-3 text-[11px]">
-          <span className="hidden md:inline italic text-[#D0DED8]/90 text-[11px]">
+        <div className="flex items-center gap-2 sm:gap-3 text-[10.5px] sm:text-[11px] shrink-0 pl-2">
+          <span className="hidden xl:inline italic text-[#D0DED8]/90 text-[11px] whitespace-nowrap">
             Equipping Servants. Transforming Lives.
           </span>
 
@@ -340,11 +341,11 @@ export const Header: React.FC = () => {
           <button
             id="btn-global-search-trigger"
             onClick={() => setSearchModalOpen(true)}
-            className="flex items-center gap-1.5 bg-[#18392B] hover:bg-[#234D3B] text-[#D0DED8] px-2.5 py-0.5 rounded-sm border border-[#588B76]/50 transition cursor-pointer text-[11px]"
+            className="flex items-center gap-1 sm:gap-1.5 bg-[#18392B] hover:bg-[#234D3B] text-[#D0DED8] px-2 sm:px-2.5 py-0.5 rounded-sm border border-[#588B76]/50 transition cursor-pointer text-[10.5px] sm:text-[11px] shrink-0 whitespace-nowrap"
             title="Search Website (Cmd+K)"
           >
-            <Search className="w-3 h-3 text-[#85AA9B]" />
-            <span>Search</span>
+            <Search className="w-3 h-3 text-[#85AA9B] shrink-0" />
+            <span className="hidden xs:inline">Search</span>
             <kbd className="hidden sm:inline bg-[#10261D] px-1 py-0.2 rounded text-[9px] text-[#D0DED8] font-mono border border-[#588B76]/30">
               ⌘K
             </kbd>
@@ -356,7 +357,7 @@ export const Header: React.FC = () => {
           <button
             id="btn-nav-google-account"
             onClick={() => setUserAccountModalOpen(true)}
-            className="flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 border border-emerald-500/30 text-white transition font-medium cursor-pointer text-[11px]"
+            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 rounded-full bg-white/10 hover:bg-white/20 border border-emerald-500/30 text-white transition font-medium cursor-pointer text-[10px] sm:text-[11px] shrink-0 whitespace-nowrap"
             title="Google Account & Role Management"
           >
             {currentUserAccount?.photoURL || currentUserAccount?.avatarUrl || firebaseAuthUser?.photoURL || (isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl) ? (
@@ -364,11 +365,11 @@ export const Header: React.FC = () => {
               <img
                 src={currentUserAccount?.photoURL || currentUserAccount?.avatarUrl || firebaseAuthUser?.photoURL || (isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl) || ''}
                 alt="Profile"
-                className="w-4 h-4 rounded-full object-cover"
+                className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full object-cover shrink-0"
                 referrerPolicy="no-referrer"
               />
             ) : (
-              <svg className="w-3.5 h-3.5" viewBox="0 0 24 24">
+              <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" viewBox="0 0 24 24">
                 <path
                   fill="#4285F4"
                   d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -387,15 +388,15 @@ export const Header: React.FC = () => {
                 />
               </svg>
             )}
-            <span className="font-semibold">
+            <span className="font-semibold max-w-[65px] xs:max-w-[100px] sm:max-w-none truncate">
               {currentUserAccount
                 ? currentUserAccount.name.split(' ')[0]
                 : firebaseAuthUser
                 ? (firebaseAuthUser.displayName?.split(' ')[0] || 'Account')
-                : 'Sign In (Google)'}
+                : 'Sign In'}
             </span>
             {currentUserAccount && (
-              <span className={`text-[9px] px-1.5 py-0.2 rounded font-bold ${
+              <span className={`text-[8.5px] sm:text-[9px] px-1 sm:px-1.5 py-0.2 rounded font-bold ${
                 currentUserAccount.role === 'Admin' ? 'bg-amber-400 text-slate-950' : 'bg-emerald-400 text-slate-950'
               }`}>
                 {currentUserAccount.role}
@@ -411,69 +412,69 @@ export const Header: React.FC = () => {
               <button
                 id="btn-nav-admin-cms"
                 onClick={() => navigateTo('admin')}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-sm transition font-medium cursor-pointer ${
+                className={`flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded-sm transition font-medium cursor-pointer shrink-0 ${
                   currentSection === 'admin'
                     ? 'bg-[#588B76] text-white font-bold'
                     : 'text-[#D0DED8] hover:text-white'
                 }`}
                 title="Institutional CMS & Admissions Administration"
               >
-                <Lock className="w-3 h-3 text-[#85AA9B]" />
-                <span>{isAdminLoggedIn ? 'Admin (In)' : 'Admin'}</span>
+                <Lock className="w-3 h-3 text-[#85AA9B] shrink-0" />
+                <span className="whitespace-nowrap">{isAdminLoggedIn ? 'Admin (In)' : 'Admin'}</span>
               </button>
             </>
           )}
 
-          <span className="text-[#85AA9B]/40">|</span>
+          <span className="text-[#85AA9B]/40 hidden sm:inline">|</span>
 
           {/* Migration Audit Trigger */}
           <button
             id="btn-nav-migration-audit"
             onClick={() => navigateTo('migration-report')}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-sm transition font-medium cursor-pointer ${
+            className={`hidden sm:flex items-center gap-1 px-2 py-0.5 rounded-sm transition font-medium cursor-pointer shrink-0 ${
               currentSection === 'migration-report'
                 ? 'bg-[#588B76] text-white font-bold'
                 : 'text-[#85AA9B] hover:text-white'
             }`}
             title="Source-to-Target Migration Audit & URL Inventory"
           >
-            <ShieldCheck className="w-3 h-3 text-[#85AA9B]" />
-            <span className="hidden sm:inline">Migration Report</span>
-            <span className="sm:hidden">Audit</span>
+            <ShieldCheck className="w-3 h-3 text-[#85AA9B] shrink-0" />
+            <span className="hidden md:inline whitespace-nowrap">Migration Report</span>
+            <span className="md:hidden whitespace-nowrap">Audit</span>
           </button>
         </div>
       </div>
 
       {/* 2. MAIN BRANDING HEADER & EMBLEM */}
       <div
-        className={`bg-white px-4 lg:px-6 xl:px-8 transition-all duration-200 flex items-center justify-between text-[#18392B] border-b border-[#D0DED8] shadow-xs z-10 ${
-          isScrolled ? 'h-14 py-1' : 'h-16 py-1.5'
+        className={`bg-white px-3 sm:px-4 lg:px-6 xl:px-8 transition-all duration-200 flex items-center justify-between text-[#18392B] border-b border-[#D0DED8] shadow-xs z-10 w-full ${
+          isScrolled ? 'h-14 py-1' : 'h-15 sm:h-16 py-1.5'
         }`}
       >
         {/* Brand identity */}
         <div
           id="header-brand-logo"
           onClick={() => navigateTo('home')}
-          className="flex items-center gap-2.5 sm:gap-3 cursor-pointer group select-none shrink-0"
+          className="flex items-center gap-2 sm:gap-2.5 md:gap-3 cursor-pointer group select-none min-w-0 pr-2 shrink"
           role="button"
           tabIndex={0}
         >
-          <div className="w-10 h-10 flex items-center justify-center shrink-0">
-            <Emblem id="header-pcm-logo" size={40} className="w-10 h-10 transition-transform duration-200 group-hover:scale-105" />
+          <div className="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center shrink-0">
+            <Emblem id="header-pcm-logo" size={38} className="w-8 h-8 sm:w-10 sm:h-10 transition-transform duration-200 group-hover:scale-105" />
           </div>
-          <div className="flex flex-col justify-center">
-            <h1 className="text-[#18392B] font-serif text-base sm:text-lg font-bold leading-tight group-hover:text-[#588B76] transition-colors whitespace-nowrap">
+          <div className="flex flex-col justify-center min-w-0">
+            <h1 className="text-[#18392B] font-serif text-[13px] xs:text-[15px] sm:text-base md:text-lg font-bold leading-tight group-hover:text-[#588B76] transition-colors truncate max-w-[170px] xs:max-w-[240px] sm:max-w-[320px] md:max-w-none">
               {siteConfig?.siteIdentity?.name || 'Philippine College of Ministry'}
             </h1>
-            <p className="text-[10px] uppercase tracking-wider font-semibold text-[#588B76] whitespace-nowrap hidden sm:block">
+            <p className="text-[9.5px] sm:text-[10px] uppercase tracking-wider font-semibold text-[#588B76] truncate hidden sm:block">
               Lamtang, Benguet • Founded 1992
             </p>
           </div>
         </div>
 
-        {/* Desktop Navigation & Apply CTA */}
-        <div className="hidden lg:flex items-center gap-1 xl:gap-2 2xl:gap-3 text-[11px] xl:text-[12px] font-bold text-[#18392B] uppercase tracking-tight">
-          {navItems.map((item) => {
+        {/* Desktop Navigation & Apply CTA (xl screens and up: 1280px+) */}
+        <div className="hidden xl:flex items-center gap-0.5 xl:gap-1 2xl:gap-2 text-[10.5px] xl:text-[11px] 2xl:text-[12px] font-bold text-[#18392B] uppercase tracking-tight shrink-0">
+          {navItems.map((item, itemIdx) => {
             const isActive =
               currentSection === item.id ||
               (item.id === 'about' && currentSection === 'why-choose-pcm') ||
@@ -495,7 +496,7 @@ export const Header: React.FC = () => {
                   }}
                   aria-expanded={activeDropdown === item.id}
                   aria-haspopup={hasDropdown ? 'true' : undefined}
-                  className={`flex items-center gap-0.5 xl:gap-1 px-1.5 py-1 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
+                  className={`flex items-center gap-0.5 px-1 xl:px-1.5 2xl:px-2 py-1 transition-colors duration-150 cursor-pointer whitespace-nowrap ${
                     isActive
                       ? 'border-b-2 border-[#588B76] text-[#18392B] font-extrabold'
                       : 'border-b-2 border-transparent text-[#18392B]/85 hover:text-[#588B76] hover:border-[#588B76]/40'
@@ -503,7 +504,7 @@ export const Header: React.FC = () => {
                 >
                   <span className="whitespace-nowrap">{item.label}</span>
                   {item.badge && (
-                    <span className="text-[8.5px] bg-amber-400 text-slate-950 font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-normal whitespace-nowrap leading-none inline-block shadow-xs">
+                    <span className="text-[8px] xl:text-[8.5px] bg-amber-400 text-slate-950 font-extrabold px-1 xl:px-1.5 py-0.5 rounded-full uppercase tracking-normal whitespace-nowrap leading-none inline-block shadow-xs">
                       {item.badge}
                     </span>
                   )}
@@ -514,7 +515,7 @@ export const Header: React.FC = () => {
 
                 {/* Dropdown Menu */}
                 {hasDropdown && activeDropdown === item.id && (
-                  <div className="absolute left-0 top-full w-72 bg-white border border-[#D0DED8] shadow-2xl rounded-sm py-2 text-[#18392B] z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                  <div className={`absolute ${itemIdx > 5 ? 'right-0' : 'left-0'} top-full w-72 bg-white border border-[#D0DED8] shadow-2xl rounded-sm py-2 text-[#18392B] z-50 animate-in fade-in slide-in-from-top-1 duration-150`}>
                     <div className="px-3 py-1.5 mb-1 border-b border-[#D0DED8] text-[10px] text-[#588B76] font-mono tracking-widest uppercase font-bold">
                       {item.id === 'academics' ? 'ACADEMIC DIRECTORY' : item.id === 'admissions' ? 'ADMISSION DIRECTORY' : `${item.label} DIRECTORY`}
                     </div>
@@ -552,38 +553,39 @@ export const Header: React.FC = () => {
           <button
             id="btn-header-apply-now"
             onClick={() => navigateTo('apply')}
-            className="group relative inline-flex items-center justify-center gap-1.5 bg-[#588B76] hover:bg-[#46705F] active:scale-[0.98] text-white px-3 py-1.5 rounded-sm shadow-xs hover:shadow-sm transition-all duration-150 font-bold text-xs uppercase tracking-wider cursor-pointer border border-[#588B76]/50 whitespace-nowrap shrink-0 ml-1"
+            className="group relative inline-flex items-center justify-center gap-1.5 bg-[#588B76] hover:bg-[#46705F] active:scale-[0.98] text-white px-2.5 xl:px-3 py-1.5 rounded-sm shadow-xs hover:shadow-sm transition-all duration-150 font-bold text-[11px] xl:text-xs uppercase tracking-wider cursor-pointer border border-[#588B76]/50 whitespace-nowrap shrink-0 ml-1"
           >
             <GraduationCap className="w-3.5 h-3.5 text-white group-hover:rotate-12 transition-transform duration-200 shrink-0" />
             <span className="whitespace-nowrap">APPLY NOW</span>
           </button>
         </div>
 
-        {/* Mobile Menu Toggle */}
-        <div className="flex items-center gap-2 lg:hidden">
+        {/* Mobile & Tablet Navigation Toggle & Apply Button */}
+        <div className="flex items-center gap-1.5 sm:gap-2 xl:hidden shrink-0">
           <button
             id="btn-mobile-header-apply"
             onClick={() => navigateTo('apply')}
-            className="bg-[#588B76] hover:bg-[#46705F] text-white text-[11px] font-bold px-3 py-1.5 rounded-sm uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+            className="bg-[#588B76] hover:bg-[#46705F] active:scale-[0.97] text-white text-[10.5px] sm:text-[11px] font-bold px-2 sm:px-3 py-1.5 rounded-sm uppercase tracking-wider flex items-center gap-1 cursor-pointer transition shadow-xs whitespace-nowrap shrink-0"
           >
+            <GraduationCap className="w-3.5 h-3.5 hidden xs:inline" />
             <span>Apply</span>
-            <ArrowRight className="w-3 h-3" />
+            <ArrowRight className="w-3 h-3 hidden sm:inline" />
           </button>
 
           <button
             id="btn-mobile-menu-toggle"
             onClick={() => setMobileMenuOpen((prev) => !prev)}
-            aria-label="Toggle Mobile Menu"
-            className="p-2 rounded-sm bg-[#18392B] text-white hover:bg-[#10261D] transition cursor-pointer"
+            aria-label="Toggle Navigation Menu"
+            className="p-1.5 sm:p-2 rounded-sm bg-[#18392B] text-white hover:bg-[#10261D] active:scale-[0.96] transition cursor-pointer shrink-0 flex items-center justify-center"
           >
-            {mobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+            {mobileMenuOpen ? <X className="w-5 h-5 sm:w-6 sm:h-6" /> : <Menu className="w-5 h-5 sm:w-6 sm:h-6" />}
           </button>
         </div>
       </div>
 
-      {/* 3. MOBILE NAVIGATION DRAWER */}
+      {/* 3. MOBILE & TABLET NAVIGATION DRAWER */}
       {mobileMenuOpen && (
-        <div className="lg:hidden bg-[#18392B] border-t border-[#588B76]/30 text-[#D0DED8] px-4 py-6 max-h-[85vh] overflow-y-auto space-y-4 shadow-2xl animate-in slide-in-from-top duration-200">
+        <div className="xl:hidden bg-[#18392B] border-t border-[#588B76]/30 text-[#D0DED8] px-4 py-5 max-h-[calc(100dvh-5.5rem)] overflow-y-auto overscroll-contain space-y-4 shadow-2xl animate-in slide-in-from-top duration-200">
           {/* Mobile Top Action CTAs */}
           <div className="flex flex-col gap-2 pb-4 border-b border-[#588B76]/30">
             <button

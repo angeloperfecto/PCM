@@ -180,7 +180,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
   };
 
   return (
-    <header className="bg-[#18392B] text-white py-4 px-4 sm:px-6 lg:px-8 border-b-2 border-[#588B76]/50 shadow-md sticky top-0 z-30">
+    <header className="bg-[#18392B] text-white py-3 sm:py-4 px-3 sm:px-6 lg:px-8 border-b-2 border-[#588B76]/50 shadow-md sticky top-0 z-30 w-full overflow-hidden">
       <input
         type="file"
         ref={fileInputRef}
@@ -188,14 +188,14 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         accept=".json"
         className="hidden"
       />
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 sm:gap-4 w-full min-w-0">
         {/* Left: Mobile Toggle & Tab Info */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 w-full lg:w-auto">
           {/* Mobile Menu Toggle Button */}
           <button
             type="button"
             onClick={() => setIsMobileOpen?.(!isMobileOpen)}
-            className="lg:hidden p-2 rounded-xl bg-[#11261D] text-slate-200 hover:text-white border border-[#2B5E47] transition cursor-pointer"
+            className="lg:hidden p-2 rounded-xl bg-[#11261D] text-slate-200 hover:text-white border border-[#2B5E47] transition cursor-pointer shrink-0"
             title="Toggle Navigation Menu"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -203,13 +203,13 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             </svg>
           </button>
 
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#85AA9B]">
                 PCM CMS
               </span>
               <span className="text-slate-400 text-xs">•</span>
-              <span className="text-[11px] text-emerald-300 font-medium font-sans">
+              <span className="text-[11px] text-emerald-300 font-medium font-sans truncate">
                 {currentTabInfo.title}
               </span>
               <span className="bg-[#588B76]/30 text-[#85AA9B] border border-[#588B76]/50 text-[10px] font-semibold px-2 py-0.2 rounded-full hidden sm:inline-flex items-center gap-1">
@@ -217,17 +217,17 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
                 {currentAdminUser?.role || 'Super Admin'}
               </span>
             </div>
-            <h1 className="font-serif text-lg sm:text-xl font-bold text-white tracking-wide mt-0.5">
+            <h1 className="font-serif text-base sm:text-lg lg:text-xl font-bold text-white tracking-wide mt-0.5 truncate">
               {currentTabInfo.title}
             </h1>
-            <p className="text-xs text-[#D0DED8] hidden sm:block">
+            <p className="text-xs text-[#D0DED8] hidden sm:block truncate">
               {currentTabInfo.subtitle}
             </p>
           </div>
         </div>
 
         {/* Right: Quick Controls & Status */}
-        <div className="flex flex-wrap items-center gap-2 text-xs w-full lg:w-auto justify-between lg:justify-end">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs w-full lg:w-auto justify-start sm:justify-end shrink-0">
           {/* Live Cloud Sync Indicator */}
           <div
             id="admin-auto-sync-status-badge"
