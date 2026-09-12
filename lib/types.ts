@@ -16,7 +16,7 @@ export type NavSection =
   | 'admin'
   | 'migration-report';
 
-export type ContentStatus = 'Published' | 'Draft' | 'Scheduled' | 'Unpublished';
+export type ContentStatus = 'Published' | 'Draft' | 'Scheduled' | 'Unpublished' | 'Archived';
 
 export type ProgramLevel = 'senior-high' | 'undergraduate' | 'graduate' | 'certificate' | 'diploma' | 'SHS' | 'Associate' | 'Undergraduate' | 'Graduate' | 'Certificate' | string;
 
@@ -1136,6 +1136,45 @@ export interface DailyScheduleItem {
   description: string;
 }
 
+export interface MinistryOpportunityItem {
+  id: string;
+  title: string;
+  role: string;
+  location: string;
+  description: string;
+  iconName?: string;
+  schedule?: string;
+  tags?: string[];
+}
+
+export interface StudentLeaderOfficer {
+  id: string;
+  name: string;
+  position: string;
+  program: string;
+  yearLevel: string;
+  bio?: string;
+  photoUrl?: string;
+  contactEmail?: string;
+}
+
+export interface CampusGuidelineItem {
+  id: string;
+  category: 'Spiritual' | 'Academic' | 'Dormitory' | 'General';
+  title: string;
+  details: string;
+  iconName?: string;
+}
+
+export interface StudentLifePhoto {
+  id: string;
+  title: string;
+  category: 'Chapel' | 'Fellowship' | 'Dormitory' | 'Ministry' | 'Sports' | 'Campus';
+  imageUrl: string;
+  caption?: string;
+  date?: string;
+}
+
 export interface StudentLifeConfig {
   bannerBadge?: string;
   bannerTitle?: string;
@@ -1154,11 +1193,25 @@ export interface StudentLifeConfig {
   dormitoryHeadline?: string;
   dormitoryDescription?: string;
   dormitoryAmenities: string[];
+  dormitoryGuidelines?: string;
   ministryBadge?: string;
   ministryTitle?: string;
   ministryDescription?: string;
   ministryPrimaryButtonText?: string;
   ministrySecondaryButtonText?: string;
+  ministryOpportunities?: MinistryOpportunityItem[];
+  leadersBadge?: string;
+  leadersTitle?: string;
+  leadersSubtitle?: string;
+  studentLeaders?: StudentLeaderOfficer[];
+  guidelinesBadge?: string;
+  guidelinesTitle?: string;
+  guidelinesSubtitle?: string;
+  campusGuidelines?: CampusGuidelineItem[];
+  galleryBadge?: string;
+  galleryTitle?: string;
+  gallerySubtitle?: string;
+  galleryPhotos?: StudentLifePhoto[];
 }
 
 export interface MigrationAuditItem {

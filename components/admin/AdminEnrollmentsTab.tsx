@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import {
   OnlineEnrollment,
@@ -1196,11 +1197,13 @@ export const AdminEnrollmentsTab: React.FC = () => {
             {faculty.map((member) => (
               <div key={member.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
                 <div className="flex items-center gap-3">
-                  <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200">
-                    <img
+                  <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 relative">
+                    <Image
                       src={member.imageUrl || member.image || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2'}
                       alt={member.name}
-                      className="w-full h-full object-cover"
+                      fill
+                      className="object-cover"
+                      referrerPolicy="no-referrer"
                     />
                   </div>
                   <div>

@@ -45,6 +45,7 @@ export type AdminTabType =
   | 'events'
   | 'announcements'
   | 'studentLife'
+  | 'scrapbook'
   | 'media'
   | 'downloads'
   | 'youtube'
@@ -104,6 +105,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     donations,
     enrollments,
     videos,
+    scrapbook,
     firebaseSyncStatus,
     updateAdminAvatar,
   } = usePCM();
@@ -178,6 +180,13 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           id: 'studentLife',
           label: 'Student Life Section',
           icon: Compass,
+          highlight: true,
+        },
+        {
+          id: 'scrapbook',
+          label: 'Historical Scrapbook',
+          icon: Camera,
+          count: scrapbook.length,
           highlight: true,
         },
         {

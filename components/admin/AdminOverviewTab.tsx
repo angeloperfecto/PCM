@@ -23,6 +23,7 @@ import {
   Heart,
   Tv,
   Compass,
+  Camera,
 } from 'lucide-react';
 
 interface AdminOverviewTabProps {
@@ -263,10 +264,18 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
 
           <button
             onClick={() => onSelectTab('studentLife')}
-            className="flex items-center gap-2 bg-[#18392B] hover:bg-[#10261D] text-white p-3 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs justify-center col-span-2 sm:col-span-1"
+            className="flex items-center gap-2 bg-[#18392B] hover:bg-[#10261D] text-white p-3 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs justify-center"
           >
-            <Compass className="w-4 h-4 shrink-0 text-[#588B76]" />
+            <Compass className="w-4 h-4 shrink-0 text-[#85AA9B]" />
             <span>Student Life</span>
+          </button>
+
+          <button
+            onClick={() => onSelectTab('scrapbook')}
+            className="flex items-center gap-2 bg-[#18392B] hover:bg-[#10261D] text-white p-3 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs justify-center"
+          >
+            <Camera className="w-4 h-4 shrink-0 text-[#85AA9B]" />
+            <span>Historical Scrapbook</span>
           </button>
         </div>
       </div>

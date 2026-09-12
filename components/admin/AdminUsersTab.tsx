@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
+import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { AdminUser, AdminRole, UserRole, UserAccount, AccountStatus, DeletedUserRecord } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
@@ -603,12 +604,15 @@ export const AdminUsersTab: React.FC = () => {
               >
                 <div className="flex items-start gap-3">
                   {req.photoURL ? (
-                    <img
-                      src={req.photoURL}
-                      alt={req.name}
-                      className="w-10 h-10 rounded-full object-cover border border-slate-200 shrink-0"
-                      referrerPolicy="no-referrer"
-                    />
+                    <div className="relative w-10 h-10 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                      <Image
+                        src={req.photoURL}
+                        alt={req.name}
+                        fill
+                        className="object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
                   ) : (
                     <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-900 border border-amber-300 flex items-center justify-center font-bold text-sm shrink-0">
                       {req.name?.charAt(0)?.toUpperCase() || 'U'}
@@ -952,12 +956,15 @@ export const AdminUsersTab: React.FC = () => {
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           {account.photoURL ? (
-                            <img
-                              src={account.photoURL}
-                              alt={account.name}
-                              className="w-9 h-9 rounded-full object-cover border border-slate-200 shrink-0"
-                              referrerPolicy="no-referrer"
-                            />
+                            <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-200 shrink-0">
+                              <Image
+                                src={account.photoURL}
+                                alt={account.name}
+                                fill
+                                className="object-cover"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
                           ) : (
                             <div className={`w-9 h-9 rounded-full text-white flex items-center justify-center font-bold text-xs shrink-0 ${
                               isPrimarySuperAdmin ? 'bg-amber-700' : account.role === 'Admin' ? 'bg-[#18392B]' : account.role === 'Student' ? 'bg-emerald-600' : 'bg-blue-600'

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { DonationRecord, DonationPaymentMethod, PaymentMethodType } from '@/lib/types';
 import { normalizeInstructions } from '@/lib/utils';
@@ -522,11 +523,14 @@ export const DonationView: React.FC = () => {
                   <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-3">
                     {selectedMethod.qrCodeUrl ? (
                       <div className="space-y-3">
-                        <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200 inline-block">
-                          <img
+                        <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200 inline-block relative">
+                          <Image
                             src={selectedMethod.qrCodeUrl}
                             alt={`${selectedMethod.name} QR Code`}
+                            width={192}
+                            height={192}
                             className="w-48 h-48 object-contain rounded-lg mx-auto"
+                            referrerPolicy="no-referrer"
                           />
                         </div>
                         <p className="text-xs text-slate-600 font-medium">

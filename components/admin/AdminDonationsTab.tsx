@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { DonationPaymentMethod, DonationRecord, DonationSettings, PaymentMethodType, FeaturedCause } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
@@ -1127,14 +1128,14 @@ export const AdminDonationsTab: React.FC = () => {
                         className="flex-1 p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
                       />
                       {methodForm.qrCodeUrl && (
-                        <div className="w-10 h-10 border border-slate-200 rounded-lg p-0.5 bg-white shrink-0 flex items-center justify-center overflow-hidden">
-                          <img
+                        <div className="w-10 h-10 border border-slate-200 rounded-lg p-0.5 bg-white shrink-0 flex items-center justify-center overflow-hidden relative">
+                          <Image
                             src={methodForm.qrCodeUrl}
                             alt="QR"
+                            width={40}
+                            height={40}
                             className="w-full h-full object-contain"
-                            onError={(e) => {
-                              (e.target as HTMLElement).style.display = 'none';
-                            }}
+                            referrerPolicy="no-referrer"
                           />
                         </div>
                       )}

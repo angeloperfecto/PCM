@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useRef } from 'react';
+import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { MediaItem } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
@@ -1111,10 +1112,12 @@ export const AdminMediaTab: React.FC = () => {
             {/* Image Preview Box */}
             <div className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200 group">
               {!previewImgError ? (
-                <img
+                <Image
                   src={detailItem.dataUrl || detailItem.downloadURL || detailItem.url}
                   alt={detailItem.altText || detailItem.title}
-                  className="max-h-full max-w-full object-contain"
+                  fill
+                  className="object-contain"
+                  referrerPolicy="no-referrer"
                   onError={() => {
                     console.warn('Preview image failed to load for:', detailItem.title);
                     setPreviewImgError(true);

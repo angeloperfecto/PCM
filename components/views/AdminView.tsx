@@ -21,6 +21,7 @@ import { AdminEnrollmentsTab } from '@/components/admin/AdminEnrollmentsTab';
 import { AdminUsersTab } from '@/components/admin/AdminUsersTab';
 import { AdminDonationsTab } from '@/components/admin/AdminDonationsTab';
 import { AdminStudentLifeTab } from '@/components/admin/AdminStudentLifeTab';
+import { AdminScrapbookTab } from '@/components/admin/AdminScrapbookTab';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   ShieldAlert,
@@ -70,6 +71,7 @@ export const AdminView: React.FC = () => {
     'events',
     'announcements',
     'studentLife',
+    'scrapbook',
     'media',
     'downloads',
     'youtube',
@@ -433,6 +435,7 @@ export const AdminView: React.FC = () => {
             {activeTab === 'enrollments' && <AdminEnrollmentsTab />}
             {activeTab === 'donations' && <AdminDonationsTab />}
             {activeTab === 'studentLife' && <AdminStudentLifeTab />}
+            {activeTab === 'scrapbook' && <AdminScrapbookTab />}
             {activeTab === 'users' && <AdminUsersTab />}
           </div>
         </main>
