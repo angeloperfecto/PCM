@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
-import sharp from 'sharp';
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -40,15 +39,17 @@ export async function POST(req: NextRequest) {
     const cleanBase = path.basename(rawFileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
     const uniqueFilename = `slide_${timestamp}_${cleanBase}.webp`;
 
-    // 1. Optimize image using sharp for fast delivery & compact storage
-    let optimizedBuffer: Buffer;
+    // 1. Optimize image using sharp for fast delivery & compact storage (if available)
+    let optimizedBuffer: Buffer = buffer;
     try {
+      const sharpModule = await import('sharp');
+      const sharp = sharpModule.default;
       optimizedBuffer = await sharp(buffer)
         .resize({ width: 1440, height: 900, fit: 'cover' })
         .webp({ quality: 75 })
         .toBuffer();
     } catch {
-      // Fallback if format is not supported by sharp
+      // Fallback if sharp is not installed or format is not supported
       optimizedBuffer = buffer;
     }
 

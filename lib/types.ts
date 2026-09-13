@@ -1098,6 +1098,19 @@ export interface SiteConfig {
     }[];
   };
   navigationMenu: NavMenuItem[];
+  historyMilestones?: {
+    year: string;
+    title: string;
+    desc: string;
+  }[];
+  distinctives?: {
+    id: string;
+    title: string;
+    short: string;
+    desc: string;
+    highlights: string[];
+    iconName?: string;
+  }[];
   studentLife?: StudentLifeConfig;
   footerConfig: {
     campusDescription: string;

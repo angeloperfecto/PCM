@@ -21,83 +21,109 @@ import {
   Briefcase,
 } from 'lucide-react';
 
-export const WhyChoosePCMView: React.FC = () => {
-  const { navigateTo, setStatementOfFaithModalOpen, setRequestInfoModalOpen } = usePCM();
+const ICON_MAP: Record<string, React.ElementType> = {
+  BookOpen,
+  Mountain,
+  Award,
+  Briefcase,
+  GraduationCap,
+  Users,
+  Compass,
+  ShieldCheck,
+  Clock,
+  Sparkles,
+};
 
-  const reasons = [
-    {
-      id: 'reason-1',
-      title: 'Uncompromised Biblical & Doctrinal Fidelity',
-      short: 'Rooted in God’s Inerrant Word',
-      icon: BookOpen,
-      desc: 'At Philippine College of Ministry, the 66 books of the Holy Bible are held as the verbally inspired, inerrant, authoritative Word of God. Every lecture, thesis, and homiletic exercise is anchored in sound grammatical-historical exegesis and historic Christian orthodoxy.',
-      highlights: [
-        'Rigorous original language training in Biblical Greek and Hebrew',
-        'Systematic theology grounded in biblical exposition rather than human philosophy',
-        'Commitment to the Stone-Campbell Restoration Movement heritage of simple New Testament Christianity',
-      ],
-    },
-    {
-      id: 'reason-2',
-      title: 'Serene Cordillera Mountain Campus (Lamtang, Benguet)',
-      short: 'An Atmosphere Conducive to Deep Study & Prayer',
-      icon: Mountain,
-      desc: 'Located along the cool, pine-covered mountain slopes of Lamtang, Puguis, La Trinidad, Benguet (just minutes from Baguio City), PCM provides a peaceful, distraction-free environment where students can focus on prayer, contemplation, fellowship, and serious intellectual study.',
-      highlights: [
-        'Cool, invigorating climate ideal for concentration and spiritual retreats',
-        '7,500 square meter hillside campus overlooking lush mountain valleys',
-        'Dedicated prayer rooms, amphitheater, and quiet library study decks',
-      ],
-    },
-    {
-      id: 'reason-3',
-      title: 'Affordable Tuition & Ministerial Scholarship Support',
-      short: 'Ministry Preparation Within Financial Reach',
-      icon: Award,
-      desc: 'We believe God’s call to ministry should never be hindered by insurmountable financial debt. PCM offers among the most affordable theological tuition rates in the Philippines, paired with generous pastoral grants and on-campus work-study subsidies.',
-      highlights: [
-        'Subsidized tuition rates for Bachelor of Arts in Theology candidates',
-        'Pastoral Worker Grants for sons and daughters of pastors and missionaries',
-        'On-campus work-study scholarships and church matching support programs',
-      ],
-    },
-    {
-      id: 'reason-4',
-      title: 'Hands-On Pastoral Practicum & Field Apprenticeship',
-      short: 'Theory Tested in Real-World Local Churches',
-      icon: Briefcase,
-      desc: 'Ministry is not learned solely in a lecture hall. Every PCM degree includes weekly supervised ministry practicum, pulpit supply opportunities, hospital and prison chaplaincy rotations, and cross-cultural church planting apprenticeships across northern Luzon.',
-      highlights: [
-        'Active network of 85+ partner churches in Baguio, Benguet, La Union, Pangasinan, and beyond',
-        '300+ supervised practicum hours under seasoned pastoral mentors',
-        'Regular community medical missions, evangelism treks, and youth leadership camps',
-      ],
-    },
-    {
-      id: 'reason-5',
-      title: 'High Placement Rate & Global Alumni Network',
-      short: 'Graduates Serving in Over 18 Countries',
-      icon: GraduationCap,
-      desc: 'Over 650+ PCM alumni currently serve as senior pastors, church planters, military and hospital chaplains, Bible college professors, and cross-cultural missionaries throughout the Philippines, Southeast Asia, North America, and the Middle East.',
-      highlights: [
-        'Over 90% of our graduates transition directly into active vocational or bi-vocational ministry',
-        'Recognized by the Commission on Higher Education (CHED) and member of PABATS & PCEC',
-        'Active lifelong alumni fellowship and continuing pastoral education conferences',
-      ],
-    },
-    {
-      id: 'reason-6',
-      title: 'Caring, Close-Knit Christian Community & Mentorship',
-      short: 'Faculty Who Walk Alongside You',
-      icon: Users,
-      desc: 'At PCM, you are not just a student number. Our faculty and resident staff live and worship on or near campus, eating meals with students, leading weekly discipleship pods, and providing one-on-one pastoral counseling for spiritual and personal growth.',
-      highlights: [
-        'Low student-to-faculty ratio ensuring personalized academic attention',
-        'Weekly campus chapel worship, prayer days, and semestral spiritual retreats',
-        'Family-oriented resident dormitories fostering lifelong ministry friendships',
-      ],
-    },
-  ];
+const DEFAULT_REASONS = [
+  {
+    id: 'reason-1',
+    title: 'Uncompromised Biblical & Doctrinal Fidelity',
+    short: 'Rooted in God’s Inerrant Word',
+    iconName: 'BookOpen',
+    desc: 'At Philippine College of Ministry, the 66 books of the Holy Bible are held as the verbally inspired, inerrant, authoritative Word of God. Every lecture, thesis, and homiletic exercise is anchored in sound grammatical-historical exegesis and historic Christian orthodoxy.',
+    highlights: [
+      'Rigorous original language training in Biblical Greek and Hebrew',
+      'Systematic theology grounded in biblical exposition rather than human philosophy',
+      'Commitment to the Stone-Campbell Restoration Movement heritage of simple New Testament Christianity',
+    ],
+  },
+  {
+    id: 'reason-2',
+    title: 'Serene Cordillera Mountain Campus (Lamtang, Benguet)',
+    short: 'An Atmosphere Conducive to Deep Study & Prayer',
+    iconName: 'Mountain',
+    desc: 'Located along the cool, pine-covered mountain slopes of Lamtang, Puguis, La Trinidad, Benguet (just minutes from Baguio City), PCM provides a peaceful, distraction-free environment where students can focus on prayer, contemplation, fellowship, and serious intellectual study.',
+    highlights: [
+      'Cool, invigorating climate ideal for concentration and spiritual retreats',
+      '7,500 square meter hillside campus overlooking lush mountain valleys',
+      'Dedicated prayer rooms, amphitheater, and quiet library study decks',
+    ],
+  },
+  {
+    id: 'reason-3',
+    title: 'Affordable Tuition & Ministerial Scholarship Support',
+    short: 'Ministry Preparation Within Financial Reach',
+    iconName: 'Award',
+    desc: 'We believe God’s call to ministry should never be hindered by insurmountable financial debt. PCM offers among the most affordable theological tuition rates in the Philippines, paired with generous pastoral grants and on-campus work-study subsidies.',
+    highlights: [
+      'Subsidized tuition rates for Bachelor of Arts in Theology candidates',
+      'Pastoral Worker Grants for sons and daughters of pastors and missionaries',
+      'On-campus work-study scholarships and church matching support programs',
+    ],
+  },
+  {
+    id: 'reason-4',
+    title: 'Hands-On Pastoral Practicum & Field Apprenticeship',
+    short: 'Theory Tested in Real-World Local Churches',
+    iconName: 'Briefcase',
+    desc: 'Ministry is not learned solely in a lecture hall. Every PCM degree includes weekly supervised ministry practicum, pulpit supply opportunities, hospital and prison chaplaincy rotations, and cross-cultural church planting apprenticeships across northern Luzon.',
+    highlights: [
+      'Active network of 85+ partner churches in Baguio, Benguet, La Union, Pangasinan, and beyond',
+      '300+ supervised practicum hours under seasoned pastoral mentors',
+      'Regular community medical missions, evangelism treks, and youth leadership camps',
+    ],
+  },
+  {
+    id: 'reason-5',
+    title: 'High Placement Rate & Global Alumni Network',
+    short: 'Graduates Serving in Over 18 Countries',
+    iconName: 'GraduationCap',
+    desc: 'Over 650+ PCM alumni currently serve as senior pastors, church planters, military and hospital chaplains, Bible college professors, and cross-cultural missionaries throughout the Philippines, Southeast Asia, North America, and the Middle East.',
+    highlights: [
+      'Over 90% of our graduates transition directly into active vocational or bi-vocational ministry',
+      'Recognized by the Commission on Higher Education (CHED) and member of PABATS & PCEC',
+      'Active lifelong alumni fellowship and continuing pastoral education conferences',
+    ],
+  },
+  {
+    id: 'reason-6',
+    title: 'Caring, Close-Knit Christian Community & Mentorship',
+    short: 'Faculty Who Walk Alongside You',
+    iconName: 'Users',
+    desc: 'At PCM, you are not just a student number. Our faculty and resident staff live and worship on or near campus, eating meals with students, leading weekly discipleship pods, and providing one-on-one pastoral counseling for spiritual and personal growth.',
+    highlights: [
+      'Low student-to-faculty ratio ensuring personalized academic attention',
+      'Weekly campus chapel worship, prayer days, and semestral spiritual retreats',
+      'Family-oriented resident dormitories fostering lifelong ministry friendships',
+    ],
+  },
+];
+
+export const WhyChoosePCMView: React.FC = () => {
+  const { navigateTo, setStatementOfFaithModalOpen, setRequestInfoModalOpen, siteConfig } = usePCM();
+
+  const distinctivesList = (siteConfig?.distinctives && siteConfig.distinctives.length > 0)
+    ? siteConfig.distinctives
+    : DEFAULT_REASONS;
+
+  const reasons = distinctivesList.map((r) => {
+    const iconKey = r.iconName || 'BookOpen';
+    const IconComponent = ICON_MAP[iconKey] || BookOpen;
+    return {
+      ...r,
+      icon: IconComponent,
+    };
+  });
 
   return (
     <div className="w-full bg-[#FFFFFF] font-sans pb-16">

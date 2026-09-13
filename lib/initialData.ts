@@ -163,6 +163,259 @@ export const INITIAL_PROGRAMS: AcademicProgram[] = [
     tuitionPerUnit: 1450,
     featured: true,
   },
+  {
+    id: 'prog-bth-scm',
+    name: 'Bachelor of Arts in Theology - Major in Chaplaincy Ministry',
+    code: 'BTh-SCM',
+    level: 'undergraduate',
+    duration: '4 Years (8 Semesters)',
+    credits: 142,
+    studyMode: 'On-Campus Full-Time & Clinical Rotations',
+    shortDescription:
+      'A specialized undergraduate theological degree preparing certified chaplains for healthcare, military, correctional, crisis response, and institutional settings.',
+    fullDescription:
+      'The Bachelor of Arts in Theology with Specialization in Chaplaincy Ministry (BTh-SCM) uniquely blends rigorous biblical exposition and systematic theology with professional clinical pastoral education (CPE). Students receive hands-on training in bedside counseling, crisis and disaster response, bereavement debriefing, ethics, and inter-faith dialogue within institutional settings across Benguet and national institutions.',
+    objectives: [
+      'Master biblical exegesis and Christian theology applicable to diverse institutional environments.',
+      'Demonstrate clinical competence in acute crisis intervention, grief support, and pastoral psychotherapy.',
+      'Navigate multi-faith, military, hospital, and correctional regulatory codes with ethical integrity.',
+      'Complete verified clinical pastoral education (CPE) rotations in recognized partner hospitals and detention centers.',
+      'Cultivate Christ-centered presence, deep listening skills, and spiritual emotional resilience.',
+    ],
+    curriculum: [
+      {
+        yearOrModule: 'First Year (Biblical Foundations & Intro to Chaplaincy)',
+        courses: [
+          { code: 'BIB-101', title: 'Old Testament Survey', units: 3 },
+          { code: 'BIB-102', title: 'New Testament Survey', units: 3 },
+          { code: 'CHP-101', title: 'Foundations of Institutional Chaplaincy', units: 3 },
+          { code: 'THE-101', title: 'Introduction to Christian Doctrine', units: 3 },
+          { code: 'PSY-101', title: 'General Psychology & Human Development', units: 3 },
+          { code: 'ENG-101', title: 'Theological Writing & Research Methods', units: 3 },
+        ],
+      },
+      {
+        yearOrModule: 'Second Year (Exegesis & Pastoral Counseling)',
+        courses: [
+          { code: 'GRK-101', title: 'Biblical Greek Grammar', units: 3 },
+          { code: 'HERM-201', title: 'Biblical Hermeneutics', units: 3 },
+          { code: 'COU-201', title: 'Theories of Pastoral Counseling & Care', units: 3 },
+          { code: 'CHP-202', title: 'Healthcare & Hospital Chaplaincy', units: 3 },
+          { code: 'THE-201', title: 'Systematic Theology I', units: 3 },
+          { code: 'CPE-201', title: 'Clinical Pastoral Orientation (60 Field Hours)', units: 2 },
+        ],
+      },
+      {
+        yearOrModule: 'Third Year (Crisis, Trauma & Institutional Ethics)',
+        courses: [
+          { code: 'CHP-301', title: 'Crisis Intervention & Disaster Spiritual Care', units: 3 },
+          { code: 'CHP-302', title: 'Military, Police & Correctional Chaplaincy', units: 3 },
+          { code: 'ETH-302', title: 'Bioethics & Medical-Ecclesial Ethics', units: 3 },
+          { code: 'HOM-301', title: 'Expository Preaching in Public Arenas', units: 3 },
+          { code: 'COU-302', title: 'Grief, Loss & Bereavement Counseling', units: 3 },
+          { code: 'CPE-301', title: 'Clinical Pastoral Education Unit I (200 Hours)', units: 3 },
+        ],
+      },
+      {
+        yearOrModule: 'Fourth Year (Advanced Clinical Residency & Capstone)',
+        courses: [
+          { code: 'CHP-401', title: 'Chaplaincy Administration & Multi-Faith Protocol', units: 3 },
+          { code: 'THE-401', title: 'Theology of Suffering & Theodicy', units: 3 },
+          { code: 'SEM-498', title: 'Senior Chaplaincy Capstone & Clinical Case Studies', units: 4 },
+          { code: 'CPE-401', title: 'Clinical Pastoral Residency (Hospital/Correctional)', units: 6 },
+        ],
+      },
+    ],
+    careerOpportunities: [
+      'Certified Hospital & Hospice Chaplain',
+      'AFP / PNP / BJMP Uniformed Service Chaplain',
+      'Corporate & Industrial Care Specialist',
+      'Disaster Emergency Response Chaplain',
+      'Local Church Pastoral Care Pastor',
+    ],
+    admissionRequirements: [
+      'High School Diploma or DepEd Transcript of Records',
+      'Personal Testimony of Faith in Jesus Christ',
+      'Recommendation from Home Church Pastor',
+      'Psychological Assessment & Emotional Maturity Screening',
+      'Formal Interview with Chaplaincy Program Director',
+    ],
+    tuitionPerUnit: 1450,
+    featured: true,
+  },
+  {
+    id: 'prog-shs-gas',
+    name: 'Senior High School - General Academic Strand (Theological Emphasis)',
+    code: 'SHS-GAS',
+    level: 'senior-high',
+    duration: '2 Years (Grades 11 & 12)',
+    credits: 80,
+    studyMode: 'On-Campus Full-Time with DepEd Voucher Support',
+    shortDescription:
+      'DepEd-recognized Senior High School preparing young scholars for higher ministerial degrees, university education, and vibrant Christian service.',
+    fullDescription:
+      'PCM’s Senior High School Program offers the General Academic Strand (GAS) infused with rich Christian values and foundational biblical studies. Designed for junior high school completers seeking an academically rigorous, spiritually nurturing environment in the cool mountains of Lamtang, Benguet. Qualified students can utilize the DepEd Senior High School Voucher (ESC) with minimal out-of-pocket costs.',
+    objectives: [
+      'Master core K-12 academic competencies in humanities, mathematics, science, and languages.',
+      'Ground young believers in sound biblical worldview, Christian apologetics, and servant leadership.',
+      'Provide smooth matriculation into collegiate theology, pastoral ministry, and general bachelor degrees.',
+      'Foster disciplined Christian lifestyle, study habits, and campus fellowship.',
+    ],
+    curriculum: [
+      {
+        yearOrModule: 'Grade 11 (Foundational Humanities & Worldview)',
+        courses: [
+          { code: 'GAS-101', title: 'Oral Communication in Context', units: 4 },
+          { code: 'GAS-102', title: 'Reading & Writing Skills', units: 4 },
+          { code: 'GAS-103', title: 'Komunikasyon at Pananaliksik sa Wika at Kulturang Pilipino', units: 4 },
+          { code: 'BIB-011', title: 'Introduction to Biblical Worldview & Narrative', units: 3 },
+          { code: 'GAS-104', title: 'General Mathematics & Statistics', units: 4 },
+          { code: 'GAS-105', title: 'Earth and Life Science', units: 4 },
+        ],
+      },
+      {
+        yearOrModule: 'Grade 12 (Applied Research & Pre-College Ministry)',
+        courses: [
+          { code: 'GAS-201', title: 'Contemporary Philippine Arts from the Regions', units: 4 },
+          { code: 'GAS-202', title: 'Introduction to the Philosophy of the Human Person', units: 4 },
+          { code: 'GAS-203', title: 'Practical Research I & II (Qualitative & Quantitative)', units: 6 },
+          { code: 'BIB-012', title: 'Foundations of Christian Ethics & Apologetics', units: 3 },
+          { code: 'GAS-204', title: 'Community Engagement, Solidarity & Citizenship', units: 4 },
+          { code: 'GAS-205', title: 'Work Immersion & Ministry Practicum Simulation', units: 4 },
+        ],
+      },
+    ],
+    careerOpportunities: [
+      'Direct admission into PCM Bachelor of Arts in Theology',
+      'Matriculation into Christian Education, Humanities, and Social Sciences',
+      'Youth & Campus Ministry Student Leadership',
+      'Preparation for University Entrance Examinations',
+    ],
+    admissionRequirements: [
+      'DepEd Form 138 (Junior High School Report Card)',
+      'Certificate of Completion from Grade 10',
+      'Certificate of Good Moral Character',
+      'PSA Birth Certificate',
+      'DepEd ESC Voucher / QVR Certificate (if applicable)',
+    ],
+    tuitionPerUnit: 0,
+    featured: true,
+  },
+  {
+    id: 'prog-mdiv',
+    name: 'Master of Divinity (M.Div.)',
+    code: 'MDIV-601',
+    level: 'graduate',
+    duration: '3 Years (6 Semesters)',
+    credits: 90,
+    studyMode: 'Modular & Resident Hybrid',
+    shortDescription:
+      'The premier graduate professional degree for pastors, church planters, theological educators, and senior organizational leaders.',
+    fullDescription:
+      'The Master of Divinity at Philippine College of Ministry is the gold standard for vocational ministerial preparation. Designed for bachelor degree holders seeking advanced mastery in biblical Hebrew and Greek exegesis, historical theology, homiletics, and strategic ecclesial leadership. Offered in flexible modular seminars ideal for active pastors across the Cordillera, Metro Manila, and overseas ministries.',
+    objectives: [
+      'Achieve advanced fluency in biblical Hebrew prose/poetry and Hellenistic Greek syntax for pulpit exposition.',
+      'Formulate comprehensive theological responses to contemporary cultural, philosophical, and ethical issues.',
+      'Demonstrate high-level leadership in church planting, revitalization, and global missions governance.',
+      'Produce a rigorous graduate theological thesis or comprehensive ministerial project.',
+    ],
+    curriculum: [
+      {
+        yearOrModule: 'Year 1: Advanced Biblical Exegesis & Theological Method',
+        courses: [
+          { code: 'OT-601', title: 'Advanced Hebrew Exegesis & Syntax', units: 3 },
+          { code: 'NT-601', title: 'Advanced Greek Exegesis of Epistles', units: 3 },
+          { code: 'TH-601', title: 'Theological Method & Historical Dogmatics', units: 3 },
+          { code: 'PR-601', title: 'Expository Preaching in Post-Christian Culture', units: 3 },
+        ],
+      },
+      {
+        yearOrModule: 'Year 2: Ecclesiology, Pastoral Counseling & Missions',
+        courses: [
+          { code: 'TH-602', title: 'Reformed & Stone-Campbell Restoration Ecclesiology', units: 3 },
+          { code: 'PC-601', title: 'Advanced Pastoral Counseling & Psychopathology', units: 3 },
+          { code: 'MS-601', title: 'Missional Strategies for 21st-Century Asia', units: 3 },
+          { code: 'LD-601', title: 'Biblical Leadership & Conflict Management', units: 3 },
+        ],
+      },
+      {
+        yearOrModule: 'Year 3: Research Seminar & Graduate Thesis',
+        courses: [
+          { code: 'RS-698', title: 'Theological Research Seminar & Methodology', units: 3 },
+          { code: 'TH-699', title: 'Master’s Thesis / Capstone Ministry Project', units: 6 },
+          { code: 'PR-602', title: 'Advanced Pastoral Residency & Mentorship', units: 3 },
+        ],
+      },
+    ],
+    careerOpportunities: [
+      'Senior Pastor / Teaching Pastor in Local Churches',
+      'Theological Seminary / Bible College Professor',
+      'Cross-Cultural Missions Director & Strategist',
+      'Denominational Superintendent / Network Overseer',
+      'Pathway to Doctor of Ministry (D.Min.) / Ph.D.',
+    ],
+    admissionRequirements: [
+      'Accredited Bachelor’s Degree (B.Th., B.A., or B.S.) with acceptable GPA',
+      'Demonstrated Christian Character and Active Ministry Experience',
+      'Official Transcript of Records (TOR)',
+      'Two Letters of Pastoral / Academic Recommendation',
+      'Personal Essay on Ministerial Calling & Goals',
+    ],
+    tuitionPerUnit: 1850,
+    featured: true,
+  },
+  {
+    id: 'prog-acm',
+    name: 'Associate in Christian Ministry & Certificate in Biblical Studies',
+    code: 'ACM-201',
+    level: 'certificate',
+    duration: '2 Years (4 Semesters) / 1 Year Certificate',
+    credits: 64,
+    studyMode: 'On-Campus, Weekend & Modular Cohorts',
+    shortDescription:
+      'A practical two-year diploma or one-year certificate equipping bi-vocational workers, church lay leaders, and ministry volunteers.',
+    fullDescription:
+      'The Associate in Christian Ministry (ACM) is tailored for lay workers, church elders, deaconesses, and bi-vocational believers who desire structured biblical and ministry training without committing to a full four-year degree. Credits earned in this program are fully transferable into the Bachelor of Arts in Theology program.',
+    objectives: [
+      'Acquire foundational understanding of Old and New Testament content and themes.',
+      'Develop practical skills in personal discipleship, evangelism, and small group leadership.',
+      'Gain practical familiarity with basic church administration, worship, and Sunday School teaching.',
+    ],
+    curriculum: [
+      {
+        yearOrModule: 'Year 1: Biblical Survey & Christian Foundations',
+        courses: [
+          { code: 'BIB-101', title: 'Old Testament Survey', units: 3 },
+          { code: 'BIB-102', title: 'New Testament Survey', units: 3 },
+          { code: 'THE-101', title: 'Introduction to Christian Doctrine', units: 3 },
+          { code: 'MIN-101', title: 'Spiritual Formation & Discipleship', units: 3 },
+          { code: 'MIN-102', title: 'Personal Evangelism & Witnessing', units: 3 },
+        ],
+      },
+      {
+        yearOrModule: 'Year 2: Practical Ministry & Church Service',
+        courses: [
+          { code: 'HERM-201', title: 'How to Study & Interpret the Bible', units: 3 },
+          { code: 'MIN-201', title: 'Teaching the Bible in Local Churches', units: 3 },
+          { code: 'WOR-201', title: 'Worship Leading & Service Planning', units: 3 },
+          { code: 'PRA-201', title: 'Church Ministry Practicum', units: 3 },
+        ],
+      },
+    ],
+    careerOpportunities: [
+      'Lay Preacher & Church Planter Assistant',
+      'Youth & Children’s Ministry Coordinator',
+      'Sunday School Superintendent',
+      'Christian Social Action & Relief Worker',
+    ],
+    admissionRequirements: [
+      'High School Graduate or equivalent',
+      'Pastoral endorsement from local church',
+      'Personal Christian testimony',
+    ],
+    tuitionPerUnit: 1200,
+    featured: false,
+  },
 ];
 
 export const INITIAL_NEWS: NewsArticle[] = [
@@ -2809,6 +3062,11 @@ export const INITIAL_SITE_CONFIG: SiteConfig = {
       order: 4,
       dropdown: [
         { id: 'sub-undergrad', label: 'Bachelor of Arts in Theology (B.Th. 4-Year)', subSection: 'undergrad', actionType: 'navigate', order: 1, isVisible: true },
+        { id: 'sub-chaplaincy', label: 'BTh Specialization in Chaplaincy (BTh-SCM)', subSection: 'chaplaincy', actionType: 'navigate', order: 2, isVisible: true },
+        { id: 'sub-shs', label: 'Senior High School (GAS with DepEd Voucher)', subSection: 'shs', actionType: 'navigate', order: 3, isVisible: true },
+        { id: 'sub-grad', label: 'Master of Divinity (M.Div. Graduate)', subSection: 'grad', actionType: 'navigate', order: 4, isVisible: true },
+        { id: 'sub-certs', label: 'Associate in Christian Ministry & Certificates', subSection: 'certs', actionType: 'navigate', order: 5, isVisible: true },
+        { id: 'sub-calendar', label: 'Academic Calendar (AY 2026–2027)', subSection: 'calendar', actionType: 'navigate', order: 6, isVisible: true },
       ],
     },
     {
@@ -2879,6 +3137,112 @@ export const INITIAL_SITE_CONFIG: SiteConfig = {
     academicLinksTitle: 'Academic Degrees',
     resourcesLinksTitle: 'Resources & Downloads',
   },
+  historyMilestones: [
+    {
+      year: 'June 12, 1992',
+      title: 'Founding of PCM in Baguio City',
+      desc: 'Founded on Philippine Independence Day under the leadership of Rev. Samson Lubag, beginning with a dedicated cohort of pioneer ministerial candidates.',
+    },
+    {
+      year: '1992 – 1995',
+      title: 'Classes at #22 T. Alonzo Street',
+      desc: 'Initial classes, chapel gatherings, and theological library established at #22 T. Alonzo St., Baguio City.',
+    },
+    {
+      year: '1995 – 2005',
+      title: 'Expansion to Ruff Hause Hotel',
+      desc: 'Moved to larger facilities at Ruff Hause Hotel, #10 Rimando Road, Baguio City, accommodating growing undergraduate student enrollment.',
+    },
+    {
+      year: 'December 2002',
+      title: 'Acquisition of 7,500 sqm Property in Lamtang',
+      desc: 'By God’s providence and sacrificial international partner support, PCM purchased 7,500 square meters of scenic hillside land in Lamtang, Puguis, La Trinidad, Benguet.',
+    },
+    {
+      year: 'June 13, 2005',
+      title: 'Official Dedication & Move to Permanent Campus',
+      desc: 'Classes and dormitories officially transferred to the permanent Lamtang mountain campus, opening state-of-the-art academic halls, dormitories, and chapel facilities.',
+    },
+    {
+      year: '2016 – Present',
+      title: 'Senior High School (GAS) & Specialized Chaplaincy (SCM)',
+      desc: 'Added Senior High School General Academic Strand with DepEd voucher support and BTh Specialized Chaplaincy Ministry, serving over 85+ partner churches.',
+    },
+  ],
+  distinctives: [
+    {
+      id: 'reason-1',
+      title: 'Uncompromised Biblical & Doctrinal Fidelity',
+      short: 'Rooted in God’s Inerrant Word',
+      iconName: 'BookOpen',
+      desc: 'At Philippine College of Ministry, the 66 books of the Holy Bible are held as the verbally inspired, inerrant, authoritative Word of God. Every lecture, thesis, and homiletic exercise is anchored in sound grammatical-historical exegesis and historic Christian orthodoxy.',
+      highlights: [
+        'Rigorous original language training in Biblical Greek and Hebrew',
+        'Systematic theology grounded in biblical exposition rather than human philosophy',
+        'Commitment to the Stone-Campbell Restoration Movement heritage of simple New Testament Christianity',
+      ],
+    },
+    {
+      id: 'reason-2',
+      title: 'Serene Cordillera Mountain Campus (Lamtang, Benguet)',
+      short: 'An Atmosphere Conducive to Deep Study & Prayer',
+      iconName: 'Mountain',
+      desc: 'Located along the cool, pine-covered mountain slopes of Lamtang, Puguis, La Trinidad, Benguet (just minutes from Baguio City), PCM provides a peaceful, distraction-free environment where students can focus on prayer, contemplation, fellowship, and serious intellectual study.',
+      highlights: [
+        'Cool, invigorating climate ideal for concentration and spiritual retreats',
+        '7,500 square meter hillside campus overlooking lush mountain valleys',
+        'Dedicated prayer rooms, amphitheater, and quiet library study decks',
+      ],
+    },
+    {
+      id: 'reason-3',
+      title: 'Affordable Tuition & Ministerial Scholarship Support',
+      short: 'Ministry Preparation Within Financial Reach',
+      iconName: 'Award',
+      desc: 'We believe God’s call to ministry should never be hindered by insurmountable financial debt. PCM offers among the most affordable theological tuition rates in the Philippines, paired with generous pastoral grants and on-campus work-study subsidies.',
+      highlights: [
+        'Subsidized tuition rates for Bachelor of Arts in Theology candidates',
+        'Pastoral Worker Grants for sons and daughters of pastors and missionaries',
+        'On-campus work-study scholarships and church matching support programs',
+      ],
+    },
+    {
+      id: 'reason-4',
+      title: 'Hands-On Pastoral Practicum & Field Apprenticeship',
+      short: 'Theory Tested in Real-World Local Churches',
+      iconName: 'Briefcase',
+      desc: 'Ministry is not learned solely in a lecture hall. Every PCM degree includes weekly supervised ministry practicum, pulpit supply opportunities, hospital and prison chaplaincy rotations, and cross-cultural church planting apprenticeships across northern Luzon.',
+      highlights: [
+        'Active network of 85+ partner churches in Baguio, Benguet, La Union, Pangasinan, and beyond',
+        '300+ supervised practicum hours under seasoned pastoral mentors',
+        'Regular community medical missions, evangelism treks, and youth leadership camps',
+      ],
+    },
+    {
+      id: 'reason-5',
+      title: 'High Placement Rate & Global Alumni Network',
+      short: 'Graduates Serving in Over 18 Countries',
+      iconName: 'GraduationCap',
+      desc: 'Over 650+ PCM alumni currently serve as senior pastors, church planters, military and hospital chaplains, Bible college professors, and cross-cultural missionaries throughout the Philippines, Southeast Asia, North America, and the Middle East.',
+      highlights: [
+        'Over 90% of our graduates transition directly into active vocational or bi-vocational ministry',
+        'Recognized by the Commission on Higher Education (CHED) and member of PABATS & PCEC',
+        'Active lifelong alumni fellowship and continuing pastoral education conferences',
+      ],
+    },
+    {
+      id: 'reason-6',
+      title: 'Caring, Close-Knit Christian Community & Mentorship',
+      short: 'Faculty Who Walk Alongside You',
+      iconName: 'Users',
+      desc: 'At PCM, you are not just a student number. Our faculty and resident staff live and worship on or near campus, eating meals with students, leading weekly discipleship pods, and providing one-on-one pastoral counseling for spiritual and personal growth.',
+      highlights: [
+        'Low student-to-faculty ratio ensuring personalized academic attention',
+        'Weekly campus chapel worship, prayer days, and semestral spiritual retreats',
+        'Family-oriented resident dormitories fostering lifelong ministry friendships',
+      ],
+    },
+  ],
 };
 
 export const INITIAL_MEDIA_ITEMS: MediaItem[] = [

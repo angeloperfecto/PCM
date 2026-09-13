@@ -249,38 +249,41 @@ export const AboutView: React.FC = () => {
           </div>
 
           <div className="space-y-4 max-w-3xl mx-auto">
-            {[
-              {
-                year: 'June 12, 1992',
-                title: 'Founding of PCM in Baguio City',
-                desc: 'Founded on Philippine Independence Day under the leadership of Rev. Samson Lubag, beginning with a dedicated cohort of pioneer ministerial candidates.',
-              },
-              {
-                year: '1992 – 1995',
-                title: 'Classes at #22 T. Alonzo Street',
-                desc: 'Initial classes, chapel gatherings, and theological library established at #22 T. Alonzo St., Baguio City.',
-              },
-              {
-                year: '1995 – 2005',
-                title: 'Expansion to Ruff Hause Hotel',
-                desc: 'Moved to larger facilities at Ruff Hause Hotel, #10 Rimando Road, Baguio City, accommodating growing undergraduate student enrollment.',
-              },
-              {
-                year: 'December 2002',
-                title: 'Acquisition of 7,500 sqm Property in Lamtang',
-                desc: 'By God’s providence and sacrificial international partner support, PCM purchased 7,500 square meters of scenic hillside land in Lamtang, Puguis, La Trinidad, Benguet.',
-              },
-              {
-                year: 'June 13, 2005',
-                title: 'Official Dedication & Move to Permanent Campus',
-                desc: 'Classes and dormitories officially transferred to the permanent Lamtang mountain campus, opening state-of-the-art academic halls, dormitories, and chapel facilities.',
-              },
-              {
-                year: '2016 – Present',
-                title: 'Senior High School (GAS) & Specialized Chaplaincy (SCM)',
-                desc: 'Added Senior High School General Academic Strand with DepEd voucher support and BTh Specialized Chaplaincy Ministry, serving over 85+ partner churches.',
-              },
-            ].map((m, idx) => (
+            {(siteConfig?.historyMilestones && siteConfig.historyMilestones.length > 0
+              ? siteConfig.historyMilestones
+              : [
+                  {
+                    year: 'June 12, 1992',
+                    title: 'Founding of PCM in Baguio City',
+                    desc: 'Founded on Philippine Independence Day under the leadership of Rev. Samson Lubag, beginning with a dedicated cohort of pioneer ministerial candidates.',
+                  },
+                  {
+                    year: '1992 – 1995',
+                    title: 'Classes at #22 T. Alonzo Street',
+                    desc: 'Initial classes, chapel gatherings, and theological library established at #22 T. Alonzo St., Baguio City.',
+                  },
+                  {
+                    year: '1995 – 2005',
+                    title: 'Expansion to Ruff Hause Hotel',
+                    desc: 'Moved to larger facilities at Ruff Hause Hotel, #10 Rimando Road, Baguio City, accommodating growing undergraduate student enrollment.',
+                  },
+                  {
+                    year: 'December 2002',
+                    title: 'Acquisition of 7,500 sqm Property in Lamtang',
+                    desc: 'By God’s providence and sacrificial international partner support, PCM purchased 7,500 square meters of scenic hillside land in Lamtang, Puguis, La Trinidad, Benguet.',
+                  },
+                  {
+                    year: 'June 13, 2005',
+                    title: 'Official Dedication & Move to Permanent Campus',
+                    desc: 'Classes and dormitories officially transferred to the permanent Lamtang mountain campus, opening state-of-the-art academic halls, dormitories, and chapel facilities.',
+                  },
+                  {
+                    year: '2016 – Present',
+                    title: 'Senior High School (GAS) & Specialized Chaplaincy (SCM)',
+                    desc: 'Added Senior High School General Academic Strand with DepEd voucher support and BTh Specialized Chaplaincy Ministry, serving over 85+ partner churches.',
+                  },
+                ]
+            ).map((m, idx) => (
               <div key={idx} className="flex gap-4 items-start bg-white p-4 rounded-sm border border-slate-200 shadow-xs">
                 <span className="font-mono text-xs font-extrabold text-[#18392B] bg-[#588B76]/20 px-2.5 py-1 rounded-sm border border-[#588B76]/40 shrink-0">
                   {m.year}

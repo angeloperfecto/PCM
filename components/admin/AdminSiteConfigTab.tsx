@@ -13,12 +13,20 @@ import {
   Share2,
   Sparkles,
   BookOpen,
+  Plus,
+  Trash2,
+  Clock,
+  Award,
+  Calendar,
+  CheckCircle2,
 } from 'lucide-react';
 
 export const AdminSiteConfigTab: React.FC = () => {
   const { siteConfig, updateSiteConfig, addToast, canPerformAction } = usePCM();
   const [formData, setFormData] = useState<SiteConfig>(siteConfig);
-  const [activeSubTab, setActiveSubTab] = useState<'identity' | 'contact' | 'social' | 'seo' | 'mission'>('identity');
+  const [activeSubTab, setActiveSubTab] = useState<
+    'identity' | 'contact' | 'social' | 'seo' | 'mission' | 'milestones' | 'distinctives'
+  >('identity');
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +120,26 @@ export const AdminSiteConfigTab: React.FC = () => {
           }`}
         >
           Search Engine Optimization (SEO)
+        </button>
+        <button
+          onClick={() => setActiveSubTab('milestones')}
+          className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+            activeSubTab === 'milestones'
+              ? 'bg-[#18392B] text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Historical Milestones
+        </button>
+        <button
+          onClick={() => setActiveSubTab('distinctives')}
+          className={`px-3 py-1.5 rounded-lg font-bold transition cursor-pointer ${
+            activeSubTab === 'distinctives'
+              ? 'bg-[#18392B] text-white'
+              : 'text-slate-600 hover:bg-slate-100'
+          }`}
+        >
+          Why PCM Distinctives
         </button>
       </div>
 
@@ -527,6 +555,302 @@ export const AdminSiteConfigTab: React.FC = () => {
                 className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
               />
             </div>
+          </div>
+        )}
+
+        {/* Sub-tab 6: Historical Milestones */}
+        {activeSubTab === 'milestones' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <div>
+                <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-[#588B76]" />
+                  Historical Timeline & Milestones
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Manage the chronology displayed in the "About PCM" page history timeline.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const current = formData.historyMilestones || [];
+                  setFormData({
+                    ...formData,
+                    historyMilestones: [
+                      ...current,
+                      {
+                        year: 'Year / Period',
+                        title: 'Milestone Title',
+                        desc: 'Description of historical achievement or transition.',
+                      },
+                    ],
+                  });
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#18392B] hover:bg-[#23533e] text-white rounded-lg text-xs font-bold transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Milestone</span>
+              </button>
+            </div>
+
+            {(!formData.historyMilestones || formData.historyMilestones.length === 0) ? (
+              <p className="text-slate-500 italic py-4 text-center">
+                No custom milestones defined. The system will use default institutional milestones.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {formData.historyMilestones.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className="p-4 rounded-lg border border-slate-200 bg-white hover:border-[#588B76]/50 transition space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                      <span className="font-bold text-[#588B76] text-[11px] uppercase tracking-wider">
+                        Milestone #{idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...(formData.historyMilestones || [])];
+                          updated.splice(idx, 1);
+                          setFormData({ ...formData, historyMilestones: updated });
+                        }}
+                        className="p-1 text-red-500 hover:bg-red-50 rounded transition cursor-pointer"
+                        title="Remove Milestone"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1">
+                          Year / Date Range
+                        </label>
+                        <input
+                          type="text"
+                          value={m.year}
+                          onChange={(e) => {
+                            const updated = [...(formData.historyMilestones || [])];
+                            updated[idx] = { ...updated[idx], year: e.target.value };
+                            setFormData({ ...formData, historyMilestones: updated });
+                          }}
+                          className="w-full p-2 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                          placeholder="e.g., June 12, 1992"
+                        />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label className="block text-slate-700 font-bold mb-1">
+                          Milestone Title
+                        </label>
+                        <input
+                          type="text"
+                          value={m.title}
+                          onChange={(e) => {
+                            const updated = [...(formData.historyMilestones || [])];
+                            updated[idx] = { ...updated[idx], title: e.target.value };
+                            setFormData({ ...formData, historyMilestones: updated });
+                          }}
+                          className="w-full p-2 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                          placeholder="e.g., Founding of PCM in Baguio City"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        Detailed Description
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={m.desc}
+                        onChange={(e) => {
+                          const updated = [...(formData.historyMilestones || [])];
+                          updated[idx] = { ...updated[idx], desc: e.target.value };
+                          setFormData({ ...formData, historyMilestones: updated });
+                        }}
+                        className="w-full p-2 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none leading-relaxed"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Sub-tab 7: Why PCM Distinctives */}
+        {activeSubTab === 'distinctives' && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200">
+              <div>
+                <h4 className="font-bold text-slate-800 flex items-center gap-1.5">
+                  <Award className="w-4 h-4 text-[#588B76]" />
+                  Why Choose PCM Distinctives (The PCM Advantage)
+                </h4>
+                <p className="text-[11px] text-slate-500">
+                  Manage the primary institutional strengths and reasons displayed on the "Why Choose PCM" view.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const current = formData.distinctives || [];
+                  const newId = `reason-${Date.now()}`;
+                  setFormData({
+                    ...formData,
+                    distinctives: [
+                      ...current,
+                      {
+                        id: newId,
+                        title: 'New Institutional Distinctive',
+                        short: 'Short Catchy Tagline',
+                        iconName: 'BookOpen',
+                        desc: 'Detailed paragraph elaborating on this PCM strength and ministerial advantage.',
+                        highlights: [
+                          'Key point or institutional metric 1',
+                          'Key point or institutional metric 2',
+                        ],
+                      },
+                    ],
+                  });
+                }}
+                className="flex items-center gap-1 px-3 py-1.5 bg-[#18392B] hover:bg-[#23533e] text-white rounded-lg text-xs font-bold transition cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Distinctive</span>
+              </button>
+            </div>
+
+            {(!formData.distinctives || formData.distinctives.length === 0) ? (
+              <p className="text-slate-500 italic py-4 text-center">
+                No custom distinctives defined. The system will use default institutional advantages.
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {formData.distinctives.map((d, idx) => (
+                  <div
+                    key={d.id || idx}
+                    className="p-4 rounded-lg border border-slate-200 bg-white hover:border-[#588B76]/50 transition space-y-3"
+                  >
+                    <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+                      <span className="font-bold text-[#588B76] text-[11px] uppercase tracking-wider">
+                        Advantage #{idx + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = [...(formData.distinctives || [])];
+                          updated.splice(idx, 1);
+                          setFormData({ ...formData, distinctives: updated });
+                        }}
+                        className="p-1 text-red-500 hover:bg-red-50 rounded transition cursor-pointer"
+                        title="Remove Distinctive"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                      <div className="md:col-span-2">
+                        <label className="block text-slate-700 font-bold mb-1">
+                          Distinctive Title
+                        </label>
+                        <input
+                          type="text"
+                          value={d.title}
+                          onChange={(e) => {
+                            const updated = [...(formData.distinctives || [])];
+                            updated[idx] = { ...updated[idx], title: e.target.value };
+                            setFormData({ ...formData, distinctives: updated });
+                          }}
+                          className="w-full p-2 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-slate-700 font-bold mb-1">
+                          Icon Symbol
+                        </label>
+                        <select
+                          value={d.iconName || 'BookOpen'}
+                          onChange={(e) => {
+                            const updated = [...(formData.distinctives || [])];
+                            updated[idx] = { ...updated[idx], iconName: e.target.value };
+                            setFormData({ ...formData, distinctives: updated });
+                          }}
+                          className="w-full p-2 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none bg-white"
+                        >
+                          <option value="BookOpen">Book / Biblical (BookOpen)</option>
+                          <option value="Mountain">Mountain / Location (Mountain)</option>
+                          <option value="Award">Award / Scholarship (Award)</option>
+                          <option value="Briefcase">Ministry / Practicum (Briefcase)</option>
+                          <option value="GraduationCap">Academics / Degree (GraduationCap)</option>
+                          <option value="Users">Community / Fellowship (Users)</option>
+                          <option value="Compass">Mission / Guidance (Compass)</option>
+                          <option value="ShieldCheck">Doctrinal Integrity (ShieldCheck)</option>
+                          <option value="Clock">Heritage / Time (Clock)</option>
+                          <option value="Sparkles">Excellence (Sparkles)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        Short Tagline / Subtitle
+                      </label>
+                      <input
+                        type="text"
+                        value={d.short}
+                        onChange={(e) => {
+                          const updated = [...(formData.distinctives || [])];
+                          updated[idx] = { ...updated[idx], short: e.target.value };
+                          setFormData({ ...formData, distinctives: updated });
+                        }}
+                        className="w-full p-2 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                        placeholder="e.g., Rooted in God’s Inerrant Word"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        Detailed Description
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={d.desc}
+                        onChange={(e) => {
+                          const updated = [...(formData.distinctives || [])];
+                          updated[idx] = { ...updated[idx], desc: e.target.value };
+                          setFormData({ ...formData, distinctives: updated });
+                        }}
+                        className="w-full p-2 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none leading-relaxed"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-slate-700 font-bold mb-1">
+                        Key Bullet Highlights (One bullet per line)
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={d.highlights ? d.highlights.join('\n') : ''}
+                        onChange={(e) => {
+                          const updated = [...(formData.distinctives || [])];
+                          const lines = e.target.value
+                            .split('\n')
+                            .filter((line) => line.trim().length > 0);
+                          updated[idx] = { ...updated[idx], highlights: lines };
+                          setFormData({ ...formData, distinctives: updated });
+                        }}
+                        className="w-full p-2 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none font-mono text-[11px]"
+                        placeholder="Enter each bullet on a new line..."
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
