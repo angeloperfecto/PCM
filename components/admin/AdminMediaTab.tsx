@@ -1116,6 +1116,7 @@ export const AdminMediaTab: React.FC = () => {
                   src={detailItem.dataUrl || detailItem.downloadURL || detailItem.url}
                   alt={detailItem.altText || detailItem.title}
                   fill
+                  sizes="(max-width: 768px) 100vw, 672px"
                   className="object-contain"
                   referrerPolicy="no-referrer"
                   onError={() => {

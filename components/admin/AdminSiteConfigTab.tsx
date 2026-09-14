@@ -25,17 +25,19 @@ import {
 export const AdminSiteConfigTab: React.FC = () => {
   const { siteConfig, updateSiteConfig, addToast, canPerformAction } = usePCM();
   const [formData, setFormData] = useState<SiteConfig>(siteConfig);
+  const [prevSiteConfig, setPrevSiteConfig] = useState(siteConfig);
   const [isDirty, setIsDirty] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<
     'identity' | 'contact' | 'social' | 'seo' | 'mission' | 'milestones' | 'distinctives'
   >('identity');
 
-  useEffect(() => {
-    if (siteConfig && !isDirty) {
+  if (siteConfig !== prevSiteConfig) {
+    setPrevSiteConfig(siteConfig);
+    if (!isDirty && siteConfig) {
       setFormData(siteConfig);
     }
-  }, [siteConfig, isDirty]);
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -589,7 +591,7 @@ export const AdminSiteConfigTab: React.FC = () => {
                   Historical Timeline & Milestones
                 </h4>
                 <p className="text-[11px] text-slate-500">
-                  Manage the chronology displayed in the "About PCM" page history timeline.
+                  Manage the chronology displayed in the &quot;About PCM&quot; page history timeline.
                 </p>
               </div>
               <button
@@ -711,7 +713,7 @@ export const AdminSiteConfigTab: React.FC = () => {
                   Why Choose PCM Distinctives (The PCM Advantage)
                 </h4>
                 <p className="text-[11px] text-slate-500">
-                  Manage the primary institutional strengths and reasons displayed on the "Why Choose PCM" view.
+                  Manage the primary institutional strengths and reasons displayed on the &quot;Why Choose PCM&quot; view.
                 </p>
               </div>
               <button

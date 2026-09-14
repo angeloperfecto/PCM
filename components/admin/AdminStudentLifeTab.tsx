@@ -64,13 +64,15 @@ export const AdminStudentLifeTab: React.FC = () => {
   const [config, setConfig] = useState<StudentLifeConfig>(() => {
     return siteConfig?.studentLife || INITIAL_STUDENT_LIFE_CONFIG;
   });
+  const [prevStudentLife, setPrevStudentLife] = useState(siteConfig?.studentLife);
   const [isDirty, setIsDirty] = useState(false);
 
-  useEffect(() => {
-    if (siteConfig?.studentLife && !isDirty) {
+  if (siteConfig?.studentLife !== prevStudentLife) {
+    setPrevStudentLife(siteConfig?.studentLife);
+    if (!isDirty && siteConfig?.studentLife) {
       setConfig(siteConfig.studentLife);
     }
-  }, [siteConfig?.studentLife, isDirty]);
+  }
 
   type SubTabType =
     | 'banner'
@@ -1477,6 +1479,7 @@ export const AdminStudentLifeTab: React.FC = () => {
                       src={leader.photoUrl}
                       alt={leader.name}
                       fill
+                      sizes="64px"
                       className="object-cover"
                       referrerPolicy="no-referrer"
                     />
@@ -1887,6 +1890,7 @@ export const AdminStudentLifeTab: React.FC = () => {
                       }
                       alt={photo.title}
                       fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       className="object-cover"
                       referrerPolicy="no-referrer"
                     />

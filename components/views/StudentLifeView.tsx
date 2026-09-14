@@ -440,6 +440,7 @@ export const StudentLifeView: React.FC = () => {
                         src={leader.photoUrl}
                         alt={leader.name}
                         fill
+                        sizes="80px"
                         className="object-cover"
                         referrerPolicy="no-referrer"
                       />
@@ -577,6 +578,7 @@ export const StudentLifeView: React.FC = () => {
                         src={photo.imageUrl}
                         alt={photo.title}
                         fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
                         referrerPolicy="no-referrer"
                       />

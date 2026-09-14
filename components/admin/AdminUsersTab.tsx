@@ -609,6 +609,7 @@ export const AdminUsersTab: React.FC = () => {
                         src={req.photoURL}
                         alt={req.name}
                         fill
+                        sizes="40px"
                         className="object-cover"
                         referrerPolicy="no-referrer"
                       />
@@ -961,6 +962,7 @@ export const AdminUsersTab: React.FC = () => {
                                 src={account.photoURL}
                                 alt={account.name}
                                 fill
+                                sizes="36px"
                                 className="object-cover"
                                 referrerPolicy="no-referrer"
                               />

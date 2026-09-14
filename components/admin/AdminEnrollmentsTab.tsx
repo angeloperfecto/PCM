@@ -1202,6 +1202,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
                       src={member.imageUrl || member.image || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2'}
                       alt={member.name}
                       fill
+                      sizes="48px"
                       className="object-cover"
                       referrerPolicy="no-referrer"
                     />

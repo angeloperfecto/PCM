@@ -315,6 +315,7 @@ export const AdminScrapbookTab: React.FC = () => {
                       src={item.imageUrl}
                       alt={item.title}
                       fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       className="object-cover group-hover:scale-102 transition-transform duration-300"
                       referrerPolicy="no-referrer"
                     />
@@ -525,6 +526,7 @@ export const AdminScrapbookTab: React.FC = () => {
                       src={formImageUrl}
                       alt="Preview"
                       fill
+                      sizes="(max-width: 640px) 100vw, 500px"
                       className="object-cover"
                       referrerPolicy="no-referrer"
                     />
