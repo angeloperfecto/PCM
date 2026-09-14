@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePCM } from '@/lib/store';
 import { SiteConfig } from '@/lib/types';
 import {
@@ -19,16 +19,25 @@ import {
   Award,
   Calendar,
   CheckCircle2,
+  Loader2,
 } from 'lucide-react';
 
 export const AdminSiteConfigTab: React.FC = () => {
   const { siteConfig, updateSiteConfig, addToast, canPerformAction } = usePCM();
   const [formData, setFormData] = useState<SiteConfig>(siteConfig);
+  const [isDirty, setIsDirty] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [activeSubTab, setActiveSubTab] = useState<
     'identity' | 'contact' | 'social' | 'seo' | 'mission' | 'milestones' | 'distinctives'
   >('identity');
 
-  const handleSave = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (siteConfig && !isDirty) {
+      setFormData(siteConfig);
+    }
+  }, [siteConfig, isDirty]);
+
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canPerformAction('Content Admin')) {
       addToast({
@@ -39,12 +48,24 @@ export const AdminSiteConfigTab: React.FC = () => {
       return;
     }
 
-    updateSiteConfig(formData);
-    addToast({
-      title: 'Configuration Saved',
-      message: 'Global site identity, contact, and SEO settings updated successfully.',
-      type: 'success',
-    });
+    setIsSaving(true);
+    try {
+      await updateSiteConfig(formData);
+      setIsDirty(false);
+      addToast({
+        title: 'Configuration Saved',
+        message: 'Global site identity, contact, milestones, distinctives, and SEO settings updated successfully and saved to cloud.',
+        type: 'success',
+      });
+    } catch (err: any) {
+      addToast({
+        title: 'Save Failed',
+        message: err?.message || 'Could not save configuration to cloud database.',
+        type: 'error',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -857,10 +878,11 @@ export const AdminSiteConfigTab: React.FC = () => {
         <div className="pt-4 border-t border-slate-100 flex justify-end">
           <button
             type="submit"
-            className="flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] text-white px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer shadow-sm"
+            disabled={isSaving}
+            className="flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] disabled:opacity-60 disabled:cursor-not-allowed text-white px-6 py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition cursor-pointer shadow-sm"
           >
-            <Save className="w-4 h-4" />
-            <span>Save Configuration</span>
+            {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+            <span>{isSaving ? 'Saving to Database...' : 'Save Configuration'}</span>
           </button>
         </div>
       </form>

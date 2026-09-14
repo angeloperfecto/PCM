@@ -1,3 +1,4 @@
 [install]
-frozen = true
+frozen = false
 network-concurrency = 8
+

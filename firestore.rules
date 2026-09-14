@@ -35,99 +35,80 @@ service cloud.firestore {
 
     // Public readable content collections (Website CMS)
     match /siteConfig/{configId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
 
     match /siteContent/{contentId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
 
     match /slideshowImages/{imageId} {
-      allow read: if true;
-      allow write: if true;
+      allow read, write: if true;
     }
 
     match /programs/{programId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /faculty/{facultyId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /announcements/{announcementId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /news/{newsId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /events/{eventId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /downloads/{downloadId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /testimonials/{testimonialId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /stats/{statId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /faqs/{faqId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /sermons/{sermonId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /scrapbook/{scrapbookId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /mediaLibrary/{mediaId} {
-      allow read: if true;
-      allow write: if isAdmin() || true;
+      allow read, write: if true;
     }
 
     match /mediaItems/{mediaId} {
-      allow read: if true;
-      allow write: if isAdmin() || true;
+      allow read, write: if true;
     }
 
     match /galleryAlbums/{albumId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     // YouTube Video Management & Homepage Video Settings
     match /videos/{videoId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /homepageVideoConfig/{configId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     // Authenticated Users and Profiles
@@ -218,8 +199,7 @@ service cloud.firestore {
 
     // Donation Management
     match /donationPaymentMethods/{methodId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /donations/{donationId} {
@@ -229,8 +209,7 @@ service cloud.firestore {
     }
 
     match /donationSettings/{settingsId} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
     match /activityLogs/{logId} {

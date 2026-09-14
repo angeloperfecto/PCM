@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import {
@@ -64,6 +64,13 @@ export const AdminStudentLifeTab: React.FC = () => {
   const [config, setConfig] = useState<StudentLifeConfig>(() => {
     return siteConfig?.studentLife || INITIAL_STUDENT_LIFE_CONFIG;
   });
+  const [isDirty, setIsDirty] = useState(false);
+
+  useEffect(() => {
+    if (siteConfig?.studentLife && !isDirty) {
+      setConfig(siteConfig.studentLife);
+    }
+  }, [siteConfig?.studentLife, isDirty]);
 
   type SubTabType =
     | 'banner'
@@ -119,6 +126,7 @@ export const AdminStudentLifeTab: React.FC = () => {
     setIsSaving(true);
     try {
       await updateStudentLifeConfig(config);
+      setIsDirty(false);
       addToast('success', 'Student Life Updated', 'Changes to Student Life have been saved and synchronized with Firestore.');
     } catch (err) {
       console.error('Failed to update Student Life:', err);

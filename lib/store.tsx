@@ -1342,7 +1342,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           collection(db, 'programs'),
           (snap) => {
             const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicProgram[];
-            setPrograms(list);
+            setPrograms(list.length > 0 ? list : INITIAL_PROGRAMS);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
             setLastSyncedAt(new Date());
@@ -1614,6 +1614,178 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         );
         unsubs.push(uMediaLibrary);
+
+        // 12. Testimonials Real-Time Sync
+        logFirestoreOp('listen', 'testimonials', 'Public Testimonials Real-Time Sync');
+        const uTestimonials = onSnapshot(
+          collection(db, 'testimonials'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[];
+              setTestimonials(list);
+            } else {
+              setTestimonials(INITIAL_TESTIMONIALS);
+            }
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'testimonials');
+          }
+        );
+        unsubs.push(uTestimonials);
+
+        // 13. Impact Stats Real-Time Sync
+        logFirestoreOp('listen', 'stats', 'Public Impact Stats Real-Time Sync');
+        const uStats = onSnapshot(
+          collection(db, 'stats'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[];
+              setStats(list);
+            } else {
+              setStats(INITIAL_STATS);
+            }
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'stats');
+          }
+        );
+        unsubs.push(uStats);
+
+        // 14. FAQs Real-Time Sync
+        logFirestoreOp('listen', 'faqs', 'Public FAQs Real-Time Sync');
+        const uFaqs = onSnapshot(
+          collection(db, 'faqs'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[];
+              setFaqs(list);
+            } else {
+              setFaqs(INITIAL_FAQS);
+            }
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'faqs');
+          }
+        );
+        unsubs.push(uFaqs);
+
+        // 15. Downloadable Resources Real-Time Sync
+        logFirestoreOp('listen', 'downloads', 'Downloads Real-Time Sync');
+        const uDownloads = onSnapshot(
+          collection(db, 'downloads'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[];
+              setDownloads(list);
+            } else {
+              setDownloads(INITIAL_DOWNLOADS);
+            }
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'downloads');
+          }
+        );
+        unsubs.push(uDownloads);
+
+        // 16. Sermons Real-Time Sync
+        logFirestoreOp('listen', 'sermons', 'Chapel Sermons Real-Time Sync');
+        const uSermons = onSnapshot(
+          collection(db, 'sermons'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[];
+              setSermons(list);
+            } else {
+              setSermons(INITIAL_SERMONS);
+            }
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'sermons');
+          }
+        );
+        unsubs.push(uSermons);
+
+        // 17. Scrapbook Real-Time Sync
+        logFirestoreOp('listen', 'scrapbook', 'Heritage Scrapbook Real-Time Sync');
+        const uScrapbook = onSnapshot(
+          collection(db, 'scrapbook'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[];
+              setScrapbook(list);
+            } else {
+              setScrapbook(INITIAL_SCRAPBOOK);
+            }
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'scrapbook');
+          }
+        );
+        unsubs.push(uScrapbook);
+
+        // 18. Gallery Albums Real-Time Sync
+        logFirestoreOp('listen', 'galleryAlbums', 'Gallery Albums Real-Time Sync');
+        const uGallery = onSnapshot(
+          collection(db, 'galleryAlbums'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[];
+              setGalleryAlbums(list);
+            } else {
+              setGalleryAlbums(INITIAL_GALLERY_ALBUMS);
+            }
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'galleryAlbums');
+          }
+        );
+        unsubs.push(uGallery);
+
+        // 19. Dedicated Student Life Real-Time Sync
+        logFirestoreOp('listen', 'siteContent/studentLife', 'Student Life Section Real-Time Sync');
+        const uStudentLife = onSnapshot(
+          doc(db, 'siteContent', 'studentLife'),
+          (snap) => {
+            if (snap.exists()) {
+              const slData = snap.data() as StudentLifeConfig;
+              setSiteConfig((prev) => ({
+                ...prev,
+                studentLife: {
+                  ...(prev.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
+                  ...slData,
+                },
+              }));
+              setIsFirebaseConnected(true);
+              setFirebaseSyncStatus('synced');
+              setLastSyncedAt(new Date());
+            }
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.GET, 'siteContent/studentLife');
+          }
+        );
+        unsubs.push(uStudentLife);
 
         // 11. Listen to Firebase Auth state & Single User Profile (Targeted Read / Subscription)
         const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
