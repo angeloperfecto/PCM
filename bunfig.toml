@@ -1,4 +1,0 @@
-[install]
-frozen = false
-network-concurrency = 8
-
