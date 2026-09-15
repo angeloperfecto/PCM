@@ -354,59 +354,169 @@ export interface StudentSubjectHistory {
   status: 'Passed' | 'In Progress' | 'Incomplete' | 'Credited' | 'Failed';
 }
 
+export interface StudentRequirementItem {
+  id: string;
+  name: string;
+  description: string;
+  required: boolean;
+  status: 'Pending' | 'Submitted' | 'Under Review' | 'Verified' | 'Rejected';
+  file?: {
+    name: string;
+    url: string;
+    size?: string;
+    type?: string;
+  };
+  uploadDate?: string;
+  verifiedBy?: string;
+  verificationDate?: string;
+  remarks?: string;
+}
+
 export interface StudentProfile {
   id: string; // Document ID (e.g. std-2024-0418)
   studentId: string; // Permanent Unique Identifier (e.g. 2024-PCM-0418)
+  applicationNumber?: string; // Application Number (e.g. APP-2026-1042)
   fullName: string;
   name?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  suffix?: string;
+  preferredName?: string;
   email: string;
   linkedGoogleUid?: string;
   authUid?: string;
   portalPassword?: string;
-  program: string;
-  programId?: string;
-  degreeProgram?: string;
-  yearLevel: string;
-  academicStatus: 'Regular' | 'Irregular' | 'Probationary' | "Dean's List" | 'Graduating' | 'Alumni' | string;
-  enrollmentStatus: EnrollmentStatus;
-  currentSemester: string;
-  academicYear: string;
+  avatarUrl: string;
+  profilePhoto?: string;
+
+  // Personal Information
+  dateOfBirth?: string;
+  birthDate?: string;
+  placeOfBirth?: string;
+  age?: number;
+  sex?: 'Male' | 'Female' | string;
+  gender?: 'Male' | 'Female' | string;
+  civilStatus?: 'Single' | 'Married' | 'Widowed' | 'Separated' | string;
+  nationality?: string;
+  religion?: string;
+
+  // Contact Information
+  mobileNumber?: string;
   contactNumber?: string;
   phone?: string;
+  facebookAccount?: string;
+  currentAddress?: string;
+  permanentAddress?: string;
   address?: string;
-  birthDate?: string;
-  gender?: 'Male' | 'Female' | string;
-  civilStatus?: 'Single' | 'Married' | 'Widowed' | string;
+  city?: string;
+  province?: string;
+  zipCode?: string;
+
+  // Family & Emergency Contact
+  fatherName?: string;
+  motherName?: string;
+  guardianName?: string;
+  guardianRelationship?: string;
+  guardianContactNumber?: string;
+  guardianPhone?: string;
+  guardianEmail?: string;
+  guardianAddress?: string;
+  emergencyContactPerson?: string;
+  emergencyContactName?: string;
+  emergencyContactNumber?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  emergencyContactRelation?: string;
   emergencyContact?: {
     name: string;
     relationship: string;
     phone: string;
   };
+
+  // Educational Background
+  lastSchoolAttended?: string;
+  schoolAddress?: string;
+  highestEducationalAttainment?: string;
+  previousCourse?: string;
+  yearGraduated?: string;
+  graduationDate?: string;
+  previousSchoolId?: string;
+  honorsAwards?: string;
+
+  // Church & Ministry Information
   homeChurch: string;
+  churchName?: string;
+  churchAddress?: string;
+  churchContactNumber?: string;
   pastorName?: string;
+  pastorContactNumber?: string;
+  pastorPhone?: string;
+  ministryDepartment?: string;
+  ministryRole?: string;
+  yearsInMinistry?: number | string;
+  dateStartedInMinistry?: string;
+  ministryExperience?: string;
+  churchRecommendationStatus?: 'Pending' | 'Received' | 'Verified' | 'Waived';
+  pastorRecommendationStatus?: 'Pending' | 'Received' | 'Verified' | 'Waived';
   presbytery?: string;
-  emergencyContactName?: string;
-  emergencyContactRelation?: string;
-  emergencyContactPhone?: string;
-  guardianName?: string;
-  guardianPhone?: string;
   mentorName: string;
-  avatarUrl: string;
-  gpa: number;
-  totalUnitsEarned: number;
+  spiritualMentor?: string;
+
+  // PCM Enrollment Information
+  applicantType?: 'New Student' | 'Returning Student' | 'Transfer Student';
+  program: string;
+  programId?: string;
+  degreeProgram?: string;
+  major?: string;
+  specialization?: string;
+  yearLevel: string;
+  section?: string;
+  assignedAdviser?: string;
+  academicStatus: 'Regular' | 'Irregular' | 'Probationary' | "Dean's List" | 'Graduating' | 'Alumni' | string;
+  enrollmentStatus: EnrollmentStatus;
+  currentSemester: string;
+  semester?: string;
+  academicYear: string;
+  applicationDate?: string;
+  enrollmentDate?: string;
+
+  // Requirements & Documents
+  requirements?: StudentRequirementItem[];
+  uploadedDocuments?: StudentDocument[];
+  documents?: StudentDocument[];
+
+  // Student Account Information
+  authProvider?: string;
+  accountStatus?: 'Active' | 'Inactive' | 'Pending Verification' | 'Suspended';
+  verificationStatus?: 'Unverified' | 'Verified';
+  lastLogin?: string;
+  portalAccess?: boolean;
+
+  // Enrollment & Payment Information
+  enrollmentFee?: number;
   tuitionTotal: number;
   tuitionPaid: number;
   tuitionBalance?: number;
-  courses: StudentCourse[];
-  subjectHistory?: StudentSubjectHistory[];
+  paymentStatus?: 'Unpaid' | 'Partially Paid' | 'Paid' | 'Overdue' | 'Waived';
   paymentRecords?: StudentPaymentRecord[];
   paymentHistory?: StudentPaymentRecord[];
-  uploadedDocuments?: StudentDocument[];
-  documents?: StudentDocument[];
+  scholarshipDiscount?: number;
+  scholarshipType?: string;
+  officialReceiptNumber?: string;
+  paymentRemarks?: string;
+
+  // Academic Records
+  gpa: number;
+  totalUnitsEarned: number;
+  courses: StudentCourse[];
+  subjectHistory?: StudentSubjectHistory[];
   practicumEntries: PracticumEntry[];
+  attendanceAverage?: string | number;
+
+  // Administrative Notes & Metadata
   adminNotes?: string;
   adminRemarks?: string;
-  major?: string;
   isArchived?: boolean;
   createdAt?: string;
   updatedAt?: string;

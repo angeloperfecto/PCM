@@ -15,6 +15,7 @@ import { EnrollmentModule } from '@/components/portal/enrollment/EnrollmentModul
 import { AddDropModule } from '@/components/portal/enrollment/AddDropModule';
 import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModule';
 import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule';
+import { StudentRegistrationWizard } from '@/components/enrollment/StudentRegistrationWizard';
 import {
   StudentPortalSidebar,
   StudentPortalTabType,
@@ -122,6 +123,7 @@ export const PortalView: React.FC = () => {
   const [wizardPaymentOption, setWizardPaymentOption] = useState('Installment (40% Downpayment)');
   const [wizardPaymentRef, setWizardPaymentRef] = useState('');
   const [wizardNotes, setWizardNotes] = useState('');
+  const [isPublicWizardOpen, setIsPublicWizardOpen] = useState(false);
 
   // Available subjects pool for enrollment selection
   const AVAILABLE_CATALOG_SUBJECTS: SelectedSubject[] = [
@@ -346,7 +348,54 @@ export const PortalView: React.FC = () => {
               Sign In to MyPCM Portal
             </button>
           </form>
+
+          {/* New Applicant & Online Enrollment Entry */}
+          <div className="pt-4 border-t border-slate-700/60 text-center space-y-2">
+            <p className="text-[11px] text-slate-300">
+              New applicant, incoming freshman, or continuing student?
+            </p>
+            <button
+              type="button"
+              onClick={() => setIsPublicWizardOpen(true)}
+              className="w-full bg-white/10 hover:bg-white/20 text-white border border-[#588B76]/50 font-bold py-3 rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Online Registration & Enrollment Wizard</span>
+            </button>
+          </div>
         </div>
+
+        {/* Public 9-Step Registration Wizard Modal */}
+        {isPublicWizardOpen && (
+          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto font-sans">
+            <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[94vh] flex flex-col text-slate-900">
+              <div className="bg-[#18392B] p-4 text-white flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-amber-300" />
+                  <span className="font-serif font-bold text-base">
+                    Philippine College of Ministry • Online Student Registration & Enrollment
+                  </span>
+                </div>
+                <button
+                  onClick={() => setIsPublicWizardOpen(false)}
+                  className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="overflow-y-auto p-4 sm:p-6 flex-1">
+                <StudentRegistrationWizard
+                  onCompleted={(newStudent) => {
+                    setIsPublicWizardOpen(false);
+                    setStudentIdInput(newStudent.studentId);
+                    addToast('success', 'Profile Created & Saved', `Your record with Student ID ${newStudent.studentId} is registered in Firebase!`);
+                  }}
+                  onCancel={() => setIsPublicWizardOpen(false)}
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

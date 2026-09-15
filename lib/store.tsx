@@ -18,6 +18,7 @@ import {
   StudentNotification,
   StudentPaymentRecord,
   StudentSubjectHistory,
+  StudentRequirementItem,
   EnrollmentStatus,
   DocumentVerificationStatus,
   SelectedSubject,
@@ -97,6 +98,13 @@ import {
   INITIAL_HOMEPAGE_VIDEO_CONFIG,
   INITIAL_STUDENT_LIFE_CONFIG,
 } from './initialData';
+import {
+  getDefaultStudentRequirements,
+  calculateGPAFromGrades,
+  normalizeStudentProfile,
+  generateStudentId,
+  generateApplicationNumber,
+} from './studentDefaults';
 import { extractYouTubeVideoId, getYouTubeThumbnailUrl, generateVideoId, getCurrentTimestamp } from './youtube';
 import { normalizeInstructions } from './utils';
 import {
@@ -415,6 +423,11 @@ interface PCMContextType {
   addStudentGrade: (studentId: string, courseCode: string, midtermGrade: number | string, finalGrade: number | string) => Promise<boolean>;
   recordStudentPayment: (studentId: string, payment: Omit<StudentPaymentRecord, 'id'>) => Promise<boolean>;
   updateStudentPaymentRecord: (studentId: string, paymentId: string, updates: Partial<StudentPaymentRecord>) => Promise<boolean>;
+  updateStudentRequirementStatus: (studentId: string, requirementId: string, status: StudentRequirementItem['status'], remarks?: string, file?: any) => Promise<boolean>;
+  addStudentSubjectHistory: (studentId: string, record: Omit<StudentSubjectHistory, 'id'>) => Promise<boolean>;
+  updateStudentSubjectHistory: (studentId: string, subjectIdOrCode: string, updates: Partial<StudentSubjectHistory>) => Promise<boolean>;
+  deleteStudentSubjectHistory: (studentId: string, subjectIdOrCode: string) => Promise<boolean>;
+  updateStudentEnrollmentStatus: (studentId: string, status: EnrollmentStatus, remarks?: string) => Promise<boolean>;
 
   // Enrollment Submenu Navigation
   enrollmentActiveSubTab: EnrollmentSubmenuTab;
@@ -2157,6 +2170,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter((s) => !isUserDeletedRef.current(s))
           : INITIAL_STUDENTS.filter((s) => !isUserDeletedRef.current(s));
         setStudents(list);
+        if (list.length > 0) {
+          setStudentProfile((prev) => {
+            const matched = list.find((s) => s.id === prev?.id || s.studentId === prev?.studentId || s.email === prev?.email);
+            return matched ? { ...prev, ...matched } : prev;
+          });
+        }
         setUserAccounts((prev) => syncWithAdminsAndStudents(prev, stateRef.current.adminUsers, list));
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'studentProfiles')
@@ -4474,6 +4493,132 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     logActivity('UPDATE', 'Payment Record', paymentId, target.fullName || target.name || 'Student', 'Updated student tuition payment entry.');
     addToast('success', 'Payment Record Updated', 'The payment entry has been modified.');
     return true;
+  };
+
+  const updateStudentRequirementStatus = async (
+    studentId: string,
+    requirementId: string,
+    status: StudentRequirementItem['status'],
+    remarks?: string,
+    file?: any
+  ): Promise<boolean> => {
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId || studentProfile.studentId === studentId ? studentProfile : null);
+    if (!target) return false;
+
+    const existingReqs = target.requirements && target.requirements.length > 0
+      ? target.requirements
+      : getDefaultStudentRequirements();
+
+    const now = new Date().toISOString();
+    const updatedReqs = existingReqs.map((req) => {
+      if (req.id === requirementId || req.name.toLowerCase() === requirementId.toLowerCase()) {
+        return {
+          ...req,
+          status,
+          remarks: remarks !== undefined ? remarks : req.remarks,
+          file: file || req.file,
+          uploadDate: file ? now : req.uploadDate,
+          verifiedBy: status === 'Verified' ? currentAdminUser.name || 'Office of Admissions & Registrar' : req.verifiedBy,
+          verificationDate: status === 'Verified' ? now.split('T')[0] : req.verificationDate,
+        };
+      }
+      return req;
+    });
+
+    const success = await updateStudentProfile(target.id, {
+      requirements: updatedReqs,
+    });
+
+    if (success) {
+      logActivity(
+        'UPDATE',
+        'Student Requirement',
+        requirementId,
+        target.fullName || target.name || 'Student',
+        `Updated submission status for requirement to "${status}".`
+      );
+    }
+    return success;
+  };
+
+  const addStudentSubjectHistory = async (
+    studentId: string,
+    record: Omit<StudentSubjectHistory, 'id'>
+  ): Promise<boolean> => {
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId || studentProfile.studentId === studentId ? studentProfile : null);
+    if (!target) return false;
+
+    const existingSubjects = target.subjectHistory || [];
+    const newSubject: StudentSubjectHistory = {
+      ...record,
+      id: `subj-${Date.now()}`,
+    };
+    const updatedSubjects = [newSubject, ...existingSubjects];
+    const newGPA = calculateGPAFromGrades(updatedSubjects);
+
+    return await updateStudentProfile(target.id, {
+      subjectHistory: updatedSubjects,
+      gpa: newGPA,
+    });
+  };
+
+  const updateStudentSubjectHistory = async (
+    studentId: string,
+    subjectIdOrCode: string,
+    updates: Partial<StudentSubjectHistory>
+  ): Promise<boolean> => {
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId || studentProfile.studentId === studentId ? studentProfile : null);
+    if (!target) return false;
+
+    const existingSubjects = target.subjectHistory || [];
+    const updatedSubjects = existingSubjects.map((s) =>
+      s.id === subjectIdOrCode || s.code === subjectIdOrCode ? { ...s, ...updates } : s
+    );
+    const newGPA = calculateGPAFromGrades(updatedSubjects);
+
+    return await updateStudentProfile(target.id, {
+      subjectHistory: updatedSubjects,
+      gpa: newGPA,
+    });
+  };
+
+  const deleteStudentSubjectHistory = async (
+    studentId: string,
+    subjectIdOrCode: string
+  ): Promise<boolean> => {
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId || studentProfile.studentId === studentId ? studentProfile : null);
+    if (!target) return false;
+
+    const existingSubjects = target.subjectHistory || [];
+    const updatedSubjects = existingSubjects.filter(
+      (s) => s.id !== subjectIdOrCode && s.code !== subjectIdOrCode
+    );
+    const newGPA = calculateGPAFromGrades(updatedSubjects);
+
+    return await updateStudentProfile(target.id, {
+      subjectHistory: updatedSubjects,
+      gpa: newGPA,
+    });
+  };
+
+  const updateStudentEnrollmentStatus = async (
+    studentId: string,
+    status: EnrollmentStatus,
+    remarks?: string
+  ): Promise<boolean> => {
+    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId || studentProfile.studentId === studentId ? studentProfile : null);
+    if (!target) return false;
+
+    const updates: Partial<StudentProfile> = {
+      enrollmentStatus: status,
+      adminRemarks: remarks || target.adminRemarks,
+    };
+
+    if (status === 'Enrolled') {
+      updates.enrollmentDate = new Date().toISOString().split('T')[0];
+    }
+
+    return await updateStudentProfile(target.id, updates);
   };
 
   // Academic Periods Management
@@ -6900,6 +7045,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addStudentGrade,
         recordStudentPayment,
         updateStudentPaymentRecord,
+        updateStudentRequirementStatus,
+        addStudentSubjectHistory,
+        updateStudentSubjectHistory,
+        deleteStudentSubjectHistory,
+        updateStudentEnrollmentStatus,
 
         // Enrollment Submenu Navigation
         enrollmentActiveSubTab,

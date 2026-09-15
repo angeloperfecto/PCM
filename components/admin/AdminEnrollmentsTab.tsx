@@ -12,6 +12,7 @@ import {
   FeeStructureItem,
   EnrollmentStatus,
 } from '@/lib/types';
+import { AdminStudentDetailModal } from './AdminStudentDetailModal';
 import {
   GraduationCap,
   FileCheck,
@@ -1407,103 +1408,13 @@ export const AdminEnrollmentsTab: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 1: STUDENT DOSSIER DRAWER */}
+      {/* MODAL 1: COMPREHENSIVE STUDENT DOSSIER & REGISTRAR MANAGEMENT */}
       {/* ========================================================================= */}
-      {selectedStudentDossier && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-2xl rounded-2xl shadow-2xl border border-slate-200 overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="bg-[#18392B] p-4 text-white flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <GraduationCap className="w-6 h-6 text-emerald-400" />
-                <div>
-                  <h4 className="font-serif text-lg font-bold">{selectedStudentDossier.fullName || selectedStudentDossier.name}</h4>
-                  <p className="text-xs text-slate-300 font-mono">{selectedStudentDossier.studentId} • {selectedStudentDossier.degreeProgram}</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setSelectedStudentDossier(null)}
-                className="text-white/70 hover:text-white p-1 rounded transition"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto space-y-6 text-xs text-slate-700 flex-1">
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3 rounded-xl">
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Year Level</span>
-                  <span className="font-bold text-slate-800">{selectedStudentDossier.yearLevel}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Academic Status</span>
-                  <span className="font-bold text-slate-800">{selectedStudentDossier.academicStatus}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Current Term</span>
-                  <span className="font-bold text-slate-800">{selectedStudentDossier.currentSemester}</span>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px]">Tuition Balance</span>
-                  <span className="font-mono font-bold text-slate-900">₱{(selectedStudentDossier.tuitionBalance || 0).toLocaleString()}</span>
-                </div>
-              </div>
-
-              {/* Enrolled Courses */}
-              <div className="space-y-2">
-                <h5 className="font-bold text-sm text-[#18392B]">Current Enrolled Courses</h5>
-                <div className="border border-slate-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-left">
-                    <thead className="bg-slate-50 font-semibold text-slate-500 border-b border-slate-200">
-                      <tr>
-                        <th className="p-2.5">Course Code</th>
-                        <th className="p-2.5">Descriptive Title</th>
-                        <th className="p-2.5">Units</th>
-                        <th className="p-2.5">Schedule & Room</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {(selectedStudentDossier.courses || []).map((c, i) => (
-                        <tr key={i}>
-                          <td className="p-2.5 font-mono font-bold text-[#18392B]">{c.code}</td>
-                          <td className="p-2.5">{c.title}</td>
-                          <td className="p-2.5 font-mono">{c.units}u</td>
-                          <td className="p-2.5 text-slate-500">{c.schedule || 'TBA'} ({c.room || 'Room 201'})</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-
-              {/* Church & Spiritual Background */}
-              <div className="bg-emerald-50/40 p-4 rounded-xl border border-emerald-200/60 space-y-1">
-                <span className="font-bold text-emerald-900 block">Spiritual Formation Details</span>
-                <p>Home Church: <strong>{selectedStudentDossier.homeChurch || 'Philippine Church of Christ'}</strong></p>
-                <p>Spiritual Mentor: <strong>{selectedStudentDossier.mentorName || 'Dr. Benjamin Villanueva'}</strong></p>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
-              <button
-                onClick={() => {
-                  setSelectedStudentDossier(null);
-                  handlePrintCOR(selectedStudentDossier);
-                }}
-                className="bg-[#18392B] hover:bg-[#588B76] text-white font-semibold px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer text-xs"
-              >
-                <Printer className="w-4 h-4" />
-                <span>Print Official COR</span>
-              </button>
-              <button
-                onClick={() => setSelectedStudentDossier(null)}
-                className="text-slate-600 hover:text-slate-900 font-semibold px-4 py-2 cursor-pointer text-xs"
-              >
-                Close Dossier
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AdminStudentDetailModal
+        student={selectedStudentDossier}
+        isOpen={!!selectedStudentDossier}
+        onClose={() => setSelectedStudentDossier(null)}
+      />
 
       {/* ========================================================================= */}
       {/* MODAL 2: CERTIFICATE OF REGISTRATION (COR) */}
