@@ -1,0 +1,6 @@
+[install]
+offline = true
+frozenLockfile = true
+
+[install.cache]
+disableManifest = true
