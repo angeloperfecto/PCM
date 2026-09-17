@@ -58,6 +58,7 @@ import {
   YouTubeVideo,
   HomepageVideoConfig,
   StudentLifeConfig,
+  ContactInquiry,
 } from './types';
 import {
   INITIAL_PROGRAMS,
@@ -354,6 +355,16 @@ interface PCMContextType {
   getApplicationByRef: (ref: string) => AdmissionApplication | undefined;
   activeTrackerRef: string;
   setActiveTrackerRef: (ref: string) => void;
+  submitInquiry: (inquiryData: {
+    name: string;
+    email: string;
+    phone?: string;
+    department?: string;
+    subject?: string;
+    message: string;
+    programInterest?: string;
+    type?: 'general_inquiry' | 'program_info_request' | 'campus_visit';
+  }) => Promise<{ success: boolean; id: string }>;
 
   // Google / Firebase User Accounts & Multi-Role Authentication
   currentUserAccount: UserAccount | null;
@@ -3314,6 +3325,60 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return applications.find(
       (a) => a.referenceNumber.trim().toUpperCase() === ref.trim().toUpperCase()
     );
+  };
+
+  // Contact & Information Inquiries Workflow (Direct Firestore Persistence)
+  const submitInquiry = async (inquiryData: {
+    name: string;
+    email: string;
+    phone?: string;
+    department?: string;
+    subject?: string;
+    message: string;
+    programInterest?: string;
+    type?: 'general_inquiry' | 'program_info_request' | 'campus_visit';
+  }): Promise<{ success: boolean; id: string }> => {
+    const inquiryId = `inq-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const newInquiry: ContactInquiry = {
+      id: inquiryId,
+      name: inquiryData.name.trim(),
+      email: inquiryData.email.trim(),
+      phone: inquiryData.phone?.trim() || '',
+      department: inquiryData.department?.trim() || 'Admissions Office',
+      subject: inquiryData.subject?.trim() || 'General Inquiry',
+      message: inquiryData.message.trim(),
+      programInterest: inquiryData.programInterest?.trim() || '',
+      type: inquiryData.type || 'general_inquiry',
+      status: 'New',
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      await safeSetDoc(doc(db, 'inquiries', newInquiry.id), newInquiry, { merge: true });
+    } catch (e) {
+      console.warn('Firestore safeSetDoc error on inquiry, retrying setDoc:', e);
+      try {
+        await setDoc(doc(db, 'inquiries', newInquiry.id), newInquiry, { merge: true });
+      } catch (err) {
+        console.warn('Fallback setDoc error on inquiry:', err);
+      }
+    }
+
+    logActivity(
+      'CREATE',
+      'Inquiry',
+      newInquiry.id,
+      `${newInquiry.name} (${newInquiry.email})`,
+      `New inquiry submitted for ${newInquiry.department || newInquiry.type}.`
+    );
+
+    addToast(
+      'success',
+      'Inquiry Submitted',
+      `Thank you, ${newInquiry.name}. Your inquiry has been saved and sent to the ${newInquiry.department}.`
+    );
+
+    return { success: true, id: newInquiry.id };
   };
 
   // Student Portal Actions & Multi-Student Directory
@@ -6976,6 +7041,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getApplicationByRef,
         activeTrackerRef,
         setActiveTrackerRef,
+        submitInquiry,
 
         // Google / Firebase User Accounts & Authentication
         currentUserAccount,

@@ -1490,4 +1490,19 @@ export interface HomepageVideoConfig {
   updatedAt?: string;
 }
 
+export interface ContactInquiry {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  department?: string;
+  subject?: string;
+  message: string;
+  programInterest?: string;
+  type: 'general_inquiry' | 'program_info_request' | 'campus_visit';
+  status: 'New' | 'In Review' | 'Responded' | 'Archived';
+  createdAt: string;
+  updatedAt?: string;
+}
+
 

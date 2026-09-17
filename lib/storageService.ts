@@ -1,4 +1,4 @@
-import { storage, ref, uploadBytes, getDownloadURL } from './firebase';
+import { storage, ref, uploadBytes, getDownloadURL, db, setDoc, doc } from './firebase';
 
 export interface UploadResult {
   success: boolean;
@@ -50,44 +50,61 @@ export async function uploadStudentFile(
   const cleanFileName = (customName || file.name).replace(/[^a-zA-Z0-9.-]/g, '_');
   const path = `students/${studentId}/${category}/${Date.now()}_${cleanFileName}`;
 
+  let finalUrl = '';
+
   try {
     const storageRef = ref(storage, path);
     const snapshot = await uploadBytes(storageRef, file);
-    const downloadUrl = await getDownloadURL(snapshot.ref);
-
-    return {
-      success: true,
-      url: downloadUrl,
-      fileName: file.name,
-      fileSize: formatFileSize(file.size),
-      fileType: file.type,
-    };
+    finalUrl = await getDownloadURL(snapshot.ref);
   } catch (firebaseErr: any) {
-    console.warn('Firebase Storage upload failed, falling back to local object reader:', firebaseErr);
+    console.warn('Firebase Storage upload notice, using persistent data URL fallback:', firebaseErr);
 
     // Reliable Data URL fallback for sandbox/preview environments
-    return new Promise((resolve) => {
+    finalUrl = await new Promise<string>((resolve) => {
       const reader = new FileReader();
       reader.onload = (e) => {
-        resolve({
-          success: true,
-          url: (e.target?.result as string) || '',
-          fileName: file.name,
-          fileSize: formatFileSize(file.size),
-          fileType: file.type,
-        });
+        resolve((e.target?.result as string) || '');
       };
       reader.onerror = () => {
-        resolve({
-          success: false,
-          url: '',
-          fileName: file.name,
-          fileSize: formatFileSize(file.size),
-          fileType: file.type,
-          error: 'Failed to read file for storage.',
-        });
+        resolve('');
       };
       reader.readAsDataURL(file);
     });
   }
+
+  if (!finalUrl) {
+    return {
+      success: false,
+      url: '',
+      fileName: file.name,
+      fileSize: formatFileSize(file.size),
+      fileType: file.type,
+      error: 'Failed to generate storage URL for file.',
+    };
+  }
+
+  // Persist record to Firestore uploadedDocuments collection
+  try {
+    const docId = `upload-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    await setDoc(doc(db, 'uploadedDocuments', docId), {
+      id: docId,
+      studentId: studentId || 'general',
+      category,
+      fileName: file.name,
+      fileSize: formatFileSize(file.size),
+      fileType: file.type,
+      url: finalUrl,
+      uploadedAt: new Date().toISOString(),
+    }, { merge: true });
+  } catch (e) {
+    console.warn('Firestore uploadedDocuments record notice:', e);
+  }
+
+  return {
+    success: true,
+    url: finalUrl,
+    fileName: file.name,
+    fileSize: formatFileSize(file.size),
+    fileType: file.type,
+  };
 }

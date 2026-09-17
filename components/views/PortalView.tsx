@@ -81,6 +81,7 @@ export const PortalView: React.FC = () => {
   // Authentication states
   const [studentIdInput, setStudentIdInput] = useState('2024-PCM-0418');
   const [passwordInput, setPasswordInput] = useState('pcmstudent');
+  const [showPasswordHelp, setShowPasswordHelp] = useState(false);
 
   // Active Main Navigation Tab
   const [activeTab, setActiveTab] = useState<StudentPortalTabType>('enrollment');
@@ -329,10 +330,20 @@ export const PortalView: React.FC = () => {
             </div>
 
             <div className="space-y-1">
-              <label className="text-slate-300 font-semibold flex items-center gap-1.5">
-                <Lock className="w-3.5 h-3.5 text-[#588B76]" />
-                <span>Student Portal Password</span>
-              </label>
+              <div className="flex items-center justify-between">
+                <label className="text-slate-300 font-semibold flex items-center gap-1.5">
+                  <Lock className="w-3.5 h-3.5 text-[#588B76]" />
+                  <span>Student Portal Password</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordHelp((prev) => !prev)}
+                  className="text-[11px] text-amber-300 hover:text-amber-200 underline flex items-center gap-1 cursor-pointer"
+                >
+                  <HelpCircle className="w-3 h-3" />
+                  <span>How to get password?</span>
+                </button>
+              </div>
               <input
                 type="password"
                 required
@@ -342,6 +353,42 @@ export const PortalView: React.FC = () => {
                 className="w-full bg-[#070e1c] border border-slate-700 rounded-lg p-3 text-white font-mono focus:border-[#588B76] focus:outline-none"
               />
             </div>
+
+            {showPasswordHelp && (
+              <div className="bg-slate-900/95 border border-amber-400/30 rounded-xl p-3.5 text-xs text-slate-200 space-y-2.5">
+                <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+                  <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                  <span>How to Retrieve or Set Your Student Password:</span>
+                </div>
+                <ul className="list-disc pl-4 space-y-1.5 text-[11px] text-slate-300">
+                  <li>
+                    <strong className="text-white">Default Institutional Password:</strong> For all enrolled and demo student accounts, use <code className="bg-black/60 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">pcmstudent</code>.
+                  </li>
+                  <li>
+                    <strong className="text-white">Self-Registered Students:</strong> If you registered through the <em>Online Registration & Enrollment Wizard</em>, use the password you entered during registration.
+                  </li>
+                  <li>
+                    <strong className="text-white">Sign In with ID or Email:</strong> You can enter either your full Student ID (e.g., <code className="bg-black/60 text-amber-300 px-1 py-0.5 rounded font-mono">2024-PCM-0418</code>) or your registered email address.
+                  </li>
+                  <li>
+                    <strong className="text-white">Registrar Assistance:</strong> If you forgot your password or need an official reset, contact the Office of the Registrar at <span className="text-emerald-400 font-mono">registrar@pcm.edu.ph</span>.
+                  </li>
+                </ul>
+                <div className="pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStudentIdInput('2024-PCM-0418');
+                      setPasswordInput('pcmstudent');
+                      setShowPasswordHelp(false);
+                    }}
+                    className="w-full text-center bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 py-1.5 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                  >
+                    Auto-Fill Demo Student Credentials (pcmstudent)
+                  </button>
+                </div>
+              </div>
+            )}
 
             <button
               type="submit"

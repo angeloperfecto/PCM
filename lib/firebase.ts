@@ -138,9 +138,7 @@ export function isFirestoreQuotaError(error: unknown): boolean {
     msg.includes('Quota limit exceeded') ||
     msg.includes('Quota exceeded') ||
     msg.includes('quota metric') ||
-    msg.includes('Free daily read units') ||
-    msg.includes('insufficient permissions') ||
-    code === 'permission-denied'
+    msg.includes('Free daily read units')
   );
 }
 

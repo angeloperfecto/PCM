@@ -121,6 +121,27 @@ service cloud.firestore {
       allow delete: if resource.data.email != "angeloperfecto.epc@gmail.com";
     }
 
+    // Inquiries from Contact Form and Info Requests
+    match /inquiries/{inquiryId} {
+      allow read: if isApprovedAdmin() || true;
+      allow create: if true;
+      allow update, delete: if isApprovedAdmin();
+    }
+
+    // Newsletter Subscribers
+    match /newsletterSubscribers/{subscriberId} {
+      allow read: if isApprovedAdmin() || true;
+      allow create: if true;
+      allow update, delete: if isApprovedAdmin();
+    }
+
+    // Uploaded Student Documents & Files Metadata
+    match /uploadedDocuments/{docId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if isApprovedAdmin();
+    }
+
     // Deleted Users Archive & Restoration Audit
     match /deletedUsers/{deletedId} {
       allow read: if true;
@@ -129,24 +150,25 @@ service cloud.firestore {
 
     match /studentProfiles/{studentId} {
       allow read: if true;
-      allow write: if isSignedIn() || isAdmin();
+      allow create, update: if true;
+      allow delete: if isAdmin();
     }
 
     match /enrollments/{enrollmentId} {
       allow read: if true;
-      allow create, update: if isSignedIn() || isAdmin();
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 
     match /preEnlistments/{preEnlistmentId} {
       allow read: if true;
-      allow create, update: if isSignedIn() || isAdmin();
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 
     match /addDropRequests/{requestId} {
       allow read: if true;
-      allow create, update: if isSignedIn() || isAdmin();
+      allow create, update: if true;
       allow delete: if isAdmin();
     }
 

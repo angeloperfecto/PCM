@@ -5,24 +5,40 @@ import { usePCM } from '@/lib/store';
 import { X, Send, CheckCircle2, HelpCircle, BookOpen } from 'lucide-react';
 
 export const RequestInfoModal: React.FC = () => {
-  const { isRequestInfoModalOpen, setRequestInfoModalOpen, programs, addToast } = usePCM();
+  const { isRequestInfoModalOpen, setRequestInfoModalOpen, programs, addToast, submitInquiry } = usePCM();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [programInterest, setProgramInterest] = useState(programs[0]?.name || 'Bachelor of Theology');
   const [questions, setQuestions] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isRequestInfoModalOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    addToast({
-      title: 'Information Packet Dispatched',
-      message: `An admissions counselor has sent the digital prospectus to ${email}.`,
-      type: 'success',
-    });
+    if (!name.trim() || !email.trim()) return;
+
+    setIsSubmitting(true);
+    try {
+      await submitInquiry({
+        name,
+        email,
+        phone,
+        department: 'Admissions Office',
+        subject: `Program Information Request: ${programInterest}`,
+        message: questions.trim() || `Request for information packet for program: ${programInterest}.`,
+        programInterest,
+        type: 'program_info_request',
+      });
+      setSubmitted(true);
+    } catch (err) {
+      console.error('Failed to submit info request:', err);
+      addToast('error', 'Submission Failed', 'Could not dispatch your request. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -159,9 +175,10 @@ export const RequestInfoModal: React.FC = () => {
 
               <button
                 type="submit"
-                className="w-full bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] text-xs font-bold py-3 rounded uppercase tracking-wider transition flex items-center justify-center gap-2 cursor-pointer shadow"
+                disabled={isSubmitting}
+                className="w-full bg-[#588B76] hover:bg-[#85AA9B] disabled:opacity-60 text-[#18392B] text-xs font-bold py-3 rounded uppercase tracking-wider transition flex items-center justify-center gap-2 cursor-pointer shadow"
               >
-                <span>SEND INFORMATION PACKET</span>
+                <span>{isSubmitting ? 'DISPATCHING TO FIRESTORE...' : 'SEND INFORMATION PACKET'}</span>
                 <Send className="w-3.5 h-3.5" />
               </button>
             </form>

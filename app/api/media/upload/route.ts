@@ -125,7 +125,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const finalUrl = dataUrl || publicUrl;
+    const finalUrl = publicUrl || dataUrl;
 
     if (!finalUrl) {
       throw new Error('Could not process media file into a usable storage URL.');
@@ -137,9 +137,12 @@ export async function POST(req: NextRequest) {
       downloadURL: finalUrl,
       publicUrl: publicUrl || finalUrl,
       dataUrl: dataUrl,
+      fileName: rawFileName,
+      fileSize: buffer.length,
+      fileType: file.type || 'application/octet-stream',
       storagePath: `uploads/${sanitizedFolder}/${uniqueFilename}`,
       filename: uniqueFilename,
-      provider: dataUrl ? 'hybrid_optimized' : 'local_public',
+      provider: publicUrl ? 'local_public' : 'hybrid_optimized',
     });
   } catch (error: any) {
     console.error('Error in /api/media/upload:', error);

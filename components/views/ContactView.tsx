@@ -18,7 +18,7 @@ import {
 } from 'lucide-react';
 
 export const ContactView: React.FC = () => {
-  const { addToast } = usePCM();
+  const { addToast, submitInquiry } = usePCM();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -28,15 +28,30 @@ export const ContactView: React.FC = () => {
     message: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    addToast({
-      title: 'Inquiry Submitted',
-      message: `Your message has been sent to the ${formData.department}. A PCM officer will respond within 24 hours.`,
-      type: 'success',
-    });
+    if (!formData.name || !formData.email || !formData.message) return;
+
+    setIsSubmitting(true);
+    try {
+      await submitInquiry({
+        name: formData.name,
+        email: formData.email,
+        phone: formData.phone,
+        department: formData.department,
+        subject: formData.subject || 'General Inquiry',
+        message: formData.message,
+        type: 'general_inquiry',
+      });
+      setSubmitted(true);
+    } catch (err) {
+      console.error('Failed to submit contact inquiry:', err);
+      addToast('error', 'Submission Failed', 'Could not save your inquiry. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -257,10 +272,11 @@ export const ContactView: React.FC = () => {
 
                   <button
                     type="submit"
-                    className="w-full bg-[#588B76] hover:bg-[#46705F] text-white font-bold py-3 rounded-sm uppercase tracking-wider transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
+                    disabled={isSubmitting}
+                    className="w-full bg-[#588B76] hover:bg-[#46705F] disabled:opacity-60 text-white font-bold py-3 rounded-sm uppercase tracking-wider transition cursor-pointer flex items-center justify-center gap-2 shadow-sm"
                   >
                     <Send className="w-4 h-4" />
-                    <span>Submit Inquiry</span>
+                    <span>{isSubmitting ? 'Submitting to Firestore...' : 'Submit Inquiry'}</span>
                   </button>
                 </form>
               )}
