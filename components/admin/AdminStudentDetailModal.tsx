@@ -760,7 +760,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                           </td>
                           <td className="p-3 text-right">
                             <button
-                              onClick={() => handleDeleteSubject(subj.id)}
+                              onClick={() => handleDeleteSubject(subj.id || subj.code)}
                               className="p-1 text-rose-500 hover:bg-rose-50 rounded transition cursor-pointer"
                               title="Delete Course Grade"
                             >

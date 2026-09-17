@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { ProgramLevel } from '@/lib/types';
+import { StudentRegistrationWizard } from '@/components/enrollment/StudentRegistrationWizard';
 import {
   FileEdit,
   CheckCircle2,
@@ -18,13 +19,18 @@ import {
   FileText,
   AlertCircle,
   Copy,
+  GraduationCap,
+  ExternalLink,
+  Layers,
 } from 'lucide-react';
 
 export const ApplicationView: React.FC = () => {
-  const { programs, submitApplication, getApplicationByRef, addToast } = usePCM();
+  const { programs, submitApplication, getApplicationByRef, navigateTo, addToast } = usePCM();
 
-  // Mode: 'apply' or 'track'
-  const [mode, setMode] = useState<'apply' | 'track'>('apply');
+  // Mode: 'apply' | 'track' | 'wizard'
+  const [mode, setMode] = useState<'apply' | 'track' | 'wizard'>('apply');
+  const [wizardInitialRef, setWizardInitialRef] = useState<string>('');
+  const [wizardInitialData, setWizardInitialData] = useState<any>(null);
 
   // Step 1 to 4
   const [step, setStep] = useState(1);
@@ -111,7 +117,7 @@ export const ApplicationView: React.FC = () => {
             Submit your online application for Academic Year 2026–2027 or track an existing application status in real-time.
           </p>
 
-          <div className="pt-4 flex items-center justify-center gap-2">
+          <div className="pt-4 flex flex-wrap items-center justify-center gap-2">
             <button
               onClick={() => setMode('apply')}
               className={`px-5 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer ${
@@ -132,6 +138,21 @@ export const ApplicationView: React.FC = () => {
             >
               <Search className="w-3.5 h-3.5" />
               <span>Track Application Status</span>
+            </button>
+            <button
+              onClick={() => {
+                setWizardInitialRef('');
+                setWizardInitialData(null);
+                setMode('wizard');
+              }}
+              className={`px-5 py-2.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1.5 ${
+                mode === 'wizard'
+                  ? 'bg-amber-400 text-slate-950 shadow-md font-extrabold'
+                  : 'bg-amber-400/20 text-amber-200 hover:bg-amber-400/30 border border-amber-400/40'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+              <span>Online Student Registration & Enrollment</span>
             </button>
           </div>
         </div>
@@ -219,17 +240,70 @@ export const ApplicationView: React.FC = () => {
                     <div className="bg-white p-4 rounded-lg border border-slate-200 text-xs space-y-1">
                       <span className="font-bold text-[#18392B]">Admissions Committee Note:</span>
                       <p className="text-slate-600 leading-relaxed">
-                        {trackedApp.status === 'approved' &&
+                        {(trackedApp.status?.toLowerCase() === 'approved' || trackedApp.status === 'Approved') &&
                           'Congratulations! Your application has been approved for enrollment. Please proceed to the Registrar for official matriculation.'}
-                        {trackedApp.status === 'interview_scheduled' &&
+                        {(trackedApp.status?.toLowerCase() === 'enrolled' || trackedApp.status === 'Enrolled') &&
+                          'Official Enrollment Confirmed! Your student profile is active in the PCM Academic Registrar database.'}
+                        {(trackedApp.status?.toLowerCase() === 'interview_scheduled' || trackedApp.status === 'Interview Scheduled') &&
                           'Your admissions interview has been scheduled with the Faculty Panel. Check your email for Zoom link / room assignment.'}
-                        {trackedApp.status === 'submitted' &&
+                        {(trackedApp.status?.toLowerCase() === 'submitted' || trackedApp.status === 'Submitted') &&
                           'Your documents and spiritual testimony are currently undergoing evaluation by the Academic Dean.'}
-                        {trackedApp.status === 'under_review' &&
+                        {(trackedApp.status?.toLowerCase() === 'under_review' || trackedApp.status === 'Under Review') &&
                           'Your application is under formal committee review. Sponsoring pastor references are being verified.'}
-                        {trackedApp.status === 'rejected' &&
+                        {(trackedApp.status?.toLowerCase() === 'rejected' || trackedApp.status === 'Rejected') &&
                           'Thank you for your interest. Unfortunately, admission cannot be granted for this semester.'}
+                        {trackedApp.adminNotes && (
+                          <span className="block mt-2 font-mono text-[11px] bg-slate-50 p-2 rounded border border-slate-200 whitespace-pre-line text-slate-700">
+                            {trackedApp.adminNotes}
+                          </span>
+                        )}
                       </p>
+                    </div>
+
+                    {/* Integrated Connection to Online Student Registration & Enrollment */}
+                    <div className="p-4 rounded-xl border border-[#588B76]/30 bg-gradient-to-r from-emerald-50/90 via-slate-50 to-amber-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-mono font-bold uppercase bg-[#18392B] text-white px-2 py-0.5 rounded">
+                            Connected Portal Bridge
+                          </span>
+                          <span className="text-xs font-serif font-bold text-[#18392B]">
+                            Online Student Registration & Enrollment
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-600">
+                          {trackedApp.status?.toLowerCase() === 'enrolled'
+                            ? 'Your student profile is already registered. You can directly log in to the Student Portal Hub.'
+                            : 'Transfer your admissions data into the 9-Step Online Student Registration Wizard to complete your profile, subject enlistment, and student ID generation.'}
+                        </p>
+                      </div>
+
+                      <div className="shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end">
+                        {trackedApp.status?.toLowerCase() === 'enrolled' ? (
+                          <button
+                            type="button"
+                            onClick={() => navigateTo('portal')}
+                            className="bg-[#18392B] hover:bg-[#588B76] text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>Access Student Portal</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setWizardInitialRef(trackedApp.referenceNumber);
+                              setWizardInitialData(trackedApp);
+                              setMode('wizard');
+                            }}
+                            className="bg-[#18392B] hover:bg-[#255843] text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                            <span>Enroll With This Record</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ) : (
@@ -281,7 +355,21 @@ export const ApplicationView: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="pt-4 flex flex-wrap items-center justify-center gap-4">
+                <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    onClick={() => {
+                      setWizardInitialRef(submittedRef);
+                      setWizardInitialData({
+                        ...formData,
+                        referenceNumber: submittedRef,
+                      });
+                      setMode('wizard');
+                    }}
+                    className="bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold px-6 py-3 rounded-lg uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 shadow-md"
+                  >
+                    <Sparkles className="w-4 h-4 text-slate-900" />
+                    <span>Proceed to Online Enrollment (Pre-Filled)</span>
+                  </button>
                   <button
                     onClick={() => {
                       setMode('track');
@@ -290,7 +378,7 @@ export const ApplicationView: React.FC = () => {
                       setTrackedApp(app);
                       setSearched(true);
                     }}
-                    className="bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] text-xs font-bold px-6 py-3 rounded uppercase tracking-wider transition cursor-pointer"
+                    className="bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] text-xs font-bold px-6 py-3 rounded-lg uppercase tracking-wider transition cursor-pointer"
                   >
                     Track Status Now
                   </button>
@@ -319,7 +407,7 @@ export const ApplicationView: React.FC = () => {
                         yearGraduated: '2024',
                       });
                     }}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-6 py-3 rounded transition cursor-pointer"
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-6 py-3 rounded-lg transition cursor-pointer"
                   >
                     Submit Another Application
                   </button>
@@ -664,6 +752,48 @@ export const ApplicationView: React.FC = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* MODE 3: ONLINE STUDENT REGISTRATION & ENROLLMENT WIZARD */}
+        {mode === 'wizard' && (
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-emerald-50/90 p-4 rounded-2xl border border-emerald-200 text-emerald-950 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-[#18392B] text-white flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-sm text-[#18392B]">
+                    Online Student Registration & Enrollment Module
+                  </h3>
+                  <p className="text-[11px] text-slate-600">
+                    Unified 9-step registration seamlessly synchronized with the PCM Admissions Database.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMode('apply')}
+                className="text-xs font-bold text-[#18392B] hover:text-[#588B76] underline flex items-center gap-1 cursor-pointer self-end sm:self-auto"
+              >
+                <span>Back to Admissions Form</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <StudentRegistrationWizard
+              initialAppRef={wizardInitialRef}
+              initialAppData={wizardInitialData}
+              onCancel={() => setMode('apply')}
+              onCompleted={(student) => {
+                setTrackRef(student.applicationNumber || '');
+                const found = getApplicationByRef(student.applicationNumber || '');
+                setTrackedApp(found || null);
+                setSearched(true);
+                setMode('track');
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

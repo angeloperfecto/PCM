@@ -51,6 +51,7 @@ import {
   Sparkles,
   Info,
   Menu,
+  ExternalLink,
 } from 'lucide-react';
 
 export const PortalView: React.FC = () => {
@@ -72,6 +73,7 @@ export const PortalView: React.FC = () => {
     markAllNotificationsRead,
     addToast,
     programs,
+    navigateTo,
     enrollmentActiveSubTab,
     setEnrollmentActiveSubTab,
   } = usePCM();
@@ -361,6 +363,14 @@ export const PortalView: React.FC = () => {
             >
               <Sparkles className="w-4 h-4 text-amber-300" />
               <span>Online Registration & Enrollment Wizard</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigateTo('apply')}
+              className="w-full bg-[#18392B] hover:bg-[#23533e] text-slate-200 border border-slate-700 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+            >
+              <ExternalLink className="w-3.5 h-3.5 text-amber-300" />
+              <span>PCM Admissions & Application Portal</span>
             </button>
           </div>
         </div>

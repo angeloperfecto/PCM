@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState, useId } from 'react';
+import React, { useState, useId, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import {
   StudentProfile,
   StudentRequirementItem,
   EnrollmentStatus,
+  AdmissionApplication,
 } from '@/lib/types';
 import {
   calculateStudentAge,
@@ -42,14 +43,20 @@ import {
   Layers,
   Search,
   ExternalLink,
+  RefreshCw,
+  Link as LinkIcon,
 } from 'lucide-react';
 
 interface StudentRegistrationWizardProps {
+  initialAppRef?: string;
+  initialAppData?: Partial<any>;
   onCompleted?: (student: StudentProfile) => void;
   onCancel?: () => void;
 }
 
 export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps> = ({
+  initialAppRef,
+  initialAppData,
   onCompleted,
   onCancel,
 }) => {
@@ -59,6 +66,9 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     applications,
     createStudentProfile,
     submitApplication,
+    updateApplicationStatus,
+    getApplicationByRef,
+    navigateTo,
     addToast,
     logActivity,
   } = usePCM();
@@ -71,33 +81,120 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   const [copiedAppNo, setCopiedAppNo] = useState<boolean>(false);
   const [submittedProfile, setSubmittedProfile] = useState<StudentProfile | null>(null);
 
+  // Resolve initial target application from props
+  const getInitialTargetApp = (): AdmissionApplication | null => {
+    if (initialAppRef) {
+      const found = applications.find(
+        (a) => a.referenceNumber?.trim().toLowerCase() === initialAppRef.trim().toLowerCase()
+      );
+      if (found) return found;
+    }
+    if (initialAppData && Object.keys(initialAppData).length > 0) {
+      return initialAppData as AdmissionApplication;
+    }
+    return null;
+  };
+
+  const initialApp = getInitialTargetApp();
+
+  // Connected Admissions Application State
+  const [linkedApp, setLinkedApp] = useState<AdmissionApplication | null>(initialApp);
+  const [syncQuery, setSyncQuery] = useState<string>('');
+  const [isSyncing, setIsSyncing] = useState<boolean>(false);
+
+  // Helper to extract parsed names & age from an application
+  const extractAppFields = (app: AdmissionApplication) => {
+    let fName = '';
+    let mName = '';
+    let lName = '';
+    let sfx = '';
+
+    if (app.fullName) {
+      const parts = app.fullName.trim().split(/\s+/);
+      if (parts.length === 1) {
+        fName = parts[0];
+      } else if (parts.length === 2) {
+        fName = parts[0];
+        lName = parts[1];
+      } else if (parts.length >= 3) {
+        fName = parts[0];
+        mName = parts.slice(1, -1).join(' ');
+        lName = parts[parts.length - 1];
+      }
+    }
+
+    const matchedProgram = programs.find(
+      (p) =>
+        p.id === app.programId ||
+        p.name?.toLowerCase() === app.programName?.toLowerCase() ||
+        p.name?.toLowerCase() === app.program?.toLowerCase() ||
+        p.title?.toLowerCase() === app.program?.toLowerCase()
+    );
+
+    const dob = app.dateOfBirth || app.birthDate;
+    const calculatedAge = dob ? calculateStudentAge(dob) : undefined;
+
+    return {
+      applicationNumber: app.referenceNumber || '',
+      firstName: fName,
+      middleName: mName,
+      lastName: lName,
+      suffix: sfx,
+      preferredName: fName,
+      email: app.email || '',
+      mobileNumber: app.phone || '',
+      dateOfBirth: app.dateOfBirth || app.birthDate || '',
+      age: calculatedAge !== undefined ? String(calculatedAge) : '',
+      sex: (app.gender === 'Female' ? 'Female' : 'Male') as string,
+      civilStatus: (app.civilStatus || 'Single') as string,
+      currentAddress: app.address || '',
+      permanentAddress: app.address || '',
+      churchName: app.churchAffiliation || app.churchName || app.church || app.homeChurch || '',
+      pastorName: app.pastorName || '',
+      pastorContactNumber: app.pastorContact || '',
+      callingTestimony:
+        app.christianTestimony ||
+        app.personalTestimony ||
+        app.salvationTestimony ||
+        app.callingStatement ||
+        '',
+      lastSchoolAttended:
+        app.highSchool || app.previousCollege || app.previousSchool || '',
+      highestEducationalAttainment: app.highestEducation || 'Senior High School Graduate',
+      programId: matchedProgram?.id || programs[0]?.id || 'prog-bth',
+      programTitle: matchedProgram?.name || app.program || programs[0]?.name || 'Bachelor of Arts in Theology',
+    };
+  };
+
+  const initialFields = initialApp ? extractAppFields(initialApp) : null;
+
   // Form State
   const [formData, setFormData] = useState({
     // Step 1: Personal Information
     applicantType: 'New Student' as 'New Student' | 'Returning Student' | 'Transfer Student',
     studentIdNumber: generateStudentId('2026-2027'),
     existingStudentId: '',
-    applicationNumber: generateApplicationNumber('2026-2027'),
-    firstName: '',
-    middleName: '',
-    lastName: '',
-    suffix: '',
-    preferredName: '',
+    applicationNumber: initialFields?.applicationNumber || generateApplicationNumber('2026-2027'),
+    firstName: initialFields?.firstName || '',
+    middleName: initialFields?.middleName || '',
+    lastName: initialFields?.lastName || '',
+    suffix: initialFields?.suffix || '',
+    preferredName: initialFields?.preferredName || '',
     profilePhoto: '',
-    dateOfBirth: '',
+    dateOfBirth: initialFields?.dateOfBirth || '',
     placeOfBirth: '',
-    age: '',
-    sex: 'Male',
-    civilStatus: 'Single',
+    age: initialFields?.age || '',
+    sex: (initialFields?.sex || 'Male') as string,
+    civilStatus: (initialFields?.civilStatus || 'Single') as string,
     nationality: 'Filipino',
     religion: 'Christian (Evangelical / Church of Christ)',
 
     // Step 2: Contact Information
-    mobileNumber: '',
-    email: '',
+    mobileNumber: initialFields?.mobileNumber || '',
+    email: initialFields?.email || '',
     facebookAccount: '',
-    currentAddress: '',
-    permanentAddress: '',
+    currentAddress: initialFields?.currentAddress || '',
+    permanentAddress: initialFields?.permanentAddress || '',
     sameAsCurrentAddress: true,
     city: 'Baguio City',
     province: 'Benguet',
@@ -116,9 +213,9 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     emergencyContactRelationship: 'Parent',
 
     // Step 4: Educational Background
-    lastSchoolAttended: '',
+    lastSchoolAttended: initialFields?.lastSchoolAttended || '',
     schoolAddress: '',
-    highestEducationalAttainment: 'Senior High School Graduate',
+    highestEducationalAttainment: initialFields?.highestEducationalAttainment || 'Senior High School Graduate',
     previousCourse: 'GAS (General Academic Strand)',
     yearGraduated: '2025',
     graduationDate: '',
@@ -126,23 +223,23 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     honorsAwards: '',
 
     // Step 5: Church & Ministry Information
-    churchName: '',
+    churchName: initialFields?.churchName || '',
     churchAddress: '',
     churchContactNumber: '',
-    pastorName: '',
-    pastorContactNumber: '',
+    pastorName: initialFields?.pastorName || '',
+    pastorContactNumber: initialFields?.pastorContactNumber || '',
     ministryDepartment: 'Youth Ministry',
     ministryRole: 'Youth Leader / Musician',
     yearsInMinistry: '2',
     dateStartedInMinistry: '',
     ministryExperience: '',
-    callingTestimony: '',
+    callingTestimony: initialFields?.callingTestimony || '',
 
     // Step 6: PCM Program & Enrollment
     academicYear: '2026–2027',
     semester: '1st Semester',
-    programId: programs[0]?.id || 'prog-bth',
-    programTitle: programs[0]?.name || 'Bachelor of Arts in Theology',
+    programId: initialFields?.programId || programs[0]?.id || 'prog-bth',
+    programTitle: initialFields?.programTitle || programs[0]?.name || 'Bachelor of Arts in Theology',
     major: 'General Pastoral Studies',
     yearLevel: '1st Year',
     section: 'Section A',
@@ -171,6 +268,76 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     }));
   };
 
+  // Synchronize wizard fields from an Admissions Application record upon user request
+  const autoSyncFromApplication = useCallback(
+    (app: AdmissionApplication) => {
+      const fields = extractAppFields(app);
+
+      setFormData((prev) => ({
+        ...prev,
+        applicationNumber: fields.applicationNumber || prev.applicationNumber,
+        firstName: fields.firstName || prev.firstName,
+        middleName: fields.middleName || prev.middleName,
+        lastName: fields.lastName || prev.lastName,
+        suffix: fields.suffix || prev.suffix,
+        preferredName: fields.preferredName || prev.preferredName,
+        email: fields.email || prev.email,
+        mobileNumber: fields.mobileNumber || prev.mobileNumber,
+        dateOfBirth: fields.dateOfBirth || prev.dateOfBirth,
+        age: fields.age || prev.age,
+        sex: fields.sex || prev.sex,
+        civilStatus: fields.civilStatus || prev.civilStatus,
+        currentAddress: fields.currentAddress || prev.currentAddress,
+        permanentAddress: fields.permanentAddress || prev.permanentAddress,
+        churchName: fields.churchName || prev.churchName,
+        pastorName: fields.pastorName || prev.pastorName,
+        pastorContactNumber: fields.pastorContactNumber || prev.pastorContactNumber,
+        callingTestimony: fields.callingTestimony || prev.callingTestimony,
+        lastSchoolAttended: fields.lastSchoolAttended || prev.lastSchoolAttended,
+        highestEducationalAttainment: fields.highestEducationalAttainment || prev.highestEducationalAttainment,
+        programId: fields.programId || prev.programId,
+        programTitle: fields.programTitle || prev.programTitle,
+      }));
+
+      setLinkedApp(app);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [programs]
+  );
+
+  // Manually link & pre-fill by reference code or email
+  const handleSyncApplication = () => {
+    const q = syncQuery.trim().toLowerCase();
+    if (!q) {
+      addToast('info', 'Input Required', 'Please enter your Application Reference Number or email.');
+      return;
+    }
+
+    setIsSyncing(true);
+    const found = applications.find(
+      (a) =>
+        a.referenceNumber?.trim().toLowerCase() === q ||
+        a.email?.trim().toLowerCase() === q
+    );
+
+    if (found) {
+      autoSyncFromApplication(found);
+      addToast(
+        'success',
+        'Connected to Admissions Application',
+        `Synchronized data for ${found.fullName} (${found.referenceNumber}).`
+      );
+      setSyncQuery('');
+    } else {
+      addToast(
+        'warning',
+        'Application Not Found',
+        `No application found matching "${syncQuery}". You may also continue your registration as a new applicant directly.`
+      );
+    }
+    setIsSyncing(false);
+  };
+
   // Duplicate Check
   const checkDuplicate = (): string | null => {
     const cleanEmail = formData.email.trim().toLowerCase();
@@ -183,11 +350,15 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
       return `A student profile with email "${cleanEmail}" already exists with Student ID: ${existingStudent.studentId}. Please login to your existing account or contact the Registrar.`;
     }
 
+    // Auto-link to existing application without throwing an error
     const existingApp = applications.find(
-      (a) => a.email?.trim().toLowerCase() === cleanEmail && a.status !== 'Rejected'
+      (a) =>
+        (a.email?.trim().toLowerCase() === cleanEmail ||
+          a.referenceNumber?.trim().toLowerCase() === formData.applicationNumber.trim().toLowerCase()) &&
+        a.status !== 'Rejected'
     );
-    if (existingApp) {
-      return `An admission application for "${cleanEmail}" has already been submitted (Ref: ${existingApp.referenceNumber}).`;
+    if (existingApp && !linkedApp) {
+      setLinkedApp(existingApp);
     }
 
     return null;
@@ -512,26 +683,53 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
       // 1. Create persistent student profile in Firestore
       const createdStudent = await createStudentProfile(newStudentPayload);
 
-      // 2. Also record in applications collection for Admissions review
-      await submitApplication({
-        fullName,
-        email: formData.email.trim(),
-        phone: formData.mobileNumber,
-        dob: formData.dateOfBirth,
-        gender: formData.sex,
-        address: formData.currentAddress,
-        program: formData.programTitle,
-        church: formData.churchName,
-        pastorName: formData.pastorName,
-        pastorContact: formData.pastorContactNumber,
-        testimony: formData.callingTestimony,
-        highSchool: formData.lastSchoolAttended,
-        previousCollege: formData.lastSchoolAttended,
-      });
+      // 2. Synchronize with Admissions Application
+      const matchedApp =
+        linkedApp ||
+        applications.find(
+          (a) =>
+            a.referenceNumber?.trim().toLowerCase() === formData.applicationNumber.trim().toLowerCase() ||
+            a.email?.trim().toLowerCase() === formData.email.trim().toLowerCase()
+        );
+
+      if (matchedApp) {
+        // Update existing application record so it marks applicant as Enrolled
+        await updateApplicationStatus(
+          matchedApp.id,
+          'Enrolled',
+          `Officially completed Online Student Registration & Enrollment. Assigned Student ID: ${permanentStudentId}`
+        );
+        setLinkedApp({
+          ...matchedApp,
+          status: 'Enrolled',
+          studentId: permanentStudentId,
+        });
+      } else {
+        // Record in applications collection for Admissions Committee review & tracking
+        await submitApplication({
+          fullName,
+          email: formData.email.trim(),
+          phone: formData.mobileNumber,
+          dob: formData.dateOfBirth,
+          gender: formData.sex,
+          address: formData.currentAddress,
+          program: formData.programTitle,
+          church: formData.churchName,
+          pastorName: formData.pastorName,
+          pastorContact: formData.pastorContactNumber,
+          testimony: formData.callingTestimony,
+          highSchool: formData.lastSchoolAttended,
+          previousCollege: formData.lastSchoolAttended,
+        });
+      }
 
       setSubmittedProfile(createdStudent);
       setCurrentStep(9);
-      addToast('success', 'Application Filed Successfully', `Application ${permanentAppName} registered in PCM Firestore.`);
+      addToast(
+        'success',
+        'Enrollment & Profile Registered',
+        `Student ID ${permanentStudentId} created and connected to Admissions Record.`
+      );
 
       if (onCompleted) {
         onCompleted(createdStudent);
@@ -637,6 +835,112 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
 
       {/* Main Form Body */}
       <div className="p-6 sm:p-8 lg:p-10">
+        {/* Connected Admissions Banner (Steps 1 to 8) */}
+        {currentStep <= 8 && (
+          <>
+            {linkedApp ? (
+              <div className="mb-6 p-4 rounded-xl border border-emerald-300 bg-emerald-50/90 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-start sm:items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-emerald-700 text-white flex items-center justify-center shrink-0 shadow-xs">
+                    <CheckCircle2 className="w-6 h-6 text-emerald-100" />
+                  </div>
+                  <div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-mono font-bold uppercase bg-emerald-200/90 text-emerald-900 px-2 py-0.5 rounded">
+                        Connected to Admissions
+                      </span>
+                      <span className="font-mono text-xs font-bold text-emerald-900">
+                        Ref: {linkedApp.referenceNumber}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold uppercase">
+                        Status: {linkedApp.status}
+                      </span>
+                    </div>
+                    <p className="text-xs text-emerald-900 mt-1 leading-snug">
+                      Form synchronized with <strong>PCM ADMISSIONS & APPLICATION PORTAL</strong> for{' '}
+                      <strong>{linkedApp.fullName}</strong>.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0 w-full sm:w-auto justify-end">
+                  <button
+                    type="button"
+                    onClick={() => navigateTo('apply')}
+                    className="text-xs font-bold text-[#18392B] hover:text-[#588B76] underline flex items-center gap-1 cursor-pointer"
+                  >
+                    <span>Admissions Portal</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLinkedApp(null)}
+                    className="text-[11px] text-slate-600 hover:text-slate-900 px-2.5 py-1 bg-white hover:bg-slate-50 rounded-lg border border-slate-300 font-medium cursor-pointer transition shadow-2xs"
+                  >
+                    Unlink
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="mb-6 p-4 rounded-xl border border-amber-300/80 bg-gradient-to-r from-amber-50/90 via-emerald-50/40 to-slate-50 text-slate-800 shadow-xs">
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1 bg-[#18392B] text-white text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-full">
+                        <Sparkles className="w-3 h-3 text-amber-300" />
+                        Admissions Bridge
+                      </span>
+                      <h4 className="font-serif text-xs sm:text-sm font-bold text-[#18392B]">
+                        Already applied through the PCM Admissions Portal?
+                      </h4>
+                    </div>
+                    <p className="text-[11px] text-slate-600 max-w-xl">
+                      Enter your Admissions Reference (e.g. <strong>PCM-2026-XXXX</strong>) or email to automatically connect and auto-fill your personal, academic, and church data across all 9 enrollment steps.
+                    </p>
+                  </div>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
+                    <div className="relative flex-1 sm:w-60">
+                      <input
+                        type="text"
+                        value={syncQuery}
+                        onChange={(e) => setSyncQuery(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleSyncApplication();
+                          }
+                        }}
+                        placeholder="PCM-2026-XXXX or email"
+                        className="w-full text-xs py-2 pl-3 pr-8 rounded-lg border border-slate-300 bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:border-[#588B76] focus:ring-1 focus:ring-[#588B76] font-mono"
+                      />
+                      {syncQuery && (
+                        <button
+                          type="button"
+                          onClick={() => setSyncQuery('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs"
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      disabled={isSyncing}
+                      onClick={handleSyncApplication}
+                      className="bg-[#18392B] hover:bg-[#255843] text-white text-xs font-bold px-3.5 py-2 rounded-lg transition whitespace-nowrap cursor-pointer shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      {isSyncing ? (
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                        <Search className="w-3.5 h-3.5 text-amber-300" />
+                      )}
+                      <span>Link & Auto-Fill</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </>
+        )}
         {/* ========================================================================= */}
         {/* STEP 1: PERSONAL INFORMATION */}
         {/* ========================================================================= */}
@@ -1986,6 +2290,17 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                     Under Review / For Verification
                   </span>
                 </div>
+                {linkedApp && (
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-200">
+                    <span className="text-slate-500 flex items-center gap-1">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                      Admissions Ref:
+                    </span>
+                    <span className="font-mono text-xs font-bold text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded">
+                      {linkedApp.referenceNumber}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -2000,13 +2315,31 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                 <span>Print Application Voucher</span>
               </button>
 
+              <button
+                type="button"
+                onClick={() => navigateTo('apply')}
+                className="bg-[#588B76] hover:bg-[#436e5d] text-white text-xs font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-md"
+              >
+                <ExternalLink className="w-4 h-4" />
+                <span>Track in Admissions Portal</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigateTo('portal')}
+                className="bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold px-5 py-2.5 rounded-xl transition flex items-center gap-2 cursor-pointer shadow-md"
+              >
+                <BookOpen className="w-4 h-4" />
+                <span>Student Portal Hub</span>
+              </button>
+
               {onCancel && (
                 <button
                   type="button"
                   onClick={onCancel}
                   className="bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs font-bold px-5 py-2.5 rounded-xl transition cursor-pointer"
                 >
-                  Close & Return
+                  Close
                 </button>
               )}
             </div>

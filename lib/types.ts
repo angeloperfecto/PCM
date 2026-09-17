@@ -233,6 +233,8 @@ export interface AdmissionApplication {
   internalNotes?: string[];
   notes?: string[];
   interviewerRemarks?: string;
+  studentId?: string;
+  enrolledAt?: string;
 }
 
 export type Application = AdmissionApplication;
@@ -326,6 +328,7 @@ export interface StudentPaymentRecord {
   referenceNo?: string;
   referenceNumber?: string;
   receiptNo?: string;
+  officialReceiptNumber?: string;
   amount: number;
   paymentDate?: string;
   date?: string;
@@ -352,6 +355,9 @@ export interface StudentSubjectHistory {
   semester: string;
   academicYear: string;
   status: 'Passed' | 'In Progress' | 'Incomplete' | 'Credited' | 'Failed';
+  midtermGrade?: number | string;
+  finalGrade?: number | string;
+  instructor?: string;
 }
 
 export interface StudentRequirementItem {
@@ -443,6 +449,7 @@ export interface StudentProfile {
   graduationDate?: string;
   previousSchoolId?: string;
   honorsAwards?: string;
+  generalAverage?: string | number;
 
   // Church & Ministry Information
   homeChurch: string;
@@ -462,6 +469,9 @@ export interface StudentProfile {
   presbytery?: string;
   mentorName: string;
   spiritualMentor?: string;
+  isBaptized?: boolean;
+  waterBaptized?: boolean;
+  baptismDate?: string;
 
   // PCM Enrollment Information
   applicantType?: 'New Student' | 'Returning Student' | 'Transfer Student';

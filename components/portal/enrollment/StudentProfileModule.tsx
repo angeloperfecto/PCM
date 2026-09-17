@@ -103,13 +103,21 @@ export const StudentProfileModule: React.FC = () => {
   const handleFileUpload = async (reqId: string, file: File) => {
     setUploadingReqId(reqId);
     try {
-      const fileData = await uploadStudentFile(studentProfile.studentId, reqId, file);
+      const uploadRes = await uploadStudentFile(file, studentProfile.studentId, 'requirements', reqId);
+      if (!uploadRes.success) {
+        throw new Error(uploadRes.error || 'Failed to upload document.');
+      }
       // Update requirement in store
       const updatedReqs = requirementsList.map((r) =>
         r.id === reqId
           ? {
               ...r,
-              file: fileData,
+              file: {
+                name: uploadRes.fileName,
+                url: uploadRes.url,
+                size: uploadRes.fileSize,
+                type: uploadRes.fileType,
+              },
               status: 'Submitted' as const,
               uploadedAt: new Date().toISOString(),
             }
@@ -1122,8 +1130,10 @@ export const StudentProfileModule: React.FC = () => {
       {/* Change Avatar Modal */}
       {isAvatarModalOpen && (
         <ChangeAvatarModal
-          currentAvatar={studentProfile.avatarUrl}
           isOpen={isAvatarModalOpen}
+          currentAvatarUrl={studentProfile.avatarUrl}
+          userName={studentProfile.fullName || 'Student'}
+          userRole="Student"
           onClose={() => setIsAvatarModalOpen(false)}
           onSave={async (url) => {
             await updateStudentProfile(studentProfile.id, { avatarUrl: url, profilePhoto: url });

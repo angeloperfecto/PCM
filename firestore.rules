@@ -192,9 +192,10 @@ service cloud.firestore {
     }
 
     match /applications/{applicationId} {
-      allow read: if isAdmin();
+      allow read: if true;
       allow create: if true;
-      allow update, delete: if isAdmin();
+      allow update: if true;
+      allow delete: if isAdmin();
     }
 
     // Donation Management
