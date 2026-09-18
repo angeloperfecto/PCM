@@ -209,9 +209,57 @@
         "tags": { "type": "array" }
       },
       "required": ["id", "title", "url"]
+    },
+    "StudentLifePhotoItem": {
+      "title": "Student Life Photo Item",
+      "description": "Individual photo within a Student Life album with metadata and storage URL.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "albumId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "caption": { "type": "string" },
+        "sortOrder": { "type": "number" },
+        "uploadedAt": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "fileSize": { "type": "number" }
+      },
+      "required": ["id", "albumId", "imageUrl", "fileName"]
+    },
+    "StudentLifeAlbum": {
+      "title": "Student Life Album",
+      "description": "Multi-image album for Student Life in Pictures with event details and photos.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string" },
+        "eventName": { "type": "string" },
+        "eventDate": { "type": "string" },
+        "location": { "type": "string" },
+        "coverPhotoUrl": { "type": "string" },
+        "photoCount": { "type": "number" },
+        "status": { "type": "string", "enum": ["published", "unpublished"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "sortOrder": { "type": "number" },
+        "photos": { "type": "array" }
+      },
+      "required": ["id", "title", "coverPhotoUrl", "status"]
     }
   },
   "firestore": {
+    "/studentLifeAlbums/{albumId}": {
+      "schema": { "$ref": "#/entities/StudentLifeAlbum" },
+      "description": "Multi-image Facebook-style photo albums for the Student Life in Pictures public section."
+    },
+    "/studentLifePhotos/{photoId}": {
+      "schema": { "$ref": "#/entities/StudentLifePhotoItem" },
+      "description": "Metadata for individual photos within Student Life albums."
+    },
     "/mediaLibrary/{mediaId}": {
       "schema": { "$ref": "#/entities/MediaItem" },
       "description": "Permanent database-backed Media Library assets with Firebase Storage references."

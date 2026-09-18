@@ -58,6 +58,8 @@ import {
   YouTubeVideo,
   HomepageVideoConfig,
   StudentLifeConfig,
+  StudentLifeAlbum,
+  StudentLifePhotoItem,
   ContactInquiry,
 } from './types';
 import {
@@ -83,6 +85,7 @@ import {
   INITIAL_SITE_CONFIG,
   INITIAL_MEDIA_ITEMS,
   INITIAL_GALLERY_ALBUMS,
+  INITIAL_STUDENT_LIFE_ALBUMS,
   INITIAL_ACTIVITY_LOGS,
   INITIAL_DONATION_METHODS,
   INITIAL_DONATIONS,
@@ -244,6 +247,23 @@ interface PCMContextType {
   addGalleryAlbum: (album: Omit<GalleryAlbum, 'id'>) => GalleryAlbum;
   updateGalleryAlbum: (id: string, updates: Partial<GalleryAlbum>) => void;
   deleteGalleryAlbum: (id: string) => void;
+
+  // Student Life Albums (Facebook-inspired Multi-Image Gallery)
+  studentLifeAlbums: StudentLifeAlbum[];
+  setStudentLifeAlbums: React.Dispatch<React.SetStateAction<StudentLifeAlbum[]>>;
+  createStudentLifeAlbum: (
+    album: Omit<StudentLifeAlbum, 'id' | 'createdAt' | 'updatedAt' | 'photoCount'>,
+    initialPhotos?: StudentLifePhotoItem[]
+  ) => Promise<StudentLifeAlbum>;
+  updateStudentLifeAlbum: (id: string, updates: Partial<StudentLifeAlbum>) => Promise<void>;
+  deleteStudentLifeAlbum: (id: string) => Promise<void>;
+  addPhotosToStudentLifeAlbum: (albumId: string, photos: StudentLifePhotoItem[]) => Promise<void>;
+  updateStudentLifePhoto: (albumId: string, photoId: string, updates: Partial<StudentLifePhotoItem>) => Promise<void>;
+  deleteStudentLifePhoto: (albumId: string, photoId: string) => Promise<void>;
+  reorderStudentLifePhotos: (albumId: string, reorderedPhotos: StudentLifePhotoItem[]) => Promise<void>;
+  setStudentLifeAlbumCover: (albumId: string, coverPhotoUrl: string) => Promise<void>;
+  toggleStudentLifeAlbumPublish: (albumId: string) => Promise<void>;
+  moveStudentLifePhoto: (sourceAlbumId: string, targetAlbumId: string, photoId: string) => Promise<void>;
 
   // Activity Audit Log
   activityLogs: ActivityLogItem[];
@@ -768,6 +788,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(INITIAL_SITE_CONFIG);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>(INITIAL_MEDIA_ITEMS);
   const [galleryAlbums, setGalleryAlbums] = useState<GalleryAlbum[]>(INITIAL_GALLERY_ALBUMS);
+  const [studentLifeAlbums, setStudentLifeAlbums] = useState<StudentLifeAlbum[]>(INITIAL_STUDENT_LIFE_ALBUMS);
   const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>(INITIAL_ACTIVITY_LOGS);
 
   const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(INITIAL_ANNOUNCEMENTS);
@@ -1000,6 +1021,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     scrapbook,
     mediaItems,
     galleryAlbums,
+    studentLifeAlbums,
     adminUsers,
     userAccounts,
     studentProfile,
@@ -1027,6 +1049,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       scrapbook,
       mediaItems,
       galleryAlbums,
+      studentLifeAlbums,
       adminUsers,
       userAccounts,
       studentProfile,
@@ -1052,6 +1075,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     scrapbook,
     mediaItems,
     galleryAlbums,
+    studentLifeAlbums,
     adminUsers,
     userAccounts,
     studentProfile,
@@ -1251,6 +1275,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             await galBatch.commit();
           } catch (e) {
             console.warn('Gallery albums batch sync notice:', e);
+          }
+        }
+
+        // 14b. Student Life albums batch
+        const albumsToSync = st.studentLifeAlbums && st.studentLifeAlbums.length > 0 ? st.studentLifeAlbums : INITIAL_STUDENT_LIFE_ALBUMS;
+        if (albumsToSync && albumsToSync.length > 0) {
+          try {
+            const slBatch = writeBatch(db);
+            albumsToSync.forEach((alb: any) => slBatch.set(doc(db, 'studentLifeAlbums', alb.id), cleanFirestoreData(alb), { merge: true }));
+            await slBatch.commit();
+          } catch (e) {
+            console.warn('Student life albums batch sync notice:', e);
           }
         }
 
@@ -1873,6 +1909,37 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         );
         unsubs.push(uGallery);
+
+        // 18b. Student Life Multi-Image Albums Real-Time Sync
+        logFirestoreOp('listen', 'studentLifeAlbums', 'Student Life Albums Real-Time Sync');
+        const uStudentLifeAlbums = onSnapshot(
+          collection(db, 'studentLifeAlbums'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => {
+                const data = d.data();
+                const photos = Array.isArray(data.photos) ? data.photos : [];
+                return {
+                  id: d.id,
+                  ...data,
+                  photos,
+                  photoCount: photos.length,
+                } as StudentLifeAlbum;
+              });
+              list.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+              setStudentLifeAlbums(list);
+            } else {
+              setStudentLifeAlbums(INITIAL_STUDENT_LIFE_ALBUMS);
+            }
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.LIST, 'studentLifeAlbums');
+          }
+        );
+        unsubs.push(uStudentLifeAlbums);
 
         // 19. Dedicated Student Life Real-Time Sync
         logFirestoreOp('listen', 'siteContent/studentLife', 'Student Life Section Real-Time Sync');
@@ -2844,6 +2911,202 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     deleteDoc(doc(db, 'galleryAlbums', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Gallery Album', id, alb?.title || 'Album', 'Deleted photo album.');
     addToast('info', 'Album Deleted', 'Gallery album deleted.');
+  };
+
+  // Student Life in Pictures Albums CRUD (Multi-Image Facebook-inspired Gallery)
+  const createStudentLifeAlbum = async (
+    albumData: Omit<StudentLifeAlbum, 'id' | 'createdAt' | 'updatedAt' | 'photoCount'>,
+    initialPhotos: StudentLifePhotoItem[] = []
+  ): Promise<StudentLifeAlbum> => {
+    const id = `sl-alb-${Date.now()}`;
+    const now = new Date().toISOString();
+    const photos = (initialPhotos || []).map((p, idx) => ({
+      ...p,
+      albumId: id,
+      sortOrder: p.sortOrder ?? (idx + 1),
+    }));
+
+    const newAlbum: StudentLifeAlbum = cleanFirestoreData({
+      ...albumData,
+      id,
+      photos,
+      photoCount: photos.length,
+      coverPhotoUrl: albumData.coverPhotoUrl || (photos[0]?.imageUrl || ''),
+      status: albumData.status || 'published',
+      sortOrder: albumData.sortOrder ?? (studentLifeAlbums.length + 1),
+      createdAt: now,
+      updatedAt: now,
+      createdBy: currentAdminUser?.name || currentUserAccount?.email || 'PCM Administration',
+    });
+
+    setStudentLifeAlbums((prev) => [newAlbum, ...prev]);
+
+    try {
+      await safeSetDoc(doc(db, 'studentLifeAlbums', id), newAlbum, { merge: true });
+    } catch (e) {
+      console.warn('Student life album write warning:', e);
+    }
+
+    logActivity(
+      'CREATE',
+      'Student Life Album',
+      newAlbum.id,
+      newAlbum.title,
+      `Created Student Life photo album "${newAlbum.title}" with ${photos.length} photos.`
+    );
+    addToast('success', 'Album Created', `Album "${newAlbum.title}" created successfully.`);
+    return newAlbum;
+  };
+
+  const updateStudentLifeAlbum = async (id: string, updates: Partial<StudentLifeAlbum>): Promise<void> => {
+    const now = new Date().toISOString();
+    const sanitized = cleanFirestoreData({
+      ...updates,
+      updatedAt: now,
+    });
+
+    setStudentLifeAlbums((prev) =>
+      prev.map((alb) => {
+        if (alb.id !== id) return alb;
+        const updated = { ...alb, ...updates, updatedAt: now };
+        if (Array.isArray(updated.photos)) {
+          updated.photoCount = updated.photos.length;
+        }
+        return updated;
+      })
+    );
+
+    try {
+      await safeSetDoc(doc(db, 'studentLifeAlbums', id), sanitized, { merge: true });
+    } catch (e) {
+      console.warn('Student life album update warning:', e);
+    }
+
+    logActivity('UPDATE', 'Student Life Album', id, updates.title || 'Album', 'Updated album details.');
+    addToast('success', 'Album Updated', 'Student life album updated.');
+  };
+
+  const deleteStudentLifeAlbum = async (id: string): Promise<void> => {
+    const alb = studentLifeAlbums.find((a) => a.id === id);
+    setStudentLifeAlbums((prev) => prev.filter((a) => a.id !== id));
+
+    try {
+      await safeDeleteDoc(doc(db, 'studentLifeAlbums', id));
+    } catch (e) {
+      console.warn('Student life album delete warning:', e);
+    }
+
+    logActivity('DELETE', 'Student Life Album', id, alb?.title || 'Album', 'Deleted student life album.');
+    addToast('info', 'Album Deleted', `Album "${alb?.title || 'Album'}" has been deleted.`);
+  };
+
+  const addPhotosToStudentLifeAlbum = async (albumId: string, newPhotos: StudentLifePhotoItem[]): Promise<void> => {
+    const targetAlbum = studentLifeAlbums.find((a) => a.id === albumId);
+    if (!targetAlbum) return;
+
+    const currentPhotos = targetAlbum.photos || [];
+    const maxSort = currentPhotos.reduce((max, p) => Math.max(max, p.sortOrder || 0), 0);
+
+    const formattedPhotos: StudentLifePhotoItem[] = newPhotos.map((p, idx) => ({
+      ...p,
+      albumId,
+      sortOrder: p.sortOrder ?? (maxSort + idx + 1),
+    }));
+
+    const combinedPhotos = [...currentPhotos, ...formattedPhotos];
+    const coverPhotoUrl = targetAlbum.coverPhotoUrl || formattedPhotos[0]?.imageUrl || '';
+
+    await updateStudentLifeAlbum(albumId, {
+      photos: combinedPhotos,
+      photoCount: combinedPhotos.length,
+      coverPhotoUrl,
+    });
+
+    addToast('success', 'Photos Added', `Added ${newPhotos.length} photos to "${targetAlbum.title}".`);
+  };
+
+  const updateStudentLifePhoto = async (albumId: string, photoId: string, updates: Partial<StudentLifePhotoItem>): Promise<void> => {
+    const targetAlbum = studentLifeAlbums.find((a) => a.id === albumId);
+    if (!targetAlbum) return;
+
+    const updatedPhotos = (targetAlbum.photos || []).map((p) =>
+      p.id === photoId ? { ...p, ...updates } : p
+    );
+
+    await updateStudentLifeAlbum(albumId, {
+      photos: updatedPhotos,
+    });
+  };
+
+  const deleteStudentLifePhoto = async (albumId: string, photoId: string): Promise<void> => {
+    const targetAlbum = studentLifeAlbums.find((a) => a.id === albumId);
+    if (!targetAlbum) return;
+
+    const remainingPhotos = (targetAlbum.photos || []).filter((p) => p.id !== photoId);
+    let newCover = targetAlbum.coverPhotoUrl;
+    const deletedPhoto = targetAlbum.photos.find((p) => p.id === photoId);
+    if (deletedPhoto && deletedPhoto.imageUrl === targetAlbum.coverPhotoUrl) {
+      newCover = remainingPhotos[0]?.imageUrl || '';
+    }
+
+    await updateStudentLifeAlbum(albumId, {
+      photos: remainingPhotos,
+      photoCount: remainingPhotos.length,
+      coverPhotoUrl: newCover,
+    });
+
+    addToast('info', 'Photo Removed', 'Photo deleted from album.');
+  };
+
+  const reorderStudentLifePhotos = async (albumId: string, reorderedPhotos: StudentLifePhotoItem[]): Promise<void> => {
+    const withUpdatedOrder = reorderedPhotos.map((p, idx) => ({
+      ...p,
+      sortOrder: idx + 1,
+    }));
+
+    await updateStudentLifeAlbum(albumId, {
+      photos: withUpdatedOrder,
+    });
+  };
+
+  const setStudentLifeAlbumCover = async (albumId: string, coverPhotoUrl: string): Promise<void> => {
+    await updateStudentLifeAlbum(albumId, {
+      coverPhotoUrl,
+    });
+    addToast('success', 'Cover Updated', 'Album cover photo updated.');
+  };
+
+  const toggleStudentLifeAlbumPublish = async (albumId: string): Promise<void> => {
+    const targetAlbum = studentLifeAlbums.find((a) => a.id === albumId);
+    if (!targetAlbum) return;
+    const newStatus = targetAlbum.status === 'published' ? 'unpublished' : 'published';
+    await updateStudentLifeAlbum(albumId, {
+      status: newStatus,
+    });
+    addToast(
+      newStatus === 'published' ? 'success' : 'info',
+      newStatus === 'published' ? 'Album Published' : 'Album Unpublished',
+      `"${targetAlbum.title}" is now ${newStatus === 'published' ? 'published on the public site' : 'unpublished and hidden from public view'}.`
+    );
+  };
+
+  const moveStudentLifePhoto = async (sourceAlbumId: string, targetAlbumId: string, photoId: string): Promise<void> => {
+    const sourceAlbum = studentLifeAlbums.find((a) => a.id === sourceAlbumId);
+    const targetAlbum = studentLifeAlbums.find((a) => a.id === targetAlbumId);
+    if (!sourceAlbum || !targetAlbum) return;
+
+    const photoToMove = sourceAlbum.photos.find((p) => p.id === photoId);
+    if (!photoToMove) return;
+
+    // Remove from source
+    await deleteStudentLifePhoto(sourceAlbumId, photoId);
+    // Add to target
+    await addPhotosToStudentLifeAlbum(targetAlbumId, [{
+      ...photoToMove,
+      albumId: targetAlbumId,
+    }]);
+
+    addToast('success', 'Photo Moved', `Photo moved to "${targetAlbum.title}".`);
   };
 
   // Announcements CRUD
@@ -6647,6 +6910,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (data.scrapbook && Array.isArray(data.scrapbook)) setScrapbook(data.scrapbook);
       if (data.mediaItems && Array.isArray(data.mediaItems)) setMediaItems(data.mediaItems);
       if (data.galleryAlbums && Array.isArray(data.galleryAlbums)) setGalleryAlbums(data.galleryAlbums);
+      if (data.studentLifeAlbums && Array.isArray(data.studentLifeAlbums)) setStudentLifeAlbums(data.studentLifeAlbums);
       if (data.siteConfig) setSiteConfig(data.siteConfig);
       if (data.applications && Array.isArray(data.applications)) setApplications(data.applications);
       if (data.studentProfile) setStudentProfile(data.studentProfile);
@@ -6669,6 +6933,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         scrapbook: data.scrapbook || stateRef.current.scrapbook,
         mediaItems: data.mediaItems || stateRef.current.mediaItems,
         galleryAlbums: data.galleryAlbums || stateRef.current.galleryAlbums,
+        studentLifeAlbums: data.studentLifeAlbums || stateRef.current.studentLifeAlbums,
         adminUsers: data.adminUsers || stateRef.current.adminUsers,
         studentProfile: data.studentProfile || stateRef.current.studentProfile,
         donationMethods: data.donationMethods || stateRef.current.donationMethods,
@@ -6701,6 +6966,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setScrapbook(INITIAL_SCRAPBOOK);
     setMediaItems(INITIAL_MEDIA_ITEMS);
     setGalleryAlbums(INITIAL_GALLERY_ALBUMS);
+    setStudentLifeAlbums(INITIAL_STUDENT_LIFE_ALBUMS);
     setApplications(INITIAL_APPLICATIONS);
     setAdminUsers(INITIAL_ADMIN_USERS);
     setStudentProfile(DEMO_STUDENT_PROFILE);
@@ -6724,6 +6990,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       scrapbook: INITIAL_SCRAPBOOK,
       mediaItems: INITIAL_MEDIA_ITEMS,
       galleryAlbums: INITIAL_GALLERY_ALBUMS,
+      studentLifeAlbums: INITIAL_STUDENT_LIFE_ALBUMS,
       adminUsers: INITIAL_ADMIN_USERS,
       studentProfile: DEMO_STUDENT_PROFILE,
       donationMethods: INITIAL_DONATION_METHODS,
@@ -7196,6 +7463,20 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addGalleryAlbum,
         updateGalleryAlbum,
         deleteGalleryAlbum,
+
+        // Student Life Albums (Facebook-inspired Multi-Image Gallery)
+        studentLifeAlbums,
+        setStudentLifeAlbums,
+        createStudentLifeAlbum,
+        updateStudentLifeAlbum,
+        deleteStudentLifeAlbum,
+        addPhotosToStudentLifeAlbum,
+        updateStudentLifePhoto,
+        deleteStudentLifePhoto,
+        reorderStudentLifePhotos,
+        setStudentLifeAlbumCover,
+        toggleStudentLifeAlbumPublish,
+        moveStudentLifePhoto,
 
         // Audit Logs
         activityLogs,

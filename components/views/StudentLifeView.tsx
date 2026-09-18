@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { INITIAL_STUDENT_LIFE_CONFIG } from '@/lib/initialData';
+import { StudentLifeGalleryPublic } from './StudentLifeGalleryPublic';
 import {
   Flame,
   Users,
@@ -533,84 +534,12 @@ export const StudentLifeView: React.FC = () => {
           </section>
         )}
 
-        {/* Student Life Photo Gallery */}
-        {config.galleryPhotos && config.galleryPhotos.length > 0 && (
-          <section id="gallery" className="space-y-6 pt-8 border-t border-slate-200">
-            <div className="text-center max-w-2xl mx-auto space-y-1">
-              <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#588B76]">
-                {config.galleryBadge || 'Campus Moments'}
-              </span>
-              <h2 className="font-serif text-2xl sm:text-3xl font-extrabold text-[#18392B]">
-                {config.galleryTitle || 'STUDENT LIFE IN PICTURES'}
-              </h2>
-              <p className="text-xs text-slate-600 font-light mt-1">
-                {config.gallerySubtitle}
-              </p>
-            </div>
-
-            {/* Category Filter Pills */}
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-              {galleryCategories.map((cat) => (
-                <button
-                  key={cat}
-                  onClick={() => setSelectedGalleryCategory(cat)}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-xs transition cursor-pointer ${
-                    selectedGalleryCategory === cat
-                      ? 'bg-[#18392B] text-white'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-
-            {/* Gallery Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pt-4">
-              {filteredPhotos.map((photo) => (
-                <div
-                  key={photo.id}
-                  className="bg-white border border-slate-200 rounded-sm overflow-hidden shadow-2xs hover:border-[#588B76] hover:shadow-xs transition group"
-                >
-                  <div className="h-56 w-full relative bg-slate-100 overflow-hidden">
-                    {photo.imageUrl ? (
-                      <Image
-                        src={photo.imageUrl}
-                        alt={photo.title}
-                        fill
-                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
-                        <Camera className="w-8 h-8" />
-                      </div>
-                    )}
-                    <span className="absolute top-2 left-2 text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-xs bg-slate-900/80 text-white backdrop-blur-xs">
-                      {photo.category}
-                    </span>
-                    {photo.date && (
-                      <span className="absolute bottom-2 right-2 text-[10px] font-mono font-bold px-2 py-0.5 rounded-xs bg-black/60 text-white backdrop-blur-xs">
-                        {photo.date}
-                      </span>
-                    )}
-                  </div>
-                  <div className="p-4 space-y-1">
-                    <h4 className="font-serif font-bold text-sm text-[#18392B]">
-                      {photo.title}
-                    </h4>
-                    {photo.caption && (
-                      <p className="text-xs text-slate-600 leading-relaxed font-light line-clamp-2">
-                        {photo.caption}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        {/* Student Life Photo Gallery - Facebook-Inspired Multi-Image System */}
+        <StudentLifeGalleryPublic
+          badge={config.galleryBadge}
+          title={config.galleryTitle}
+          subtitle={config.gallerySubtitle}
+        />
       </div>
     </div>
   );

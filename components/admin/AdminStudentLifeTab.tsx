@@ -14,6 +14,7 @@ import {
   StudentLifePhoto,
 } from '@/lib/types';
 import { INITIAL_STUDENT_LIFE_CONFIG } from '@/lib/initialData';
+import { AdminStudentLifeGallery } from './AdminStudentLifeGallery';
 import {
   Flame,
   Users,
@@ -58,7 +59,7 @@ const AVAILABLE_ICONS = [
 ];
 
 export const AdminStudentLifeTab: React.FC = () => {
-  const { siteConfig, updateStudentLifeConfig, addToast, navigateTo, canPerformAction } = usePCM();
+  const { siteConfig, updateStudentLifeConfig, addToast, navigateTo, canPerformAction, studentLifeAlbums } = usePCM();
 
   // Local draft state initialized with existing config or fallback
   const [config, setConfig] = useState<StudentLifeConfig>(() => {
@@ -309,7 +310,7 @@ export const AdminStudentLifeTab: React.FC = () => {
     { id: 'ministry', label: 'Ministry & Outreach', icon: Compass, count: config.ministryOpportunities?.length },
     { id: 'leaders', label: 'Student Council', icon: ShieldCheck, count: config.studentLeaders?.length },
     { id: 'guidelines', label: 'Rules & FAQs', icon: HelpCircle, count: config.campusGuidelines?.length },
-    { id: 'gallery', label: 'Campus Moments', icon: Camera, count: config.galleryPhotos?.length },
+    { id: 'gallery', label: 'Photo Albums', icon: Camera, count: studentLifeAlbums?.length },
   ];
 
   return (
@@ -1809,241 +1810,55 @@ export const AdminStudentLifeTab: React.FC = () => {
         </div>
       )}
 
-      {/* Tab 9: Campus Life Photo Gallery */}
+      {/* Tab 9: Campus Life Photo Gallery & Albums */}
       {activeSubTab === 'gallery' && (
-        <div className="bg-white border border-slate-200 rounded-b-sm p-6 space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-            <div>
+        <div className="space-y-6">
+          <div className="bg-white border border-slate-200 rounded-sm p-5 space-y-4 shadow-2xs">
+            <div className="border-b border-slate-100 pb-3">
               <h3 className="font-serif font-bold text-base text-[#18392B]">
-                Student Life Photo Gallery
+                Public Gallery Section Headline & Settings
               </h3>
               <p className="text-xs text-slate-500">
-                Curate vibrant photos of chapel praise, fellowship dinners, dormitory activities, highland outreach, and campus recreation.
+                Configure the headline, section badge, and introductory text displayed on the public Student Life page.
               </p>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingPhoto({
-                  id: `photo-${Date.now()}`,
-                  title: '',
-                  category: 'Fellowship',
-                  imageUrl: '',
-                  caption: '',
-                  date: new Date().getFullYear().toString(),
-                });
-                setIsAddingPhoto(true);
-              }}
-              className="bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold px-3 py-1.5 rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Photo</span>
-            </button>
-          </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700">Gallery Badge</label>
-              <input
-                type="text"
-                value={config.galleryBadge || ''}
-                onChange={(e) => setConfig({ ...config, galleryBadge: e.target.value })}
-                className="w-full text-xs p-2 border border-slate-200 rounded-sm"
-                placeholder="e.g. Campus Moments"
-              />
-            </div>
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700">Gallery Title</label>
-              <input
-                type="text"
-                value={config.galleryTitle || ''}
-                onChange={(e) => setConfig({ ...config, galleryTitle: e.target.value })}
-                className="w-full text-xs p-2 border border-slate-200 rounded-sm font-serif"
-                placeholder="e.g. STUDENT LIFE IN PICTURES"
-              />
-            </div>
-            <div className="md:col-span-2 space-y-1">
-              <label className="text-xs font-semibold text-slate-700">Gallery Subtitle</label>
-              <input
-                type="text"
-                value={config.gallerySubtitle || ''}
-                onChange={(e) => setConfig({ ...config, gallerySubtitle: e.target.value })}
-                className="w-full text-xs p-2 border border-slate-200 rounded-sm"
-                placeholder="Description of campus snapshots..."
-              />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pt-4 border-t border-slate-100">
-            {(config.galleryPhotos || []).map((photo) => (
-              <div
-                key={photo.id}
-                className="border border-slate-200 rounded-sm overflow-hidden bg-white shadow-2xs hover:border-[#588B76] transition group"
-              >
-                <div className="h-44 w-full relative bg-slate-100">
-                  {photo.imageUrl ? (
-                    <Image
-                      src={
-                        photo.imageUrl.includes('photo-1517649763962-0c623266ddc0')
-                          ? 'https://images.unsplash.com/photo-1546519638-68e109498ffc?q=80&w=800&auto=format&fit=crop'
-                          : photo.imageUrl
-                      }
-                      alt={photo.title}
-                      fill
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                      className="object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center text-slate-400">
-                      <Camera className="w-8 h-8" />
-                    </div>
-                  )}
-                  <span className="absolute top-2 left-2 text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-xs bg-slate-900/80 text-white backdrop-blur-xs">
-                    {photo.category}
-                  </span>
-                  <div className="absolute top-2 right-2 flex items-center gap-1 opacity-90 group-hover:opacity-100">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditingPhoto(photo);
-                        setIsAddingPhoto(false);
-                      }}
-                      className="p-1.5 bg-white/90 hover:bg-white text-slate-700 rounded-xs shadow-xs transition cursor-pointer"
-                      title="Edit Photo"
-                    >
-                      <Edit2 className="w-3 h-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => deletePhoto(photo.id)}
-                      className="p-1.5 bg-white/90 hover:bg-red-50 text-red-600 rounded-xs shadow-xs transition cursor-pointer"
-                      title="Delete Photo"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                </div>
-
-                <div className="p-3 space-y-1">
-                  <h4 className="font-serif font-bold text-xs text-[#18392B] truncate">
-                    {photo.title}
-                  </h4>
-                  {photo.caption && (
-                    <p className="text-[11px] text-slate-500 line-clamp-2 leading-relaxed">
-                      {photo.caption}
-                    </p>
-                  )}
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Gallery Badge</label>
+                <input
+                  type="text"
+                  value={config.galleryBadge || ''}
+                  onChange={(e) => setConfig({ ...config, galleryBadge: e.target.value })}
+                  className="w-full text-xs p-2 border border-slate-200 rounded-sm"
+                  placeholder="e.g. Campus Moments"
+                />
               </div>
-            ))}
-          </div>
-
-          {/* Photo Modal */}
-          {(editingPhoto || isAddingPhoto) && editingPhoto && (
-            <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-              <div className="bg-white border border-slate-200 rounded-sm max-w-lg w-full p-6 space-y-4 shadow-xl">
-                <h4 className="font-serif font-bold text-base text-[#18392B]">
-                  {isAddingPhoto ? 'Add Campus Photo' : 'Edit Campus Photo'}
-                </h4>
-
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Photo Title</label>
-                    <input
-                      type="text"
-                      value={editingPhoto.title}
-                      onChange={(e) => setEditingPhoto({ ...editingPhoto, title: e.target.value })}
-                      className="w-full p-2 border border-slate-200 rounded-sm font-serif"
-                      placeholder="e.g. Chapel Worship Convocation"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Category</label>
-                      <select
-                        value={editingPhoto.category}
-                        onChange={(e) =>
-                          setEditingPhoto({
-                            ...editingPhoto,
-                            category: e.target.value as any,
-                          })
-                        }
-                        className="w-full p-2 border border-slate-200 rounded-sm"
-                      >
-                        <option value="Chapel">Chapel & Worship</option>
-                        <option value="Fellowship">Fellowship & Community</option>
-                        <option value="Dormitory">Dormitory Living</option>
-                        <option value="Ministry">Ministry & Practicum</option>
-                        <option value="Sports">Sports & Recreation</option>
-                        <option value="Campus">Campus & Mountain Scenery</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Year / Date</label>
-                      <input
-                        type="text"
-                        value={editingPhoto.date || ''}
-                        onChange={(e) =>
-                          setEditingPhoto({ ...editingPhoto, date: e.target.value })
-                        }
-                        className="w-full p-2 border border-slate-200 rounded-sm font-mono"
-                        placeholder="e.g. 2026"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Image URL</label>
-                    <input
-                      type="url"
-                      value={editingPhoto.imageUrl}
-                      onChange={(e) =>
-                        setEditingPhoto({ ...editingPhoto, imageUrl: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-200 rounded-sm"
-                      placeholder="https://..."
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Caption / Description</label>
-                    <textarea
-                      rows={3}
-                      value={editingPhoto.caption || ''}
-                      onChange={(e) =>
-                        setEditingPhoto({ ...editingPhoto, caption: e.target.value })
-                      }
-                      className="w-full p-2 border border-slate-200 rounded-sm leading-relaxed"
-                      placeholder="What is happening in this photo..."
-                    />
-                  </div>
-                </div>
-
-                <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingPhoto(null);
-                      setIsAddingPhoto(false);
-                    }}
-                    className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-600 rounded-sm hover:bg-slate-50 cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => savePhoto(editingPhoto)}
-                    className="px-4 py-1.5 bg-[#18392B] text-white text-xs font-bold rounded-sm hover:bg-[#10261D] cursor-pointer"
-                  >
-                    Save Photo
-                  </button>
-                </div>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Gallery Title</label>
+                <input
+                  type="text"
+                  value={config.galleryTitle || ''}
+                  onChange={(e) => setConfig({ ...config, galleryTitle: e.target.value })}
+                  className="w-full text-xs p-2 border border-slate-200 rounded-sm font-serif"
+                  placeholder="e.g. STUDENT LIFE IN PICTURES"
+                />
+              </div>
+              <div className="md:col-span-2 space-y-1">
+                <label className="text-xs font-semibold text-slate-700">Gallery Subtitle</label>
+                <input
+                  type="text"
+                  value={config.gallerySubtitle || ''}
+                  onChange={(e) => setConfig({ ...config, gallerySubtitle: e.target.value })}
+                  className="w-full text-xs p-2 border border-slate-200 rounded-sm"
+                  placeholder="Description of campus snapshots..."
+                />
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Facebook-Inspired Multi-Image Gallery & Album Manager */}
+          <AdminStudentLifeGallery />
         </div>
       )}
     </div>

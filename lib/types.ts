@@ -1311,6 +1311,37 @@ export interface StudentLifePhoto {
   date?: string;
 }
 
+export interface StudentLifePhotoItem {
+  id: string;
+  albumId: string;
+  imageUrl: string;
+  thumbnailUrl?: string;
+  fileName: string;
+  caption?: string;
+  sortOrder: number;
+  uploadedAt: string;
+  uploadedBy?: string;
+  fileSize?: number;
+  dimensions?: { width: number; height: number };
+}
+
+export interface StudentLifeAlbum {
+  id: string;
+  title: string;
+  description: string;
+  eventName: string;
+  eventDate: string;
+  location: string;
+  coverPhotoUrl: string;
+  photoCount: number;
+  status: 'published' | 'unpublished';
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  sortOrder?: number;
+  photos: StudentLifePhotoItem[];
+}
+
 export interface StudentLifeConfig {
   bannerBadge?: string;
   bannerTitle?: string;
