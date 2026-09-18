@@ -382,6 +382,7 @@ export interface StudentProfile {
   id: string; // Document ID (e.g. std-2024-0418)
   studentId: string; // Permanent Unique Identifier (e.g. 2024-PCM-0418)
   applicationNumber?: string; // Application Number (e.g. APP-2026-1042)
+  referenceNumber?: string; // Reference Number (e.g. PCM-2026-1042)
   fullName: string;
   name?: string;
   firstName?: string;
@@ -490,6 +491,7 @@ export interface StudentProfile {
   academicYear: string;
   applicationDate?: string;
   enrollmentDate?: string;
+  registeredDate?: string;
 
   // Requirements & Documents
   requirements?: StudentRequirementItem[];
@@ -760,6 +762,7 @@ export interface StudentAssessment {
 export interface OnlineEnrollment {
   id: string; // enr-2026-XXXX
   referenceNumber: string; // ENR-2026-0842
+  applicationNumber?: string; // Application Reference Number (e.g. PCM-2026-9354)
   studentId: string; // Permanent PCM Student ID (e.g. 2024-PCM-0418)
   studentUid?: string;
   studentName: string;

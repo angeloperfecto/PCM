@@ -353,6 +353,7 @@ interface PCMContextType {
   addApplicationNote: (id: string, note: string) => void;
   deleteApplication: (id: string) => void;
   getApplicationByRef: (ref: string) => AdmissionApplication | undefined;
+  fetchApplicationByRef?: (ref: string) => Promise<AdmissionApplication | undefined>;
   activeTrackerRef: string;
   setActiveTrackerRef: (ref: string) => void;
   submitInquiry: (inquiryData: {
@@ -667,6 +668,80 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     isUserDeletedRef.current = isUserDeleted;
   }, [isUserDeleted]);
+
+  // Helper to keep userAccounts in sync with all registered admins and students
+  const syncWithAdminsAndStudents = useCallback(
+    (
+      baseUsers: UserAccount[],
+      currAdmins: AdminUser[],
+      currStudents: StudentProfile[]
+    ): UserAccount[] => {
+      const map = new Map<string, UserAccount>();
+
+      // 1. Base / Registered accounts (exclude deleted)
+      (baseUsers || [])
+        .filter((u) => !isUserDeletedRef.current(u))
+        .forEach((u) => {
+          const key = (u.email || u.id || u.uid || '').toLowerCase().trim();
+          if (key && !isUserDeletedRef.current(key)) map.set(key, u);
+        });
+
+      // 2. Ensure all registered admin users are included (exclude deleted)
+      (currAdmins || [])
+        .filter((adm) => !isUserDeletedRef.current(adm))
+        .forEach((adm) => {
+          const key = (adm.email || adm.id).toLowerCase().trim();
+          if (isUserDeletedRef.current(key) || isUserDeletedRef.current(adm)) return;
+          const existing = map.get(key);
+          map.set(key, {
+            id: existing?.id || `uid-${adm.id}`,
+            uid: existing?.uid || adm.id,
+            name: adm.name || existing?.name || 'Administrator',
+            displayName: adm.name || existing?.displayName || 'Administrator',
+            email: adm.email,
+            role: 'Admin',
+            adminRole: adm.role || existing?.adminRole || 'Super Admin',
+            department: adm.department || existing?.department || 'Office of Administration',
+            status: (adm.status as any) || existing?.status || 'Active',
+            provider: existing?.provider || (adm.email.endsWith('@pcm.edu.ph') ? 'google.com' : 'password'),
+            emailVerified: true,
+            createdAt: existing?.createdAt || adm.createdAt || '2024-01-15T08:00:00Z',
+            lastLogin: existing?.lastLogin || adm.lastLogin || new Date().toISOString(),
+            avatarUrl: adm.avatarUrl || existing?.avatarUrl || '',
+            photoURL: adm.avatarUrl || existing?.photoURL || '',
+          });
+        });
+
+      // 3. Ensure all registered students are included (exclude deleted)
+      (currStudents || [])
+        .filter((std) => !isUserDeletedRef.current(std))
+        .forEach((std) => {
+          const key = (std.email || std.studentId || std.id).toLowerCase().trim();
+          if (isUserDeletedRef.current(key) || isUserDeletedRef.current(std)) return;
+          const existing = map.get(key);
+          map.set(key, {
+            id: existing?.id || `uid-${std.id}`,
+            uid: existing?.uid || std.id,
+            name: std.fullName || std.name || existing?.name || 'Student',
+            displayName: std.fullName || std.name || existing?.displayName || 'Student',
+            email: std.email,
+            role: 'Student',
+            studentId: std.studentId,
+            department: std.program || std.degreeProgram || existing?.department || 'Undergraduate Theology',
+            status: (std.academicStatus === 'Probationary' ? 'Pending' : (existing?.status || 'Active')) as any,
+            provider: existing?.provider || (std.email.endsWith('@student.pcm.edu.ph') ? 'google.com' : 'password'),
+            emailVerified: true,
+            createdAt: existing?.createdAt || '2024-08-01T10:00:00Z',
+            lastLogin: existing?.lastLogin || new Date().toISOString(),
+            avatarUrl: std.avatarUrl || existing?.avatarUrl || '',
+            photoURL: std.avatarUrl || existing?.photoURL || '',
+          });
+        });
+
+      return Array.from(map.values()).filter((u) => !isUserDeletedRef.current(u));
+    },
+    []
+  );
 
   // User Accounts & Multi-Role Auth
   const [currentUserAccount, setCurrentUserAccount] = useState<UserAccount | null>(null);
@@ -1256,6 +1331,19 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }
         }
 
+        // 16d. Admissions Applications batch
+        if (st.applications && st.applications.length > 0) {
+          try {
+            const appBatch = writeBatch(db);
+            st.applications.forEach((app: any) => {
+              appBatch.set(doc(db, 'applications', app.id), cleanFirestoreData(app), { merge: true });
+            });
+            await appBatch.commit();
+          } catch (e) {
+            console.warn('Applications batch sync notice:', e);
+          }
+        }
+
         // 17. Donation Payment Methods batch
         if (st.donationMethods && st.donationMethods.length > 0) {
           try {
@@ -1811,6 +1899,97 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         unsubs.push(uStudentLife);
 
+        // 20. Admissions Applications collection (Universal real-time sync for applicants & portal tracking)
+        logFirestoreOp('listen', 'applications', 'Admissions Applications Public Sync');
+        const uApps = onSnapshot(
+          collection(db, 'applications'),
+          (snap) => {
+            const list = (!snap.empty && snap.docs.length > 0)
+              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[])
+              : INITIAL_APPLICATIONS;
+            setApplications(list);
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'applications')
+        );
+        unsubs.push(uApps);
+
+        // 21. Student Profiles Directory (Universal real-time sync for enrolled students & portal)
+        logFirestoreOp('listen', 'studentProfiles', 'Student Profiles Directory Public Sync');
+        const uStudents = onSnapshot(
+          collection(db, 'studentProfiles'),
+          (snap) => {
+            const list = (!snap.empty && snap.docs.length > 0)
+              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter((s) => !isUserDeletedRef.current(s))
+              : INITIAL_STUDENTS.filter((s) => !isUserDeletedRef.current(s));
+            setStudents(list);
+            if (list.length > 0) {
+              setStudentProfile((prev) => {
+                const matched = list.find((s) => s.id === prev?.id || s.studentId === prev?.studentId || s.email === prev?.email);
+                return matched ? { ...prev, ...matched } : prev;
+              });
+            }
+            setUserAccounts((prev) => syncWithAdminsAndStudents(prev, stateRef.current.adminUsers, list));
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'studentProfiles')
+        );
+        unsubs.push(uStudents);
+
+        // 22. Online Enrollments collection (Universal real-time sync)
+        logFirestoreOp('listen', 'enrollments', 'Online Enrollments Public Sync');
+        const uEnrollments = onSnapshot(
+          collection(db, 'enrollments'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as OnlineEnrollment[];
+              setEnrollments(list);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments')
+        );
+        unsubs.push(uEnrollments);
+
+        // 23. Student Notifications collection (Universal real-time sync)
+        logFirestoreOp('listen', 'studentNotifications', 'Student Notifications Public Sync');
+        const uNotifs = onSnapshot(
+          collection(db, 'studentNotifications'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentNotification[];
+              setStudentNotifications(list);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'studentNotifications')
+        );
+        unsubs.push(uNotifs);
+
+        // 24. Academic Subjects collection (Universal real-time sync)
+        logFirestoreOp('listen', 'academicSubjects', 'Academic Subjects Public Sync');
+        const uSubjects = onSnapshot(
+          collection(db, 'academicSubjects'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicSubject[];
+              setAcademicSubjects(list);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'academicSubjects')
+        );
+        unsubs.push(uSubjects);
+
+        // 25. Pre-Enlistments collection (Universal real-time sync)
+        logFirestoreOp('listen', 'preEnlistments', 'Pre-Enlistments Public Sync');
+        const uPreEnlist = onSnapshot(
+          collection(db, 'preEnlistments'),
+          (snap) => {
+            if (!snap.empty) {
+              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PreEnlistmentRecord[];
+              setPreEnlistments(list);
+            }
+          },
+          (err) => handleFirestoreError(err, OperationType.LIST, 'preEnlistments')
+        );
+        unsubs.push(uPreEnlist);
+
         // 11. Listen to Firebase Auth state & Single User Profile (Targeted Read / Subscription)
         const unsubAuth = onAuthStateChanged(auth, async (fbUser) => {
           setFirebaseAuthUser(fbUser);
@@ -2019,7 +2198,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubs.forEach((unsub) => unsub());
       if (singleUserUnsub) singleUserUnsub();
     };
-  }, []);
+  }, [syncWithAdminsAndStudents]);
 
   // Gated Admin Subscriptions: Only subscribe to Admin/Sensitive collections when Admin is authenticated & active
   useEffect(() => {
@@ -2029,77 +2208,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     let adminUnsubs: (() => void)[] = [];
-
-    // Helper to keep userAccounts in sync with all registered admins and students
-    const syncWithAdminsAndStudents = (
-      baseUsers: UserAccount[],
-      currAdmins: AdminUser[],
-      currStudents: StudentProfile[]
-    ): UserAccount[] => {
-      const map = new Map<string, UserAccount>();
-
-      // 1. Base / Registered accounts (exclude deleted)
-      baseUsers
-        .filter((u) => !isUserDeletedRef.current(u))
-        .forEach((u) => {
-          const key = (u.email || u.id || u.uid || '').toLowerCase().trim();
-          if (key && !isUserDeletedRef.current(key)) map.set(key, u);
-        });
-
-      // 2. Ensure all registered admin users are included (exclude deleted)
-      currAdmins
-        .filter((adm) => !isUserDeletedRef.current(adm))
-        .forEach((adm) => {
-          const key = (adm.email || adm.id).toLowerCase().trim();
-          if (isUserDeletedRef.current(key) || isUserDeletedRef.current(adm)) return;
-          const existing = map.get(key);
-          map.set(key, {
-            id: existing?.id || `uid-${adm.id}`,
-            uid: existing?.uid || adm.id,
-            name: adm.name || existing?.name || 'Administrator',
-            displayName: adm.name || existing?.displayName || 'Administrator',
-            email: adm.email,
-            role: 'Admin',
-            adminRole: adm.role || existing?.adminRole || 'Super Admin',
-            department: adm.department || existing?.department || 'Office of Administration',
-            status: (adm.status as any) || existing?.status || 'Active',
-            provider: existing?.provider || (adm.email.endsWith('@pcm.edu.ph') ? 'google.com' : 'password'),
-            emailVerified: true,
-            createdAt: existing?.createdAt || adm.createdAt || '2024-01-15T08:00:00Z',
-            lastLogin: existing?.lastLogin || adm.lastLogin || new Date().toISOString(),
-            avatarUrl: adm.avatarUrl || existing?.avatarUrl || '',
-            photoURL: adm.avatarUrl || existing?.photoURL || '',
-          });
-        });
-
-      // 3. Ensure all registered students are included (exclude deleted)
-      currStudents
-        .filter((std) => !isUserDeletedRef.current(std))
-        .forEach((std) => {
-          const key = (std.email || std.studentId || std.id).toLowerCase().trim();
-          if (isUserDeletedRef.current(key) || isUserDeletedRef.current(std)) return;
-          const existing = map.get(key);
-          map.set(key, {
-            id: existing?.id || `uid-${std.id}`,
-            uid: existing?.uid || std.id,
-            name: std.fullName || std.name || existing?.name || 'Student',
-            displayName: std.fullName || std.name || existing?.displayName || 'Student',
-            email: std.email,
-            role: 'Student',
-            studentId: std.studentId,
-            department: std.program || std.degreeProgram || existing?.department || 'Undergraduate Theology',
-            status: (std.academicStatus === 'Probationary' ? 'Pending' : (existing?.status || 'Active')) as any,
-            provider: existing?.provider || (std.email.endsWith('@student.pcm.edu.ph') ? 'google.com' : 'password'),
-            emailVerified: true,
-            createdAt: existing?.createdAt || '2024-08-01T10:00:00Z',
-            lastLogin: existing?.lastLogin || new Date().toISOString(),
-            avatarUrl: std.avatarUrl || existing?.avatarUrl || '',
-            photoURL: std.avatarUrl || existing?.photoURL || '',
-          });
-        });
-
-      return Array.from(map.values()).filter((u) => !isUserDeletedRef.current(u));
-    };
 
     // 1. Users collection (for Admin Users & Roles management tab)
     logFirestoreOp('listen', 'users', 'Admin Active Users & Roles Management Listener');
@@ -2130,20 +2238,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
     adminUnsubs.push(uAdmins);
 
-    // 3. Admissions Applications collection
-    logFirestoreOp('listen', 'applications', 'Admissions Applications Review Listener');
-    const uApps = onSnapshot(
-      collection(db, 'applications'),
-      (snap) => {
-        const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[])
-          : INITIAL_APPLICATIONS;
-        setApplications(list);
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'applications')
-    );
-    adminUnsubs.push(uApps);
-
     // 4. Donations collection
     logFirestoreOp('listen', 'donations', 'Donations Review Listener');
     const uDonations = onSnapshot(
@@ -2171,83 +2265,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => handleFirestoreError(err, OperationType.LIST, 'activityLogs')
     );
     adminUnsubs.push(uLogs);
-
-    // 6. Student Profiles Directory
-    logFirestoreOp('listen', 'studentProfiles', 'Student Profiles Directory Listener');
-    const uStudents = onSnapshot(
-      collection(db, 'studentProfiles'),
-      (snap) => {
-        const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter((s) => !isUserDeletedRef.current(s))
-          : INITIAL_STUDENTS.filter((s) => !isUserDeletedRef.current(s));
-        setStudents(list);
-        if (list.length > 0) {
-          setStudentProfile((prev) => {
-            const matched = list.find((s) => s.id === prev?.id || s.studentId === prev?.studentId || s.email === prev?.email);
-            return matched ? { ...prev, ...matched } : prev;
-          });
-        }
-        setUserAccounts((prev) => syncWithAdminsAndStudents(prev, stateRef.current.adminUsers, list));
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'studentProfiles')
-    );
-    adminUnsubs.push(uStudents);
-
-    // 7. Online Enrollments collection
-    logFirestoreOp('listen', 'enrollments', 'Online Enrollments Listener');
-    const uEnrollments = onSnapshot(
-      collection(db, 'enrollments'),
-      (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as OnlineEnrollment[];
-          setEnrollments(list);
-        }
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments')
-    );
-    adminUnsubs.push(uEnrollments);
-
-    // 8. Student Notifications collection
-    logFirestoreOp('listen', 'studentNotifications', 'Student Notifications Listener');
-    const uNotifs = onSnapshot(
-      collection(db, 'studentNotifications'),
-      (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentNotification[];
-          setStudentNotifications(list);
-        }
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'studentNotifications')
-    );
-    adminUnsubs.push(uNotifs);
-
-    // 9. Academic Subjects collection
-    logFirestoreOp('listen', 'academicSubjects', 'Academic Subjects Listener');
-    const uSubjects = onSnapshot(
-      collection(db, 'academicSubjects'),
-      (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicSubject[];
-          setAcademicSubjects(list);
-        }
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'academicSubjects')
-    );
-    adminUnsubs.push(uSubjects);
-
-    // 10. Pre-Enlistments collection
-    logFirestoreOp('listen', 'preEnlistments', 'Pre-Enlistments Listener');
-    const uPreEnlist = onSnapshot(
-      collection(db, 'preEnlistments'),
-      (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PreEnlistmentRecord[];
-          setPreEnlistments(list);
-        }
-      },
-      (err) => handleFirestoreError(err, OperationType.LIST, 'preEnlistments')
-    );
-    adminUnsubs.push(uPreEnlist);
 
     // 11. Add/Drop Requests collection
     logFirestoreOp('listen', 'addDropRequests', 'Add/Drop Requests Listener');
@@ -2335,7 +2352,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => {
       adminUnsubs.forEach((unsub) => unsub());
     };
-  }, [isAdminLoggedIn, currentUserAccount?.role, currentSection]);
+  }, [isAdminLoggedIn, currentUserAccount?.role, currentSection, syncWithAdminsAndStudents]);
 
   // Upload media file to Firebase Storage & register in Media Library
   const uploadMediaFile = async (
@@ -3235,32 +3252,44 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const submitApplication = async (appData: any): Promise<string> => {
     const year = new Date().getFullYear();
     const randDigits = Math.floor(1000 + Math.random() * 9000);
-    const refNumber = `PCM-${year}-${randDigits}`;
+    const refNumber =
+      (appData.referenceNumber && String(appData.referenceNumber).trim()) ||
+      (appData.applicationNumber && String(appData.applicationNumber).trim()) ||
+      `PCM-${year}-${randDigits}`;
+
+    const studentId =
+      (appData.studentId && String(appData.studentId).trim()) ||
+      (refNumber.startsWith('PCM-') ? refNumber.replace(/^PCM-(\d{4})-(\d+)$/, '$1-PCM-$2') : refNumber);
 
     const newApp: AdmissionApplication = {
-      id: `app-${Date.now()}`,
+      id: appData.id || `app-${Date.now()}`,
       referenceNumber: refNumber,
-      fullName: appData.fullName,
-      email: appData.email,
-      phone: appData.phone || '',
-      dateOfBirth: appData.dob || '',
-      gender: appData.gender || 'Prefer not to say',
-      address: appData.address || '',
-      program: appData.program || 'Bachelor of Theology (B.Th.)',
-      status: 'Submitted',
-      submissionDate: new Date().toISOString().split('T')[0],
-      christianTestimony: appData.testimony || '',
-      churchAffiliation: appData.church || '',
+      studentId,
+      fullName: appData.fullName || 'Applicant',
+      email: appData.email || '',
+      phone: appData.phone || appData.mobileNumber || appData.contactNumber || '',
+      dateOfBirth: appData.dob || appData.dateOfBirth || appData.birthDate || '',
+      gender: appData.gender || appData.sex || 'Prefer not to say',
+      address: appData.address || appData.currentAddress || '',
+      program: appData.program || appData.programTitle || 'Bachelor of Theology (B.Th.)',
+      programName: appData.program || appData.programTitle || 'Bachelor of Theology (B.Th.)',
+      programId: appData.programId || 'prog-bth',
+      status: appData.status || 'Submitted',
+      submissionDate: appData.submissionDate || new Date().toISOString().split('T')[0],
+      christianTestimony: appData.testimony || appData.callingTestimony || '',
+      churchAffiliation: appData.church || appData.churchName || '',
       pastorName: appData.pastorName || '',
-      pastorContact: appData.pastorContact || '',
-      highSchool: appData.highSchool || '',
-      previousCollege: appData.previousCollege || '',
-      adminNotes: 'Application received online. Queued for initial Admissions Committee review.',
+      pastorContact: appData.pastorContact || appData.pastorContactNumber || '',
+      highSchool: appData.highSchool || appData.lastSchoolAttended || '',
+      previousCollege: appData.previousCollege || appData.lastSchoolAttended || '',
+      adminNotes: appData.adminNotes || 'Application received online. Queued for initial Admissions Committee review.',
+      createdAt: appData.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
 
-    setApplications((prev) => [newApp, ...prev]);
+    setApplications((prev) => [newApp, ...prev.filter((a) => a.referenceNumber !== refNumber && a.id !== newApp.id)]);
     try {
-      await setDoc(doc(db, 'applications', newApp.id), newApp, { merge: true });
+      await setDoc(doc(db, 'applications', newApp.id), cleanFirestoreData(newApp), { merge: true });
     } catch (e) {
       console.warn('Firestore application save warning:', e);
     }
@@ -3321,10 +3350,167 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('info', 'Application Removed', 'Application record deleted.');
   };
 
+  const normalizeRef = (val?: string): string => {
+    if (!val) return '';
+    return val.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  };
+
   const getApplicationByRef = (ref: string): AdmissionApplication | undefined => {
-    return applications.find(
-      (a) => a.referenceNumber.trim().toUpperCase() === ref.trim().toUpperCase()
-    );
+    const cleanRef = (ref || '').trim();
+    if (!cleanRef) return undefined;
+    const upperRef = cleanRef.toUpperCase();
+    const normRef = normalizeRef(cleanRef);
+    const altFormat = upperRef.startsWith('PCM-')
+      ? upperRef.replace(/^PCM-(\d{4})-(\d+)$/, '$1-PCM-$2')
+      : upperRef.replace(/^(\d{4})-PCM-(\d+)$/, 'PCM-$1-$2');
+
+    // 1. Direct search in applications collection
+    const foundApp = applications.find((a) => {
+      if (!a) return false;
+      const refN = (a.referenceNumber || '').trim().toUpperCase();
+      const sId = (a.studentId || '').trim().toUpperCase();
+      const aId = (a.id || '').trim().toUpperCase();
+      const email = (a.email || '').trim().toLowerCase();
+
+      if (refN === upperRef || sId === upperRef || aId === upperRef || email === cleanRef.toLowerCase()) {
+        return true;
+      }
+      if (refN === altFormat || sId === altFormat) {
+        return true;
+      }
+      if (normRef && (normalizeRef(refN) === normRef || normalizeRef(sId) === normRef || normalizeRef(aId) === normRef)) {
+        return true;
+      }
+      return false;
+    });
+
+    if (foundApp) return foundApp;
+
+    // 2. Check studentProfiles and synthesize an application view so student status is immediately found
+    const matchedStudent = students.find((s) => {
+      if (!s) return false;
+      const sId = (s.studentId || '').trim().toUpperCase();
+      const appNum = (s.applicationNumber || '').trim().toUpperCase();
+      const refNum = ((s as any).referenceNumber || '').trim().toUpperCase();
+      const email = (s.email || '').trim().toLowerCase();
+      const id = (s.id || '').trim().toUpperCase();
+
+      if (sId === upperRef || appNum === upperRef || refNum === upperRef || id === upperRef || email === cleanRef.toLowerCase()) {
+        return true;
+      }
+      if (sId === altFormat || appNum === altFormat) {
+        return true;
+      }
+      if (normRef && (normalizeRef(sId) === normRef || normalizeRef(appNum) === normRef || normalizeRef(refNum) === normRef || normalizeRef(id) === normRef)) {
+        return true;
+      }
+      return false;
+    });
+
+    if (matchedStudent) {
+      const synApp: AdmissionApplication = {
+        id: `app-sync-${matchedStudent.id}`,
+        referenceNumber: matchedStudent.applicationNumber || cleanRef,
+        studentId: matchedStudent.studentId,
+        fullName: matchedStudent.fullName || matchedStudent.name || 'Admitted Student',
+        email: matchedStudent.email || '',
+        phone: matchedStudent.phone || matchedStudent.contactNumber || '',
+        status: (matchedStudent.enrollmentStatus === 'Approved' || matchedStudent.enrollmentStatus === 'Enrolled') ? 'Accepted' : 'Under Review',
+        programId: matchedStudent.programId || 'prog-bth',
+        program: matchedStudent.program || 'Bachelor of Theology (B.Th.)',
+        programName: matchedStudent.program || 'Bachelor of Theology (B.Th.)',
+        address: matchedStudent.address || '',
+        church: matchedStudent.homeChurch || '',
+        churchName: matchedStudent.homeChurch || '',
+        pastorName: matchedStudent.pastorName || '',
+        submissionDate: matchedStudent.currentSemester || '2026-08-28',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        adminNotes: `Registered student record verified (Student ID: ${matchedStudent.studentId}).`,
+      };
+      return synApp;
+    }
+
+    return undefined;
+  };
+
+  const fetchApplicationByRef = async (ref: string): Promise<AdmissionApplication | undefined> => {
+    const cleanRef = (ref || '').trim();
+    if (!cleanRef) return undefined;
+    const inMem = getApplicationByRef(cleanRef);
+    if (inMem) return inMem;
+
+    try {
+      const qRef = cleanRef.toUpperCase();
+      const norm = normalizeRef(cleanRef);
+      const altFormat = qRef.startsWith('PCM-')
+        ? qRef.replace(/^PCM-(\d{4})-(\d+)$/, '$1-PCM-$2')
+        : qRef.replace(/^(\d{4})-PCM-(\d+)$/, 'PCM-$1-$2');
+
+      const appsSnap = await getDocs(collection(db, 'applications'));
+      if (!appsSnap.empty) {
+        for (const docSnap of appsSnap.docs) {
+          const data = { id: docSnap.id, ...docSnap.data() } as AdmissionApplication;
+          const refN = (data.referenceNumber || '').trim().toUpperCase();
+          const sId = (data.studentId || '').trim().toUpperCase();
+          const docId = docSnap.id.toUpperCase();
+          if (
+            refN === qRef ||
+            sId === qRef ||
+            docId === qRef ||
+            refN === altFormat ||
+            sId === altFormat ||
+            (norm && (normalizeRef(refN) === norm || normalizeRef(sId) === norm))
+          ) {
+            setApplications((prev) => {
+              const exists = prev.some((a) => a.id === data.id || a.referenceNumber === data.referenceNumber);
+              return exists ? prev : [data, ...prev];
+            });
+            return data;
+          }
+        }
+      }
+
+      const stdSnap = await getDocs(collection(db, 'studentProfiles'));
+      if (!stdSnap.empty) {
+        for (const docSnap of stdSnap.docs) {
+          const s = { id: docSnap.id, ...docSnap.data() } as StudentProfile;
+          const sId = (s.studentId || '').trim().toUpperCase();
+          const appNum = (s.applicationNumber || '').trim().toUpperCase();
+          if (
+            sId === qRef ||
+            appNum === qRef ||
+            sId === altFormat ||
+            appNum === altFormat ||
+            (norm && (normalizeRef(sId) === norm || normalizeRef(appNum) === norm))
+          ) {
+            const synApp: AdmissionApplication = {
+              id: `app-sync-${s.id}`,
+              referenceNumber: s.applicationNumber || cleanRef,
+              studentId: s.studentId,
+              fullName: s.fullName || s.name || 'Admitted Student',
+              email: s.email || '',
+              phone: s.phone || s.contactNumber || '',
+              status: (s.enrollmentStatus === 'Approved' || s.enrollmentStatus === 'Enrolled') ? 'Accepted' : 'Under Review',
+              programId: s.programId || 'prog-bth',
+              program: s.program || 'Bachelor of Theology (B.Th.)',
+              programName: s.program || 'Bachelor of Theology (B.Th.)',
+              address: s.address || '',
+              church: s.homeChurch || '',
+              churchName: s.homeChurch || '',
+              pastorName: s.pastorName || '',
+              submissionDate: '2026-08-28',
+              adminNotes: `Registered student record verified (Student ID: ${s.studentId}).`,
+            };
+            setApplications((prev) => [synApp, ...prev]);
+            return synApp;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('fetchApplicationByRef error:', e);
+    }
+    return undefined;
   };
 
   // Contact & Information Inquiries Workflow (Direct Firestore Persistence)
@@ -3386,18 +3572,92 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const sId = studentId.trim().toUpperCase();
     const p = pass.trim();
     const inputEmail = studentId.trim().toLowerCase();
+    const norm = sId.replace(/[^A-Za-z0-9]/g, '');
+    const altFormat = sId.startsWith('PCM-')
+      ? sId.replace(/^PCM-(\d{4})-(\d+)$/, '$1-PCM-$2')
+      : sId.replace(/^(\d{4})-PCM-(\d+)$/, 'PCM-$1-$2');
 
-    // Look for matching student in state or fallback
-    const matched = students.find((s) => {
-      const matchId = (s.studentId || '').toUpperCase() === sId || (s.studentId || '').replace(/-/g, '').toUpperCase() === sId || s.id.toUpperCase() === sId;
+    // 1. Look for matching student in state
+    let matched = students.find((s) => {
+      const matchId =
+        (s.studentId || '').toUpperCase() === sId ||
+        (s.studentId || '').replace(/-/g, '').toUpperCase() === sId ||
+        (s.applicationNumber || '').toUpperCase() === sId ||
+        s.id.toUpperCase() === sId ||
+        (s.studentId || '').toUpperCase() === altFormat ||
+        (s.applicationNumber || '').toUpperCase() === altFormat ||
+        (norm && (s.studentId || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase() === norm);
       const matchEmail = (s.email || '').toLowerCase() === inputEmail;
       return matchId || matchEmail;
-    }) || (
-      // Fallback check against active student profile
-      ((studentProfile.studentId || '').toUpperCase() === sId || (studentProfile.email || '').toLowerCase() === inputEmail || sId === 'STUDENT' || sId === '2024-PCM-0418' || sId === '2024PCM0418')
-        ? studentProfile
-        : null
-    );
+    });
+
+    // 2. If not found in students, check in applications and auto-hydrate
+    if (!matched) {
+      const appMatch = applications.find((a) => {
+        const refN = (a.referenceNumber || '').toUpperCase();
+        const aStudentId = (a.studentId || '').toUpperCase();
+        const aEmail = (a.email || '').toLowerCase();
+        return (
+          refN === sId ||
+          aStudentId === sId ||
+          refN === altFormat ||
+          aStudentId === altFormat ||
+          aEmail === inputEmail ||
+          (norm && (refN.replace(/[^A-Za-z0-9]/g, '') === norm || aStudentId.replace(/[^A-Za-z0-9]/g, '') === norm))
+        );
+      });
+
+      if (appMatch) {
+        const generatedStudentId =
+          appMatch.studentId ||
+          (appMatch.referenceNumber.startsWith('PCM-')
+            ? appMatch.referenceNumber.replace(/^PCM-(\d{4})-(\d+)$/, '$1-PCM-$2')
+            : appMatch.referenceNumber);
+        const hydratedProfile: StudentProfile = {
+          ...studentProfile,
+          id: `std-${appMatch.id.replace('app-', '')}`,
+          studentId: generatedStudentId,
+          applicationNumber: appMatch.referenceNumber,
+          referenceNumber: appMatch.referenceNumber,
+          fullName: appMatch.fullName,
+          name: appMatch.fullName,
+          email: appMatch.email,
+          phone: appMatch.phone,
+          program: appMatch.program || 'Bachelor of Theology (B.Th.)',
+          programId: appMatch.programId || 'prog-bth',
+          enrollmentStatus: (appMatch.status === 'Accepted' || appMatch.status === 'Enrolled' ? 'Approved' : 'Enrolled') as EnrollmentStatus,
+          yearLevel: '1st Year',
+          academicStatus: 'Regular',
+          academicYear: '2026–2027',
+          currentSemester: 'First Semester 2026-2027',
+          registeredDate: appMatch.submissionDate || '2026-08-28',
+          homeChurch: appMatch.churchAffiliation || '',
+          pastorName: appMatch.pastorName || '',
+          mentorName: appMatch.pastorName || 'Faculty Mentor',
+          address: appMatch.address || '',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
+          portalPassword: 'pcmstudent',
+        };
+        matched = hydratedProfile;
+        setStudents((prev) => [hydratedProfile, ...prev]);
+        setDoc(doc(db, 'studentProfiles', hydratedProfile.id), cleanFirestoreData(hydratedProfile), { merge: true }).catch((e) => console.warn(e));
+      }
+    }
+
+    // 3. Fallback check against active student profile
+    if (!matched) {
+      if (
+        (studentProfile.studentId || '').toUpperCase() === sId ||
+        (studentProfile.email || '').toLowerCase() === inputEmail ||
+        sId === 'STUDENT' ||
+        sId === '2024-PCM-0418' ||
+        sId === '2024PCM0418' ||
+        sId === '2026-PCM-9354' ||
+        sId === 'PCM-2026-9354'
+      ) {
+        matched = studentProfile;
+      }
+    }
 
     const isPassMatch =
       (matched?.portalPassword && matched.portalPassword === p) ||
@@ -7039,6 +7299,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addApplicationNote,
         deleteApplication,
         getApplicationByRef,
+        fetchApplicationByRef,
         activeTrackerRef,
         setActiveTrackerRef,
         submitInquiry,

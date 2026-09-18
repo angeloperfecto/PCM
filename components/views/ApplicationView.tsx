@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { usePCM } from '@/lib/store';
 import { ProgramLevel } from '@/lib/types';
 import { StudentRegistrationWizard } from '@/components/enrollment/StudentRegistrationWizard';
@@ -25,10 +25,19 @@ import {
 } from 'lucide-react';
 
 export const ApplicationView: React.FC = () => {
-  const { programs, submitApplication, getApplicationByRef, navigateTo, addToast } = usePCM();
+  const {
+    programs,
+    submitApplication,
+    getApplicationByRef,
+    fetchApplicationByRef,
+    activeTrackerRef,
+    setActiveTrackerRef,
+    navigateTo,
+    addToast,
+  } = usePCM();
 
   // Mode: 'apply' | 'track' | 'wizard'
-  const [mode, setMode] = useState<'apply' | 'track' | 'wizard'>('apply');
+  const [mode, setMode] = useState<'apply' | 'track' | 'wizard'>(() => (activeTrackerRef ? 'track' : 'apply'));
   const [wizardInitialRef, setWizardInitialRef] = useState<string>('');
   const [wizardInitialData, setWizardInitialData] = useState<any>(null);
 
@@ -60,9 +69,39 @@ export const ApplicationView: React.FC = () => {
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
 
   // Tracker State
-  const [trackRef, setTrackRef] = useState('');
+  const [trackRef, setTrackRef] = useState(() => (activeTrackerRef ? activeTrackerRef.trim() : ''));
   const [trackedApp, setTrackedApp] = useState<any | null>(null);
   const [searched, setSearched] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+
+  // Synchronize with activeTrackerRef if navigated from another component
+  useEffect(() => {
+    if (!activeTrackerRef || !activeTrackerRef.trim()) return;
+
+    let isMounted = true;
+    const ref = activeTrackerRef.trim();
+
+    const performInitialLookup = async () => {
+      setIsSearching(true);
+      let found = getApplicationByRef(ref);
+      if (!found && fetchApplicationByRef) {
+        found = await fetchApplicationByRef(ref);
+      }
+      if (isMounted) {
+        setTrackRef(ref);
+        setMode('track');
+        setTrackedApp(found || null);
+        setSearched(true);
+        setIsSearching(false);
+      }
+    };
+
+    performInitialLookup();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [activeTrackerRef, getApplicationByRef, fetchApplicationByRef]);
 
   // Handle Program select
   const handleProgramSelect = (progId: string) => {
@@ -94,12 +133,18 @@ export const ApplicationView: React.FC = () => {
   };
 
   // Track Application Lookup
-  const handleTrack = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!trackRef.trim()) return;
-    const found = getApplicationByRef(trackRef.trim());
+  const handleTrack = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const query = trackRef.trim();
+    if (!query) return;
+    setIsSearching(true);
+    let found = getApplicationByRef(query);
+    if (!found && fetchApplicationByRef) {
+      found = await fetchApplicationByRef(query);
+    }
     setTrackedApp(found || null);
     setSearched(true);
+    setIsSearching(false);
   };
 
   return (
@@ -182,9 +227,10 @@ export const ApplicationView: React.FC = () => {
               />
               <button
                 type="submit"
-                className="bg-[#18392B] hover:bg-[#588B76] hover:text-[#18392B] text-white font-bold px-6 py-3 rounded-lg text-xs uppercase tracking-wider transition cursor-pointer shrink-0"
+                disabled={isSearching}
+                className="bg-[#18392B] hover:bg-[#588B76] hover:text-[#18392B] text-white font-bold px-6 py-3 rounded-lg text-xs uppercase tracking-wider transition cursor-pointer shrink-0 disabled:opacity-50"
               >
-                Search
+                {isSearching ? 'Searching...' : 'Search'}
               </button>
             </form>
 
@@ -785,11 +831,17 @@ export const ApplicationView: React.FC = () => {
               initialAppRef={wizardInitialRef}
               initialAppData={wizardInitialData}
               onCancel={() => setMode('apply')}
-              onCompleted={(student) => {
-                setTrackRef(student.applicationNumber || '');
-                const found = getApplicationByRef(student.applicationNumber || '');
+              onCompleted={async (student) => {
+                const targetRef = student.applicationNumber || student.studentId || '';
+                setTrackRef(targetRef);
+                setIsSearching(true);
+                let found = getApplicationByRef(targetRef);
+                if (!found && fetchApplicationByRef) {
+                  found = await fetchApplicationByRef(targetRef);
+                }
                 setTrackedApp(found || null);
                 setSearched(true);
+                setIsSearching(false);
                 setMode('track');
               }}
             />

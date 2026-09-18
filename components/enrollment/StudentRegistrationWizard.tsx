@@ -68,6 +68,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     submitApplication,
     updateApplicationStatus,
     getApplicationByRef,
+    fetchApplicationByRef,
     navigateTo,
     addToast,
     logActivity,
@@ -84,7 +85,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   // Resolve initial target application from props
   const getInitialTargetApp = (): AdmissionApplication | null => {
     if (initialAppRef) {
-      const found = applications.find(
+      const found = getApplicationByRef(initialAppRef) || applications.find(
         (a) => a.referenceNumber?.trim().toLowerCase() === initialAppRef.trim().toLowerCase()
       );
       if (found) return found;
@@ -306,19 +307,26 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   );
 
   // Manually link & pre-fill by reference code or email
-  const handleSyncApplication = () => {
-    const q = syncQuery.trim().toLowerCase();
+  const handleSyncApplication = async () => {
+    const q = syncQuery.trim();
     if (!q) {
       addToast('info', 'Input Required', 'Please enter your Application Reference Number or email.');
       return;
     }
 
     setIsSyncing(true);
-    const found = applications.find(
-      (a) =>
-        a.referenceNumber?.trim().toLowerCase() === q ||
-        a.email?.trim().toLowerCase() === q
-    );
+    let found =
+      getApplicationByRef(q) ||
+      applications.find(
+        (a) =>
+          a.referenceNumber?.trim().toLowerCase() === q.toLowerCase() ||
+          a.email?.trim().toLowerCase() === q.toLowerCase() ||
+          a.studentId?.trim().toLowerCase() === q.toLowerCase()
+      );
+
+    if (!found && fetchApplicationByRef) {
+      found = await fetchApplicationByRef(q);
+    }
 
     if (found) {
       autoSyncFromApplication(found);
@@ -707,6 +715,9 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
       } else {
         // Record in applications collection for Admissions Committee review & tracking
         await submitApplication({
+          referenceNumber: formData.applicationNumber,
+          applicationNumber: formData.applicationNumber,
+          studentId: permanentStudentId,
           fullName,
           email: formData.email.trim(),
           phone: formData.mobileNumber,
@@ -714,6 +725,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
           gender: formData.sex,
           address: formData.currentAddress,
           program: formData.programTitle,
+          programTitle: formData.programTitle,
           church: formData.churchName,
           pastorName: formData.pastorName,
           pastorContact: formData.pastorContactNumber,
