@@ -448,8 +448,19 @@ export async function uploadFileToFirebaseStorage(
     // data URL so user operations NEVER fail silently or block content creation.
     if (typeof window !== 'undefined' && (optimizedBlob instanceof Blob || (file as any).type?.startsWith('image/'))) {
       try {
-        const dataUrl = await blobToDataUrl(optimizedBlob);
-        if (dataUrl && dataUrl.length < 880000) {
+        let dataUrl = await blobToDataUrl(optimizedBlob);
+        // If data URL is larger than 800KB, progressively recompress so it safely fits Firestore document limits
+        if (dataUrl && dataUrl.length > 800000) {
+          const smallerBlob = await compressImageFile(file, 1280, 960, 0.72);
+          const smallerDataUrl = await blobToDataUrl(smallerBlob);
+          if (smallerDataUrl && smallerDataUrl.length <= 880000) {
+            dataUrl = smallerDataUrl;
+          } else {
+            const compactBlob = await compressImageFile(file, 960, 720, 0.65);
+            dataUrl = await blobToDataUrl(compactBlob);
+          }
+        }
+        if (dataUrl) {
           console.info('Client-side optimized storage fallback applied successfully for asset.');
           return dataUrl;
         }
@@ -458,7 +469,7 @@ export async function uploadFileToFirebaseStorage(
       }
     }
 
-    throw new Error(lastErrorMsg || 'Upload could not be saved to storage. Please try again with a smaller file.');
+    throw new Error(lastErrorMsg || 'Upload could not be processed. Please try again.');
   } catch (error: any) {
     console.error('Storage upload failed:', error?.message || error);
     throw new Error(error?.message || 'Storage upload failed. Please try again.');

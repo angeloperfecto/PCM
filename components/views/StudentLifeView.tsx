@@ -443,6 +443,7 @@ export const StudentLifeView: React.FC = () => {
                         fill
                         sizes="80px"
                         className="object-cover"
+                        unoptimized={leader.photoUrl?.startsWith('data:') || leader.photoUrl?.startsWith('blob:')}
                         referrerPolicy="no-referrer"
                       />
                     ) : (

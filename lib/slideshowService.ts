@@ -282,8 +282,14 @@ export async function uploadSlideshowImage(
   slideId?: string
 ): Promise<{ success: boolean; url?: string; dataUrl?: string; error?: string; slideId?: string }> {
   try {
+    // If file is large (> 2MB), optimize client-side first so upload is instantaneous for any size
+    const uploadFile = file.size > 2 * 1024 * 1024
+      ? await compressImageFile(file, 1920, 1080, 0.85)
+      : file;
+
     const formData = new FormData();
-    formData.append('file', file);
+    const rawFileName = file.name || `slide_${Date.now()}.jpg`;
+    formData.append('file', uploadFile, rawFileName);
     if (slideId) {
       formData.append('slideId', slideId);
     }

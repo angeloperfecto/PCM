@@ -112,11 +112,6 @@ export const ChangeAvatarModal: React.FC<ChangeAvatarModalProps> = ({
       return;
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setUploadError('File size exceeds 10MB. Please choose a smaller image.');
-      return;
-    }
-
     setIsUploading(true);
     setUploadError(null);
 
@@ -377,7 +372,7 @@ export const ChangeAvatarModal: React.FC<ChangeAvatarModalProps> = ({
                     Click to browse or drag and drop an image
                   </p>
                   <p className="text-xs text-slate-500 mt-1">
-                    Supports PNG, JPG, WebP up to 10MB. Images are automatically optimized.
+                    Supports PNG, JPG, WebP — Any file size supported (auto-optimized).
                   </p>
                 </div>
                 <button

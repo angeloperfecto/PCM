@@ -175,6 +175,7 @@ export const ScrapbookView: React.FC = () => {
                     fill
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                    unoptimized={item.imageUrl?.startsWith('data:') || item.imageUrl?.startsWith('blob:')}
                     referrerPolicy="no-referrer"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
@@ -293,6 +294,7 @@ export const ScrapbookView: React.FC = () => {
                 fill
                 className="object-contain"
                 sizes="100vw"
+                unoptimized={selectedScrapbookItem.imageUrl?.startsWith('data:') || selectedScrapbookItem.imageUrl?.startsWith('blob:')}
                 referrerPolicy="no-referrer"
               />
 

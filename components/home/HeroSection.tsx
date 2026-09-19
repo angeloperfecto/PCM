@@ -96,7 +96,7 @@ export const HeroSection: React.FC = () => {
             idx === slideIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
           }`}
           style={{
-            backgroundImage: `url(${getSlideImageUrl(s)})`,
+            backgroundImage: `url("${getSlideImageUrl(s)}")`,
             backgroundSize: 'cover',
             backgroundPosition: 'center 30%',
           }}

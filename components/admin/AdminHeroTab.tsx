@@ -172,10 +172,6 @@ export const AdminHeroTab: React.FC = () => {
       setUploadError('Please select a valid image file (JPG, PNG, WEBP).');
       return;
     }
-    if (file.size > 15 * 1024 * 1024) {
-      setUploadError('Image size must be less than 15MB.');
-      return;
-    }
 
     setIsUploading(true);
     setUploadError(null);
@@ -183,8 +179,8 @@ export const AdminHeroTab: React.FC = () => {
     const uploadRes = await uploadSlideshowImage(file, editingSlide?.id);
     setIsUploading(false);
 
-    if (uploadRes.success && (uploadRes.dataUrl || uploadRes.url)) {
-      setFormImage(uploadRes.dataUrl || uploadRes.url || '');
+    if (uploadRes.success && (uploadRes.url || uploadRes.dataUrl)) {
+      setFormImage(uploadRes.url || uploadRes.dataUrl || '');
       addToast({
         title: 'Image Uploaded',
         message: 'Image uploaded and synchronized across all users.',
@@ -221,8 +217,8 @@ export const AdminHeroTab: React.FC = () => {
     });
 
     const uploadRes = await uploadSlideshowImage(file, quickReplaceSlideId);
-    if (uploadRes.success && (uploadRes.dataUrl || uploadRes.url)) {
-      const uploadedUrl: string = uploadRes.dataUrl || uploadRes.url!;
+    if (uploadRes.success && (uploadRes.url || uploadRes.dataUrl)) {
+      const uploadedUrl: string = uploadRes.url || uploadRes.dataUrl!;
       const updated: HeroSlide[] = slides.map((s) =>
         s.id === quickReplaceSlideId ? { ...s, image: uploadedUrl, updatedAt: new Date().toISOString() } : s
       );
@@ -861,7 +857,7 @@ export const AdminHeroTab: React.FC = () => {
                           Click to upload or drag & drop image
                         </p>
                         <p className="text-[11px] text-slate-400">
-                          PNG, JPG, WEBP up to 15MB. Stored permanently in Firebase Storage.
+                          PNG, JPG, WEBP — Any file size supported (auto-optimized). Stored permanently.
                         </p>
                       </>
                     )}

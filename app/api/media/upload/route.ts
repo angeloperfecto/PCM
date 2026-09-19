@@ -19,11 +19,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 });
     }
 
-    // Limit size to 25MB
-    const MAX_SIZE = 25 * 1024 * 1024;
+    // Allow any file size for admin uploads (up to 250MB for raw/high-res photography)
+    const MAX_SIZE = 250 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
       return NextResponse.json(
-        { error: 'File size exceeds 25MB limit' },
+        { error: 'File size exceeds maximum 250MB capacity.' },
         { status: 400 }
       );
     }

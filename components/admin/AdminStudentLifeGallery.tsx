@@ -197,23 +197,17 @@ export const AdminStudentLifeGallery: React.FC = () => {
     }
   };
 
-  // File selection & validation
+  // File selection & validation (Supports any image size with auto-compression)
   const handleFilesSelected = (files: FileList | null) => {
     if (!files || files.length === 0) return;
 
     const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
-    const maxSizeBytes = 15 * 1024 * 1024; // 15MB limit
     const newQueueItems: UploadQueueItem[] = [];
 
     Array.from(files).forEach((file) => {
       // Validate type
       if (!allowedTypes.includes(file.type.toLowerCase())) {
         addToast('error', 'Invalid File Format', `${file.name} is not a supported format (JPG, PNG, WEBP).`);
-        return;
-      }
-      // Validate size
-      if (file.size > maxSizeBytes) {
-        addToast('error', 'File Too Large', `${file.name} exceeds the 15MB limit.`);
         return;
       }
 
@@ -534,6 +528,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
                           fill
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          unoptimized={coverImg.startsWith('data:') || coverImg.startsWith('blob:')}
                           referrerPolicy="no-referrer"
                         />
                       ) : (
@@ -823,6 +818,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
                           fill
                           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-200"
+                          unoptimized={photo.imageUrl?.startsWith('data:') || photo.imageUrl?.startsWith('blob:')}
                           referrerPolicy="no-referrer"
                         />
 
@@ -1006,7 +1002,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
                 Click or drag & drop images to add to the queue
               </p>
               <p className="text-[11px] text-slate-500 mt-1">
-                Select multiple JPG, PNG, or WEBP photos. Max 15MB each.
+                Select multiple JPG, PNG, or WEBP photos. Any file size supported (auto-optimized on upload).
               </p>
             </div>
 
@@ -1028,6 +1024,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
                         alt="Preview"
                         fill
                         className="object-cover"
+                        unoptimized={true}
                         referrerPolicy="no-referrer"
                       />
                     </div>
@@ -1270,6 +1267,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
                   alt="Edit photo"
                   fill
                   className="object-contain"
+                  unoptimized={editingPhoto.imageUrl?.startsWith('data:') || editingPhoto.imageUrl?.startsWith('blob:')}
                   referrerPolicy="no-referrer"
                 />
               </div>
@@ -1391,6 +1389,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
               alt="Preview"
               fill
               className="object-contain"
+              unoptimized={previewPhotoUrl.startsWith('data:') || previewPhotoUrl.startsWith('blob:')}
               referrerPolicy="no-referrer"
             />
           </div>

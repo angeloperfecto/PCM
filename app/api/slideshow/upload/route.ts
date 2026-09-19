@@ -23,10 +23,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File must be an image (PNG, JPG, WEBP, etc.)' }, { status: 400 });
     }
 
-    // Limit size to 20MB
-    const MAX_SIZE = 20 * 1024 * 1024;
+    // Allow any file size for admin uploads (up to 250MB)
+    const MAX_SIZE = 250 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
-      return NextResponse.json({ error: 'Image file size exceeds 20MB limit' }, { status: 400 });
+      return NextResponse.json({ error: 'Image file size exceeds maximum 250MB capacity.' }, { status: 400 });
     }
 
     const arrayBuffer = await file.arrayBuffer();
@@ -45,15 +45,20 @@ export async function POST(req: NextRequest) {
       const sharpModule = await import('sharp');
       const sharp = sharpModule.default;
       optimizedBuffer = await sharp(buffer)
-        .resize({ width: 1440, height: 900, fit: 'cover' })
-        .webp({ quality: 75 })
+        .resize({ width: 1920, height: 1080, fit: 'cover', withoutEnlargement: true })
+        .webp({ quality: 80 })
         .toBuffer();
     } catch {
       // Fallback if sharp is not installed or format is not supported
       optimizedBuffer = buffer;
     }
 
-    const dataUrl = `data:image/webp;base64,${optimizedBuffer.toString('base64')}`;
+    // Only construct dataUrl if under safe 800KB Firestore document limit
+    const fitsInFirestore = optimizedBuffer.length < 800000;
+    const dataUrl = fitsInFirestore
+      ? `data:image/webp;base64,${optimizedBuffer.toString('base64')}`
+      : '';
+    const publicEndpointUrl = `/api/slideshow/image?id=${slideId}&v=${timestamp}`;
 
     // 2. Authoritative Persistence: Save to Firestore siteContent/slideshow_image_<slideId>
     // This guarantees immediate global visibility for ALL users across any container, shared link, or device!
@@ -66,7 +71,7 @@ export async function POST(req: NextRequest) {
         docRef,
         {
           id: slideId,
-          image: dataUrl,
+          image: dataUrl || publicEndpointUrl,
           filename: uniqueFilename,
           updatedAt: new Date().toISOString(),
         },

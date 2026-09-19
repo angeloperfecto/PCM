@@ -11,7 +11,7 @@ import {
 } from './firebase';
 import { MediaItem } from './types';
 
-export const MAX_MEDIA_FILE_SIZE = 10 * 1024 * 1024; // 10 MB limit
+export const MAX_MEDIA_FILE_SIZE = 250 * 1024 * 1024; // 250 MB (Supports any image size for admin uploads)
 export const ALLOWED_IMAGE_TYPES = [
   'image/jpeg',
   'image/png',
@@ -39,12 +39,12 @@ export function validateMediaFile(file: File | Blob): { valid: boolean; error?: 
     return { valid: false, error: 'No file provided for upload.' };
   }
 
-  // Size validation
+  // Size validation (relaxed to allow any practical admin upload)
   if (file.size > MAX_MEDIA_FILE_SIZE) {
     const sizeInMB = (file.size / (1024 * 1024)).toFixed(1);
     return {
       valid: false,
-      error: `File size (${sizeInMB} MB) exceeds maximum allowed upload size of 10 MB.`,
+      error: `File size (${sizeInMB} MB) exceeds maximum allowed upload capacity.`,
     };
   }
 

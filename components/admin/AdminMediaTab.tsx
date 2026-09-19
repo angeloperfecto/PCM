@@ -663,7 +663,7 @@ export const AdminMediaTab: React.FC = () => {
                 <div
                   onClick={() => handleOpenDetail(m)}
                   className="w-full h-36 bg-slate-100 bg-cover bg-center border-b border-slate-200 relative cursor-pointer overflow-hidden"
-                  style={{ backgroundImage: `url(${displayUrl})` }}
+                  style={{ backgroundImage: `url("${displayUrl}")` }}
                 >
                   {/* Subtle Gradient Overlay */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
@@ -750,7 +750,7 @@ export const AdminMediaTab: React.FC = () => {
                       <div
                         onClick={() => handleOpenDetail(m)}
                         className="w-12 h-12 rounded-lg bg-cover bg-center border border-slate-200 cursor-pointer hover:opacity-90"
-                        style={{ backgroundImage: `url(${displayUrl})` }}
+                        style={{ backgroundImage: `url("${displayUrl}")` }}
                       />
                     </td>
                     <td className="py-2.5 px-4 max-w-xs">
@@ -895,7 +895,7 @@ export const AdminMediaTab: React.FC = () => {
                       <div className="space-y-2">
                         <div
                           className="w-full h-36 rounded-lg bg-cover bg-center border border-slate-200 shadow-inner"
-                          style={{ backgroundImage: `url(${filePreview})` }}
+                          style={{ backgroundImage: `url("${filePreview}")` }}
                         />
                         <div className="flex items-center justify-between text-[11px] text-slate-600 px-1">
                           <span className="font-semibold truncate max-w-[200px]">
@@ -923,8 +923,7 @@ export const AdminMediaTab: React.FC = () => {
                           Click to browse or drag & drop image here
                         </div>
                         <p className="text-[10px] text-slate-400">
-                          Supports PNG, JPG, JPEG, WEBP, GIF, SVG (up to 25MB). Permanently stored in
-                          Firebase Storage.
+                          Supports PNG, JPG, JPEG, WEBP, GIF, SVG — Any file size supported (auto-optimized). Permanently stored.
                         </p>
                       </div>
                     )}
@@ -1118,6 +1117,7 @@ export const AdminMediaTab: React.FC = () => {
                   fill
                   sizes="(max-width: 768px) 100vw, 672px"
                   className="object-contain"
+                  unoptimized={Boolean((detailItem.dataUrl || detailItem.downloadURL || detailItem.url)?.startsWith('data:') || (detailItem.dataUrl || detailItem.downloadURL || detailItem.url)?.startsWith('blob:'))}
                   referrerPolicy="no-referrer"
                   onError={() => {
                     console.warn('Preview image failed to load for:', detailItem.title);

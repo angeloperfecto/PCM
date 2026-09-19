@@ -275,6 +275,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                           fill
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-500"
+                          unoptimized={coverImg.startsWith('data:') || coverImg.startsWith('blob:')}
                           referrerPolicy="no-referrer"
                         />
                       ) : (
@@ -441,6 +442,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                       className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      unoptimized={photo.imageUrl?.startsWith('data:') || photo.imageUrl?.startsWith('blob:')}
                       referrerPolicy="no-referrer"
                     />
 
@@ -502,6 +504,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                       fill
                       sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
                       className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      unoptimized={item.photo.imageUrl?.startsWith('data:') || item.photo.imageUrl?.startsWith('blob:')}
                       referrerPolicy="no-referrer"
                     />
 
@@ -597,6 +600,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                 priority
                 className="object-contain"
                 sizes="(max-width: 1280px) 100vw, 1200px"
+                unoptimized={currentPhoto.imageUrl?.startsWith('data:') || currentPhoto.imageUrl?.startsWith('blob:')}
                 referrerPolicy="no-referrer"
               />
             </div>
@@ -623,6 +627,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
               <div className="flex items-center justify-center gap-2 overflow-x-auto py-1 max-w-2xl mx-auto">
                 {lightboxState.photos.map((p, idx) => {
                   const isSelected = idx === lightboxState.currentIndex;
+                  const thumbSrc = p.thumbnailUrl || p.imageUrl;
                   return (
                     <button
                       key={p.id}
@@ -637,10 +642,11 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                       }`}
                     >
                       <Image
-                        src={p.thumbnailUrl || p.imageUrl}
+                        src={thumbSrc}
                         alt="thumb"
                         fill
                         className="object-cover"
+                        unoptimized={thumbSrc?.startsWith('data:') || thumbSrc?.startsWith('blob:')}
                         referrerPolicy="no-referrer"
                       />
                     </button>

@@ -35,15 +35,15 @@ export async function uploadStudentFile(
     };
   }
 
-  // 10MB limit
-  if (file.size > 10 * 1024 * 1024) {
+  // File size limit (Supports any practical file size up to 250MB)
+  if (file.size > 250 * 1024 * 1024) {
     return {
       success: false,
       url: '',
       fileName: file.name,
       fileSize: formatFileSize(file.size),
       fileType: file.type,
-      error: 'File exceeds maximum allowed size of 10MB.',
+      error: 'File exceeds maximum allowed upload capacity of 250MB.',
     };
   }
 
