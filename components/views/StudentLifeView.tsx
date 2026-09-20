@@ -145,6 +145,16 @@ export const StudentLifeView: React.FC = () => {
               {config.applyButtonText || 'Apply to Join PCM'}
             </button>
             <button
+              onClick={() => {
+                const el = document.getElementById('gallery');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              className="bg-[#10261D] hover:bg-[#050b16] text-slate-200 text-xs font-semibold px-4 py-2 rounded-sm border border-[#588B76]/40 transition flex items-center gap-2 cursor-pointer"
+            >
+              <Camera className="w-3.5 h-3.5 text-[#588B76]" />
+              <span>Campus Moments in Pictures</span>
+            </button>
+            <button
               onClick={() => navigateTo('resources', 'sermons')}
               className="bg-[#10261D] hover:bg-[#050b16] text-slate-200 text-xs font-semibold px-4 py-2 rounded-sm border border-[#588B76]/40 transition flex items-center gap-2 cursor-pointer"
             >
