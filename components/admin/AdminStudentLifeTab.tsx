@@ -88,6 +88,7 @@ export const AdminStudentLifeTab: React.FC = () => {
 
   const [activeSubTab, setActiveSubTab] = useState<SubTabType>('banner');
   const [isSaving, setIsSaving] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Editing modals/states for Pillars
   const [editingPillar, setEditingPillar] = useState<SpiritualPillar | null>(null);
@@ -140,10 +141,14 @@ export const AdminStudentLifeTab: React.FC = () => {
   };
 
   const handleResetToDefault = () => {
-    if (window.confirm('Reset all Student Life content to default PCM settings? Any unsaved edits will be lost.')) {
-      setConfig(INITIAL_STUDENT_LIFE_CONFIG);
-      addToast('info', 'Reset to Defaults', 'Draft reset to institutional defaults. Click "Save Changes" to publish.');
-    }
+    setShowResetConfirm(true);
+  };
+
+  const handleConfirmReset = () => {
+    setConfig(INITIAL_STUDENT_LIFE_CONFIG);
+    setIsDirty(true);
+    setShowResetConfirm(false);
+    addToast('info', 'Reset to Defaults', 'Draft reset to institutional defaults. Click "Save Changes" to publish.');
   };
 
   // Pillar CRUD
@@ -1859,6 +1864,62 @@ export const AdminStudentLifeTab: React.FC = () => {
 
           {/* Facebook-Inspired Multi-Image Gallery & Album Manager */}
           <AdminStudentLifeGallery />
+        </div>
+      )}
+
+      {/* RESET CONFIRMATION MODAL */}
+      {showResetConfirm && (
+        <div
+          className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+          onClick={() => setShowResetConfirm(false)}
+        >
+          <div
+            className="bg-white rounded-md shadow-xl max-w-md w-full overflow-hidden border border-slate-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-amber-50/60">
+              <div className="flex items-center gap-2 text-amber-800">
+                <RotateCcw className="w-4 h-4 text-amber-600" />
+                <h4 className="font-serif font-bold text-base text-slate-900">
+                  Reset Student Life Defaults
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 text-xs text-slate-600 space-y-2 leading-relaxed">
+              <p>
+                Reset all Student Life content to default PCM settings? Any unsaved edits will be lost.
+              </p>
+              <p className="text-slate-500 text-[11px]">
+                Click &quot;Save Changes&quot; afterward if you wish to publish the restored defaults to the live site.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setShowResetConfirm(false)}
+                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-700 rounded-sm hover:bg-white cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReset}
+                className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset to Defaults</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

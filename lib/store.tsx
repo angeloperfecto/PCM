@@ -3042,19 +3042,52 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetAlbum = studentLifeAlbums.find((a) => a.id === albumId);
     if (!targetAlbum) return;
 
-    const remainingPhotos = (targetAlbum.photos || []).filter((p) => p.id !== photoId);
+    const currentPhotos = Array.isArray(targetAlbum.photos) ? targetAlbum.photos : [];
+    const remainingPhotos = currentPhotos.filter((p) => p.id !== photoId);
+    const deletedPhoto = currentPhotos.find((p) => p.id === photoId);
+
     let newCover = targetAlbum.coverPhotoUrl;
-    const deletedPhoto = targetAlbum.photos.find((p) => p.id === photoId);
     if (deletedPhoto && deletedPhoto.imageUrl === targetAlbum.coverPhotoUrl) {
       newCover = remainingPhotos[0]?.imageUrl || '';
+    } else if (!newCover && remainingPhotos.length > 0) {
+      newCover = remainingPhotos[0].imageUrl;
     }
 
-    await updateStudentLifeAlbum(albumId, {
+    const now = new Date().toISOString();
+    const updates: Partial<StudentLifeAlbum> = {
       photos: remainingPhotos,
       photoCount: remainingPhotos.length,
       coverPhotoUrl: newCover,
-    });
+      updatedAt: now,
+    };
 
+    const sanitized = cleanFirestoreData(updates);
+
+    // Optimistically update local state immediately
+    setStudentLifeAlbums((prev) =>
+      prev.map((alb) => {
+        if (alb.id !== albumId) return alb;
+        return {
+          ...alb,
+          ...updates,
+          photoCount: remainingPhotos.length,
+        };
+      })
+    );
+
+    try {
+      await safeSetDoc(doc(db, 'studentLifeAlbums', albumId), sanitized, { merge: true });
+    } catch (e) {
+      console.warn('Student life photo delete error:', e);
+    }
+
+    logActivity(
+      'DELETE',
+      'Student Life Photo',
+      photoId,
+      targetAlbum.title,
+      `Deleted photo "${deletedPhoto?.caption || deletedPhoto?.fileName || photoId}" from album "${targetAlbum.title}".`
+    );
     addToast('info', 'Photo Removed', 'Photo deleted from album.');
   };
 

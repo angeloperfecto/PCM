@@ -29,6 +29,39 @@ interface StudentLifeGalleryPublicProps {
   subtitle?: string;
 }
 
+const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop';
+
+const SafeGalleryImage: React.FC<{
+  src: string;
+  alt: string;
+  fill?: boolean;
+  className?: string;
+  sizes?: string;
+  priority?: boolean;
+}> = ({ src, alt, fill = true, className = '', sizes, priority = false }) => {
+  const [hasError, setHasError] = useState(false);
+  const [prevSrc, setPrevSrc] = useState(src);
+
+  if (prevSrc !== src) {
+    setPrevSrc(src);
+    setHasError(false);
+  }
+
+  return (
+    <Image
+      src={hasError || !src ? FALLBACK_PHOTO : src}
+      alt={alt}
+      fill={fill}
+      sizes={sizes}
+      priority={priority}
+      className={className}
+      unoptimized={true}
+      referrerPolicy="no-referrer"
+      onError={() => setHasError(true)}
+    />
+  );
+};
+
 export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> = ({
   badge = 'Campus Moments',
   title = 'STUDENT LIFE IN PICTURES',
@@ -269,14 +302,12 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                     {/* Album Card Image Cover with FB style photo counter */}
                     <div className="h-60 w-full relative bg-slate-100 overflow-hidden">
                       {coverImg ? (
-                        <Image
+                        <SafeGalleryImage
                           src={coverImg}
                           alt={album.title}
                           fill
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-500"
-                          unoptimized={coverImg.startsWith('data:') || coverImg.startsWith('blob:')}
-                          referrerPolicy="no-referrer"
                         />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center text-slate-300">
@@ -436,14 +467,12 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                     }
                     className="group relative bg-slate-100 border border-slate-200 rounded-sm overflow-hidden shadow-2xs hover:shadow-md hover:border-[#588B76] transition cursor-pointer h-60"
                   >
-                    <Image
+                    <SafeGalleryImage
                       src={photo.imageUrl}
                       alt={photo.caption || photo.fileName || currentAlbum.title}
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                       className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      unoptimized={photo.imageUrl?.startsWith('data:') || photo.imageUrl?.startsWith('blob:')}
-                      referrerPolicy="no-referrer"
                     />
 
                     {/* Gradient Overlay for Caption */}
@@ -498,14 +527,12 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                     }
                     className="group relative bg-slate-100 border border-slate-200 rounded-sm overflow-hidden h-44 shadow-2xs hover:shadow-xs hover:border-[#588B76] transition cursor-pointer"
                   >
-                    <Image
+                    <SafeGalleryImage
                       src={item.photo.imageUrl}
                       alt={item.photo.caption || item.album.title}
                       fill
                       sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
                       className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      unoptimized={item.photo.imageUrl?.startsWith('data:') || item.photo.imageUrl?.startsWith('blob:')}
-                      referrerPolicy="no-referrer"
                     />
 
                     {/* Overlay */}
@@ -593,15 +620,13 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
 
             {/* Active Image Container */}
             <div className="relative w-full h-full max-w-6xl max-h-[75vh] flex items-center justify-center">
-              <Image
+              <SafeGalleryImage
                 src={currentPhoto.imageUrl}
                 alt={currentPhoto.caption || 'Campus photo'}
                 fill
                 priority
                 className="object-contain"
                 sizes="(max-width: 1280px) 100vw, 1200px"
-                unoptimized={currentPhoto.imageUrl?.startsWith('data:') || currentPhoto.imageUrl?.startsWith('blob:')}
-                referrerPolicy="no-referrer"
               />
             </div>
           </div>
@@ -641,13 +666,11 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                           : 'opacity-50 hover:opacity-100'
                       }`}
                     >
-                      <Image
+                      <SafeGalleryImage
                         src={thumbSrc}
                         alt="thumb"
                         fill
                         className="object-cover"
-                        unoptimized={thumbSrc?.startsWith('data:') || thumbSrc?.startsWith('blob:')}
-                        referrerPolicy="no-referrer"
                       />
                     </button>
                   );

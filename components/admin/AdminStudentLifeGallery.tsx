@@ -1,10 +1,43 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
-import { StudentLifeAlbum, StudentLifePhotoItem } from '@/lib/types';
+import { StudentLifeAlbum, StudentLifePhotoItem, MediaItem } from '@/lib/types';
 import { compressImageFile, uploadFileToFirebaseStorage } from '@/lib/firebase';
+
+const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop';
+
+const SafeAdminImage: React.FC<{
+  src: string;
+  alt: string;
+  fill?: boolean;
+  className?: string;
+  sizes?: string;
+  priority?: boolean;
+}> = ({ src, alt, fill = true, className = '', sizes, priority = false }) => {
+  const [hasError, setHasError] = useState(false);
+  const [prevSrc, setPrevSrc] = useState(src);
+
+  if (prevSrc !== src) {
+    setPrevSrc(src);
+    setHasError(false);
+  }
+
+  return (
+    <Image
+      src={hasError || !src ? FALLBACK_PHOTO : src}
+      alt={alt}
+      fill={fill}
+      sizes={sizes}
+      priority={priority}
+      className={className}
+      unoptimized={true}
+      referrerPolicy="no-referrer"
+      onError={() => setHasError(true)}
+    />
+  );
+};
 import {
   Camera,
   Plus,
@@ -30,6 +63,7 @@ import {
   RotateCw,
   FolderOpen,
   Image as ImageIcon,
+  Loader2,
 } from 'lucide-react';
 
 interface UploadQueueItem {
@@ -107,6 +141,60 @@ export const AdminStudentLifeGallery: React.FC = () => {
 
   // Lightbox preview for admin
   const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+
+  // In-app Photo Deletion Dialog state
+  const [photoToDelete, setPhotoToDelete] = useState<{
+    albumId: string;
+    photo: StudentLifePhotoItem;
+  } | null>(null);
+  const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
+
+  // In-app Album Deletion Dialog state
+  const [albumToDelete, setAlbumToDelete] = useState<{
+    id: string;
+    title: string;
+    photoCount: number;
+  } | null>(null);
+  const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
+
+  // Confirm photo deletion handler
+  const handleConfirmDeletePhoto = async () => {
+    if (!photoToDelete) return;
+    try {
+      setIsDeletingPhoto(true);
+      await deleteStudentLifePhoto(photoToDelete.albumId, photoToDelete.photo.id);
+      if (previewPhotoUrl === photoToDelete.photo.imageUrl) {
+        setPreviewPhotoUrl(null);
+      }
+      if (editingPhoto?.id === photoToDelete.photo.id) {
+        setEditingPhoto(null);
+      }
+      setPhotoToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete photo:', err);
+      addToast('error', 'Delete Failed', 'Could not delete photo. Please try again.');
+    } finally {
+      setIsDeletingPhoto(false);
+    }
+  };
+
+  // Confirm album deletion handler
+  const handleConfirmDeleteAlbum = async () => {
+    if (!albumToDelete) return;
+    try {
+      setIsDeletingAlbum(true);
+      if (selectedAlbumId === albumToDelete.id) {
+        setSelectedAlbumId(null);
+      }
+      await deleteStudentLifeAlbum(albumToDelete.id);
+      setAlbumToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete album:', err);
+      addToast('error', 'Delete Failed', 'Could not delete album.');
+    } finally {
+      setIsDeletingAlbum(false);
+    }
+  };
 
   // Filtered albums
   const filteredAlbums = studentLifeAlbums.filter((alb) => {
@@ -189,12 +277,12 @@ export const AdminStudentLifeGallery: React.FC = () => {
       addToast('error', 'Access Denied', 'Content Admin privileges required.');
       return;
     }
-    if (window.confirm(`Are you sure you want to delete the album "${title}" and all its photos? This action cannot be undone.`)) {
-      if (selectedAlbumId === id) {
-        setSelectedAlbumId(null);
-      }
-      await deleteStudentLifeAlbum(id);
-    }
+    const targetAlb = studentLifeAlbums.find((a) => a.id === id);
+    setAlbumToDelete({
+      id,
+      title,
+      photoCount: targetAlb?.photos?.length || targetAlb?.photoCount || 0,
+    });
   };
 
   // File selection & validation (Supports any image size with auto-compression)
@@ -522,14 +610,12 @@ export const AdminStudentLifeGallery: React.FC = () => {
                       className="h-48 w-full relative bg-slate-100 cursor-pointer overflow-hidden"
                     >
                       {coverImg ? (
-                        <Image
+                        <SafeAdminImage
                           src={coverImg}
                           alt={album.title}
                           fill
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-300"
-                          unoptimized={coverImg.startsWith('data:') || coverImg.startsWith('blob:')}
-                          referrerPolicy="no-referrer"
                         />
                       ) : (
                         <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1">
@@ -812,14 +898,12 @@ export const AdminStudentLifeGallery: React.FC = () => {
                         onClick={() => setPreviewPhotoUrl(photo.imageUrl)}
                         className="h-36 w-full relative bg-slate-100 cursor-pointer"
                       >
-                        <Image
+                        <SafeAdminImage
                           src={photo.imageUrl}
                           alt={photo.caption || photo.fileName || 'PCM Student Life Photo'}
                           fill
                           sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-200"
-                          unoptimized={photo.imageUrl?.startsWith('data:') || photo.imageUrl?.startsWith('blob:')}
-                          referrerPolicy="no-referrer"
                         />
 
                         {/* Badges */}
@@ -903,12 +987,10 @@ export const AdminStudentLifeGallery: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => {
-                                if (window.confirm('Delete this photo from the album?')) {
-                                  deleteStudentLifePhoto(selectedAlbum.id, photo.id);
-                                }
+                                setPhotoToDelete({ albumId: selectedAlbum.id, photo });
                               }}
-                              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xs cursor-pointer"
-                              title="Delete photo"
+                              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xs cursor-pointer transition"
+                              title="Delete photo from album"
                             >
                               <Trash2 className="w-3 h-3" />
                             </button>
@@ -946,13 +1028,9 @@ export const AdminStudentLifeGallery: React.FC = () => {
                 type="button"
                 onClick={() => {
                   if (isUploading) {
-                    if (window.confirm('An upload is in progress. Are you sure you want to exit?')) {
-                      handleCancelUpload();
-                      setIsUploadDrawerOpen(false);
-                    }
-                  } else {
-                    setIsUploadDrawerOpen(false);
+                    handleCancelUpload();
                   }
+                  setIsUploadDrawerOpen(false);
                 }}
                 className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
               >
@@ -1262,13 +1340,11 @@ export const AdminStudentLifeGallery: React.FC = () => {
 
             <div className="space-y-3 text-xs">
               <div className="h-40 w-full relative bg-slate-100 rounded-xs overflow-hidden border border-slate-200">
-                <Image
+                <SafeAdminImage
                   src={editingPhoto.imageUrl}
                   alt="Edit photo"
                   fill
                   className="object-contain"
-                  unoptimized={editingPhoto.imageUrl?.startsWith('data:') || editingPhoto.imageUrl?.startsWith('blob:')}
-                  referrerPolicy="no-referrer"
                 />
               </div>
 
@@ -1294,28 +1370,44 @@ export const AdminStudentLifeGallery: React.FC = () => {
               </div>
             </div>
 
-            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
               <button
                 type="button"
-                onClick={() => setEditingPhoto(null)}
-                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-600 rounded-sm hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={async () => {
-                  await updateStudentLifePhoto(selectedAlbum.id, editingPhoto.id, {
-                    caption: editingPhoto.caption,
-                    fileName: editingPhoto.fileName,
-                  });
-                  setEditingPhoto(null);
-                  addToast('success', 'Caption Updated', 'Photo caption saved.');
+                onClick={() => {
+                  if (selectedAlbum) {
+                    setPhotoToDelete({ albumId: selectedAlbum.id, photo: editingPhoto });
+                    setEditingPhoto(null);
+                  }
                 }}
-                className="px-4 py-1.5 bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold rounded-sm cursor-pointer shadow-xs"
+                className="px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-sm flex items-center gap-1.5 cursor-pointer transition border border-red-200"
               >
-                Save Caption
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Photo</span>
               </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPhoto(null)}
+                  className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-600 rounded-sm hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await updateStudentLifePhoto(selectedAlbum.id, editingPhoto.id, {
+                      caption: editingPhoto.caption,
+                      fileName: editingPhoto.fileName,
+                    });
+                    setEditingPhoto(null);
+                    addToast('success', 'Caption Updated', 'Photo caption saved.');
+                  }}
+                  className="px-4 py-1.5 bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold rounded-sm cursor-pointer shadow-xs"
+                >
+                  Save Caption
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1371,27 +1463,254 @@ export const AdminStudentLifeGallery: React.FC = () => {
       )}
 
       {/* LIGHTBOX PREVIEW MODAL FOR ADMIN */}
-      {previewPhotoUrl && (
-        <div
-          onClick={() => setPreviewPhotoUrl(null)}
-          className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-50 p-4"
-        >
-          <button
-            type="button"
+      {previewPhotoUrl && (() => {
+        const currentLightboxPhoto = selectedAlbum?.photos?.find((p) => p.imageUrl === previewPhotoUrl) || null;
+        const isCurrentCover = selectedAlbum && currentLightboxPhoto?.imageUrl === selectedAlbum.coverPhotoUrl;
+
+        return (
+          <div
+            className="fixed inset-0 bg-black/95 backdrop-blur-sm flex flex-col items-center justify-between z-50 p-4"
             onClick={() => setPreviewPhotoUrl(null)}
-            className="absolute top-4 right-4 text-white hover:text-slate-300 p-2 cursor-pointer z-10"
           >
-            <X className="w-6 h-6" />
-          </button>
-          <div className="relative max-w-4xl max-h-[85vh] w-full h-full">
-            <Image
-              src={previewPhotoUrl}
-              alt="Preview"
-              fill
-              className="object-contain"
-              unoptimized={previewPhotoUrl.startsWith('data:') || previewPhotoUrl.startsWith('blob:')}
-              referrerPolicy="no-referrer"
-            />
+            {/* Top Bar with actions */}
+            <div
+              className="w-full max-w-5xl flex items-center justify-between py-2 text-white z-10 bg-black/40 px-4 rounded-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="min-w-0 pr-4">
+                <p className="text-xs font-semibold text-white truncate">
+                  {currentLightboxPhoto?.fileName || 'Photo Preview'}
+                </p>
+                {currentLightboxPhoto?.caption && (
+                  <p className="text-[11px] text-slate-300 truncate">
+                    &ldquo;{currentLightboxPhoto.caption}&rdquo;
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {selectedAlbum && currentLightboxPhoto && !isCurrentCover && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStudentLifeAlbumCover(selectedAlbum.id, currentLightboxPhoto.imageUrl);
+                    }}
+                    className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white text-xs font-medium rounded-xs transition cursor-pointer"
+                    title="Set as album cover photo"
+                  >
+                    Set as Cover
+                  </button>
+                )}
+
+                {selectedAlbum && currentLightboxPhoto && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoToDelete({ albumId: selectedAlbum.id, photo: currentLightboxPhoto });
+                      setPreviewPhotoUrl(null);
+                    }}
+                    className="px-2.5 py-1 bg-red-600/80 hover:bg-red-600 text-white text-xs font-medium rounded-xs flex items-center gap-1.5 transition cursor-pointer"
+                    title="Delete this photo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Photo</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewPhotoUrl(null)}
+                  className="text-white hover:text-slate-300 p-1.5 cursor-pointer rounded-xs hover:bg-white/10"
+                  title="Close preview"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Photo Center */}
+            <div
+              className="relative max-w-4xl max-h-[82vh] w-full h-full flex-1 my-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SafeAdminImage
+                src={previewPhotoUrl}
+                alt={currentLightboxPhoto?.caption || 'Preview'}
+                fill
+                className="object-contain"
+              />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* PHOTO DELETION CONFIRMATION MODAL */}
+      {photoToDelete && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+          onClick={() => !isDeletingPhoto && setPhotoToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-md shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-red-50/60">
+              <div className="flex items-center gap-2 text-red-700">
+                <div className="p-1.5 bg-red-100 rounded-sm">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </div>
+                <h4 className="font-serif font-bold text-base text-slate-900">
+                  Delete Photo from Album
+                </h4>
+              </div>
+              <button
+                type="button"
+                disabled={isDeletingPhoto}
+                onClick={() => setPhotoToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer disabled:opacity-40"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="flex gap-3 bg-slate-50 p-2.5 rounded-sm border border-slate-200">
+                <div className="relative w-16 h-16 shrink-0 rounded-xs overflow-hidden bg-slate-200">
+                  <SafeAdminImage
+                    src={photoToDelete.photo.imageUrl}
+                    alt={photoToDelete.photo.caption || 'Thumbnail'}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 flex flex-col justify-center text-xs">
+                  <p className="font-semibold text-slate-800 truncate">
+                    {photoToDelete.photo.fileName || 'Snapshot'}
+                  </p>
+                  {photoToDelete.photo.caption && (
+                    <p className="text-slate-600 italic line-clamp-2 mt-0.5">
+                      &ldquo;{photoToDelete.photo.caption}&rdquo;
+                    </p>
+                  )}
+                  {selectedAlbum && (
+                    <p className="text-[11px] text-[#18392B] font-medium mt-1">
+                      Album: {selectedAlbum.title}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Are you sure you want to permanently delete this photo? It will be removed from this album and will no longer be visible in the public Student Life gallery.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isDeletingPhoto}
+                onClick={() => setPhotoToDelete(null)}
+                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-700 rounded-sm hover:bg-white cursor-pointer disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingPhoto}
+                onClick={handleConfirmDeletePhoto}
+                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 transition"
+              >
+                {isDeletingPhoto ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Photo</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ALBUM DELETION CONFIRMATION MODAL */}
+      {albumToDelete && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+          onClick={() => !isDeletingAlbum && setAlbumToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-md shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-red-50/60">
+              <div className="flex items-center gap-2 text-red-700">
+                <div className="p-1.5 bg-red-100 rounded-sm">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </div>
+                <h4 className="font-serif font-bold text-base text-slate-900">
+                  Delete Album
+                </h4>
+              </div>
+              <button
+                type="button"
+                disabled={isDeletingAlbum}
+                onClick={() => setAlbumToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer disabled:opacity-40"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2 text-xs text-slate-600">
+              <p>
+                Are you sure you want to delete the album <strong className="text-slate-900">&ldquo;{albumToDelete.title}&rdquo;</strong>?
+              </p>
+              {albumToDelete.photoCount > 0 && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 p-2.5 rounded-sm flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    This album contains <strong>{albumToDelete.photoCount} {albumToDelete.photoCount === 1 ? 'photo' : 'photos'}</strong> which will also be removed from the gallery.
+                  </span>
+                </div>
+              )}
+              <p className="text-slate-500 text-[11px]">
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isDeletingAlbum}
+                onClick={() => setAlbumToDelete(null)}
+                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-700 rounded-sm hover:bg-white cursor-pointer disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingAlbum}
+                onClick={handleConfirmDeleteAlbum}
+                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 transition"
+              >
+                {isDeletingAlbum ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Album</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

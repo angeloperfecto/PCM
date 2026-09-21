@@ -3,6 +3,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { initializeApp, getApps } from 'firebase/app';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import firebaseConfig from '@/firebase-applet-config.json';
 
 export const dynamic = 'force-dynamic';
@@ -129,6 +130,46 @@ export async function POST(req: NextRequest) {
 
     if (!finalUrl) {
       throw new Error('Could not process media file into a usable storage URL.');
+    }
+
+    // 5. Persist to Firestore uploadedMedia collection for durability across container lifecycles
+    if (dataUrl) {
+      try {
+        const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+        const db = firebaseConfig.firestoreDatabaseId
+          ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+          : getFirestore(app);
+
+        // Store by uniqueFilename as primary doc ID
+        await setDoc(doc(db, 'uploadedMedia', uniqueFilename), {
+          id: uniqueFilename,
+          fileName: uniqueFilename,
+          originalFileName: rawFileName,
+          folder: sanitizedFolder,
+          contentType: file.type || 'image/jpeg',
+          size: buffer.length,
+          dataUrl: dataUrl,
+          createdAt: new Date().toISOString(),
+        });
+
+        // Also index cleanBase if distinct
+        if (cleanBase && cleanBase !== uniqueFilename) {
+          try {
+            await setDoc(doc(db, 'uploadedMedia', `${cleanBase}${ext}`), {
+              id: `${cleanBase}${ext}`,
+              fileName: uniqueFilename,
+              originalFileName: rawFileName,
+              folder: sanitizedFolder,
+              contentType: file.type || 'image/jpeg',
+              size: buffer.length,
+              dataUrl: dataUrl,
+              createdAt: new Date().toISOString(),
+            }, { merge: true });
+          } catch {}
+        }
+      } catch (firestoreErr) {
+        console.warn('Could not persist media to Firestore uploadedMedia:', firestoreErr);
+      }
     }
 
     return NextResponse.json({
