@@ -41,6 +41,7 @@ import {
   Layers,
   ChevronRight,
   Info,
+  X,
 } from 'lucide-react';
 
 const AVAILABLE_ICONS = [
