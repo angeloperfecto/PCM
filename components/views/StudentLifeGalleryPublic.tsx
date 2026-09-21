@@ -54,7 +54,7 @@ const SafeGalleryImage: React.FC<{
       fill={fill}
       sizes={sizes}
       priority={priority}
-      className={className}
+      className={`transition-opacity duration-300 bg-slate-900/30 ${className}`}
       unoptimized={true}
       referrerPolicy="no-referrer"
       onError={() => setHasError(true)}

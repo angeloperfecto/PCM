@@ -37,14 +37,13 @@ import {
 export const AdminHeroTab: React.FC = () => {
   const { siteConfig, addToast, canPerformAction, currentAdminUser, currentUserAccount } = usePCM();
 
-  // Firestore-synced slides (source of truth)
-  const [slides, setSlides] = useState<HeroSlide[]>(() => {
-    return siteConfig.heroSlides && siteConfig.heroSlides.length > 0
+  // Firestore-synced slides (source of truth from central store)
+  const slides = useMemo(() => {
+    return siteConfig?.heroSlides && siteConfig.heroSlides.length > 0
       ? siteConfig.heroSlides
       : DEFAULT_HERO_SLIDES;
-  });
+  }, [siteConfig?.heroSlides]);
 
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
   const [lastUpdatedBy, setLastUpdatedBy] = useState<string | null>(null);
@@ -75,27 +74,8 @@ export const AdminHeroTab: React.FC = () => {
   const quickReplaceInputRef = useRef<HTMLInputElement | null>(null);
   const [quickReplaceSlideId, setQuickReplaceSlideId] = useState<string | null>(null);
 
-  // Subscribe to real-time updates from Firestore
-  useEffect(() => {
-    const unsubscribe = subscribeToSlideshow(
-      (updatedSlides) => {
-        if (updatedSlides && updatedSlides.length > 0) {
-          setSlides(updatedSlides);
-          setLastSavedTime(new Date().toLocaleTimeString());
-        }
-        setIsLoading(false);
-      },
-      (error) => {
-        console.warn('Real-time slideshow sync warning:', error);
-        setIsLoading(false);
-      }
-    );
-
-    return () => unsubscribe();
-  }, []);
-
   // Compute active slides for preview
-  const activeSlides = slides.filter((s) => s.active !== false);
+  const activeSlides = useMemo(() => slides.filter((s) => s.active !== false), [slides]);
 
   // Helper to persist slides to Firebase Firestore
   const persistSlides = async (
@@ -110,7 +90,6 @@ export const AdminHeroTab: React.FC = () => {
     setIsSaving(false);
 
     if (result.success) {
-      setSlides(newSlidesList);
       setLastSavedTime(new Date().toLocaleTimeString());
       setLastUpdatedBy(userIdentifier);
       addToast({

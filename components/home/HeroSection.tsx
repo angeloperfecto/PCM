@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { usePCM } from '@/lib/store';
-import { subscribeToSlideshow, DEFAULT_HERO_SLIDES } from '@/lib/slideshowService';
+import { DEFAULT_HERO_SLIDES } from '@/lib/slideshowService';
 import { HeroSlide } from '@/lib/types';
 import {
   ArrowRight,
@@ -18,36 +18,15 @@ import {
 export const HeroSection: React.FC = () => {
   const { navigateTo, setSelectedSermon, sermons, siteConfig } = usePCM();
   const [currentSlide, setCurrentSlide] = useState(0);
-  const [liveSlides, setLiveSlides] = useState<HeroSlide[]>(() => {
-    return siteConfig?.heroSlides && siteConfig.heroSlides.length > 0
+
+  // Compute active slides from central store siteConfig (with fallback)
+  const slides = useMemo(() => {
+    const rawSlides = siteConfig?.heroSlides && siteConfig.heroSlides.length > 0
       ? siteConfig.heroSlides
       : DEFAULT_HERO_SLIDES;
-  });
-
-  // Subscribe to real-time slideshow updates from Firestore (siteContent/slideshow)
-  useEffect(() => {
-    const unsubscribe = subscribeToSlideshow((updatedSlides) => {
-      if (updatedSlides && updatedSlides.length > 0) {
-        setLiveSlides(updatedSlides);
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Also sync whenever siteConfig.heroSlides updates via store
-  useEffect(() => {
-    if (siteConfig?.heroSlides && siteConfig.heroSlides.length > 0) {
-      const timer = setTimeout(() => {
-        setLiveSlides(siteConfig.heroSlides);
-      }, 0);
-      return () => clearTimeout(timer);
-    }
+    const active = rawSlides.filter((s) => s.active !== false);
+    return active.length > 0 ? active : DEFAULT_HERO_SLIDES;
   }, [siteConfig?.heroSlides]);
-
-  // Filter for active slides only
-  const activeSlides = liveSlides.filter((s) => s.active !== false);
-  const slides = activeSlides.length > 0 ? activeSlides : DEFAULT_HERO_SLIDES;
 
   // Auto-advance slides every 7 seconds
   useEffect(() => {
@@ -68,8 +47,8 @@ export const HeroSection: React.FC = () => {
     return `/api/slideshow/image?id=${s.id}`;
   };
 
-  const slideIndex = currentSlide % slides.length;
-  const slide = slides[slideIndex] || slides[0];
+  const slideIndex = slides.length > 0 ? currentSlide % slides.length : 0;
+  const slide = slides[slideIndex] || slides[0] || DEFAULT_HERO_SLIDES[0];
 
   const handleLinkClick = (target?: string) => {
     if (!target) {
@@ -91,9 +70,9 @@ export const HeroSection: React.FC = () => {
       {/* Background Slideshow with Smooth Crossfade */}
       {slides.map((s, idx) => (
         <div
-          key={`${s.id}-${s.image || ''}-${idx}`}
+          key={s.id || `slide-${idx}`}
           className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${
-            idx === slideIndex ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+            idx === slideIndex ? 'opacity-100 scale-100 z-1' : 'opacity-0 scale-105 z-0'
           }`}
           style={{
             backgroundImage: `url("${getSlideImageUrl(s)}")`,
@@ -102,8 +81,8 @@ export const HeroSection: React.FC = () => {
           }}
         >
           {/* High Density Gradient Overlays */}
-          <div className="absolute inset-0 bg-gradient-to-r from-[#10261D]/95 via-[#18392B]/85 to-[#18392B]/60" />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#10261D] via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[#10261D]/95 via-[#18392B]/85 to-[#18392B]/60 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#10261D] via-transparent to-transparent pointer-events-none" />
         </div>
       ))}
 

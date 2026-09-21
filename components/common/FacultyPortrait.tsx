@@ -46,13 +46,12 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
     const shouldUnoptimize = isSvg || isDataOrBlob || resolvedImage.startsWith('http');
 
     return (
-      <div className={`relative w-full h-full overflow-hidden ${className}`}>
+      <div className={`relative w-full h-full overflow-hidden bg-slate-800/40 ${className}`}>
         <Image
-          key={resolvedImage}
           src={resolvedImage}
           alt={name}
           fill={fill}
-          className="object-cover object-top w-full h-full"
+          className="object-cover object-top w-full h-full transition-opacity duration-300"
           sizes={sizes}
           priority={priority}
           unoptimized={shouldUnoptimize}
