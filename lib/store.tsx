@@ -1550,7 +1550,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (snap) => {
             const list = snap.docs.map((d) => {
               const data = d.data() as any;
-              const photo = data.imageUrl || data.image || '';
+              const initialMatch = INITIAL_FACULTY.find((f) => f.id === d.id || f.name.toLowerCase() === (data.name || '').toLowerCase());
+              const rawPhoto = (data.imageUrl || data.image || '').trim();
+              const photo = rawPhoto.length > 0 ? rawPhoto : (initialMatch?.imageUrl || initialMatch?.image || '');
               return {
                 id: d.id,
                 ...data,
@@ -1558,12 +1560,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 image: photo,
               } as FacultyMember;
             });
+            const targetList = list.length > 0 ? list : INITIAL_FACULTY;
             // Sort by order ascending if provided
-            list.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-            setFaculty((prev) => areEntitiesEqual(prev, list) ? prev : list);
+            targetList.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+            setFaculty((prev) => areEntitiesEqual(prev, targetList) ? prev : targetList);
             setSelectedFaculty((currentSelected) => {
               if (!currentSelected) return null;
-              const match = list.find((m) => m.id === currentSelected.id);
+              const match = targetList.find((m) => m.id === currentSelected.id);
               return match || currentSelected;
             });
             setIsFirebaseConnected(true);

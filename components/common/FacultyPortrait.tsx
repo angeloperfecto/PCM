@@ -24,6 +24,51 @@ interface PortraitStyle {
   glasses?: boolean;
 }
 
+const DEFAULT_FACULTY_IMAGE_MAP: Record<string, string> = {
+  'fac-bot-laruta': '/images/faculty/atty-laruta.svg',
+  'laruta': '/images/faculty/atty-laruta.svg',
+  'fac-bot-ali': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop',
+  'ali': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop',
+  'fac-bot-batuna': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=800&auto=format&fit=crop',
+  'batuna': 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=800&auto=format&fit=crop',
+  'fac-bot-aliba': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=800&auto=format&fit=crop',
+  'aliba': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=800&auto=format&fit=crop',
+  'fac-bot-marquez': 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=800&auto=format&fit=crop',
+  'marquez': 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?q=80&w=800&auto=format&fit=crop',
+  'fac-bot-suello': 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=800&auto=format&fit=crop',
+  'suello': 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=800&auto=format&fit=crop',
+  'fac-bot-hong': 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=800&auto=format&fit=crop',
+  'hong': 'https://images.unsplash.com/photo-1506794778202-cad84cf45f1d?q=80&w=800&auto=format&fit=crop',
+  'fac-bot-dungo': 'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=800&auto=format&fit=crop',
+  'dungo': 'https://images.unsplash.com/photo-1560250097-0b93528c311a?q=80&w=800&auto=format&fit=crop',
+  'fac-pasion': 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=800&auto=format&fit=crop',
+  'pasion': 'https://images.unsplash.com/photo-1537368910025-700350fe46c7?q=80&w=800&auto=format&fit=crop',
+  'fac-cruz': 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=800&auto=format&fit=crop',
+  'cruz': 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?q=80&w=800&auto=format&fit=crop',
+  'fac-santos-crisanta': 'https://images.unsplash.com/photo-1580894732444-8ecded7900cd?q=80&w=800&auto=format&fit=crop',
+  'santos': 'https://images.unsplash.com/photo-1580894732444-8ecded7900cd?q=80&w=800&auto=format&fit=crop',
+  'fac-benalio-marlon': 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=800&auto=format&fit=crop',
+  'marlon': 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?q=80&w=800&auto=format&fit=crop',
+  'fac-cabalar': 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?q=80&w=800&auto=format&fit=crop',
+  'cabalar': 'https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?q=80&w=800&auto=format&fit=crop',
+  'fac-dagasen': 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=800&auto=format&fit=crop',
+  'dagasen': 'https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?q=80&w=800&auto=format&fit=crop',
+  'fac-intuya': 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?q=80&w=800&auto=format&fit=crop',
+  'intuya': 'https://images.unsplash.com/photo-1501196354995-cbb51c65aaea?q=80&w=800&auto=format&fit=crop',
+  'fac-agayao': 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=800&auto=format&fit=crop',
+  'agayao': 'https://images.unsplash.com/photo-1492562080023-ab3db95bfbce?q=80&w=800&auto=format&fit=crop',
+  'fac-benalio-adelaida': 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?q=80&w=800&auto=format&fit=crop',
+  'adelaida': 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?q=80&w=800&auto=format&fit=crop',
+  'fac-virtudazo': 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=800&auto=format&fit=crop',
+  'virtudazo': 'https://images.unsplash.com/photo-1519085360753-af0119f7cbe7?q=80&w=800&auto=format&fit=crop',
+  'fac-bacuyag': 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800&auto=format&fit=crop',
+  'bacuyag': 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=800&auto=format&fit=crop',
+  'fac-huckaba-james': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=800&auto=format&fit=crop',
+  'huckaba': 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?q=80&w=800&auto=format&fit=crop',
+  'fac-lubag-samson': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop',
+  'lubag': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop',
+};
+
 export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   name,
   imageUrl,
@@ -35,20 +80,38 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   fill = true,
   priority = false,
 }) => {
-  const resolvedImage = imageUrl || imageSrc || image;
+  // Check if direct image was passed, otherwise look up in map by id or name
+  let targetImage = (imageUrl || imageSrc || image || '').trim();
+  if (!targetImage) {
+    const cleanId = (id || '').replace(/^(featured|dir|modal|admin|card)-/i, '');
+    if (cleanId && DEFAULT_FACULTY_IMAGE_MAP[cleanId]) {
+      targetImage = DEFAULT_FACULTY_IMAGE_MAP[cleanId];
+    } else if (id && DEFAULT_FACULTY_IMAGE_MAP[id]) {
+      targetImage = DEFAULT_FACULTY_IMAGE_MAP[id];
+    } else {
+      const lowerName = (name || '').toLowerCase();
+      for (const [key, url] of Object.entries(DEFAULT_FACULTY_IMAGE_MAP)) {
+        if (lowerName.includes(key)) {
+          targetImage = url;
+          break;
+        }
+      }
+    }
+  }
+
   const [failedImage, setFailedImage] = useState<string | null>(null);
-  const isImageFailed = Boolean(resolvedImage && failedImage === resolvedImage);
+  const isImageFailed = Boolean(targetImage && failedImage === targetImage);
 
   // If a valid custom photo is provided and hasn't failed to load, render it
-  if (resolvedImage && resolvedImage.trim().length > 0 && !isImageFailed) {
-    const isSvg = resolvedImage.endsWith('.svg');
-    const isDataOrBlob = resolvedImage.startsWith('data:') || resolvedImage.startsWith('blob:');
-    const shouldUnoptimize = isSvg || isDataOrBlob || resolvedImage.startsWith('http');
+  if (targetImage && targetImage.length > 0 && !isImageFailed) {
+    const isSvg = targetImage.endsWith('.svg');
+    const isDataOrBlob = targetImage.startsWith('data:') || targetImage.startsWith('blob:');
+    const shouldUnoptimize = isSvg || isDataOrBlob || targetImage.startsWith('http');
 
     return (
       <div className={`relative w-full h-full overflow-hidden bg-slate-800/40 ${className}`}>
         <Image
-          src={resolvedImage}
+          src={targetImage}
           alt={name}
           fill={fill}
           className="object-cover object-top w-full h-full transition-opacity duration-300"
@@ -57,8 +120,8 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
           unoptimized={shouldUnoptimize}
           referrerPolicy="no-referrer"
           onError={() => {
-            console.warn(`Failed to load faculty portrait image for ${name}:`, resolvedImage);
-            setFailedImage(resolvedImage);
+            console.warn(`Failed to load faculty portrait image for ${name}:`, targetImage);
+            setFailedImage(targetImage);
           }}
         />
       </div>
