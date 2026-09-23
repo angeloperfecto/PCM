@@ -992,16 +992,24 @@ export const AdminFacultyTab: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Earned Degrees & Credentials (Comma-separated)
-                </label>
-                <input
-                  type="text"
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-slate-700 font-bold text-xs">
+                    Earned Degrees & Credentials (Comma-separated)
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-normal">
+                    Resizable textbox (drag corner)
+                  </span>
+                </div>
+                <textarea
+                  rows={3}
                   value={formDegrees}
                   onChange={(e) => setFormDegrees(e.target.value)}
-                  placeholder="e.g. Bachelor of Arts in Classical Philosophy, Master of Arts"
-                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                  placeholder="e.g. Bachelor of Arts in Classical Philosophy, Polytechnic University of the Philippines, Master of Arts in Philosophy, De La Salle University"
+                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none resize-y min-h-[68px] max-h-[280px] leading-relaxed bg-white"
                 />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Separate multiple credentials with commas. Drag the bottom-right handle to expand or resize the textbox.
+                </p>
               </div>
 
               {/* ENHANCED PHOTO UPLOAD & MANAGEMENT SECTION */}
