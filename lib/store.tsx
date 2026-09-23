@@ -607,14 +607,7 @@ function areEntitiesEqual<T extends Record<string, any>>(a: T[] | undefined, b: 
   if (a === b) return true;
   if (!a || !b) return false;
   if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) {
-    const itemA = a[i];
-    const itemB = b[i];
-    if (!itemA || !itemB) return false;
-    if (itemA.id !== itemB.id) return false;
-    if (itemA.updatedAt !== itemB.updatedAt) return false;
-  }
-  return true;
+  return JSON.stringify(a) === JSON.stringify(b);
 }
 
 function areUserAccountsEqual(a: UserAccount[] | undefined, b: UserAccount[] | undefined): boolean {
@@ -1466,64 +1459,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         setFirebaseSyncStatus('syncing');
 
-        // Safe, idempotent one-time bootstrap check: only seeds baseline data if siteConfig document does NOT exist
-        try {
-          const configDocSnap = await getDoc(doc(db, 'siteConfig', 'global'));
-          if (!configDocSnap.exists()) {
-            await safeSetDoc(doc(db, 'siteConfig', 'global'), cleanFirestoreData(INITIAL_SITE_CONFIG));
-
-            const progSnap = await getDocs(collection(db, 'programs'));
-            if (progSnap.empty) {
-              const b = writeBatch(db);
-              INITIAL_PROGRAMS.forEach((p) => b.set(doc(db, 'programs', p.id), cleanFirestoreData(p), { merge: true }));
-              await b.commit();
-            }
-
-            const facSnap = await getDocs(collection(db, 'faculty'));
-            if (facSnap.empty) {
-              const b = writeBatch(db);
-              INITIAL_FACULTY.forEach((f) => b.set(doc(db, 'faculty', f.id), cleanFirestoreData(f), { merge: true }));
-              await b.commit();
-            }
-
-            const annSnap = await getDocs(collection(db, 'announcements'));
-            if (annSnap.empty) {
-              const b = writeBatch(db);
-              INITIAL_ANNOUNCEMENTS.forEach((a) => b.set(doc(db, 'announcements', a.id), cleanFirestoreData(a), { merge: true }));
-              await b.commit();
-            }
-
-            const newsSnap = await getDocs(collection(db, 'news'));
-            if (newsSnap.empty) {
-              const b = writeBatch(db);
-              INITIAL_NEWS.forEach((n) => b.set(doc(db, 'news', n.id), cleanFirestoreData(n), { merge: true }));
-              await b.commit();
-            }
-
-            const evtSnap = await getDocs(collection(db, 'events'));
-            if (evtSnap.empty) {
-              const b = writeBatch(db);
-              INITIAL_EVENTS.forEach((e) => b.set(doc(db, 'events', e.id), cleanFirestoreData(e), { merge: true }));
-              await b.commit();
-            }
-
-            const donSnap = await getDocs(collection(db, 'donationPaymentMethods'));
-            if (donSnap.empty) {
-              const b = writeBatch(db);
-              INITIAL_DONATION_METHODS.forEach((d) => b.set(doc(db, 'donationPaymentMethods', d.id), cleanFirestoreData(d), { merge: true }));
-              await b.commit();
-            }
-
-            const donSetSnap = await getDoc(doc(db, 'donationSettings', 'global'));
-            if (!donSetSnap.exists()) {
-              await safeSetDoc(doc(db, 'donationSettings', 'global'), cleanFirestoreData(INITIAL_DONATION_SETTINGS));
-            }
-          }
-        } catch (bootstrapErr) {
-          console.warn('Initial bootstrap check notice:', bootstrapErr);
-        }
-
-        // Set up real-time onSnapshot listeners ONLY for core public CMS collections
+        // Real-time onSnapshot listeners ONLY for core public CMS collections
         // 1. Site Config & Slideshow Single Source of Truth
         logFirestoreOp('listen', 'siteConfig/global', 'Public Site Config Real-Time Sync');
         const uConfig = onSnapshot(
@@ -3220,9 +3156,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       imageUrl: photo,
       image: photo,
       status: member.status || 'Published',
+      updatedAt: new Date().toISOString(),
     });
     setFaculty((prev) => [...prev, newFac]);
-    setDoc(doc(db, 'faculty', newFac.id), newFac, { merge: true }).catch((e) => console.warn(e));
+    safeSetDoc(doc(db, 'faculty', newFac.id), newFac, { merge: true }).catch((e) => console.warn('addFaculty safeSetDoc error:', e));
     logActivity('CREATE', 'Faculty Member', newFac.id, newFac.name, `Added ${newFac.name} (${newFac.group} - ${newFac.role}) to directory.`);
     addToast('success', 'Faculty Member Added', `Added ${newFac.name} to institutional directory.`);
     return newFac;
@@ -3233,13 +3170,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const normalizedUpdates: Partial<FacultyMember> = {
       ...updates,
       ...(photo !== undefined ? { imageUrl: photo, image: photo } : {}),
+      updatedAt: new Date().toISOString(),
     };
     const sanitized = cleanFirestoreData(normalizedUpdates);
     setFaculty((prev) =>
       prev.map((f) => (f.id === id ? { ...f, ...normalizedUpdates } : f))
     );
     setSelectedFaculty((prev) => (prev && prev.id === id ? { ...prev, ...normalizedUpdates } : prev));
-    setDoc(doc(db, 'faculty', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    safeSetDoc(doc(db, 'faculty', id), sanitized, { merge: true }).catch((e) => console.warn('updateFaculty safeSetDoc error:', e));
     logActivity('UPDATE', 'Faculty Member', id, updates.name || 'Faculty Member', 'Updated academic credentials, bio, and portrait image.');
     addToast('success', 'Faculty Profile Updated', 'Faculty details saved.');
   };
@@ -3247,35 +3185,29 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const deleteFaculty = (id: string) => {
     const fac = faculty.find((f) => f.id === id);
     setFaculty((prev) => prev.filter((f) => f.id !== id));
-    deleteDoc(doc(db, 'faculty', id)).catch((e) => console.warn(e));
+    deleteDoc(doc(db, 'faculty', id)).catch((e) => console.warn('deleteFaculty error:', e));
     logActivity('DELETE', 'Faculty Member', id, fac?.name || 'Faculty Member', 'Removed faculty record from directory.');
     addToast('info', 'Faculty Removed', 'Faculty profile removed.');
   };
 
   const reorderFaculty = (reordered: FacultyMember[]) => {
+    const nowIso = new Date().toISOString();
     const updated = reordered.map((member, index) => ({
       ...member,
       order: index + 1,
+      updatedAt: nowIso,
     }));
-    
-    // Determine which members actually shifted order to avoid redundant batch writes
-    const changed = updated.filter((member) => {
-      const existing = faculty.find((f) => f.id === member.id);
-      return !existing || existing.order !== member.order;
-    });
 
     setFaculty(updated);
 
-    if (auth.currentUser && changed.length > 0) {
-      try {
-        const batch = writeBatch(db);
-        changed.forEach((member) => {
-          batch.set(doc(db, 'faculty', member.id), { order: member.order }, { merge: true });
-        });
-        batch.commit().catch((e) => console.warn('Firestore faculty reorder sync warning:', e));
-      } catch (err) {
-        console.warn('Batch commit error:', err);
-      }
+    try {
+      const batch = writeBatch(db);
+      updated.forEach((member) => {
+        batch.set(doc(db, 'faculty', member.id), { order: member.order, updatedAt: nowIso }, { merge: true });
+      });
+      batch.commit().catch((e) => console.warn('Firestore faculty reorder sync warning:', e));
+    } catch (err) {
+      console.warn('Batch commit error:', err);
     }
 
     logActivity(
