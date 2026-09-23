@@ -11,35 +11,69 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    const formData = await req.formData();
-    const file = formData.get('file') as File | null;
-    const requestedFolder = (formData.get('folder') as string) || 'media';
-    const customStoragePath = formData.get('storagePath') as string | null;
+    const contentTypeHeader = req.headers.get('content-type') || '';
+    let buffer: Buffer | null = null;
+    let rawFileName = '';
+    let requestedFolder = 'media';
+    let customStoragePath: string | null = null;
+    let fileMime = 'image/jpeg';
 
-    if (!file) {
-      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    if (contentTypeHeader.includes('application/json')) {
+      // JSON Base64 Payload Fallback (Highly resilient across proxies)
+      const body = await req.json();
+      const base64Input = (body.base64 || body.dataUrl || '') as string;
+      if (!base64Input) {
+        return NextResponse.json({ error: 'No image data provided in payload' }, { status: 400 });
+      }
+
+      // Extract MIME type if data URL
+      const match = base64Input.match(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/);
+      if (match) {
+        fileMime = match[1];
+      }
+
+      const cleanBase64 = base64Input.replace(/^data:([a-zA-Z0-9]+\/[a-zA-Z0-9-.+]+);base64,/, '');
+      buffer = Buffer.from(cleanBase64, 'base64');
+      rawFileName = body.fileName || body.name || `photo_${Date.now()}.jpg`;
+      requestedFolder = body.folder || 'media';
+      customStoragePath = body.storagePath || null;
+    } else {
+      // Standard Multipart Form Data
+      const formData = await req.formData();
+      const file = formData.get('file') as File | null;
+      requestedFolder = (formData.get('folder') as string) || 'media';
+      customStoragePath = formData.get('storagePath') as string | null;
+
+      if (!file) {
+        return NextResponse.json({ error: 'No file provided in form data' }, { status: 400 });
+      }
+
+      // Allow file size up to 250MB
+      const MAX_SIZE = 250 * 1024 * 1024;
+      if (file.size > MAX_SIZE) {
+        return NextResponse.json(
+          { error: 'File size exceeds maximum capacity.' },
+          { status: 400 }
+        );
+      }
+
+      const arrayBuffer = await file.arrayBuffer();
+      buffer = Buffer.from(arrayBuffer);
+      rawFileName = file.name || (formData.get('fileName') as string) || `upload_${Date.now()}.jpg`;
+      fileMime = file.type || 'image/jpeg';
     }
 
-    // Allow any file size for admin uploads (up to 250MB for raw/high-res photography)
-    const MAX_SIZE = 250 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
-      return NextResponse.json(
-        { error: 'File size exceeds maximum 250MB capacity.' },
-        { status: 400 }
-      );
+    if (!buffer || buffer.length === 0) {
+      return NextResponse.json({ error: 'Received empty file buffer' }, { status: 400 });
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    const rawFileName = file.name || (formData.get('fileName') as string) || `upload_${Date.now()}.jpg`;
-    const ext = path.extname(rawFileName) || '.jpg';
+    const ext = path.extname(rawFileName) || (fileMime.includes('png') ? '.png' : fileMime.includes('webp') ? '.webp' : '.jpg');
     const cleanBase = path.basename(rawFileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_') || `file_${Date.now()}`;
     const timestamp = Date.now();
     const sanitizedFolder = requestedFolder.replace(/[^a-zA-Z0-9_-]/g, '_') || 'media';
     const uniqueFilename = `${sanitizedFolder}_${timestamp}_${cleanBase}${ext}`;
 
-    // 1. Check if Firebase Storage bucket is active and reachable (cached)
+    // 1. Check if external Firebase Storage bucket is active and reachable (excluding default studio bucket)
     let isBucketAvailable = false;
     if (firebaseConfig.storageBucket && !firebaseConfig.storageBucket.includes('intelligent-park-95fd2')) {
       try {
@@ -51,7 +85,6 @@ export async function POST(req: NextRequest) {
         ).catch(() => null);
         clearTimeout(probeTimeout);
 
-        // Only consider available if status is explicitly 200
         if (probeRes && probeRes.status === 200) {
           isBucketAvailable = true;
         }
@@ -60,7 +93,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Try Firebase Storage if bucket is verified available
+    // 2. Try Firebase Storage if bucket is explicitly active
     if (isBucketAvailable) {
       try {
         const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
@@ -72,7 +105,7 @@ export async function POST(req: NextRequest) {
         const storageRef = ref(storage, storagePath);
 
         await uploadBytes(storageRef, buffer, {
-          contentType: file.type || 'image/jpeg',
+          contentType: fileMime,
         });
         const downloadUrl = await getDownloadURL(storageRef);
 
@@ -80,16 +113,17 @@ export async function POST(req: NextRequest) {
           success: true,
           url: downloadUrl,
           downloadURL: downloadUrl,
+          publicUrl: downloadUrl,
           storagePath,
           filename: uniqueFilename,
           provider: 'firebase_storage',
         });
       } catch (storageErr: any) {
-        console.warn('Firebase Storage upload failed or timed out, falling back to local persistent storage:', storageErr?.message || storageErr);
+        console.warn('Firebase Storage upload notice (falling back to local storage):', storageErr?.message || storageErr);
       }
     }
 
-    // 3. Fallback: Save to public/uploads/[folder]/ with safe error catching for read-only containers
+    // 3. Save to public/uploads/[folder]/
     let publicUrl = '';
     try {
       const uploadDir = path.join(process.cwd(), 'public', 'uploads', sanitizedFolder);
@@ -99,96 +133,54 @@ export async function POST(req: NextRequest) {
       await fs.writeFile(filePath, buffer);
       publicUrl = `/uploads/${sanitizedFolder}/${uniqueFilename}`;
     } catch (diskErr) {
-      console.warn('Local disk write notice (falling back to memory dataUrl):', diskErr);
+      console.warn('Local disk write notice:', diskErr);
     }
 
-    // 4. Generate resilient base64 data URL for cross-environment rendering (if image)
-    let dataUrl = '';
-    const isSvg = (file.type && file.type.includes('svg')) || /\.svg$/i.test(ext);
-    if (isSvg) {
-      dataUrl = `data:image/svg+xml;base64,${buffer.toString('base64')}`;
-    } else {
-      const isImage = (file.type && file.type.startsWith('image/')) || /\.(jpe?g|png|webp|gif|avif)$/i.test(ext);
-      if (isImage) {
-        try {
-          const sharpModule = await import('sharp');
-          const sharp = sharpModule.default;
-          const compressed = await sharp(buffer)
-            .resize({ width: 1440, height: 1440, fit: 'inside', withoutEnlargement: true })
-            .jpeg({ quality: 82, progressive: true })
-            .toBuffer();
-          dataUrl = `data:image/jpeg;base64,${compressed.toString('base64')}`;
-        } catch {
-          if (buffer.length < 800000) {
-            dataUrl = `data:${file.type || 'image/jpeg'};base64,${buffer.toString('base64')}`;
-          }
-        }
-      }
-    }
-
-    const finalUrl = publicUrl || dataUrl;
+    const finalUrl = publicUrl;
 
     if (!finalUrl) {
-      throw new Error('Could not process media file into a usable storage URL.');
+      throw new Error('Could not persist file to storage.');
     }
 
-    // 5. Persist to Firestore uploadedMedia collection for durability across container lifecycles
-    if (dataUrl) {
-      try {
-        const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-        const db = firebaseConfig.firestoreDatabaseId
-          ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-          : getFirestore(app);
+    // 4. Lightweight metadata logging in Firestore (NEVER stores large base64 to protect 1MB doc limits)
+    try {
+      const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+      const db = firebaseConfig.firestoreDatabaseId
+        ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+        : getFirestore(app);
 
-        // Store by uniqueFilename as primary doc ID
-        await setDoc(doc(db, 'uploadedMedia', uniqueFilename), {
-          id: uniqueFilename,
-          fileName: uniqueFilename,
-          originalFileName: rawFileName,
-          folder: sanitizedFolder,
-          contentType: file.type || 'image/jpeg',
-          size: buffer.length,
-          dataUrl: dataUrl,
-          createdAt: new Date().toISOString(),
-        });
-
-        // Also index cleanBase if distinct
-        if (cleanBase && cleanBase !== uniqueFilename) {
-          try {
-            await setDoc(doc(db, 'uploadedMedia', `${cleanBase}${ext}`), {
-              id: `${cleanBase}${ext}`,
-              fileName: uniqueFilename,
-              originalFileName: rawFileName,
-              folder: sanitizedFolder,
-              contentType: file.type || 'image/jpeg',
-              size: buffer.length,
-              dataUrl: dataUrl,
-              createdAt: new Date().toISOString(),
-            }, { merge: true });
-          } catch {}
-        }
-      } catch (firestoreErr) {
-        console.warn('Could not persist media to Firestore uploadedMedia:', firestoreErr);
-      }
+      await setDoc(doc(db, 'uploadedMedia', uniqueFilename), {
+        id: uniqueFilename,
+        fileName: uniqueFilename,
+        originalFileName: rawFileName,
+        folder: sanitizedFolder,
+        contentType: fileMime,
+        size: buffer.length,
+        url: publicUrl,
+        storagePath: `uploads/${sanitizedFolder}/${uniqueFilename}`,
+        createdAt: new Date().toISOString(),
+      }, { merge: true });
+    } catch (firestoreErr) {
+      // Non-blocking metadata log
     }
 
     return NextResponse.json({
       success: true,
       url: finalUrl,
       downloadURL: finalUrl,
-      publicUrl: publicUrl || finalUrl,
-      dataUrl: dataUrl,
+      publicUrl: finalUrl,
+      dataUrl: '',
       fileName: rawFileName,
       fileSize: buffer.length,
-      fileType: file.type || 'application/octet-stream',
+      fileType: fileMime,
       storagePath: `uploads/${sanitizedFolder}/${uniqueFilename}`,
       filename: uniqueFilename,
-      provider: publicUrl ? 'local_public' : 'hybrid_optimized',
+      provider: 'local_public',
     });
   } catch (error: any) {
     console.error('Error in /api/media/upload:', error);
     return NextResponse.json(
-      { error: error.message || 'Internal upload error' },
+      { error: error?.message || 'Internal upload error' },
       { status: 500 }
     );
   }

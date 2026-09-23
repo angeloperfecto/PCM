@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { StudentLifeAlbum, StudentLifePhotoItem } from '@/lib/types';
+import { parsePhotoStory } from '@/lib/galleryStoryParser';
+import { AlbumEditorialHeader } from '@/components/gallery/AlbumEditorialHeader';
 import {
   Camera,
   Calendar,
@@ -73,6 +75,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
   const [activeAlbumId, setActiveAlbumId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'albums' | 'all-photos'>('albums');
   const [searchQuery, setSearchQuery] = useState('');
+  const [albumLayoutMode, setAlbumLayoutMode] = useState<'mosaic' | 'grid'>('mosaic');
 
   // Lightbox state
   const [lightboxState, setLightboxState] = useState<{
@@ -292,6 +295,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
               {filteredAlbums.map((album) => {
                 const count = album.photos?.length || album.photoCount || 0;
                 const coverImg = album.coverPhotoUrl || album.photos?.[0]?.imageUrl || '';
+                const story = parsePhotoStory(album);
 
                 return (
                   <div
@@ -304,7 +308,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                       {coverImg ? (
                         <SafeGalleryImage
                           src={coverImg}
-                          alt={album.title}
+                          alt={story.displayTitle || album.title}
                           fill
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-500"
@@ -316,7 +320,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                       )}
 
                       {/* Dark overlay gradient */}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
 
                       {/* Photo Count Pill */}
                       <div className="absolute top-3 right-3">
@@ -326,14 +330,22 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                         </span>
                       </div>
 
+                      {story.isEditorialDispatch && (
+                        <div className="absolute top-3 left-3">
+                          <span className="bg-[#18392B] text-white text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-xs tracking-wider shadow-xs">
+                            {story.category || 'IN PHOTOS'}
+                          </span>
+                        </div>
+                      )}
+
                       {/* Bottom Info inside cover */}
                       <div className="absolute bottom-3 left-4 right-4 text-white">
-                        <h3 className="font-serif font-bold text-lg leading-snug drop-shadow-sm group-hover:text-emerald-200 transition">
-                          {album.title}
+                        <h3 className="font-serif font-bold text-lg leading-snug drop-shadow-sm group-hover:text-emerald-200 transition line-clamp-2">
+                          {story.displayTitle || album.title}
                         </h3>
-                        {album.eventName && (
+                        {story.cleanEventName && (
                           <p className="text-xs text-slate-200 font-light truncate mt-0.5">
-                            {album.eventName}
+                            {story.cleanEventName}
                           </p>
                         )}
                       </div>
@@ -341,24 +353,23 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
 
                     {/* Album Card Metadata */}
                     <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-                      {album.description && (
+                      {story.summary ? (
                         <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed font-light">
-                          {album.description}
+                          {story.summary}
                         </p>
-                      )}
+                      ) : null}
 
-                      <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100">
-                        <div className="flex items-center gap-3">
-                          {album.eventDate && (
+                      <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 pt-2 border-t border-slate-100 gap-y-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {(story.storyDate || album.eventDate) && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3 text-slate-400" />
-                              <span>{album.eventDate}</span>
+                              <span>{story.storyDate || album.eventDate}</span>
                             </span>
                           )}
-                          {album.location && (
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3 h-3 text-slate-400" />
-                              <span className="truncate max-w-[150px]">{album.location}</span>
+                          {story.photographer && (
+                            <span className="text-[#18392B] font-medium truncate max-w-[140px]">
+                              📷 {story.photographer}
                             </span>
                           )}
                         </div>
@@ -376,74 +387,23 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
         </div>
       )}
 
-      {/* VIEW 2: SINGLE ALBUM DETAIL (FACEBOOK COLLAGE / MOSAIC) */}
+      {/* VIEW 2: SINGLE ALBUM DETAIL (EDITORIAL NEWSLETTER / FACEBOOK MOSAIC) */}
       {currentAlbum && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-6">
-          {/* Breadcrumb & Album Header */}
-          <div className="bg-white border border-slate-200 rounded-sm p-5 sm:p-6 shadow-2xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <button
-                type="button"
-                onClick={() => setActiveAlbumId(null)}
-                className="inline-flex items-center gap-2 text-xs font-bold text-[#18392B] hover:text-[#588B76] transition cursor-pointer w-fit"
-              >
-                <ArrowLeft className="w-4 h-4" />
-                <span>Back to All Albums</span>
-              </button>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() =>
-                    openLightbox(currentAlbum.photos, 0, {
-                      title: currentAlbum.title,
-                      event: currentAlbum.eventName,
-                      date: currentAlbum.eventDate,
-                      location: currentAlbum.location,
-                    })
-                  }
-                  className="px-4 py-2 bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs transition"
-                >
-                  <Maximize2 className="w-3.5 h-3.5" />
-                  <span>Start Slideshow / Fullscreen</span>
-                </button>
-              </div>
-            </div>
-
-            <div className="space-y-2 border-t border-slate-100 pt-4">
-              <h3 className="font-serif text-2xl sm:text-3xl font-bold text-[#18392B]">
-                {currentAlbum.title}
-              </h3>
-              {currentAlbum.description && (
-                <p className="text-xs sm:text-sm text-slate-600 max-w-4xl leading-relaxed font-light">
-                  {currentAlbum.description}
-                </p>
-              )}
-
-              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
-                {currentAlbum.eventName && (
-                  <span className="font-medium text-slate-700">
-                    Event: <span className="font-normal text-slate-600">{currentAlbum.eventName}</span>
-                  </span>
-                )}
-                {currentAlbum.eventDate && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{currentAlbum.eventDate}</span>
-                  </span>
-                )}
-                {currentAlbum.location && (
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{currentAlbum.location}</span>
-                  </span>
-                )}
-                <span className="bg-[#18392B]/10 text-[#18392B] font-mono text-[11px] font-bold px-2 py-0.5 rounded-xs">
-                  {currentAlbum.photos.length} Photos
-                </span>
-              </div>
-            </div>
-          </div>
+          <AlbumEditorialHeader
+            album={currentAlbum}
+            onBack={() => setActiveAlbumId(null)}
+            onStartSlideshow={() =>
+              openLightbox(currentAlbum.photos, 0, {
+                title: currentAlbum.title,
+                event: currentAlbum.eventName,
+                date: currentAlbum.eventDate,
+                location: currentAlbum.location,
+              })
+            }
+            layoutMode={albumLayoutMode}
+            onChangeLayoutMode={setAlbumLayoutMode}
+          />
 
           {/* Facebook-style Photo Collage or Grid */}
           {currentAlbum.photos.length === 0 ? (
@@ -451,7 +411,172 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
               <Camera className="w-10 h-10 text-slate-300 mx-auto mb-2 stroke-1" />
               <p className="text-xs text-slate-500">No photos have been added to this album yet.</p>
             </div>
+          ) : albumLayoutMode === 'mosaic' ? (
+            /* Editorial Mosaic Collage */
+            <div className="space-y-4">
+              {(() => {
+                const photos = currentAlbum.photos;
+                const total = photos.length;
+
+                if (total === 1) {
+                  return (
+                    <div
+                      onClick={() =>
+                        openLightbox(photos, 0, {
+                          title: currentAlbum.title,
+                          event: currentAlbum.eventName,
+                          date: currentAlbum.eventDate,
+                          location: currentAlbum.location,
+                        })
+                      }
+                      className="group relative bg-slate-100 border border-slate-200 rounded-sm overflow-hidden shadow-2xs hover:shadow-md hover:border-[#588B76] transition cursor-pointer h-96 sm:h-[480px]"
+                    >
+                      <SafeGalleryImage
+                        src={photos[0].imageUrl}
+                        alt={photos[0].caption || currentAlbum.title}
+                        fill
+                        priority
+                        sizes="(max-width: 1280px) 100vw, 1200px"
+                        className="object-cover group-hover:scale-102 transition-transform duration-300"
+                      />
+                      {photos[0].caption && (
+                        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 sm:p-6 text-white">
+                          <p className="text-sm sm:text-base font-light leading-relaxed max-w-4xl">
+                            {photos[0].caption}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+
+                if (total === 2) {
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {photos.map((photo, index) => (
+                        <div
+                          key={photo.id}
+                          onClick={() =>
+                            openLightbox(photos, index, {
+                              title: currentAlbum.title,
+                              event: currentAlbum.eventName,
+                              date: currentAlbum.eventDate,
+                              location: currentAlbum.location,
+                            })
+                          }
+                          className="group relative bg-slate-100 border border-slate-200 rounded-sm overflow-hidden shadow-2xs hover:shadow-md hover:border-[#588B76] transition cursor-pointer h-80 sm:h-96"
+                        >
+                          <SafeGalleryImage
+                            src={photo.imageUrl}
+                            alt={photo.caption || currentAlbum.title}
+                            fill
+                            sizes="(max-width: 640px) 100vw, 50vw"
+                            className="object-cover group-hover:scale-103 transition-transform duration-300"
+                          />
+                          <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/30 to-transparent p-4 text-white">
+                            {photo.caption && (
+                              <p className="text-xs sm:text-sm font-light line-clamp-2">
+                                {photo.caption}
+                              </p>
+                            )}
+                            <span className="text-[10px] text-emerald-300 font-mono mt-1 block">
+                              Photo {index + 1} of {total}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                }
+
+                // 3 or more photos: Large lead hero photo + grid of subsequent photos
+                const leadPhoto = photos[0];
+                const restPhotos = photos.slice(1);
+
+                return (
+                  <div className="space-y-4">
+                    {/* Primary Hero Photograph with prominent caption */}
+                    <div
+                      onClick={() =>
+                        openLightbox(photos, 0, {
+                          title: currentAlbum.title,
+                          event: currentAlbum.eventName,
+                          date: currentAlbum.eventDate,
+                          location: currentAlbum.location,
+                        })
+                      }
+                      className="group relative bg-slate-900 border border-slate-200 rounded-sm overflow-hidden shadow-2xs hover:shadow-md hover:border-[#588B76] transition cursor-pointer h-80 sm:h-[480px]"
+                    >
+                      <SafeGalleryImage
+                        src={leadPhoto.imageUrl}
+                        alt={leadPhoto.caption || currentAlbum.title}
+                        fill
+                        priority
+                        sizes="(max-width: 1280px) 100vw, 1200px"
+                        className="object-cover group-hover:scale-102 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-transparent flex flex-col justify-end p-5 sm:p-7 text-white">
+                        <div className="max-w-4xl space-y-1.5">
+                          <span className="bg-[#18392B] text-white text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-xs tracking-wider inline-block">
+                            Featured Photo • #1 of {total}
+                          </span>
+                          {leadPhoto.caption && (
+                            <p className="text-sm sm:text-base font-light leading-relaxed drop-shadow-sm text-slate-100">
+                              {leadPhoto.caption}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Secondary Photos Grid */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {restPhotos.map((photo, rIdx) => {
+                        const originalIndex = rIdx + 1;
+                        return (
+                          <div
+                            key={photo.id}
+                            onClick={() =>
+                              openLightbox(photos, originalIndex, {
+                                title: currentAlbum.title,
+                                event: currentAlbum.eventName,
+                                date: currentAlbum.eventDate,
+                                location: currentAlbum.location,
+                              })
+                            }
+                            className="group relative bg-slate-100 border border-slate-200 rounded-sm overflow-hidden shadow-2xs hover:shadow-md hover:border-[#588B76] transition cursor-pointer h-64 flex flex-col justify-between"
+                          >
+                            <div className="relative w-full flex-1 overflow-hidden">
+                              <SafeGalleryImage
+                                src={photo.imageUrl}
+                                alt={photo.caption || photo.fileName || currentAlbum.title}
+                                fill
+                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                                className="object-cover group-hover:scale-105 transition-transform duration-300"
+                              />
+                              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-3 text-white">
+                                <span className="text-[10px] text-emerald-300 font-mono">
+                                  #{originalIndex + 1} of {total} • Click to enlarge
+                                </span>
+                              </div>
+                            </div>
+                            {photo.caption && (
+                              <div className="p-3 bg-white border-t border-slate-100">
+                                <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">
+                                  {photo.caption}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
           ) : (
+            /* Uniform Grid View */
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {currentAlbum.photos.map((photo, index) => {
                 return (
@@ -465,31 +590,29 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                         location: currentAlbum.location,
                       })
                     }
-                    className="group relative bg-slate-100 border border-slate-200 rounded-sm overflow-hidden shadow-2xs hover:shadow-md hover:border-[#588B76] transition cursor-pointer h-60"
+                    className="group relative bg-slate-100 border border-slate-200 rounded-sm overflow-hidden shadow-2xs hover:shadow-md hover:border-[#588B76] transition cursor-pointer h-64 flex flex-col justify-between"
                   >
-                    <SafeGalleryImage
-                      src={photo.imageUrl}
-                      alt={photo.caption || photo.fileName || currentAlbum.title}
-                      fill
-                      sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                    />
-
-                    {/* Gradient Overlay for Caption */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-3">
-                      {photo.caption ? (
-                        <p className="text-white text-xs font-light line-clamp-2 leading-snug">
+                    <div className="relative w-full flex-1 overflow-hidden">
+                      <SafeGalleryImage
+                        src={photo.imageUrl}
+                        alt={photo.caption || photo.fileName || currentAlbum.title}
+                        fill
+                        sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col justify-end p-3 text-white">
+                        <span className="text-[10px] text-emerald-300 font-mono">
+                          #{index + 1} of {currentAlbum.photos.length}
+                        </span>
+                      </div>
+                    </div>
+                    {photo.caption && (
+                      <div className="p-3 bg-white border-t border-slate-100">
+                        <p className="text-xs text-slate-700 line-clamp-2 leading-relaxed">
                           {photo.caption}
                         </p>
-                      ) : (
-                        <p className="text-slate-300 text-[11px] italic">
-                          Click to view photo
-                        </p>
-                      )}
-                      <span className="text-[10px] text-emerald-300 font-mono mt-1">
-                        #{index + 1} of {currentAlbum.photos.length}
-                      </span>
-                    </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}

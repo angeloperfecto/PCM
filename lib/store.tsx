@@ -1309,11 +1309,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         // 14b. Student Life albums batch
-        const albumsToSync = st.studentLifeAlbums && st.studentLifeAlbums.length > 0 ? st.studentLifeAlbums : INITIAL_STUDENT_LIFE_ALBUMS;
-        if (albumsToSync && albumsToSync.length > 0) {
+        if (st.studentLifeAlbums && st.studentLifeAlbums.length > 0) {
           try {
             const slBatch = writeBatch(db);
-            albumsToSync.forEach((alb: any) => slBatch.set(doc(db, 'studentLifeAlbums', alb.id), cleanFirestoreData(alb), { merge: true }));
+            st.studentLifeAlbums.forEach((alb: any) => slBatch.set(doc(db, 'studentLifeAlbums', alb.id), cleanFirestoreData(alb), { merge: true }));
             await slBatch.commit();
           } catch (e) {
             console.warn('Student life albums batch sync notice:', e);
@@ -1467,6 +1466,63 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         setFirebaseSyncStatus('syncing');
 
+        // Safe, idempotent one-time bootstrap check: only seeds baseline data if siteConfig document does NOT exist
+        try {
+          const configDocSnap = await getDoc(doc(db, 'siteConfig', 'global'));
+          if (!configDocSnap.exists()) {
+            await safeSetDoc(doc(db, 'siteConfig', 'global'), cleanFirestoreData(INITIAL_SITE_CONFIG));
+
+            const progSnap = await getDocs(collection(db, 'programs'));
+            if (progSnap.empty) {
+              const b = writeBatch(db);
+              INITIAL_PROGRAMS.forEach((p) => b.set(doc(db, 'programs', p.id), cleanFirestoreData(p), { merge: true }));
+              await b.commit();
+            }
+
+            const facSnap = await getDocs(collection(db, 'faculty'));
+            if (facSnap.empty) {
+              const b = writeBatch(db);
+              INITIAL_FACULTY.forEach((f) => b.set(doc(db, 'faculty', f.id), cleanFirestoreData(f), { merge: true }));
+              await b.commit();
+            }
+
+            const annSnap = await getDocs(collection(db, 'announcements'));
+            if (annSnap.empty) {
+              const b = writeBatch(db);
+              INITIAL_ANNOUNCEMENTS.forEach((a) => b.set(doc(db, 'announcements', a.id), cleanFirestoreData(a), { merge: true }));
+              await b.commit();
+            }
+
+            const newsSnap = await getDocs(collection(db, 'news'));
+            if (newsSnap.empty) {
+              const b = writeBatch(db);
+              INITIAL_NEWS.forEach((n) => b.set(doc(db, 'news', n.id), cleanFirestoreData(n), { merge: true }));
+              await b.commit();
+            }
+
+            const evtSnap = await getDocs(collection(db, 'events'));
+            if (evtSnap.empty) {
+              const b = writeBatch(db);
+              INITIAL_EVENTS.forEach((e) => b.set(doc(db, 'events', e.id), cleanFirestoreData(e), { merge: true }));
+              await b.commit();
+            }
+
+            const donSnap = await getDocs(collection(db, 'donationPaymentMethods'));
+            if (donSnap.empty) {
+              const b = writeBatch(db);
+              INITIAL_DONATION_METHODS.forEach((d) => b.set(doc(db, 'donationPaymentMethods', d.id), cleanFirestoreData(d), { merge: true }));
+              await b.commit();
+            }
+
+            const donSetSnap = await getDoc(doc(db, 'donationSettings', 'global'));
+            if (!donSetSnap.exists()) {
+              await safeSetDoc(doc(db, 'donationSettings', 'global'), cleanFirestoreData(INITIAL_DONATION_SETTINGS));
+            }
+          }
+        } catch (bootstrapErr) {
+          console.warn('Initial bootstrap check notice:', bootstrapErr);
+        }
+
         // Set up real-time onSnapshot listeners ONLY for core public CMS collections
         // 1. Site Config & Slideshow Single Source of Truth
         logFirestoreOp('listen', 'siteConfig/global', 'Public Site Config Real-Time Sync');
@@ -1479,10 +1535,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 const updated = {
                   ...prev,
                   ...data,
-                  studentLife: data.studentLife || prev.studentLife || INITIAL_STUDENT_LIFE_CONFIG,
-                  heroSlides: (data.heroSlides && data.heroSlides.length > 0) ? data.heroSlides : prev.heroSlides,
+                  heroSlides: data.heroSlides ?? prev.heroSlides,
                 };
-                return updated;
+                return JSON.stringify(prev) === JSON.stringify(updated) ? prev : updated;
               });
               setFirebaseSyncStatus('synced');
               setIsFirebaseConnected(true);
@@ -1504,7 +1559,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (snap) => {
             if (snap.exists()) {
               const data = snap.data();
-              if (data?.slides && Array.isArray(data.slides) && data.slides.length > 0) {
+              if (data?.slides && Array.isArray(data.slides)) {
                 setSiteConfig((prev) => {
                   if (JSON.stringify(prev.heroSlides) === JSON.stringify(data.slides)) {
                     return prev;
@@ -1529,8 +1584,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           collection(db, 'programs'),
           (snap) => {
             const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicProgram[];
-            const target = list.length > 0 ? list : INITIAL_PROGRAMS;
-            setPrograms((prev) => areEntitiesEqual(prev, target) ? prev : target);
+            setPrograms((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
             setLastSyncedAt(new Date());
@@ -1550,23 +1604,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (snap) => {
             const list = snap.docs.map((d) => {
               const data = d.data() as any;
-              const initialMatch = INITIAL_FACULTY.find((f) => f.id === d.id || f.name.toLowerCase() === (data.name || '').toLowerCase());
-              const rawPhoto = (data.imageUrl || data.image || '').trim();
-              const photo = rawPhoto.length > 0 ? rawPhoto : (initialMatch?.imageUrl || initialMatch?.image || '');
               return {
                 id: d.id,
                 ...data,
-                imageUrl: photo,
-                image: photo,
+                imageUrl: data.imageUrl || data.image || '',
+                image: data.imageUrl || data.image || '',
               } as FacultyMember;
             });
-            const targetList = list.length > 0 ? list : INITIAL_FACULTY;
-            // Sort by order ascending if provided
-            targetList.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
-            setFaculty((prev) => areEntitiesEqual(prev, targetList) ? prev : targetList);
+            list.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+            setFaculty((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setSelectedFaculty((currentSelected) => {
               if (!currentSelected) return null;
-              const match = targetList.find((m) => m.id === currentSelected.id);
+              const match = list.find((m) => m.id === currentSelected.id);
               return match || currentSelected;
             });
             setIsFirebaseConnected(true);
@@ -1643,21 +1692,19 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uDonMethods = onSnapshot(
           collection(db, 'donationPaymentMethods'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => {
-                const data = d.data();
-                return {
-                  id: d.id,
-                  ...data,
-                  instructions: normalizeInstructions(data.instructions),
-                };
-              }) as DonationPaymentMethod[];
-              list.sort((a, b) => (a.order || 0) - (b.order || 0));
-              setDonationMethods((prev) => areEntitiesEqual(prev, list) ? prev : list);
-              setIsFirebaseConnected(true);
-              setFirebaseSyncStatus('synced');
-              setLastSyncedAt(new Date());
-            }
+            const list = snap.docs.map((d) => {
+              const data = d.data();
+              return {
+                id: d.id,
+                ...data,
+                instructions: normalizeInstructions(data.instructions),
+              };
+            }) as DonationPaymentMethod[];
+            list.sort((a, b) => (a.order || 0) - (b.order || 0));
+            setDonationMethods((prev) => areEntitiesEqual(prev, list) ? prev : list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'donationPaymentMethods');
@@ -1692,17 +1739,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uVideos = onSnapshot(
           collection(db, 'videos'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as YouTubeVideo[];
-              list.sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
-              setVideos((prev) => areEntitiesEqual(prev, list) ? prev : list);
-              setIsFirebaseConnected(true);
-              setFirebaseSyncStatus('synced');
-              setLastSyncedAt(new Date());
-            } else {
-              setIsFirebaseConnected(true);
-              setFirebaseSyncStatus('synced');
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as YouTubeVideo[];
+            list.sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
+            setVideos((prev) => areEntitiesEqual(prev, list) ? prev : list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'videos');
@@ -1737,66 +1779,26 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uMediaLibrary = onSnapshot(
           collection(db, 'mediaLibrary'),
           async (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => {
-                const data = d.data() as any;
-                const fileUrl = data.downloadURL || data.url || '';
-                return {
-                  id: d.id,
-                  ...data,
-                  url: fileUrl,
-                  downloadURL: fileUrl,
-                } as MediaItem;
-              });
-              // Sort newest first
-              list.sort((a, b) => {
-                const timeA = new Date(a.createdAt || a.uploadDate || 0).getTime();
-                const timeB = new Date(b.createdAt || b.uploadDate || 0).getTime();
-                return timeB - timeA;
-              });
-              setMediaItems((prev) => areEntitiesEqual(prev, list) ? prev : list);
-              setIsFirebaseConnected(true);
-              setFirebaseSyncStatus('synced');
-              setLastSyncedAt(new Date());
-            } else {
-              // If mediaLibrary collection is empty, check legacy mediaItems collection
-              try {
-                const legacySnap = await getDocs(collection(db, 'mediaItems'));
-                if (!legacySnap.empty) {
-                  const list = legacySnap.docs
-                    .map((d) => {
-                      const data = d.data() as any;
-                      const fileUrl = data.downloadURL || data.url || '';
-                      return {
-                        id: d.id,
-                        ...data,
-                        url: fileUrl,
-                        downloadURL: fileUrl,
-                      } as MediaItem;
-                    })
-                    .filter((item) => {
-                      const u = item.url || item.downloadURL || '';
-                      return !!u;
-                    });
-                  list.sort((a, b) => {
-                    const timeA = new Date(a.createdAt || a.uploadDate || 0).getTime();
-                    const timeB = new Date(b.createdAt || b.uploadDate || 0).getTime();
-                    return timeB - timeA;
-                  });
-                  if (list.length > 0) {
-                    setMediaItems((prev) => areEntitiesEqual(prev, list) ? prev : list);
-                  } else {
-                    setMediaItems((prev) => areEntitiesEqual(prev, INITIAL_MEDIA_ITEMS) ? prev : INITIAL_MEDIA_ITEMS);
-                  }
-                } else {
-                  setMediaItems((prev) => areEntitiesEqual(prev, INITIAL_MEDIA_ITEMS) ? prev : INITIAL_MEDIA_ITEMS);
-                }
-              } catch (e) {
-                setMediaItems((prev) => areEntitiesEqual(prev, INITIAL_MEDIA_ITEMS) ? prev : INITIAL_MEDIA_ITEMS);
-              }
-              setIsFirebaseConnected(true);
-              setFirebaseSyncStatus('synced');
-            }
+            const list = snap.docs.map((d) => {
+              const data = d.data() as any;
+              const fileUrl = data.downloadURL || data.url || '';
+              return {
+                id: d.id,
+                ...data,
+                url: fileUrl,
+                downloadURL: fileUrl,
+              } as MediaItem;
+            });
+            // Sort newest first
+            list.sort((a, b) => {
+              const timeA = new Date(a.createdAt || a.uploadDate || 0).getTime();
+              const timeB = new Date(b.createdAt || b.uploadDate || 0).getTime();
+              return timeB - timeA;
+            });
+            setMediaItems((prev) => areEntitiesEqual(prev, list) ? prev : list);
+            setIsFirebaseConnected(true);
+            setFirebaseSyncStatus('synced');
+            setLastSyncedAt(new Date());
           },
           (err) => {
             handleFirestoreError(err, OperationType.LIST, 'mediaLibrary');
@@ -1811,9 +1813,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uTestimonials = onSnapshot(
           collection(db, 'testimonials'),
           (snap) => {
-            const list = (!snap.empty && snap.docs.length > 0)
-              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[])
-              : INITIAL_TESTIMONIALS;
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[];
             setTestimonials((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1830,9 +1830,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uStats = onSnapshot(
           collection(db, 'stats'),
           (snap) => {
-            const list = (!snap.empty && snap.docs.length > 0)
-              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[])
-              : INITIAL_STATS;
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[];
             setStats((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1849,9 +1847,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uFaqs = onSnapshot(
           collection(db, 'faqs'),
           (snap) => {
-            const list = (!snap.empty && snap.docs.length > 0)
-              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[])
-              : INITIAL_FAQS;
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[];
             setFaqs((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1868,9 +1864,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uDownloads = onSnapshot(
           collection(db, 'downloads'),
           (snap) => {
-            const list = (!snap.empty && snap.docs.length > 0)
-              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[])
-              : INITIAL_DOWNLOADS;
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[];
             setDownloads((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1887,9 +1881,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uSermons = onSnapshot(
           collection(db, 'sermons'),
           (snap) => {
-            const list = (!snap.empty && snap.docs.length > 0)
-              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[])
-              : INITIAL_SERMONS;
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[];
             setSermons((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1906,9 +1898,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uScrapbook = onSnapshot(
           collection(db, 'scrapbook'),
           (snap) => {
-            const list = (!snap.empty && snap.docs.length > 0)
-              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[])
-              : INITIAL_SCRAPBOOK;
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[];
             setScrapbook((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1925,9 +1915,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uGallery = onSnapshot(
           collection(db, 'galleryAlbums'),
           (snap) => {
-            const list = (!snap.empty && snap.docs.length > 0)
-              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[])
-              : INITIAL_GALLERY_ALBUMS;
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[];
             setGalleryAlbums((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1944,22 +1932,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uStudentLifeAlbums = onSnapshot(
           collection(db, 'studentLifeAlbums'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => {
-                const data = d.data();
-                const photos = Array.isArray(data.photos) ? data.photos : [];
-                return {
-                  id: d.id,
-                  ...data,
-                  photos,
-                  photoCount: photos.length,
-                } as StudentLifeAlbum;
-              });
-              list.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-              setStudentLifeAlbums((prev) => areEntitiesEqual(prev, list) ? prev : list);
-            } else {
-              setStudentLifeAlbums((prev) => areEntitiesEqual(prev, INITIAL_STUDENT_LIFE_ALBUMS) ? prev : INITIAL_STUDENT_LIFE_ALBUMS);
-            }
+            const list = snap.docs.map((d) => {
+              const data = d.data();
+              const photos = Array.isArray(data.photos) ? data.photos : [];
+              return {
+                id: d.id,
+                ...data,
+                photos,
+                photoCount: photos.length,
+              } as StudentLifeAlbum;
+            });
+            list.sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+            setStudentLifeAlbums((prev) => areEntitiesEqual(prev, list) ? prev : list);
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
             setLastSyncedAt(new Date());
@@ -1980,7 +1964,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setSiteConfig((prev) => ({
                 ...prev,
                 studentLife: {
-                  ...(prev.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
+                  ...prev.studentLife,
                   ...slData,
                 },
               }));
@@ -2000,9 +1984,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uApps = onSnapshot(
           collection(db, 'applications'),
           (snap) => {
-            const list = (!snap.empty && snap.docs.length > 0)
-              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[])
-              : INITIAL_APPLICATIONS;
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
             setApplications((prev) => areEntitiesEqual(prev, list) ? prev : list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'applications')
@@ -2014,9 +1996,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uStudents = onSnapshot(
           collection(db, 'studentProfiles'),
           (snap) => {
-            const list = (!snap.empty && snap.docs.length > 0)
-              ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter((s) => !isUserDeletedRef.current(s))
-              : INITIAL_STUDENTS.filter((s) => !isUserDeletedRef.current(s));
+            const list = (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter((s) => !isUserDeletedRef.current(s));
             setStudents((prev) => areEntitiesEqual(prev, list) ? prev : list);
             if (list.length > 0) {
               setStudentProfile((prev) => {
@@ -2038,10 +2018,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uEnrollments = onSnapshot(
           collection(db, 'enrollments'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as OnlineEnrollment[];
-              setEnrollments((prev) => areEntitiesEqual(prev, list) ? prev : list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as OnlineEnrollment[];
+            setEnrollments((prev) => areEntitiesEqual(prev, list) ? prev : list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments')
         );
@@ -2052,10 +2030,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uNotifs = onSnapshot(
           collection(db, 'studentNotifications'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentNotification[];
-              setStudentNotifications((prev) => areEntitiesEqual(prev, list) ? prev : list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentNotification[];
+            setStudentNotifications((prev) => areEntitiesEqual(prev, list) ? prev : list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'studentNotifications')
         );
@@ -2066,10 +2042,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uSubjects = onSnapshot(
           collection(db, 'academicSubjects'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicSubject[];
-              setAcademicSubjects((prev) => areEntitiesEqual(prev, list) ? prev : list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicSubject[];
+            setAcademicSubjects((prev) => areEntitiesEqual(prev, list) ? prev : list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'academicSubjects')
         );
@@ -2080,10 +2054,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uPreEnlist = onSnapshot(
           collection(db, 'preEnlistments'),
           (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PreEnlistmentRecord[];
-              setPreEnlistments((prev) => areEntitiesEqual(prev, list) ? prev : list);
-            }
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PreEnlistmentRecord[];
+            setPreEnlistments((prev) => areEntitiesEqual(prev, list) ? prev : list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'preEnlistments')
         );
@@ -2313,9 +2285,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uUsers = onSnapshot(
       collection(db, 'users'),
       (snap) => {
-        const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[]).filter((u) => !isUserDeletedRef.current(u))
-          : INITIAL_USER_ACCOUNTS.filter((u) => !isUserDeletedRef.current(u));
+        const list = (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as UserAccount[]).filter((u) => !isUserDeletedRef.current(u));
         setUserAccounts((prev) => {
           const next = syncWithAdminsAndStudents(list, stateRef.current.adminUsers, stateRef.current.students);
           return areUserAccountsEqual(prev, next) ? prev : next;
@@ -2330,9 +2300,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uAdmins = onSnapshot(
       collection(db, 'adminUsers'),
       (snap) => {
-        const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[]).filter((a) => !isUserDeletedRef.current(a))
-          : INITIAL_ADMIN_USERS.filter((a) => !isUserDeletedRef.current(a));
+        const list = (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdminUser[]).filter((a) => !isUserDeletedRef.current(a));
         setAdminUsers((prev) => areEntitiesEqual(prev, list) ? prev : list);
         setUserAccounts((prev) => {
           const next = syncWithAdminsAndStudents(prev, list, stateRef.current.students);
@@ -2348,9 +2316,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uDonations = onSnapshot(
       collection(db, 'donations'),
       (snap) => {
-        const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationRecord[])
-          : INITIAL_DONATIONS;
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationRecord[];
         setDonations((prev) => areEntitiesEqual(prev, list) ? prev : list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'donations')
@@ -2362,9 +2328,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uLogs = onSnapshot(
       collection(db, 'activityLogs'),
       (snap) => {
-        const list = (!snap.empty && snap.docs.length > 0)
-          ? (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[])
-          : INITIAL_ACTIVITY_LOGS;
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[];
         setActivityLogs((prev) => areEntitiesEqual(prev, list) ? prev : list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'activityLogs')
@@ -2376,10 +2340,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uAddDrop = onSnapshot(
       collection(db, 'addDropRequests'),
       (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AddDropRequest[];
-          setAddDropRequests((prev) => areEntitiesEqual(prev, list) ? prev : list);
-        }
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AddDropRequest[];
+        setAddDropRequests((prev) => areEntitiesEqual(prev, list) ? prev : list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'addDropRequests')
     );
@@ -2390,10 +2352,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uFeeStruct = onSnapshot(
       collection(db, 'feeStructure'),
       (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FeeStructureItem[];
-          setFeeStructure((prev) => areEntitiesEqual(prev, list) ? prev : list);
-        }
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FeeStructureItem[];
+        setFeeStructure((prev) => areEntitiesEqual(prev, list) ? prev : list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'feeStructure')
     );
@@ -2404,10 +2364,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uPeriods = onSnapshot(
       collection(db, 'academicPeriods'),
       (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicPeriod[];
-          setAcademicPeriods((prev) => areEntitiesEqual(prev, list) ? prev : list);
-        }
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicPeriod[];
+        setAcademicPeriods((prev) => areEntitiesEqual(prev, list) ? prev : list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'academicPeriods')
     );
@@ -2418,10 +2376,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uSections = onSnapshot(
       collection(db, 'classSections'),
       (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ClassSection[];
-          setClassSections((prev) => areEntitiesEqual(prev, list) ? prev : list);
-        }
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ClassSection[];
+        setClassSections((prev) => areEntitiesEqual(prev, list) ? prev : list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'classSections')
     );
@@ -2432,10 +2388,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const uInstructors = onSnapshot(
       collection(db, 'instructors'),
       (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InstructorRecord[];
-          setInstructors((prev) => areEntitiesEqual(prev, list) ? prev : list);
-        }
+        const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InstructorRecord[];
+        setInstructors((prev) => areEntitiesEqual(prev, list) ? prev : list);
       },
       (err) => handleFirestoreError(err, OperationType.LIST, 'instructors')
     );

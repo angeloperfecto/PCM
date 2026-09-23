@@ -3111,6 +3111,74 @@ export const INITIAL_STUDENT_LIFE_CONFIG: StudentLifeConfig = {
 
 export const INITIAL_STUDENT_LIFE_ALBUMS: StudentLifeAlbum[] = [
   {
+    id: 'alb-pcm-presidential-consultation-2026',
+    title: 'IN PHOTOS | Consultation with PCM President Held for Graduation Plans; National Convention Preparations Ongoing | March 03, 2026',
+    description: `IN PHOTOS: Consultation with PCM President Held for Graduation Plans; National Convention Preparations Ongoing
+
+A consultative dialogue was convened at the President’s Office between Philippine College of Ministry (PCM) President Atty. Michael Joseph B. Laruta and the graduating class leadership, committee chairpersons, and academic deans. The assembly addressed vital directives for the forthcoming 33rd Commencement Exercises, baccalaureate service liturgy, and spiritual commissioning traditions.
+
+Concurrently, institutional updates were finalized for the upcoming PCM National Convention. Atty. Laruta emphasized servant-stewardship, ministerial integrity, and pastoral readiness as the graduating batch prepares to step out into local church planting and community transformation across the Philippines and beyond.
+
+Photos by: Luis Niño C. Daco
+Diakonos, the Official Newsletter of the Philippine College of Ministry, Inc. (PCM)`,
+    eventName: 'Graduation Consultation & National Convention Preparations',
+    eventDate: 'March 03, 2026',
+    location: 'President’s Office & Conference Room, Lamtang Campus, Benguet',
+    coverPhotoUrl: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=1200&auto=format&fit=crop',
+    photoCount: 4,
+    status: 'published',
+    createdAt: '2026-03-03T08:00:00.000Z',
+    updatedAt: '2026-03-03T08:00:00.000Z',
+    createdBy: 'Diakonos Editorial Team',
+    sortOrder: 1,
+    photos: [
+      {
+        id: 'slp-pres-1',
+        albumId: 'alb-pcm-presidential-consultation-2026',
+        imageUrl: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=1200&auto=format&fit=crop',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=400&auto=format&fit=crop',
+        fileName: 'presidential_consultation_laruta.jpg',
+        caption: 'PCM President Atty. Michael Joseph B. Laruta conferring with graduating seniors and academic deans regarding commencement proceedings.',
+        sortOrder: 1,
+        uploadedAt: '2026-03-03T08:05:00.000Z',
+        uploadedBy: 'Diakonos Editorial Team',
+      },
+      {
+        id: 'slp-pres-2',
+        albumId: 'alb-pcm-presidential-consultation-2026',
+        imageUrl: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?q=80&w=1200&auto=format&fit=crop',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1517486808906-6ca8b3f04846?q=80&w=400&auto=format&fit=crop',
+        fileName: 'graduation_committee_deliberation.jpg',
+        caption: 'Graduating class committee representatives reviewing the baccalaureate service liturgy and ceremony itinerary.',
+        sortOrder: 2,
+        uploadedAt: '2026-03-03T08:10:00.000Z',
+        uploadedBy: 'Diakonos Editorial Team',
+      },
+      {
+        id: 'slp-pres-3',
+        albumId: 'alb-pcm-presidential-consultation-2026',
+        imageUrl: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=1200&auto=format&fit=crop',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1531482615713-2afd69097998?q=80&w=400&auto=format&fit=crop',
+        fileName: 'national_convention_planning.jpg',
+        caption: 'Administrative officers discussing logistical coordination for the upcoming PCM National Convention delegates.',
+        sortOrder: 3,
+        uploadedAt: '2026-03-03T08:15:00.000Z',
+        uploadedBy: 'Diakonos Editorial Team',
+      },
+      {
+        id: 'slp-pres-4',
+        albumId: 'alb-pcm-presidential-consultation-2026',
+        imageUrl: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?q=80&w=1200&auto=format&fit=crop',
+        thumbnailUrl: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?q=80&w=400&auto=format&fit=crop',
+        fileName: 'closing_prayer_commissioning.jpg',
+        caption: 'Closing prayer and pastoral benediction seeking divine guidance and protection for the graduating ministers.',
+        sortOrder: 4,
+        uploadedAt: '2026-03-03T08:20:00.000Z',
+        uploadedBy: 'Diakonos Editorial Team',
+      },
+    ],
+  },
+  {
     id: 'alb-pcm-fellowship-2026',
     title: 'PCM Student Fellowship 2026',
     description: 'Photos from the PCM Student Fellowship activity, chapel convocation, and communal life on the Lamtang mountain campus.',
@@ -3123,7 +3191,7 @@ export const INITIAL_STUDENT_LIFE_ALBUMS: StudentLifeAlbum[] = [
     createdAt: '2026-09-01T08:00:00.000Z',
     updatedAt: '2026-09-01T08:00:00.000Z',
     createdBy: 'PCM Administration',
-    sortOrder: 1,
+    sortOrder: 2,
     photos: [
       {
         id: 'slp-1-1',
@@ -3184,7 +3252,7 @@ export const INITIAL_STUDENT_LIFE_ALBUMS: StudentLifeAlbum[] = [
     createdAt: '2026-08-20T08:00:00.000Z',
     updatedAt: '2026-08-20T08:00:00.000Z',
     createdBy: 'PCM Administration',
-    sortOrder: 2,
+    sortOrder: 3,
     photos: [
       {
         id: 'slp-2-1',

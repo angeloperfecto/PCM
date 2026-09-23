@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { StudentLifeAlbum, StudentLifePhotoItem, MediaItem } from '@/lib/types';
 import { compressImageFile, uploadFileToFirebaseStorage } from '@/lib/firebase';
+import { parsePhotoStory } from '@/lib/galleryStoryParser';
 
 const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop';
 
@@ -378,7 +379,12 @@ export const AdminStudentLifeGallery: React.FC = () => {
         const storagePath = `studentLife/${uploadTargetAlbumId}/${Date.now()}_${safeFileName}`;
         const downloadUrl = await uploadFileToFirebaseStorage(compressedBlob, storagePath, {
           contentType: item.file.type || 'image/jpeg',
+          fileName: safeFileName,
         });
+
+        if (!downloadUrl) {
+          throw new Error('Image upload failed. Storage was unreachable.');
+        }
 
         const newPhotoItem: StudentLifePhotoItem = {
           id: `slp-${Date.now()}-${i}`,
@@ -598,6 +604,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
                 const isPub = album.status === 'published';
                 const count = album.photos?.length || album.photoCount || 0;
                 const coverImg = album.coverPhotoUrl || album.photos?.[0]?.imageUrl || '';
+                const story = parsePhotoStory(album);
 
                 return (
                   <div
@@ -612,7 +619,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
                       {coverImg ? (
                         <SafeAdminImage
                           src={coverImg}
-                          alt={album.title}
+                          alt={story.displayTitle || album.title}
                           fill
                           sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-300"
@@ -651,12 +658,17 @@ export const AdminStudentLifeGallery: React.FC = () => {
 
                       {/* Bottom title in cover */}
                       <div className="absolute bottom-2.5 left-3 right-3 text-white pointer-events-none">
+                        {story.isEditorialDispatch && (
+                          <span className="bg-[#18392B]/90 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-xs mb-1 inline-block uppercase">
+                            {story.category || 'IN PHOTOS'}
+                          </span>
+                        )}
                         <h4 className="font-serif font-bold text-sm line-clamp-1 drop-shadow-sm">
-                          {album.title}
+                          {story.displayTitle || album.title}
                         </h4>
-                        {album.eventName && (
+                        {story.cleanEventName && (
                           <p className="text-[11px] text-slate-200 drop-shadow-sm truncate">
-                            {album.eventName}
+                            {story.cleanEventName}
                           </p>
                         )}
                       </div>
@@ -665,23 +677,28 @@ export const AdminStudentLifeGallery: React.FC = () => {
                     {/* Album Info & Controls */}
                     <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
                       <div className="space-y-1.5">
-                        {album.description && (
+                        {story.summary ? (
                           <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
-                            {album.description}
+                            {story.summary}
                           </p>
-                        )}
+                        ) : null}
 
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 pt-1">
-                          {album.eventDate && (
+                          {(story.storyDate || album.eventDate) && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3 text-slate-400" />
-                              <span>{album.eventDate}</span>
+                              <span>{story.storyDate || album.eventDate}</span>
                             </span>
                           )}
-                          {album.location && (
+                          {story.location && (
                             <span className="flex items-center gap-1">
                               <MapPin className="w-3 h-3 text-slate-400" />
-                              <span className="truncate max-w-[140px]">{album.location}</span>
+                              <span className="truncate max-w-[140px]">{story.location}</span>
+                            </span>
+                          )}
+                          {story.photographer && (
+                            <span className="text-[#18392B] font-medium text-[10px]">
+                              📷 {story.photographer}
                             </span>
                           )}
                         </div>
@@ -740,59 +757,84 @@ export const AdminStudentLifeGallery: React.FC = () => {
       {selectedAlbum && (
         <div className="bg-white border border-slate-200 rounded-sm p-6 space-y-6">
           {/* Header of selected album */}
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setSelectedAlbumId(null)}
-                  className="text-slate-400 hover:text-slate-700 transition cursor-pointer"
-                >
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-                <h3 className="font-serif font-bold text-xl text-[#18392B]">
-                  {selectedAlbum.title}
-                </h3>
-                <span
-                  className={`text-[10px] font-bold px-2 py-0.5 rounded-xs capitalize ${
-                    selectedAlbum.status === 'published'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : 'bg-amber-100 text-amber-800'
-                  }`}
-                >
-                  {selectedAlbum.status}
-                </span>
-              </div>
+          {(() => {
+            const story = parsePhotoStory(selectedAlbum);
+            return (
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAlbumId(null)}
+                      className="text-slate-400 hover:text-slate-700 transition cursor-pointer mr-1"
+                      title="Back to all albums"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    {story.isEditorialDispatch && (
+                      <span className="bg-[#18392B] text-white text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-xs tracking-wider">
+                        {story.category || 'IN PHOTOS'}
+                      </span>
+                    )}
+                    <h3 className="font-serif font-bold text-xl text-[#18392B]">
+                      {story.displayTitle || selectedAlbum.title}
+                    </h3>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-xs capitalize ${
+                        selectedAlbum.status === 'published'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {selectedAlbum.status}
+                    </span>
+                  </div>
 
-              {selectedAlbum.description && (
-                <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
-                  {selectedAlbum.description}
-                </p>
-              )}
+                  {story.paragraphs.length > 0 ? (
+                    <div className="space-y-1.5 text-xs text-slate-600 max-w-4xl leading-relaxed">
+                      {story.paragraphs.map((p, idx) => (
+                        <p key={idx}>{p}</p>
+                      ))}
+                    </div>
+                  ) : selectedAlbum.description ? (
+                    <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
+                      {selectedAlbum.description}
+                    </p>
+                  ) : null}
 
-              <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
-                {selectedAlbum.eventName && (
-                  <span className="font-medium text-slate-700">
-                    Event: <span className="font-normal text-slate-600">{selectedAlbum.eventName}</span>
-                  </span>
-                )}
-                {selectedAlbum.eventDate && (
-                  <span className="flex items-center gap-1">
-                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{selectedAlbum.eventDate}</span>
-                  </span>
-                )}
-                {selectedAlbum.location && (
-                  <span className="flex items-center gap-1">
-                    <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                    <span>{selectedAlbum.location}</span>
-                  </span>
-                )}
-                <span className="font-mono text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-xs">
-                  {selectedAlbum.photos?.length || 0} Photos Total
-                </span>
-              </div>
-            </div>
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-1">
+                    {story.cleanEventName && (
+                      <span className="font-medium text-slate-700">
+                        Event: <span className="font-normal text-slate-600">{story.cleanEventName}</span>
+                      </span>
+                    )}
+                    {(story.storyDate || selectedAlbum.eventDate) && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{story.storyDate || selectedAlbum.eventDate}</span>
+                      </span>
+                    )}
+                    {selectedAlbum.location && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{selectedAlbum.location}</span>
+                      </span>
+                    )}
+                    {story.photographer && (
+                      <span className="text-[#18392B] font-medium bg-[#18392B]/5 px-2 py-0.5 rounded-xs">
+                        📷 Photos by: <strong className="text-slate-800">{story.photographer}</strong>
+                      </span>
+                    )}
+                    {story.publisher && (
+                      <span className="text-slate-600 italic bg-slate-100 px-2 py-0.5 rounded-xs">
+                        📰 {story.publisher}
+                      </span>
+                    )}
+                    <span className="font-mono text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-xs">
+                      {selectedAlbum.photos?.length || 0} Photos Total
+                    </span>
+                  </div>
+                </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -830,6 +872,8 @@ export const AdminStudentLifeGallery: React.FC = () => {
               </button>
             </div>
           </div>
+        );
+      })()}
 
           {/* Drag & Drop Quick Dropzone banner inside album */}
           <div
@@ -1248,9 +1292,36 @@ export const AdminStudentLifeGallery: React.FC = () => {
               </div>
 
               <div>
-                <label className="block font-semibold text-slate-700 mb-1">Description</label>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700">Description</label>
+                  {(editingAlbumData.title.includes('|') || editingAlbumData.description.includes('|') || editingAlbumData.description.toLowerCase().includes('photos by:')) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const parsed = parsePhotoStory({
+                          title: editingAlbumData.title,
+                          description: editingAlbumData.description,
+                          eventName: editingAlbumData.eventName,
+                          eventDate: editingAlbumData.eventDate,
+                          location: editingAlbumData.location,
+                        });
+                        setEditingAlbumData({
+                          ...editingAlbumData,
+                          title: parsed.displayTitle || editingAlbumData.title,
+                          description: parsed.paragraphs.join('\n\n') + (parsed.photographer ? `\n\nPhotos by: ${parsed.photographer}` : '') + (parsed.publisher ? `\n${parsed.publisher}` : ''),
+                          eventName: parsed.cleanEventName || editingAlbumData.eventName,
+                          eventDate: parsed.storyDate || editingAlbumData.eventDate,
+                        });
+                      }}
+                      className="text-[11px] font-bold text-[#18392B] hover:text-[#10261D] flex items-center gap-1 cursor-pointer bg-[#18392B]/5 hover:bg-[#18392B]/10 px-2 py-0.5 rounded-xs transition"
+                    >
+                      <Sparkles className="w-3 h-3 text-[#18392B]" />
+                      <span>Format Dispatch Copy</span>
+                    </button>
+                  )}
+                </div>
                 <textarea
-                  rows={3}
+                  rows={4}
                   value={editingAlbumData.description}
                   onChange={(e) => setEditingAlbumData({ ...editingAlbumData, description: e.target.value })}
                   className="w-full p-2 border border-slate-200 rounded-sm leading-relaxed"

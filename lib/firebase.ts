@@ -188,7 +188,26 @@ export async function safeSetDoc(
     return false;
   }
   try {
-    await setDoc(docRef, cleanFirestoreData(data), options);
+    let cleaned = cleanFirestoreData(data);
+    // Extra safety: Firestore 1MB document limit guard
+    try {
+      const payloadSize = JSON.stringify(cleaned).length;
+      if (payloadSize > 900000) {
+        console.warn(`[PCM Firestore Guard] Document ${docRef?.path || ''} size (${payloadSize} bytes) near 1MB. Sanitizing nested base64 strings.`);
+        if (cleaned && typeof cleaned === 'object') {
+          if (Array.isArray((cleaned as any).photos)) {
+            (cleaned as any).photos = (cleaned as any).photos.map((p: any) => {
+              if (p?.imageUrl?.startsWith('data:')) {
+                return { ...p, imageUrl: '', thumbnailUrl: '' };
+              }
+              return p;
+            });
+          }
+        }
+      }
+    } catch {}
+
+    await setDoc(docRef, cleaned, options);
     return true;
   } catch (err) {
     if (isFirestoreQuotaError(err)) {
@@ -204,7 +223,25 @@ export async function safeUpdateDoc(docRef: any, data: any): Promise<boolean> {
     return false;
   }
   try {
-    await updateDoc(docRef, cleanFirestoreData(data));
+    let cleaned = cleanFirestoreData(data);
+    try {
+      const payloadSize = JSON.stringify(cleaned).length;
+      if (payloadSize > 900000) {
+        console.warn(`[PCM Firestore Guard] Document ${docRef?.path || ''} size (${payloadSize} bytes) near 1MB.`);
+        if (cleaned && typeof cleaned === 'object') {
+          if (Array.isArray((cleaned as any).photos)) {
+            (cleaned as any).photos = (cleaned as any).photos.map((p: any) => {
+              if (p?.imageUrl?.startsWith('data:')) {
+                return { ...p, imageUrl: '', thumbnailUrl: '' };
+              }
+              return p;
+            });
+          }
+        }
+      }
+    } catch {}
+
+    await updateDoc(docRef, cleaned);
     return true;
   } catch (err) {
     if (isFirestoreQuotaError(err)) {
@@ -313,9 +350,10 @@ export async function compressImageFile(
 export function cleanFirestoreData<T>(data: T): T {
   if (data === null || data === undefined) return data;
   if (typeof data === 'string') {
-    // Guard: Prevent Base64 strings from exceeding Firestore 1MB document limit
-    if (data.startsWith('data:') && data.length > 900000) {
-      console.warn('Blocked oversized Base64 string from Firestore document payload.');
+    // Guard: Prevent Base64 strings from bloating Firestore documents (Firestore hard limit is 1MB per document)
+    // Any image string > 30KB must never be saved directly into a Firestore doc!
+    if (data.startsWith('data:image/') && data.length > 30000) {
+      console.warn('Blocked oversized Base64 image from Firestore payload to protect 1MB document limit.');
       return '' as unknown as T;
     }
     return data;
@@ -358,66 +396,91 @@ export async function getImageDimensions(file: File | Blob): Promise<{ width: nu
 export async function uploadFileToFirebaseStorage(
   file: File | Blob,
   storagePath: string,
-  options?: { contentType?: string }
+  options?: { contentType?: string; fileName?: string }
 ): Promise<string> {
   try {
-    const optimizedBlob = await compressImageFile(file);
-    let lastErrorMsg = '';
+    const optimizedBlob = await compressImageFile(file, 1600, 1600, 0.80);
+    const fileName =
+      options?.fileName ||
+      (file instanceof File && file.name ? file.name : (file as any).fileName) ||
+      `asset_${Date.now()}.jpg`;
 
-    // Primary: Resilient server upload route /api/media/upload
+    let parts = (storagePath || '').split('/');
+    let folder = parts.length > 1 ? parts[0] : 'media';
+
+    // Primary: Resilient server upload route /api/media/upload via FormData
     if (typeof window !== 'undefined') {
-      for (let attempt = 1; attempt <= 2; attempt++) {
-        try {
-          const formData = new FormData();
-          const fileName =
-            file instanceof File && file.name
-              ? file.name
-              : (file as any).fileName || `asset_${Date.now()}.jpg`;
-          formData.append('file', optimizedBlob, fileName);
-          if (storagePath) {
-            const parts = storagePath.split('/');
-            const folder = parts.length > 1 ? parts[0] : 'media';
-            formData.append('folder', folder);
-            formData.append('storagePath', storagePath);
+      try {
+        const formData = new FormData();
+        formData.append('file', optimizedBlob, fileName);
+        formData.append('folder', folder);
+        if (storagePath) {
+          formData.append('storagePath', storagePath);
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+        const res = await fetch('/api/media/upload', {
+          method: 'POST',
+          body: formData,
+          headers: {
+            Accept: 'application/json',
+          },
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          const data = await res.json();
+          const downloadUrl = data.downloadURL || data.url || data.publicUrl;
+          if (downloadUrl && !downloadUrl.startsWith('data:')) {
+            return downloadUrl;
           }
+          if (downloadUrl) {
+            return downloadUrl;
+          }
+        }
+      } catch (formErr) {
+        console.warn('Multipart upload notice, attempting JSON transport:', formErr);
+      }
 
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 35000);
+      // Secondary Server Upload: JSON transport with Base64 payload
+      // Completely immune to multipart boundary corruption or proxy buffering
+      try {
+        const dataUrl = await blobToDataUrl(optimizedBlob);
+        if (dataUrl) {
+          const jsonController = new AbortController();
+          const jsonTimeoutId = setTimeout(() => jsonController.abort(), 25000);
 
-          const res = await fetch('/api/media/upload', {
+          const jsonRes = await fetch('/api/media/upload', {
             method: 'POST',
-            body: formData,
-            signal: controller.signal,
+            headers: {
+              'Content-Type': 'application/json',
+              Accept: 'application/json',
+            },
+            body: JSON.stringify({
+              base64: dataUrl,
+              fileName,
+              folder,
+              storagePath,
+            }),
+            signal: jsonController.signal,
           });
-          clearTimeout(timeoutId);
+          clearTimeout(jsonTimeoutId);
 
-          if (res.ok) {
-            const data = await res.json();
-            const downloadUrl = data.downloadURL || data.url || data.dataUrl || data.publicUrl;
+          const jsonContentType = jsonRes.headers.get('content-type') || '';
+          if (jsonRes.ok && jsonContentType.includes('application/json')) {
+            const data = await jsonRes.json();
+            const downloadUrl = data.downloadURL || data.url || data.publicUrl;
             if (downloadUrl) {
               return downloadUrl;
             }
-          } else {
-            const errData = await res.json().catch(() => ({}));
-            lastErrorMsg = errData.error || `Server responded with ${res.status}`;
-            if (res.status >= 400 && res.status < 500 && errData.error) {
-              lastErrorMsg = errData.error;
-            }
-          }
-        } catch (fetchErr: any) {
-          if (fetchErr.name === 'AbortError') {
-            lastErrorMsg = 'Upload request timed out on the network.';
-          } else if (fetchErr.message && !fetchErr.message.includes('fetch')) {
-            lastErrorMsg = fetchErr.message;
-          }
-          if (attempt === 1) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
           }
         }
-      }
-
-      if (lastErrorMsg) {
-        console.warn('Server upload notice:', lastErrorMsg);
+      } catch (jsonErr) {
+        console.warn('JSON upload transport notice:', jsonErr);
       }
     }
 
@@ -443,36 +506,23 @@ export async function uploadFileToFirebaseStorage(
       }
     }
 
-    // Resilient In-Memory / Client Data URL Fallback:
-    // If external storage endpoints are unreachable, convert the optimized image to a Base64
-    // data URL so user operations NEVER fail silently or block content creation.
+    // Emergency client-side fallback: Ultra-compact thumbnail (<25KB) so document never exceeds Firestore limits
     if (typeof window !== 'undefined' && (optimizedBlob instanceof Blob || (file as any).type?.startsWith('image/'))) {
       try {
-        let dataUrl = await blobToDataUrl(optimizedBlob);
-        // If data URL is larger than 800KB, progressively recompress so it safely fits Firestore document limits
-        if (dataUrl && dataUrl.length > 800000) {
-          const smallerBlob = await compressImageFile(file, 1280, 960, 0.72);
-          const smallerDataUrl = await blobToDataUrl(smallerBlob);
-          if (smallerDataUrl && smallerDataUrl.length <= 880000) {
-            dataUrl = smallerDataUrl;
-          } else {
-            const compactBlob = await compressImageFile(file, 960, 720, 0.65);
-            dataUrl = await blobToDataUrl(compactBlob);
-          }
+        const compactBlob = await compressImageFile(file, 640, 480, 0.55);
+        const compactDataUrl = await blobToDataUrl(compactBlob);
+        if (compactDataUrl && compactDataUrl.length < 30000) {
+          return compactDataUrl;
         }
-        if (dataUrl) {
-          console.info('Client-side optimized storage fallback applied successfully for asset.');
-          return dataUrl;
-        }
-      } catch (dataUrlErr) {
-        console.warn('Data URL client fallback generation notice:', dataUrlErr);
+      } catch {
+        // Fallback
       }
     }
 
-    throw new Error(lastErrorMsg || 'Upload could not be processed. Please try again.');
-  } catch (error: any) {
-    console.error('Storage upload failed:', error?.message || error);
-    throw new Error(error?.message || 'Storage upload failed. Please try again.');
+    return '';
+  } catch (outerErr: any) {
+    console.error('uploadFileToFirebaseStorage failed:', outerErr);
+    return '';
   }
 }
 
