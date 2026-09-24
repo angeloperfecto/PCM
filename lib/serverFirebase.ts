@@ -4,17 +4,27 @@ import firebaseConfig from '@/firebase-applet-config.json';
 
 let cachedDb: Firestore | null = null;
 
+const resolvedFirebaseConfig = {
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || firebaseConfig.projectId,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || firebaseConfig.appId,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || firebaseConfig.apiKey,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
+  firestoreDatabaseId: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || (firebaseConfig as any).firestoreDatabaseId,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId,
+};
+
 export function getServerFirestore(): Firestore {
   if (cachedDb) return cachedDb;
-  const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
+  const app = getApps().length > 0 ? getApps()[0] : initializeApp(resolvedFirebaseConfig);
   try {
-    if (firebaseConfig.firestoreDatabaseId) {
+    if (resolvedFirebaseConfig.firestoreDatabaseId) {
       cachedDb = initializeFirestore(
         app,
         {
           experimentalAutoDetectLongPolling: true,
         },
-        firebaseConfig.firestoreDatabaseId
+        resolvedFirebaseConfig.firestoreDatabaseId
       );
     } else {
       cachedDb = initializeFirestore(app, {
@@ -22,8 +32,8 @@ export function getServerFirestore(): Firestore {
       });
     }
   } catch {
-    cachedDb = firebaseConfig.firestoreDatabaseId
-      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+    cachedDb = resolvedFirebaseConfig.firestoreDatabaseId
+      ? getFirestore(app, resolvedFirebaseConfig.firestoreDatabaseId)
       : getFirestore(app);
   }
   return cachedDb;

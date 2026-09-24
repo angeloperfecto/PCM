@@ -4,6 +4,9 @@ import path from 'path';
 import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
 import { getServerFirestore, isIgnorableFirestoreError } from '@/lib/serverFirebase';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 const MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
   '.jpeg': 'image/jpeg',

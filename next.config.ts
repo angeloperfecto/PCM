@@ -2,32 +2,77 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  experimental: {
-    allowedDevOrigins: [
-      'ais-dev-2imnhtcijlvggg7m4xbrz7-37292599062.asia-southeast1.run.app',
-      'ais-pre-2imnhtcijlvggg7m4xbrz7-37292599062.asia-southeast1.run.app',
-      '*.asia-southeast1.run.app',
-      '*.run.app',
-      'localhost',
-      'localhost:3000',
-    ],
-  },
+  // Next.js 15 top-level allowed dev origins
+  allowedDevOrigins: [
+    'ais-dev-2imnhtcijlvggg7m4xbrz7-37292599062.asia-southeast1.run.app',
+    'ais-pre-2imnhtcijlvggg7m4xbrz7-37292599062.asia-southeast1.run.app',
+    '*.asia-southeast1.run.app',
+    '*.run.app',
+    'localhost',
+    'localhost:3000',
+  ],
   eslint: {
     ignoreDuringBuilds: true,
   },
   typescript: {
     ignoreBuildErrors: false,
   },
-  // Allow access to all remote image hostnames and protocols
   images: {
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: '**',
+        hostname: 'images.unsplash.com',
       },
       {
-        protocol: 'http',
-        hostname: '**',
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.googleusercontent.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'firebasestorage.googleapis.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.googleapis.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'picsum.photos',
+      },
+      {
+        protocol: 'https',
+        hostname: 'i.ytimg.com',
+      },
+      {
+        protocol: 'https',
+        hostname: 'img.youtube.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.run.app',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.vercel.app',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.firebaseapp.com',
+      },
+      {
+        protocol: 'https',
+        hostname: '*.firebasestorage.app',
       },
     ],
   },

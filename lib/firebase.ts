@@ -33,24 +33,36 @@ import {
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import firebaseConfig from '../firebase-applet-config.json';
 
-// Initialize Firebase App instance singleton
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+// Support both checked-in config and environment variables for Vercel/cloud deployments
+const resolvedFirebaseConfig = {
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || firebaseConfig.projectId,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || firebaseConfig.appId,
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || firebaseConfig.apiKey,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || firebaseConfig.authDomain,
+  firestoreDatabaseId: process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || (firebaseConfig as any).firestoreDatabaseId,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || firebaseConfig.storageBucket,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || firebaseConfig.messagingSenderId,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || (firebaseConfig as any).measurementId || '',
+};
 
-// Initialize Firestore with auto-detect long polling for maximum reliability in iframes and proxies
+// Initialize Firebase App instance singleton
+const app = !getApps().length ? initializeApp(resolvedFirebaseConfig) : getApp();
+
+// Initialize Firestore with auto-detect long polling for maximum reliability in iframes, proxies, and Vercel
 export const db = (() => {
   try {
-    if (firebaseConfig.firestoreDatabaseId) {
+    if (resolvedFirebaseConfig.firestoreDatabaseId) {
       return initializeFirestore(app, {
         experimentalAutoDetectLongPolling: true,
-      }, firebaseConfig.firestoreDatabaseId);
+      }, resolvedFirebaseConfig.firestoreDatabaseId);
     }
     return initializeFirestore(app, {
       experimentalAutoDetectLongPolling: true,
     });
   } catch {
     // If already initialized, retrieve existing instance
-    return firebaseConfig.firestoreDatabaseId
-      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+    return resolvedFirebaseConfig.firestoreDatabaseId
+      ? getFirestore(app, resolvedFirebaseConfig.firestoreDatabaseId)
       : getFirestore(app);
   }
 })();

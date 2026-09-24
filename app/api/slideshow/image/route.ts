@@ -4,6 +4,9 @@ import { getServerFirestore, isIgnorableFirestoreError } from '@/lib/serverFireb
 import fs from 'fs';
 import path from 'path';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 // Fallback images if an ID is completely missing
 const DEFAULT_FALLBACKS: Record<string, string> = {
   'hero-1': 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600&auto=format&fit=crop',
