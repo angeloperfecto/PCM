@@ -69,6 +69,16 @@ const DEFAULT_FACULTY_IMAGE_MAP: Record<string, string> = {
   'lubag': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop',
 };
 
+// Helper to validate whether a string is a potentially valid image URL
+const isValidImageUrl = (url?: string | null): boolean => {
+  if (!url || typeof url !== 'string') return false;
+  const trimmed = url.trim();
+  if (!trimmed || trimmed === 'undefined' || trimmed === 'null' || trimmed === '[object Object]' || trimmed === 'none') {
+    return false;
+  }
+  return true;
+};
+
 export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   name,
   imageUrl,
@@ -80,8 +90,9 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   fill = true,
   priority = false,
 }) => {
-  // Determine primary and fallback image candidates
-  let primaryImage = (imageUrl || imageSrc || image || '').trim();
+  // Determine primary and fallback image candidates with robust validation
+  const rawPrimary = (imageUrl || imageSrc || image || '').trim();
+  const primaryImage = isValidImageUrl(rawPrimary) ? rawPrimary : '';
   let defaultCuratedImage = '';
 
   const cleanId = (id || '').replace(/^(featured|dir|modal|admin|card)-/i, '');
@@ -99,27 +110,41 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
     }
   }
 
-  const [activeImage, setActiveImage] = useState<string>(primaryImage || defaultCuratedImage);
-  const [hasError, setHasError] = useState<boolean>(false);
+  const initialTarget = primaryImage || defaultCuratedImage;
+  const [activeImage, setActiveImage] = useState<string>(initialTarget);
+  const [hasError, setHasError] = useState<boolean>(!initialTarget);
 
   useEffect(() => {
-    const nextTarget = (imageUrl || imageSrc || image || '').trim() || defaultCuratedImage;
+    const rawTarget = (imageUrl || imageSrc || image || '').trim();
+    const validTarget = isValidImageUrl(rawTarget) ? rawTarget : '';
+    const nextTarget = validTarget || defaultCuratedImage;
+
     setActiveImage(nextTarget);
-    setHasError(false);
+    setHasError(!nextTarget);
   }, [imageUrl, imageSrc, image, defaultCuratedImage]);
 
   // If a valid photo is available and hasn't errored out, render it
   if (activeImage && activeImage.length > 0 && !hasError) {
     const isSvg = activeImage.endsWith('.svg');
     const isDataOrBlob = activeImage.startsWith('data:') || activeImage.startsWith('blob:');
-    const shouldUnoptimize = isSvg || isDataOrBlob || activeImage.startsWith('http') || activeImage.startsWith('/uploads/');
+    const shouldUnoptimize =
+      isSvg ||
+      isDataOrBlob ||
+      activeImage.startsWith('http:') ||
+      activeImage.startsWith('https:') ||
+      activeImage.startsWith('/uploads/');
 
     return (
-      <div className={`relative w-full h-full overflow-hidden bg-slate-800/40 ${className}`}>
+      <div
+        className={`relative w-full h-full overflow-hidden bg-slate-800/40 ${className}`}
+        role="img"
+        aria-label={`${name} Portrait`}
+      >
         <Image
           src={activeImage}
-          alt={name}
+          alt={name || 'Faculty Member'}
           fill={fill}
+          {...(!fill ? { width: 300, height: 300 } : {})}
           className="object-cover object-top w-full h-full transition-opacity duration-300"
           sizes={sizes}
           priority={priority}
@@ -127,7 +152,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
           referrerPolicy="no-referrer"
           onError={() => {
             // If primary custom upload failed, attempt curated default; otherwise fall back to regalia portrait
-            if (activeImage !== defaultCuratedImage && defaultCuratedImage) {
+            if (activeImage !== defaultCuratedImage && isValidImageUrl(defaultCuratedImage)) {
               setActiveImage(defaultCuratedImage);
             } else {
               setHasError(true);

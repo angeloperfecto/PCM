@@ -145,6 +145,7 @@ import {
   safeSetDoc,
   safeUpdateDoc,
   safeDeleteDoc,
+  blobToDataUrl,
 } from './firebase';
 
 export interface ToastNotification {
@@ -2381,6 +2382,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       contentType: file.type || 'image/jpeg',
     });
 
+    // Implement dataUrl persistence in Firestore for small files (<= 800KB) for resilient offline and cross-session persistence
+    let inlineDataUrl: string | undefined = undefined;
+    if (downloadUrl && downloadUrl.startsWith('data:')) {
+      inlineDataUrl = downloadUrl;
+    } else if (file.size && file.size <= 800 * 1024) {
+      try {
+        inlineDataUrl = await blobToDataUrl(file);
+      } catch (dataUrlErr) {
+        console.warn('Inline dataUrl generation notice:', dataUrlErr);
+      }
+    }
+
     const now = new Date();
     const formattedSize = file.size
       ? file.size < 1024 * 1024
@@ -2395,7 +2408,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       storagePath,
       downloadURL: downloadUrl,
       url: downloadUrl,
-      dataUrl: downloadUrl.startsWith('data:') ? downloadUrl : undefined,
+      dataUrl: inlineDataUrl || (downloadUrl.startsWith('data:') ? downloadUrl : undefined),
       category,
       folder: folder || '',
       caption: caption || '',

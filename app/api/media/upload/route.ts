@@ -143,14 +143,14 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Metadata and cloud persistence in Firestore (stores dataUrl for files under 800KB for full cross-session recovery)
+    const canStoreDataUrl = buffer.length <= 800 * 1024;
+    const dataUrlValue = canStoreDataUrl ? `data:${fileMime};base64,${buffer.toString('base64')}` : '';
+
     try {
       const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
       const db = firebaseConfig.firestoreDatabaseId
         ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
         : getFirestore(app);
-
-      const canStoreDataUrl = buffer.length <= 800 * 1024;
-      const dataUrlValue = canStoreDataUrl ? `data:${fileMime};base64,${buffer.toString('base64')}` : '';
 
       await setDoc(doc(db, 'uploadedMedia', uniqueFilename), {
         id: uniqueFilename,
@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
       url: finalUrl,
       downloadURL: finalUrl,
       publicUrl: finalUrl,
-      dataUrl: '',
+      dataUrl: dataUrlValue,
       fileName: rawFileName,
       fileSize: buffer.length,
       fileType: fileMime,
