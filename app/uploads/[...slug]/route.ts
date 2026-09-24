@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
-import firebaseConfig from '@/firebase-applet-config.json';
+import { doc, getDoc, collection, query, where, getDocs, limit } from 'firebase/firestore';
+import { getServerFirestore, isIgnorableFirestoreError } from '@/lib/serverFirebase';
 
 const MIME_TYPES: Record<string, string> = {
   '.jpg': 'image/jpeg',
@@ -72,10 +71,7 @@ export async function GET(
 
     // 2. Query Firestore if file not on current container's disk
     try {
-      const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-      const db = firebaseConfig.firestoreDatabaseId
-        ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-        : getFirestore(app);
+      const db = getServerFirestore();
 
       let base64Data: string | undefined;
 
@@ -86,8 +82,10 @@ export async function GET(
           const data = directDoc.data();
           base64Data = data?.dataUrl || data?.url;
         }
-      } catch (err) {
-        console.warn('Direct uploadedMedia lookup error:', err);
+      } catch (err: any) {
+        if (!isIgnorableFirestoreError(err)) {
+          console.debug('Direct uploadedMedia lookup error:', err?.message || err);
+        }
       }
 
       // B. Query uploadedMedia by fileName or originalFileName
@@ -154,7 +152,9 @@ export async function GET(
         }
       }
     } catch (e: any) {
-      console.warn('Firestore fallback media retrieval error:', e);
+      if (!isIgnorableFirestoreError(e)) {
+        console.debug('Firestore fallback media retrieval notice:', e?.message || e);
+      }
     }
 
     // 3. Fallback: Return a clean PCM themed SVG banner so images never break with 404

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs/promises';
 import path from 'path';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getServerFirestore, isIgnorableFirestoreError } from '@/lib/serverFirebase';
+import { initializeApp, getApps } from 'firebase/app';
 import firebaseConfig from '@/firebase-applet-config.json';
 
 export const dynamic = 'force-dynamic';
@@ -64,8 +65,7 @@ export async function POST(req: NextRequest) {
     // This guarantees immediate global visibility for ALL users across any container, shared link, or device!
     let savedToFirestore = false;
     try {
-      const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-      const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+      const db = getServerFirestore();
       const docRef = doc(db, 'siteContent', `slideshow_image_${slideId}`);
       await setDoc(
         docRef,
@@ -78,8 +78,10 @@ export async function POST(req: NextRequest) {
         { merge: true }
       );
       savedToFirestore = true;
-    } catch (fsErr) {
-      console.warn('Could not save slideshow image document in Firestore:', fsErr);
+    } catch (fsErr: any) {
+      if (!isIgnorableFirestoreError(fsErr)) {
+        console.debug('Slideshow image Firestore set notice:', fsErr?.message || fsErr);
+      }
     }
 
     // 3. Probe if Firebase Storage bucket is active and reachable (if configured)

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
-import firebaseConfig from '@/firebase-applet-config.json';
+import { doc, getDoc } from 'firebase/firestore';
+import { getServerFirestore, isIgnorableFirestoreError } from '@/lib/serverFirebase';
 import fs from 'fs';
 import path from 'path';
 
@@ -72,11 +71,18 @@ export async function GET(req: NextRequest) {
     // 1. Check authoritative Firestore doc siteContent/slideshow_image_<id> only if circuit breaker is inactive
     if (now >= quotaExceededUntil) {
       try {
-        const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
-        const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
-        const snap = await getDoc(doc(db, 'siteContent', `slideshow_image_${id}`));
+        const db = getServerFirestore();
+        // Use a 2.5s timeout promise so offline or slow handshakes gracefully fall back to local disk/defaults
+        const fetchDocWithTimeout = Promise.race([
+          getDoc(doc(db, 'siteContent', `slideshow_image_${id}`)),
+          new Promise<null>((_, reject) =>
+            setTimeout(() => reject(new Error('Firestore read timeout')), 2500)
+          ),
+        ]);
 
-        if (snap.exists()) {
+        const snap = await fetchDocWithTimeout;
+
+        if (snap && snap.exists()) {
           const data = snap.data();
           const imgVal = data?.image;
 
@@ -116,8 +122,9 @@ export async function GET(req: NextRequest) {
         if (isQuotaExceededError(dbErr)) {
           // Trip circuit breaker to prevent repeated failed calls and log flooding
           quotaExceededUntil = now + CIRCUIT_BREAKER_DURATION_MS;
-        } else {
-          console.warn('Notice reading slideshow image from Firestore:', dbErr?.message || dbErr);
+        } else if (!isIgnorableFirestoreError(dbErr)) {
+          // Only log unexpected non-offline errors
+          console.debug('Slideshow Firestore read notice:', dbErr?.message || dbErr);
         }
       }
     }
