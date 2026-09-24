@@ -80,38 +80,44 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   fill = true,
   priority = false,
 }) => {
-  // Check if direct image was passed, otherwise look up in map by id or name
-  let targetImage = (imageUrl || imageSrc || image || '').trim();
-  if (!targetImage) {
-    const cleanId = (id || '').replace(/^(featured|dir|modal|admin|card)-/i, '');
-    if (cleanId && DEFAULT_FACULTY_IMAGE_MAP[cleanId]) {
-      targetImage = DEFAULT_FACULTY_IMAGE_MAP[cleanId];
-    } else if (id && DEFAULT_FACULTY_IMAGE_MAP[id]) {
-      targetImage = DEFAULT_FACULTY_IMAGE_MAP[id];
-    } else {
-      const lowerName = (name || '').toLowerCase();
-      for (const [key, url] of Object.entries(DEFAULT_FACULTY_IMAGE_MAP)) {
-        if (lowerName.includes(key)) {
-          targetImage = url;
-          break;
-        }
+  // Determine primary and fallback image candidates
+  let primaryImage = (imageUrl || imageSrc || image || '').trim();
+  let defaultCuratedImage = '';
+
+  const cleanId = (id || '').replace(/^(featured|dir|modal|admin|card)-/i, '');
+  if (cleanId && DEFAULT_FACULTY_IMAGE_MAP[cleanId]) {
+    defaultCuratedImage = DEFAULT_FACULTY_IMAGE_MAP[cleanId];
+  } else if (id && DEFAULT_FACULTY_IMAGE_MAP[id]) {
+    defaultCuratedImage = DEFAULT_FACULTY_IMAGE_MAP[id];
+  } else {
+    const lowerName = (name || '').toLowerCase();
+    for (const [key, url] of Object.entries(DEFAULT_FACULTY_IMAGE_MAP)) {
+      if (lowerName.includes(key)) {
+        defaultCuratedImage = url;
+        break;
       }
     }
   }
 
-  const [failedImage, setFailedImage] = useState<string | null>(null);
-  const isImageFailed = Boolean(targetImage && failedImage === targetImage);
+  const [activeImage, setActiveImage] = useState<string>(primaryImage || defaultCuratedImage);
+  const [hasError, setHasError] = useState<boolean>(false);
 
-  // If a valid custom photo is provided and hasn't failed to load, render it
-  if (targetImage && targetImage.length > 0 && !isImageFailed) {
-    const isSvg = targetImage.endsWith('.svg');
-    const isDataOrBlob = targetImage.startsWith('data:') || targetImage.startsWith('blob:');
-    const shouldUnoptimize = isSvg || isDataOrBlob || targetImage.startsWith('http');
+  useEffect(() => {
+    const nextTarget = (imageUrl || imageSrc || image || '').trim() || defaultCuratedImage;
+    setActiveImage(nextTarget);
+    setHasError(false);
+  }, [imageUrl, imageSrc, image, defaultCuratedImage]);
+
+  // If a valid photo is available and hasn't errored out, render it
+  if (activeImage && activeImage.length > 0 && !hasError) {
+    const isSvg = activeImage.endsWith('.svg');
+    const isDataOrBlob = activeImage.startsWith('data:') || activeImage.startsWith('blob:');
+    const shouldUnoptimize = isSvg || isDataOrBlob || activeImage.startsWith('http') || activeImage.startsWith('/uploads/');
 
     return (
       <div className={`relative w-full h-full overflow-hidden bg-slate-800/40 ${className}`}>
         <Image
-          src={targetImage}
+          src={activeImage}
           alt={name}
           fill={fill}
           className="object-cover object-top w-full h-full transition-opacity duration-300"
@@ -120,8 +126,12 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
           unoptimized={shouldUnoptimize}
           referrerPolicy="no-referrer"
           onError={() => {
-            console.warn(`Failed to load faculty portrait image for ${name}:`, targetImage);
-            setFailedImage(targetImage);
+            // If primary custom upload failed, attempt curated default; otherwise fall back to regalia portrait
+            if (activeImage !== defaultCuratedImage && defaultCuratedImage) {
+              setActiveImage(defaultCuratedImage);
+            } else {
+              setHasError(true);
+            }
           }}
         />
       </div>

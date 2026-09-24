@@ -13,6 +13,7 @@ import {
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
+  initializeFirestore,
   getFirestore,
   doc,
   collection,
@@ -35,10 +36,24 @@ import firebaseConfig from '../firebase-applet-config.json';
 // Initialize Firebase App instance singleton
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore with custom database ID if specified
-export const db = firebaseConfig.firestoreDatabaseId
-  ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
-  : getFirestore(app);
+// Initialize Firestore with auto-detect long polling for maximum reliability in iframes and proxies
+export const db = (() => {
+  try {
+    if (firebaseConfig.firestoreDatabaseId) {
+      return initializeFirestore(app, {
+        experimentalAutoDetectLongPolling: true,
+      }, firebaseConfig.firestoreDatabaseId);
+    }
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+    });
+  } catch {
+    // If already initialized, retrieve existing instance
+    return firebaseConfig.firestoreDatabaseId
+      ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
+      : getFirestore(app);
+  }
+})();
 
 // Initialize Auth
 export const auth = getAuth(app);
@@ -553,6 +568,17 @@ export async function deleteFileFromFirebaseStorage(storagePath: string): Promis
     return true;
   } catch (err) {
     console.warn('Firebase storage delete file notice:', err);
+    return false;
+  }
+}
+
+// Optional graceful connection check helper
+export async function testConnection(): Promise<boolean> {
+  if (typeof window === 'undefined') return true;
+  try {
+    const snap = await getDoc(doc(db, 'siteConfig', 'global'));
+    return snap.exists();
+  } catch {
     return false;
   }
 }

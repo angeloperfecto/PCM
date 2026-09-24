@@ -239,6 +239,7 @@ interface PCMContextType {
   addMediaItem: (item: Omit<MediaItem, 'id' | 'uploadDate'>) => Promise<MediaItem> | MediaItem;
   updateMediaItem: (id: string, updates: Partial<MediaItem>) => Promise<boolean> | void;
   deleteMediaItem: (id: string) => Promise<boolean> | void;
+  deleteMultipleMediaItems: (ids: string[]) => Promise<boolean>;
   replaceMediaFile: (id: string, newFile: File | Blob) => Promise<MediaItem>;
 
   // Gallery Albums
@@ -2808,6 +2809,49 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     logActivity('DELETE', 'Media Library', id, item?.title || 'Media Asset', 'Removed image asset from media library.');
     addToast('info', 'Media Deleted', 'Image asset removed from library.');
+  };
+
+  const deleteMultipleMediaItems = async (ids: string[]): Promise<boolean> => {
+    if (!ids || ids.length === 0) return true;
+    const targetSet = new Set(ids);
+    const itemsToDelete = mediaItems.filter((m) => targetSet.has(m.id));
+
+    // Optimistic UI state update
+    setMediaItems((prev) => prev.filter((m) => !targetSet.has(m.id)));
+
+    try {
+      // Parallel Firestore deletion across collections
+      await Promise.all(
+        ids.map(async (id) => {
+          await Promise.all([
+            safeDeleteDoc(doc(db, 'mediaLibrary', id)).catch(() => {}),
+            safeDeleteDoc(doc(db, 'mediaItems', id)).catch(() => {}),
+            safeDeleteDoc(doc(db, 'uploadedMedia', id)).catch(() => {}),
+          ]);
+        })
+      );
+
+      // Clean up storage paths
+      itemsToDelete.forEach((item) => {
+        if (item.storagePath) {
+          deleteFileFromFirebaseStorage(item.storagePath).catch(() => {});
+        }
+      });
+
+      logActivity(
+        'DELETE',
+        'Media Library',
+        'bulk-delete',
+        `${ids.length} Media Assets`,
+        `Permanently deleted ${ids.length} photographic assets from media library.`
+      );
+      addToast('success', 'Bulk Delete Successful', `Permanently removed ${ids.length} assets.`);
+      return true;
+    } catch (err: any) {
+      console.warn('Bulk media deletion error:', err);
+      addToast('error', 'Bulk Delete Failed', err?.message || 'Error deleting selected assets.');
+      return false;
+    }
   };
 
   // Gallery Albums CRUD
@@ -7414,6 +7458,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addMediaItem,
         updateMediaItem,
         deleteMediaItem,
+        deleteMultipleMediaItems,
         replaceMediaFile,
         galleryAlbums,
         setGalleryAlbums,

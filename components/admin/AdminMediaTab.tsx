@@ -34,6 +34,9 @@ import {
   AlertCircle,
   Info,
   Sparkles,
+  CheckSquare,
+  Square,
+  AlertTriangle,
 } from 'lucide-react';
 import { validateMediaFile, MAX_MEDIA_FILE_SIZE } from '@/lib/mediaService';
 
@@ -43,6 +46,7 @@ export const AdminMediaTab: React.FC = () => {
     addMediaItem,
     updateMediaItem,
     deleteMediaItem,
+    deleteMultipleMediaItems,
     uploadMediaFile,
     replaceMediaFile,
     addToast,
@@ -55,6 +59,11 @@ export const AdminMediaTab: React.FC = () => {
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title' | 'size'>('newest');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  // Multi-Selection State for Bulk Actions
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState(false);
+  const [isDeletingBulk, setIsDeletingBulk] = useState(false);
 
   // Interactive Action Feedback
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -386,11 +395,58 @@ export const AdminMediaTab: React.FC = () => {
       if (detailItem?.id === deleteTarget.id) {
         setDetailItem(null);
       }
+      setSelectedIds((prev) => prev.filter((id) => id !== deleteTarget.id));
       setDeleteTarget(null);
     } catch (err: any) {
       addToast('error', 'Delete Failed', err.message || 'Could not remove asset.');
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Multi-Select Helpers
+  const handleToggleSelect = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+    );
+  };
+
+  const handleSelectAllFiltered = () => {
+    const allFilteredIds = filteredAndSortedMedia.map((m) => m.id);
+    setSelectedIds(allFilteredIds);
+  };
+
+  const handleDeselectAll = () => {
+    setSelectedIds([]);
+  };
+
+  const handleBulkDeleteClick = () => {
+    if (!canPerformAction('Content Admin')) {
+      addToast('error', 'Permission Denied', 'Content Admin privileges required to delete assets.');
+      return;
+    }
+    if (selectedIds.length === 0) {
+      addToast('info', 'No Assets Selected', 'Please select at least one image to delete.');
+      return;
+    }
+    setIsBulkDeleteModalOpen(true);
+  };
+
+  const confirmBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setIsDeletingBulk(true);
+    try {
+      await deleteMultipleMediaItems(selectedIds);
+      if (detailItem && selectedIds.includes(detailItem.id)) {
+        setDetailItem(null);
+      }
+      setSelectedIds([]);
+      setIsBulkDeleteModalOpen(false);
+    } catch (err: any) {
+      addToast('error', 'Bulk Delete Error', err?.message || 'Failed to delete selected images.');
+    } finally {
+      setIsDeletingBulk(false);
     }
   };
 
@@ -601,26 +657,71 @@ export const AdminMediaTab: React.FC = () => {
           </div>
         </div>
 
-        {/* Category Pills */}
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
-          {categories.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                categoryFilter === cat
-                  ? 'bg-[#18392B] text-white font-bold shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              {cat === 'all' ? 'All Assets' : cat}
-              <span className="ml-1.5 opacity-60 text-[10px]">
-                {cat === 'all'
-                  ? mediaLibrary.length
-                  : mediaLibrary.filter((m) => m.category?.toLowerCase() === cat.toLowerCase()).length}
-              </span>
-            </button>
-          ))}
+        {/* Category Pills & Bulk Action Bar */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pt-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
+            {categories.map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
+                  categoryFilter === cat
+                    ? 'bg-[#18392B] text-white font-bold shadow-2xs'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
+              >
+                {cat === 'all' ? 'All Assets' : cat}
+                <span className="ml-1.5 opacity-60 text-[10px]">
+                  {cat === 'all'
+                    ? mediaLibrary.length
+                    : mediaLibrary.filter((m) => m.category?.toLowerCase() === cat.toLowerCase()).length}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Quick Select All / Deselect buttons */}
+          <div className="flex items-center gap-2 text-xs">
+            {selectedIds.length > 0 ? (
+              <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-900 px-3 py-1.5 rounded-lg shadow-2xs animate-fade-in">
+                <span className="font-bold text-xs">
+                  {selectedIds.length} {selectedIds.length === 1 ? 'asset' : 'assets'} selected
+                </span>
+                <span className="text-emerald-300">|</span>
+                <button
+                  type="button"
+                  onClick={handleSelectAllFiltered}
+                  className="text-xs font-medium text-emerald-800 hover:text-emerald-950 underline cursor-pointer"
+                >
+                  Select all ({filteredAndSortedMedia.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeselectAll}
+                  className="text-xs font-medium text-slate-500 hover:text-slate-800 cursor-pointer"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkDeleteClick}
+                  className="flex items-center gap-1.5 bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-xs font-bold transition shadow-xs cursor-pointer ml-1"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Selected ({selectedIds.length})</span>
+                </button>
+              </div>
+            ) : filteredAndSortedMedia.length > 0 ? (
+              <button
+                type="button"
+                onClick={handleSelectAllFiltered}
+                className="flex items-center gap-1.5 text-xs text-slate-600 hover:text-[#18392B] bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition cursor-pointer"
+              >
+                <Square className="w-3.5 h-3.5 text-slate-400" />
+                <span>Select All ({filteredAndSortedMedia.length})</span>
+              </button>
+            ) : null}
+          </div>
         </div>
       </div>
 
@@ -654,10 +755,15 @@ export const AdminMediaTab: React.FC = () => {
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {filteredAndSortedMedia.map((m) => {
             const displayUrl = m.dataUrl || m.downloadURL || m.url;
+            const isSelected = selectedIds.includes(m.id);
             return (
               <div
                 key={m.id}
-                className="group relative bg-white rounded-xl border border-slate-200 overflow-hidden shadow-2xs hover:shadow-md hover:border-[#588B76] transition-all flex flex-col justify-between"
+                className={`group relative bg-white rounded-xl border overflow-hidden shadow-2xs transition-all flex flex-col justify-between ${
+                  isSelected
+                    ? 'border-[#588B76] ring-2 ring-[#588B76] shadow-md bg-emerald-50/20'
+                    : 'border-slate-200 hover:shadow-md hover:border-[#588B76]'
+                }`}
               >
                 {/* Thumbnail Image Container */}
                 <div
@@ -667,6 +773,27 @@ export const AdminMediaTab: React.FC = () => {
                 >
                   {/* Subtle Gradient Overlay */}
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors" />
+
+                  {/* Top-left Multi-Select Checkbox */}
+                  <div
+                    onClick={(e) => handleToggleSelect(m.id, e)}
+                    className="absolute top-2 left-2 z-20 cursor-pointer"
+                    title={isSelected ? 'Deselect image' : 'Select image for bulk deletion'}
+                  >
+                    <div
+                      className={`w-6 h-6 rounded-md flex items-center justify-center transition-all shadow-md ${
+                        isSelected
+                          ? 'bg-[#18392B] text-white ring-2 ring-white'
+                          : 'bg-white/90 hover:bg-white text-slate-400 hover:text-slate-700 opacity-80 group-hover:opacity-100 border border-slate-300'
+                      }`}
+                    >
+                      {isSelected ? (
+                        <Check className="w-4 h-4 stroke-[3]" />
+                      ) : (
+                        <Square className="w-3.5 h-3.5 opacity-60" />
+                      )}
+                    </div>
+                  </div>
 
                   {/* Top-right Quick Action Buttons */}
                   <div
@@ -710,13 +837,15 @@ export const AdminMediaTab: React.FC = () => {
 
                 {/* Metadata Card Footer */}
                 <div className="p-3 space-y-1 bg-white">
-                  <h4
-                    onClick={() => handleOpenDetail(m)}
-                    className="text-xs font-bold text-[#18392B] truncate cursor-pointer hover:text-[#588B76]"
-                    title={m.title}
-                  >
-                    {m.title}
-                  </h4>
+                  <div className="flex items-start justify-between gap-1">
+                    <h4
+                      onClick={() => handleOpenDetail(m)}
+                      className="text-xs font-bold text-[#18392B] truncate cursor-pointer hover:text-[#588B76] flex-1"
+                      title={m.title}
+                    >
+                      {m.title}
+                    </h4>
+                  </div>
                   <div className="flex items-center justify-between text-[10px] text-slate-400">
                     <span>{m.fileSize || 'Image'}</span>
                     <span>{m.uploadDate || (m.createdAt ? m.createdAt.split('T')[0] : '')}</span>
@@ -732,6 +861,24 @@ export const AdminMediaTab: React.FC = () => {
           <table className="w-full text-left text-xs">
             <thead className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold uppercase text-[10px] tracking-wider">
               <tr>
+                <th className="py-3 px-3 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    aria-label="Select all items"
+                    checked={
+                      filteredAndSortedMedia.length > 0 &&
+                      filteredAndSortedMedia.every((m) => selectedIds.includes(m.id))
+                    }
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        handleSelectAllFiltered();
+                      } else {
+                        handleDeselectAll();
+                      }
+                    }}
+                    className="w-4 h-4 rounded-sm border-slate-300 text-[#18392B] focus:ring-[#588B76] cursor-pointer"
+                  />
+                </th>
                 <th className="py-3 px-4">Preview</th>
                 <th className="py-3 px-4">Title & Details</th>
                 <th className="py-3 px-4">Category</th>
@@ -744,8 +891,23 @@ export const AdminMediaTab: React.FC = () => {
             <tbody className="divide-y divide-slate-100">
               {filteredAndSortedMedia.map((m) => {
                 const displayUrl = m.dataUrl || m.downloadURL || m.url;
+                const isSelected = selectedIds.includes(m.id);
                 return (
-                  <tr key={m.id} className="hover:bg-slate-50 transition">
+                  <tr
+                    key={m.id}
+                    className={`transition ${
+                      isSelected ? 'bg-emerald-50/60 font-medium' : 'hover:bg-slate-50'
+                    }`}
+                  >
+                    <td className="py-2.5 px-3 text-center">
+                      <input
+                        type="checkbox"
+                        aria-label={`Select ${m.title}`}
+                        checked={isSelected}
+                        onChange={(e) => handleToggleSelect(m.id)}
+                        className="w-4 h-4 rounded-sm border-slate-300 text-[#18392B] focus:ring-[#588B76] cursor-pointer"
+                      />
+                    </td>
                     <td className="py-2.5 px-4">
                       <div
                         onClick={() => handleOpenDetail(m)}
@@ -1415,7 +1577,7 @@ export const AdminMediaTab: React.FC = () => {
         </div>
       )}
 
-      {/* CONFIRM DELETE MODAL */}
+      {/* CONFIRM DELETE MODAL (Single Item) */}
       <ConfirmDeleteModal
         isOpen={!!deleteTarget}
         title="Delete Media Asset Permanently"
@@ -1425,6 +1587,91 @@ export const AdminMediaTab: React.FC = () => {
         onConfirm={confirmDeleteMedia}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {/* CONFIRM BULK DELETE MODAL (Multiple Items) */}
+      {isBulkDeleteModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-5 shadow-2xl border border-slate-200 my-8 animate-scale-up">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 text-red-600 flex items-center justify-center shrink-0 mt-0.5">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="font-serif text-base font-bold text-slate-900">
+                  Delete {selectedIds.length} Assets Permanently
+                </h3>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  Are you sure you want to permanently delete {selectedIds.length} selected image{selectedIds.length > 1 ? 's' : ''}? This action cannot be undone and will permanently remove them from Firestore and cloud storage.
+                </p>
+              </div>
+            </div>
+
+            {/* Selected Items Preview Thumbnails */}
+            <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 max-h-48 overflow-y-auto space-y-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                Selected for deletion:
+              </span>
+              <div className="grid grid-cols-4 gap-2">
+                {selectedIds.slice(0, 8).map((id) => {
+                  const item = mediaLibrary.find((m) => m.id === id);
+                  const displayUrl = item?.dataUrl || item?.downloadURL || item?.url;
+                  return (
+                    <div
+                      key={id}
+                      className="relative rounded-lg overflow-hidden border border-slate-300 aspect-square bg-slate-200"
+                    >
+                      {displayUrl && (
+                        <div
+                          className="w-full h-full bg-cover bg-center"
+                          style={{ backgroundImage: `url("${displayUrl}")` }}
+                        />
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-black/70 px-1 py-0.5 text-[8px] text-white truncate">
+                        {item?.title || id}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              {selectedIds.length > 8 && (
+                <p className="text-[11px] text-slate-500 text-center font-medium pt-1">
+                  + {selectedIds.length - 8} more assets selected
+                </p>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100 text-xs">
+              <button
+                type="button"
+                disabled={isDeletingBulk}
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 font-semibold transition cursor-pointer disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingBulk}
+                onClick={confirmBulkDelete}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+              >
+                {isDeletingBulk ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Deleting {selectedIds.length} Assets...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-4 h-4" />
+                    <span>Delete Permanently ({selectedIds.length})</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

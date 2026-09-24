@@ -142,12 +142,15 @@ export async function POST(req: NextRequest) {
       throw new Error('Could not persist file to storage.');
     }
 
-    // 4. Lightweight metadata logging in Firestore (NEVER stores large base64 to protect 1MB doc limits)
+    // 4. Metadata and cloud persistence in Firestore (stores dataUrl for files under 800KB for full cross-session recovery)
     try {
       const app = getApps().length > 0 ? getApps()[0] : initializeApp(firebaseConfig);
       const db = firebaseConfig.firestoreDatabaseId
         ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
         : getFirestore(app);
+
+      const canStoreDataUrl = buffer.length <= 800 * 1024;
+      const dataUrlValue = canStoreDataUrl ? `data:${fileMime};base64,${buffer.toString('base64')}` : '';
 
       await setDoc(doc(db, 'uploadedMedia', uniqueFilename), {
         id: uniqueFilename,
@@ -157,6 +160,7 @@ export async function POST(req: NextRequest) {
         contentType: fileMime,
         size: buffer.length,
         url: publicUrl,
+        dataUrl: dataUrlValue,
         storagePath: `uploads/${sanitizedFolder}/${uniqueFilename}`,
         createdAt: new Date().toISOString(),
       }, { merge: true });
