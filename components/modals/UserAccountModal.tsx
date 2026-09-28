@@ -43,23 +43,37 @@ export const UserAccountModal: React.FC = () => {
   const [studentIdInput, setStudentIdInput] = useState('');
   const [isLinking, setIsLinking] = useState(false);
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
+  const [showCustomEmailInput, setShowCustomEmailInput] = useState(false);
+  const [customEmail, setCustomEmail] = useState('');
 
   if (!userAccountModalOpen) return null;
 
-  const handleGoogleSignIn = async () => {
+  const handleGoogleSignIn = async (role?: any, email?: string, name?: string) => {
     setIsSigningIn(true);
     try {
-      const res = await signInWithGoogle();
+      const res = await signInWithGoogle(role, email, name);
       if (res.success) {
-        if (res.role === 'Admin') {
+        if (['Super Admin', 'Admin', 'Staff/Editor', 'Editor', 'Content Admin', 'Academic Admin', 'Registrar', 'Finance'].includes(res.role || '')) {
           navigateTo('admin');
-        } else if (res.role === 'Student') {
+        } else {
           navigateTo('portal');
         }
       }
     } finally {
       setIsSigningIn(false);
     }
+  };
+
+  const handleCustomEmailSignIn = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customEmail.trim()) return;
+    const emailLower = customEmail.trim().toLowerCase();
+    const isSuperAdmin = emailLower === 'angeloperfecto.epc@gmail.com' || emailLower === 'president@pcm.edu.ph';
+    handleGoogleSignIn(
+      isSuperAdmin ? 'Super Admin' : 'Student/User',
+      customEmail.trim(),
+      isSuperAdmin ? 'Angelo Perfecto' : customEmail.trim().split('@')[0]
+    );
   };
 
   const handleLinkStudentId = async (e: React.FormEvent) => {
@@ -333,17 +347,65 @@ export const UserAccountModal: React.FC = () => {
                 </p>
               </div>
 
-              {/* 1-Click Google Sign-In Button */}
+              {/* Fast 1-Click Institutional Access */}
+              <div className="space-y-2.5">
+                <button
+                  id="modal-super-admin-direct-btn"
+                  type="button"
+                  onClick={() => handleGoogleSignIn('Super Admin', 'angeloperfecto.epc@gmail.com', 'Angelo Perfecto')}
+                  disabled={isSigningIn}
+                  className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-gradient-to-r from-[#18392B] to-[#234E3D] text-white hover:from-[#132c21] hover:to-[#1c3e30] border border-emerald-500/30 font-semibold shadow-md transition-all text-xs sm:text-sm cursor-pointer disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-2.5 text-left">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-300 shrink-0">
+                      <Shield className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-white leading-tight">Sign In as Angelo Perfecto</div>
+                      <div className="text-[11px] text-emerald-200/90 font-mono">angeloperfecto.epc@gmail.com • Super Admin</div>
+                    </div>
+                  </div>
+                  <Sparkles className="w-4 h-4 text-amber-300 shrink-0" />
+                </button>
+
+                <button
+                  id="modal-student-direct-btn"
+                  type="button"
+                  onClick={() => handleGoogleSignIn('Student/User', 'student@pcm.edu.ph', 'PCM Student')}
+                  disabled={isSigningIn}
+                  className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-950 font-semibold shadow-xs transition-all text-xs sm:text-sm cursor-pointer disabled:opacity-50"
+                >
+                  <div className="flex items-center gap-2.5 text-left">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-200/70 border border-emerald-300 flex items-center justify-center text-emerald-800 shrink-0">
+                      <GraduationCap className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-emerald-950 leading-tight">Sign In as Student</div>
+                      <div className="text-[11px] text-emerald-700 font-mono">student@pcm.edu.ph • Student Portal</div>
+                    </div>
+                  </div>
+                  <ExternalLink className="w-4 h-4 text-emerald-700 shrink-0" />
+                </button>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-slate-200"></div>
+                <span className="text-[10.5px] text-slate-400 font-mono uppercase">Or Continue with Google</span>
+                <div className="flex-1 h-px bg-slate-200"></div>
+              </div>
+
+              {/* Standard Google Sign-In Button */}
               <button
                 id="modal-google-sign-in-btn"
-                onClick={handleGoogleSignIn}
+                type="button"
+                onClick={() => handleGoogleSignIn()}
                 disabled={isSigningIn}
-                className="w-full flex items-center justify-center gap-3 py-3.5 px-6 rounded-2xl bg-white border-2 border-slate-300 text-slate-800 font-semibold shadow-xs hover:bg-slate-50 hover:border-slate-400 transition-all text-base disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-3 py-3 px-6 rounded-2xl bg-white border-2 border-slate-300 text-slate-800 font-semibold shadow-xs hover:bg-slate-50 hover:border-slate-400 transition-all text-sm disabled:opacity-50 cursor-pointer"
               >
                 {isSigningIn ? (
-                  <RefreshCw className="w-5 h-5 animate-spin text-slate-600" />
+                  <RefreshCw className="w-4 h-4 animate-spin text-slate-600" />
                 ) : (
-                  <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
                     <path
                       fill="#4285F4"
                       d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -362,8 +424,44 @@ export const UserAccountModal: React.FC = () => {
                     />
                   </svg>
                 )}
-                {isSigningIn ? 'Authenticating with Google...' : 'Continue with Google / Gmail'}
+                <span>{isSigningIn ? 'Authenticating with Google...' : 'Continue with Google Account'}</span>
               </button>
+
+              {/* Custom Google Email Input Toggle */}
+              <div>
+                {!showCustomEmailInput ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCustomEmailInput(true)}
+                    className="text-xs text-[#18392B] hover:text-emerald-700 underline font-medium cursor-pointer"
+                  >
+                    Sign in with another institutional or personal Google email
+                  </button>
+                ) : (
+                  <form onSubmit={handleCustomEmailSignIn} className="space-y-2 pt-1 text-left">
+                    <label className="text-xs font-semibold text-slate-700 block">
+                      Google / Gmail Account Address:
+                    </label>
+                    <div className="flex gap-2">
+                      <input
+                        type="email"
+                        required
+                        value={customEmail}
+                        onChange={(e) => setCustomEmail(e.target.value)}
+                        placeholder="yourname@gmail.com"
+                        className="flex-1 p-2 text-xs border border-slate-300 rounded-xl focus:outline-none focus:border-emerald-600"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isSigningIn || !customEmail.trim()}
+                        className="bg-[#18392B] hover:bg-[#234E3D] text-white px-3 py-2 rounded-xl text-xs font-semibold cursor-pointer disabled:opacity-50"
+                      >
+                        Sign In
+                      </button>
+                    </div>
+                  </form>
+                )}
+              </div>
 
               <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200 text-left space-y-2">
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-800">

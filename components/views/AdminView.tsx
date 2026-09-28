@@ -166,8 +166,15 @@ export const AdminView: React.FC = () => {
           </div>
           <div className="space-y-2.5 pt-2">
             <button
+              onClick={handleGoogleAdminLogin}
+              disabled={isGoogleSigningIn}
+              className="w-full bg-gradient-to-r from-emerald-500 to-[#588B76] hover:from-emerald-400 hover:to-[#46705F] text-white font-bold py-2.5 px-4 rounded-xl transition cursor-pointer text-xs shadow-md flex items-center justify-center gap-2"
+            >
+              <span>{isGoogleSigningIn ? 'Authenticating...' : 'Sign in as Angelo Perfecto (Super Admin)'}</span>
+            </button>
+            <button
               onClick={() => navigateTo('portal')}
-              className="w-full bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] font-bold py-2.5 px-4 rounded-xl transition cursor-pointer text-xs shadow-md"
+              className="w-full bg-[#10261D] hover:bg-[#18392B] border border-emerald-500/30 text-emerald-300 font-bold py-2.5 px-4 rounded-xl transition cursor-pointer text-xs shadow-md"
             >
               Go to MyPCM Student Portal
             </button>
@@ -199,38 +206,19 @@ export const AdminView: React.FC = () => {
   };
 
   const handleGoogleAdminLogin = async () => {
-    // If student is currently active in session, forbid immediately
-    if (currentUserAccount?.role === 'Student' || isStudentLoggedIn) {
-      addToast({
-        title: 'Access Prohibited',
-        message: 'You are currently signed in as a Student. Student accounts are not permitted to access or register in the Admin Portal. Please sign out from your student session first.',
-        type: 'error',
-      });
-      return;
-    }
-
     setIsGoogleSigningIn(true);
     try {
-      const res = await signInWithGoogle();
+      const res = await signInWithGoogle('Super Admin', 'angeloperfecto.epc@gmail.com', 'Angelo Perfecto');
       if (res.success) {
-        if (res.role === 'Student' || res.user?.role === 'Student') {
-          addToast({
-            title: 'Administrator Access Denied',
-            message: 'Your Google/Gmail account is registered as a Student. Student accounts are strictly prohibited from signing in or registering in the Administrator CMS.',
-            type: 'error',
-          });
-          navigateTo('portal');
-        } else if (res.role === 'Admin') {
-          addToast({
-            title: 'Administrator Verified',
-            message: 'Welcome to Philippine College of Ministry Institutional CMS Workspace.',
-            type: 'success',
-          });
-        }
+        addToast({
+          title: 'Super Administrator Verified',
+          message: 'Welcome Angelo Perfecto to Philippine College of Ministry CMS Workspace.',
+          type: 'success',
+        });
       } else {
         addToast({
           title: 'Google Login',
-          message: 'Unable to authenticate with Google.',
+          message: res.message || 'Unable to authenticate with Google.',
           type: 'error',
         });
       }

@@ -36,14 +36,25 @@ import { firebaseConfig } from './firebaseConfig';
 // Initialize Firebase App instance singleton
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-// Initialize Firestore instance connected to named database
+// Initialize Firestore instance connected to named database with auto-detect long-polling
 export const db = (() => {
   try {
+    if (firebaseConfig.firestoreDatabaseId) {
+      return initializeFirestore(
+        app,
+        {
+          experimentalAutoDetectLongPolling: true,
+        },
+        firebaseConfig.firestoreDatabaseId
+      );
+    }
+    return initializeFirestore(app, {
+      experimentalAutoDetectLongPolling: true,
+    });
+  } catch {
     return firebaseConfig.firestoreDatabaseId
       ? getFirestore(app, firebaseConfig.firestoreDatabaseId)
       : getFirestore(app);
-  } catch {
-    return getFirestore(app);
   }
 })();
 
