@@ -1,0 +1,1790 @@
+'use client';
+
+import React, { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
+import { usePCM } from '@/lib/store';
+import { StudentLifeAlbum, StudentLifePhotoItem, MediaItem } from '@/lib/types';
+import { compressImageFile, uploadFileToFirebaseStorage } from '@/lib/firebase';
+import { parsePhotoStory } from '@/lib/galleryStoryParser';
+
+const FALLBACK_PHOTO = 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop';
+
+const SafeAdminImage: React.FC<{
+  src: string;
+  alt: string;
+  fill?: boolean;
+  className?: string;
+  sizes?: string;
+  priority?: boolean;
+}> = ({ src, alt, fill = true, className = '', sizes, priority = false }) => {
+  const [hasError, setHasError] = useState(false);
+  const [prevSrc, setPrevSrc] = useState(src);
+
+  if (prevSrc !== src) {
+    setPrevSrc(src);
+    setHasError(false);
+  }
+
+  return (
+    <Image
+      src={hasError || !src ? FALLBACK_PHOTO : src}
+      alt={alt}
+      fill={fill}
+      sizes={sizes}
+      priority={priority}
+      className={className}
+      unoptimized={true}
+      referrerPolicy="no-referrer"
+      onError={() => setHasError(true)}
+    />
+  );
+};
+import {
+  Camera,
+  Plus,
+  Trash2,
+  Edit2,
+  FolderPlus,
+  UploadCloud,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  ArrowLeft,
+  ChevronUp,
+  ChevronDown,
+  Eye,
+  EyeOff,
+  Move,
+  Calendar,
+  MapPin,
+  Sparkles,
+  Layers,
+  Search,
+  ExternalLink,
+  RotateCw,
+  FolderOpen,
+  Image as ImageIcon,
+  Loader2,
+} from 'lucide-react';
+
+interface UploadQueueItem {
+  id: string;
+  file: File;
+  previewUrl: string;
+  caption: string;
+  progress: number;
+  status: 'pending' | 'uploading' | 'completed' | 'error';
+  errorMessage?: string;
+  uploadedUrl?: string;
+}
+
+export const AdminStudentLifeGallery: React.FC = () => {
+  const {
+    studentLifeAlbums,
+    createStudentLifeAlbum,
+    updateStudentLifeAlbum,
+    deleteStudentLifeAlbum,
+    addPhotosToStudentLifeAlbum,
+    updateStudentLifePhoto,
+    deleteStudentLifePhoto,
+    reorderStudentLifePhotos,
+    setStudentLifeAlbumCover,
+    toggleStudentLifeAlbumPublish,
+    moveStudentLifePhoto,
+    addToast,
+    canPerformAction,
+  } = usePCM();
+
+  // Active view: 'albums' list or 'album-detail'
+  const [selectedAlbumId, setSelectedAlbumId] = useState<string | null>(null);
+  const selectedAlbum = studentLifeAlbums.find((a) => a.id === selectedAlbumId) || null;
+
+  // Search and filter
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'published' | 'unpublished'>('all');
+
+  // Album creation / edit modal
+  const [isAlbumModalOpen, setIsAlbumModalOpen] = useState(false);
+  const [editingAlbumData, setEditingAlbumData] = useState<{
+    id?: string;
+    title: string;
+    description: string;
+    eventName: string;
+    eventDate: string;
+    location: string;
+    status: 'published' | 'unpublished';
+    coverPhotoUrl: string;
+  }>({
+    title: '',
+    description: '',
+    eventName: '',
+    eventDate: '',
+    location: '',
+    status: 'published',
+    coverPhotoUrl: '',
+  });
+
+  // Photo editing modal
+  const [editingPhoto, setEditingPhoto] = useState<StudentLifePhotoItem | null>(null);
+
+  // Multi-image upload drawer & queue
+  const [isUploadDrawerOpen, setIsUploadDrawerOpen] = useState(false);
+  const [uploadTargetAlbumId, setUploadTargetAlbumId] = useState<string>('');
+  const [uploadQueue, setUploadQueue] = useState<UploadQueueItem[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  // Move photo dialog state
+  const [movingPhoto, setMovingPhoto] = useState<StudentLifePhotoItem | null>(null);
+  const [targetMoveAlbumId, setTargetMoveAlbumId] = useState<string>('');
+
+  // Lightbox preview for admin
+  const [previewPhotoUrl, setPreviewPhotoUrl] = useState<string | null>(null);
+
+  // In-app Photo Deletion Dialog state
+  const [photoToDelete, setPhotoToDelete] = useState<{
+    albumId: string;
+    photo: StudentLifePhotoItem;
+  } | null>(null);
+  const [isDeletingPhoto, setIsDeletingPhoto] = useState(false);
+
+  // In-app Album Deletion Dialog state
+  const [albumToDelete, setAlbumToDelete] = useState<{
+    id: string;
+    title: string;
+    photoCount: number;
+  } | null>(null);
+  const [isDeletingAlbum, setIsDeletingAlbum] = useState(false);
+
+  // Confirm photo deletion handler
+  const handleConfirmDeletePhoto = async () => {
+    if (!photoToDelete) return;
+    try {
+      setIsDeletingPhoto(true);
+      await deleteStudentLifePhoto(photoToDelete.albumId, photoToDelete.photo.id);
+      if (previewPhotoUrl === photoToDelete.photo.imageUrl) {
+        setPreviewPhotoUrl(null);
+      }
+      if (editingPhoto?.id === photoToDelete.photo.id) {
+        setEditingPhoto(null);
+      }
+      setPhotoToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete photo:', err);
+      addToast('error', 'Delete Failed', 'Could not delete photo. Please try again.');
+    } finally {
+      setIsDeletingPhoto(false);
+    }
+  };
+
+  // Confirm album deletion handler
+  const handleConfirmDeleteAlbum = async () => {
+    if (!albumToDelete) return;
+    try {
+      setIsDeletingAlbum(true);
+      if (selectedAlbumId === albumToDelete.id) {
+        setSelectedAlbumId(null);
+      }
+      await deleteStudentLifeAlbum(albumToDelete.id);
+      setAlbumToDelete(null);
+    } catch (err: any) {
+      console.error('Failed to delete album:', err);
+      addToast('error', 'Delete Failed', 'Could not delete album.');
+    } finally {
+      setIsDeletingAlbum(false);
+    }
+  };
+
+  // Filtered albums
+  const filteredAlbums = studentLifeAlbums.filter((alb) => {
+    const matchesSearch =
+      alb.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (alb.eventName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (alb.location || '').toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || alb.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
+  // Open album modal for creating
+  const handleOpenCreateAlbum = () => {
+    setEditingAlbumData({
+      title: '',
+      description: '',
+      eventName: '',
+      eventDate: new Date().getFullYear().toString(),
+      location: 'PCM Campus, Lamtang, Benguet',
+      status: 'published',
+      coverPhotoUrl: '',
+    });
+    setIsAlbumModalOpen(true);
+  };
+
+  // Open album modal for editing
+  const handleOpenEditAlbum = (alb: StudentLifeAlbum) => {
+    setEditingAlbumData({
+      id: alb.id,
+      title: alb.title,
+      description: alb.description || '',
+      eventName: alb.eventName || '',
+      eventDate: alb.eventDate || '',
+      location: alb.location || '',
+      status: alb.status,
+      coverPhotoUrl: alb.coverPhotoUrl || '',
+    });
+    setIsAlbumModalOpen(true);
+  };
+
+  // Save album (create or edit)
+  const handleSaveAlbum = async () => {
+    if (!editingAlbumData.title.trim()) {
+      addToast('error', 'Title Required', 'Please enter a title for the photo album.');
+      return;
+    }
+
+    if (editingAlbumData.id) {
+      await updateStudentLifeAlbum(editingAlbumData.id, {
+        title: editingAlbumData.title.trim(),
+        description: editingAlbumData.description.trim(),
+        eventName: editingAlbumData.eventName.trim(),
+        eventDate: editingAlbumData.eventDate.trim(),
+        location: editingAlbumData.location.trim(),
+        status: editingAlbumData.status,
+        coverPhotoUrl: editingAlbumData.coverPhotoUrl,
+      });
+    } else {
+      const newAlbum = await createStudentLifeAlbum({
+        title: editingAlbumData.title.trim(),
+        description: editingAlbumData.description.trim(),
+        eventName: editingAlbumData.eventName.trim(),
+        eventDate: editingAlbumData.eventDate.trim(),
+        location: editingAlbumData.location.trim(),
+        status: editingAlbumData.status,
+        coverPhotoUrl: editingAlbumData.coverPhotoUrl,
+        photos: [] as StudentLifePhotoItem[],
+      });
+      // Optionally open upload modal directly for new album
+      setUploadTargetAlbumId(newAlbum.id);
+      setSelectedAlbumId(newAlbum.id);
+    }
+
+    setIsAlbumModalOpen(false);
+  };
+
+  // Delete Album confirmation
+  const handleDeleteAlbum = async (id: string, title: string) => {
+    if (!canPerformAction('Content Admin')) {
+      addToast('error', 'Access Denied', 'Content Admin privileges required.');
+      return;
+    }
+    const targetAlb = studentLifeAlbums.find((a) => a.id === id);
+    setAlbumToDelete({
+      id,
+      title,
+      photoCount: targetAlb?.photos?.length || targetAlb?.photoCount || 0,
+    });
+  };
+
+  // File selection & validation (Supports any image size with auto-compression)
+  const handleFilesSelected = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg'];
+    const newQueueItems: UploadQueueItem[] = [];
+
+    Array.from(files).forEach((file) => {
+      // Validate type
+      if (!allowedTypes.includes(file.type.toLowerCase())) {
+        addToast('error', 'Invalid File Format', `${file.name} is not a supported format (JPG, PNG, WEBP).`);
+        return;
+      }
+
+      const previewUrl = URL.createObjectURL(file);
+      newQueueItems.push({
+        id: `upload-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        file,
+        previewUrl,
+        caption: '',
+        progress: 0,
+        status: 'pending',
+      });
+    });
+
+    if (newQueueItems.length > 0) {
+      setUploadQueue((prev) => [...prev, ...newQueueItems]);
+      setIsUploadDrawerOpen(true);
+      if (selectedAlbumId && !uploadTargetAlbumId) {
+        setUploadTargetAlbumId(selectedAlbumId);
+      } else if (!uploadTargetAlbumId && studentLifeAlbums.length > 0) {
+        setUploadTargetAlbumId(studentLifeAlbums[0].id);
+      }
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer.files) {
+      handleFilesSelected(e.dataTransfer.files);
+    }
+  };
+
+  // Process and upload queue
+  const handleStartUpload = async () => {
+    if (!uploadTargetAlbumId) {
+      addToast('error', 'Target Album Required', 'Please select an album to upload these photos into.');
+      return;
+    }
+    const targetAlbum = studentLifeAlbums.find((a) => a.id === uploadTargetAlbumId);
+    if (!targetAlbum) return;
+
+    setIsUploading(true);
+    abortControllerRef.current = new AbortController();
+
+    const completedPhotos: StudentLifePhotoItem[] = [];
+
+    for (let i = 0; i < uploadQueue.length; i++) {
+      const item = uploadQueue[i];
+      if (item.status === 'completed') continue;
+
+      // Update item to uploading
+      setUploadQueue((prev) =>
+        prev.map((q) => (q.id === item.id ? { ...q, status: 'uploading', progress: 20 } : q))
+      );
+
+      try {
+        // Step 1: Compress image
+        const compressedBlob = await compressImageFile(item.file, 1600, 1600, 0.82);
+        setUploadQueue((prev) =>
+          prev.map((q) => (q.id === item.id ? { ...q, progress: 50 } : q))
+        );
+
+        // Step 2: Upload to Firebase Storage or API
+        const safeFileName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const storagePath = `studentLife/${uploadTargetAlbumId}/${Date.now()}_${safeFileName}`;
+        const downloadUrl = await uploadFileToFirebaseStorage(compressedBlob, storagePath, {
+          contentType: item.file.type || 'image/jpeg',
+          fileName: safeFileName,
+        });
+
+        if (!downloadUrl) {
+          throw new Error('Image upload failed. Storage was unreachable.');
+        }
+
+        const newPhotoItem: StudentLifePhotoItem = {
+          id: `slp-${Date.now()}-${i}`,
+          albumId: uploadTargetAlbumId,
+          imageUrl: downloadUrl,
+          thumbnailUrl: downloadUrl,
+          fileName: item.file.name,
+          caption: item.caption.trim() || '',
+          sortOrder: (targetAlbum.photos?.length || 0) + completedPhotos.length + 1,
+          uploadedAt: new Date().toISOString(),
+          uploadedBy: 'PCM Admin',
+        };
+
+        completedPhotos.push(newPhotoItem);
+
+        // Mark completed
+        setUploadQueue((prev) =>
+          prev.map((q) =>
+            q.id === item.id
+              ? { ...q, status: 'completed', progress: 100, uploadedUrl: downloadUrl }
+              : q
+          )
+        );
+      } catch (err: any) {
+        console.error(`Upload error for ${item.file.name}:`, err);
+        setUploadQueue((prev) =>
+          prev.map((q) =>
+            q.id === item.id
+              ? { ...q, status: 'error', errorMessage: err?.message || 'Failed to upload photo.' }
+              : q
+          )
+        );
+      }
+    }
+
+    setIsUploading(false);
+
+    if (completedPhotos.length > 0) {
+      await addPhotosToStudentLifeAlbum(uploadTargetAlbumId, completedPhotos);
+      // Clean up completed queue after 1.5s
+      setTimeout(() => {
+        setUploadQueue((prev) => prev.filter((q) => q.status !== 'completed'));
+        if (uploadQueue.filter((q) => q.status === 'error').length === 0) {
+          setIsUploadDrawerOpen(false);
+        }
+      }, 1200);
+    }
+  };
+
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsUploading(false);
+    addToast('info', 'Upload Cancelled', 'File upload stopped.');
+  };
+
+  const handleRemoveQueueItem = (id: string) => {
+    setUploadQueue((prev) => {
+      const item = prev.find((q) => q.id === id);
+      if (item) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+      return prev.filter((q) => q.id !== id);
+    });
+  };
+
+  // Reorder photos
+  const handleMovePhoto = (albumId: string, index: number, direction: 'up' | 'down') => {
+    if (!selectedAlbum) return;
+    const photos = [...selectedAlbum.photos];
+    const newIndex = direction === 'up' ? index - 1 : index + 1;
+    if (newIndex < 0 || newIndex >= photos.length) return;
+
+    const temp = photos[index];
+    photos[index] = photos[newIndex];
+    photos[newIndex] = temp;
+
+    reorderStudentLifePhotos(albumId, photos);
+  };
+
+  // Execute moving photo to another album
+  const handleExecuteMovePhoto = async () => {
+    if (!movingPhoto || !selectedAlbumId || !targetMoveAlbumId) return;
+    await moveStudentLifePhoto(selectedAlbumId, targetMoveAlbumId, movingPhoto.id);
+    setMovingPhoto(null);
+    setTargetMoveAlbumId('');
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Top Action Bar */}
+      <div className="bg-white border border-slate-200 rounded-sm p-4 sm:p-5 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-sm bg-[#18392B]/10 text-[#18392B]">
+                <Camera className="w-4 h-4" />
+              </span>
+              <h3 className="font-serif font-bold text-lg text-[#18392B]">
+                Student Life in Pictures — Facebook-Style Multi-Image Gallery
+              </h3>
+            </div>
+            <p className="text-xs text-slate-600 mt-1 max-w-2xl">
+              Organize campus memories into rich albums with multi-image drag-and-drop uploads, cover photo selection, custom captions, reordering, and real-time public synchronization.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {selectedAlbum ? (
+              <button
+                type="button"
+                onClick={() => setSelectedAlbumId(null)}
+                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-700 rounded-sm hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                <ArrowLeft className="w-3.5 h-3.5" />
+                <span>Back to Albums</span>
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              onClick={handleOpenCreateAlbum}
+              className="px-3.5 py-1.5 bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+            >
+              <FolderPlus className="w-3.5 h-3.5" />
+              <span>Create New Album</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (studentLifeAlbums.length === 0) {
+                  addToast('info', 'Create Album First', 'Please create an album before uploading photos.');
+                  handleOpenCreateAlbum();
+                  return;
+                }
+                setUploadTargetAlbumId(selectedAlbumId || studentLifeAlbums[0]?.id || '');
+                setIsUploadDrawerOpen(true);
+              }}
+              className="px-3.5 py-1.5 bg-[#588B76] hover:bg-[#46705f] text-white text-xs font-bold rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+            >
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>Upload Photos</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Search & Filter Bar (Only shown on Albums view) */}
+        {!selectedAlbum && (
+          <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-72">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search albums, events, locations..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-sm focus:border-[#588B76] focus:outline-hidden"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <span className="text-[11px] font-semibold text-slate-500">Status:</span>
+              <div className="inline-flex rounded-sm border border-slate-200 p-0.5 bg-slate-50 text-xs">
+                {(['all', 'published', 'unpublished'] as const).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setStatusFilter(filter)}
+                    className={`px-2.5 py-1 rounded-xs capitalize text-xs font-medium transition cursor-pointer ${
+                      statusFilter === filter
+                        ? 'bg-white text-[#18392B] font-bold shadow-2xs'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    {filter}
+                  </button>
+                ))}
+              </div>
+              <span className="text-xs text-slate-400 ml-2">
+                {filteredAlbums.length} {filteredAlbums.length === 1 ? 'album' : 'albums'}
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* VIEW 1: ALBUM LIST VIEW */}
+      {!selectedAlbum && (
+        <div>
+          {filteredAlbums.length === 0 ? (
+            <div className="bg-white border border-dashed border-slate-300 rounded-sm p-12 text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-slate-100 text-slate-400 mx-auto flex items-center justify-center">
+                <FolderOpen className="w-8 h-8" />
+              </div>
+              <div className="space-y-1 max-w-md mx-auto">
+                <h4 className="font-serif font-bold text-base text-[#18392B]">No Photo Albums Found</h4>
+                <p className="text-xs text-slate-500">
+                  {searchQuery || statusFilter !== 'all'
+                    ? 'No photo albums match your active search filter.'
+                    : 'Start building your Facebook-style Student Life gallery by creating your first photo album.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleOpenCreateAlbum}
+                className="px-4 py-2 bg-[#18392B] text-white text-xs font-bold rounded-sm hover:bg-[#10261D] cursor-pointer inline-flex items-center gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Create First Album</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredAlbums.map((album) => {
+                const isPub = album.status === 'published';
+                const count = album.photos?.length || album.photoCount || 0;
+                const coverImg = album.coverPhotoUrl || album.photos?.[0]?.imageUrl || '';
+                const story = parsePhotoStory(album);
+
+                return (
+                  <div
+                    key={album.id}
+                    className="bg-white border border-slate-200 rounded-sm overflow-hidden shadow-2xs hover:border-[#588B76] hover:shadow-xs transition group flex flex-col"
+                  >
+                    {/* Album Cover & Preview Collage */}
+                    <div
+                      onClick={() => setSelectedAlbumId(album.id)}
+                      className="h-48 w-full relative bg-slate-100 cursor-pointer overflow-hidden"
+                    >
+                      {coverImg ? (
+                        <SafeAdminImage
+                          src={coverImg}
+                          alt={story.displayTitle || album.title}
+                          fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 gap-1">
+                          <ImageIcon className="w-8 h-8 stroke-1" />
+                          <span className="text-[11px]">No Photos Uploaded</span>
+                        </div>
+                      )}
+
+                      {/* Overlays */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-black/20 pointer-events-none" />
+
+                      {/* Photo count badge */}
+                      <div className="absolute top-2.5 left-2.5 flex items-center gap-1.5">
+                        <span className="bg-black/75 text-white backdrop-blur-xs text-[10px] font-mono font-bold px-2 py-0.5 rounded-xs flex items-center gap-1">
+                          <Camera className="w-3 h-3" />
+                          <span>{count} {count === 1 ? 'Photo' : 'Photos'}</span>
+                        </span>
+                      </div>
+
+                      {/* Status badge */}
+                      <div className="absolute top-2.5 right-2.5">
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-xs flex items-center gap-1 shadow-2xs ${
+                            isPub
+                              ? 'bg-emerald-600 text-white'
+                              : 'bg-amber-500 text-white'
+                          }`}
+                        >
+                          {isPub ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                          <span className="capitalize">{album.status}</span>
+                        </span>
+                      </div>
+
+                      {/* Bottom title in cover */}
+                      <div className="absolute bottom-2.5 left-3 right-3 text-white pointer-events-none">
+                        {story.isEditorialDispatch && (
+                          <span className="bg-[#18392B]/90 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded-xs mb-1 inline-block uppercase">
+                            {story.category || 'IN PHOTOS'}
+                          </span>
+                        )}
+                        <h4 className="font-serif font-bold text-sm line-clamp-1 drop-shadow-sm">
+                          {story.displayTitle || album.title}
+                        </h4>
+                        {story.cleanEventName && (
+                          <p className="text-[11px] text-slate-200 drop-shadow-sm truncate">
+                            {story.cleanEventName}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Album Info & Controls */}
+                    <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
+                      <div className="space-y-1.5">
+                        {story.summary ? (
+                          <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                            {story.summary}
+                          </p>
+                        ) : null}
+
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 pt-1">
+                          {(story.storyDate || album.eventDate) && (
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3 h-3 text-slate-400" />
+                              <span>{story.storyDate || album.eventDate}</span>
+                            </span>
+                          )}
+                          {story.location && (
+                            <span className="flex items-center gap-1">
+                              <MapPin className="w-3 h-3 text-slate-400" />
+                              <span className="truncate max-w-[140px]">{story.location}</span>
+                            </span>
+                          )}
+                          {story.photographer && (
+                            <span className="text-[#18392B] font-medium text-[10px]">
+                              📷 {story.photographer}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Actions */}
+                      <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-1 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAlbumId(album.id)}
+                          className="px-2.5 py-1.5 bg-[#18392B] hover:bg-[#10261D] text-white font-bold rounded-xs flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                        >
+                          <FolderOpen className="w-3 h-3" />
+                          <span>Manage Photos</span>
+                        </button>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => toggleStudentLifeAlbumPublish(album.id)}
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xs transition cursor-pointer"
+                            title={isPub ? 'Unpublish album' : 'Publish album'}
+                          >
+                            {isPub ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditAlbum(album)}
+                            className="p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 rounded-xs transition cursor-pointer"
+                            title="Edit album details"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteAlbum(album.id, album.title)}
+                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xs transition cursor-pointer"
+                            title="Delete album"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* VIEW 2: SINGLE ALBUM DETAIL & PHOTOS MANAGER */}
+      {selectedAlbum && (
+        <div className="bg-white border border-slate-200 rounded-sm p-6 space-y-6">
+          {/* Header of selected album */}
+          {(() => {
+            const story = parsePhotoStory(selectedAlbum);
+            return (
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-slate-100 pb-5">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAlbumId(null)}
+                      className="text-slate-400 hover:text-slate-700 transition cursor-pointer mr-1"
+                      title="Back to all albums"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                    </button>
+                    {story.isEditorialDispatch && (
+                      <span className="bg-[#18392B] text-white text-[10px] font-mono font-bold uppercase px-2 py-0.5 rounded-xs tracking-wider">
+                        {story.category || 'IN PHOTOS'}
+                      </span>
+                    )}
+                    <h3 className="font-serif font-bold text-xl text-[#18392B]">
+                      {story.displayTitle || selectedAlbum.title}
+                    </h3>
+                    <span
+                      className={`text-[10px] font-bold px-2 py-0.5 rounded-xs capitalize ${
+                        selectedAlbum.status === 'published'
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-amber-100 text-amber-800'
+                      }`}
+                    >
+                      {selectedAlbum.status}
+                    </span>
+                  </div>
+
+                  {story.paragraphs.length > 0 ? (
+                    <div className="space-y-1.5 text-xs text-slate-600 max-w-4xl leading-relaxed">
+                      {story.paragraphs.map((p, idx) => (
+                        <p key={idx}>{p}</p>
+                      ))}
+                    </div>
+                  ) : selectedAlbum.description ? (
+                    <p className="text-xs text-slate-600 max-w-3xl leading-relaxed">
+                      {selectedAlbum.description}
+                    </p>
+                  ) : null}
+
+                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 pt-1">
+                    {story.cleanEventName && (
+                      <span className="font-medium text-slate-700">
+                        Event: <span className="font-normal text-slate-600">{story.cleanEventName}</span>
+                      </span>
+                    )}
+                    {(story.storyDate || selectedAlbum.eventDate) && (
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{story.storyDate || selectedAlbum.eventDate}</span>
+                      </span>
+                    )}
+                    {selectedAlbum.location && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{selectedAlbum.location}</span>
+                      </span>
+                    )}
+                    {story.photographer && (
+                      <span className="text-[#18392B] font-medium bg-[#18392B]/5 px-2 py-0.5 rounded-xs">
+                        📷 Photos by: <strong className="text-slate-800">{story.photographer}</strong>
+                      </span>
+                    )}
+                    {story.publisher && (
+                      <span className="text-slate-600 italic bg-slate-100 px-2 py-0.5 rounded-xs">
+                        📰 {story.publisher}
+                      </span>
+                    )}
+                    <span className="font-mono text-[11px] bg-slate-100 text-slate-700 px-2 py-0.5 rounded-xs">
+                      {selectedAlbum.photos?.length || 0} Photos Total
+                    </span>
+                  </div>
+                </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => handleOpenEditAlbum(selectedAlbum)}
+                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-700 rounded-sm hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Edit2 className="w-3.5 h-3.5" />
+                <span>Edit Album Details</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => toggleStudentLifeAlbumPublish(selectedAlbum.id)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-sm flex items-center gap-1.5 cursor-pointer transition ${
+                  selectedAlbum.status === 'published'
+                    ? 'border border-slate-200 text-slate-700 hover:bg-slate-50'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700'
+                }`}
+              >
+                {selectedAlbum.status === 'published' ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                <span>{selectedAlbum.status === 'published' ? 'Unpublish Album' : 'Publish Album'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setUploadTargetAlbumId(selectedAlbum.id);
+                  setIsUploadDrawerOpen(true);
+                }}
+                className="px-4 py-1.5 bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs transition"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add Photos to Album</span>
+              </button>
+            </div>
+          </div>
+        );
+      })()}
+
+          {/* Drag & Drop Quick Dropzone banner inside album */}
+          <div
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => {
+              setUploadTargetAlbumId(selectedAlbum.id);
+              fileInputRef.current?.click();
+            }}
+            className={`border-2 border-dashed rounded-sm p-6 text-center transition cursor-pointer ${
+              isDragOver
+                ? 'border-[#588B76] bg-[#588B76]/10'
+                : 'border-slate-200 bg-slate-50 hover:bg-slate-100/70 hover:border-slate-300'
+            }`}
+          >
+            <UploadCloud className="w-7 h-7 mx-auto text-[#588B76] mb-2" />
+            <p className="text-xs font-bold text-slate-800">
+              Drag and drop multiple photos here, or click to browse
+            </p>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Supports high-resolution JPG, PNG, WEBP (up to 15MB each). Images are automatically optimized before storage.
+            </p>
+          </div>
+
+          {/* Photos Grid */}
+          {selectedAlbum.photos.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 space-y-2">
+              <Camera className="w-10 h-10 mx-auto stroke-1" />
+              <p className="text-xs font-medium text-slate-600">No photos in this album yet.</p>
+              <p className="text-[11px] text-slate-400">
+                Click the upload box above or &quot;Add Photos to Album&quot; to begin adding memories.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs text-slate-500">
+                <span>
+                  Showing {selectedAlbum.photos.length} photos in album order. Drag or click arrows to reorder.
+                </span>
+                <span className="font-semibold text-slate-700">
+                  Cover Photo:{' '}
+                  <span className="text-[#588B76]">
+                    {selectedAlbum.photos.findIndex((p) => p.imageUrl === selectedAlbum.coverPhotoUrl) !== -1
+                      ? `Photo #${selectedAlbum.photos.findIndex((p) => p.imageUrl === selectedAlbum.coverPhotoUrl) + 1}`
+                      : 'First Photo'}
+                  </span>
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                {selectedAlbum.photos.map((photo, index) => {
+                  const isCover =
+                    photo.imageUrl === selectedAlbum.coverPhotoUrl ||
+                    (!selectedAlbum.coverPhotoUrl && index === 0);
+
+                  return (
+                    <div
+                      key={photo.id}
+                      className={`relative bg-white border rounded-sm overflow-hidden group shadow-2xs transition ${
+                        isCover ? 'border-2 border-[#18392B] ring-2 ring-[#18392B]/10' : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      {/* Photo Thumbnail */}
+                      <div
+                        onClick={() => setPreviewPhotoUrl(photo.imageUrl)}
+                        className="h-36 w-full relative bg-slate-100 cursor-pointer"
+                      >
+                        <SafeAdminImage
+                          src={photo.imageUrl}
+                          alt={photo.caption || photo.fileName || 'PCM Student Life Photo'}
+                          fill
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                          className="object-cover group-hover:scale-105 transition-transform duration-200"
+                        />
+
+                        {/* Badges */}
+                        {isCover && (
+                          <span className="absolute top-1.5 left-1.5 bg-[#18392B] text-white text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-xs shadow-xs">
+                            Cover
+                          </span>
+                        )}
+
+                        <span className="absolute bottom-1.5 left-1.5 bg-black/70 text-white text-[9px] font-mono px-1 py-0.2 rounded-xs">
+                          #{index + 1}
+                        </span>
+                      </div>
+
+                      {/* Photo Details & Controls */}
+                      <div className="p-2 space-y-1.5 bg-white">
+                        <p className="text-[11px] text-slate-700 line-clamp-1 font-medium" title={photo.caption || photo.fileName}>
+                          {photo.caption || photo.fileName || 'Untitled snapshot'}
+                        </p>
+
+                        <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                          {/* Reorder arrows */}
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              type="button"
+                              disabled={index === 0}
+                              onClick={() => handleMovePhoto(selectedAlbum.id, index, 'up')}
+                              className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed rounded-xs hover:bg-slate-100 cursor-pointer"
+                              title="Move left/earlier"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5 rotate-270" />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={index === selectedAlbum.photos.length - 1}
+                              onClick={() => handleMovePhoto(selectedAlbum.id, index, 'down')}
+                              className="p-1 text-slate-500 hover:text-slate-800 disabled:opacity-30 disabled:cursor-not-allowed rounded-xs hover:bg-slate-100 cursor-pointer"
+                              title="Move right/later"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5 rotate-270" />
+                            </button>
+                          </div>
+
+                          {/* Quick Actions */}
+                          <div className="flex items-center gap-1">
+                            {!isCover && (
+                              <button
+                                type="button"
+                                onClick={() => setStudentLifeAlbumCover(selectedAlbum.id, photo.imageUrl)}
+                                className="text-[10px] text-[#18392B] hover:underline font-semibold cursor-pointer"
+                                title="Set as album cover photo"
+                              >
+                                Set Cover
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => setEditingPhoto(photo)}
+                              className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xs cursor-pointer"
+                              title="Edit caption"
+                            >
+                              <Edit2 className="w-3 h-3" />
+                            </button>
+
+                            {studentLifeAlbums.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMovingPhoto(photo);
+                                  const otherAlbums = studentLifeAlbums.filter((a) => a.id !== selectedAlbum.id);
+                                  setTargetMoveAlbumId(otherAlbums[0]?.id || '');
+                                }}
+                                className="p-1 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-xs cursor-pointer"
+                                title="Move to another album"
+                              >
+                                <Move className="w-3 h-3" />
+                              </button>
+                            )}
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setPhotoToDelete({ albumId: selectedAlbum.id, photo });
+                              }}
+                              className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-xs cursor-pointer transition"
+                              title="Delete photo from album"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MULTI-IMAGE UPLOAD DRAWER / MODAL */}
+      {isUploadDrawerOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-sm max-w-2xl w-full p-6 space-y-4 shadow-xl my-8 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-sm bg-[#588B76]/10 text-[#588B76]">
+                  <UploadCloud className="w-5 h-5" />
+                </span>
+                <div>
+                  <h4 className="font-serif font-bold text-base text-[#18392B]">
+                    Multi-Image Photo Upload
+                  </h4>
+                  <p className="text-xs text-slate-500">
+                    Upload multiple images at once to PCM Student Life photo albums.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (isUploading) {
+                    handleCancelUpload();
+                  }
+                  setIsUploadDrawerOpen(false);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Target Album Selection */}
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-slate-700">Target Album</label>
+              <select
+                value={uploadTargetAlbumId}
+                onChange={(e) => setUploadTargetAlbumId(e.target.value)}
+                disabled={isUploading}
+                className="w-full text-xs p-2 border border-slate-200 rounded-sm bg-white"
+              >
+                {studentLifeAlbums.map((alb) => (
+                  <option key={alb.id} value={alb.id}>
+                    {alb.title} ({alb.photos?.length || 0} photos)
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Drag & Drop Area */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className={`border-2 border-dashed rounded-sm p-6 text-center cursor-pointer transition ${
+                isDragOver
+                  ? 'border-[#588B76] bg-[#588B76]/10'
+                  : 'border-slate-300 bg-slate-50 hover:bg-slate-100 hover:border-slate-400'
+              }`}
+            >
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/jpeg,image/png,image/webp,image/jpg"
+                className="hidden"
+                onChange={(e) => handleFilesSelected(e.target.files)}
+              />
+              <UploadCloud className="w-8 h-8 text-[#588B76] mx-auto mb-2" />
+              <p className="text-xs font-bold text-slate-800">
+                Click or drag & drop images to add to the queue
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Select multiple JPG, PNG, or WEBP photos. Any file size supported (auto-optimized on upload).
+              </p>
+            </div>
+
+            {/* Queue List */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[160px] max-h-[260px]">
+              {uploadQueue.length === 0 ? (
+                <div className="h-full flex items-center justify-center text-xs text-slate-400 py-8">
+                  No images selected yet. Choose files to preview before uploading.
+                </div>
+              ) : (
+                uploadQueue.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    className="flex items-center gap-3 p-2 border border-slate-200 rounded-sm bg-slate-50/50"
+                  >
+                    <div className="relative w-12 h-12 bg-slate-200 rounded-xs overflow-hidden shrink-0">
+                      <Image
+                        src={item.previewUrl}
+                        alt="Preview"
+                        fill
+                        className="object-cover"
+                        unoptimized={true}
+                        referrerPolicy="no-referrer"
+                      />
+                    </div>
+
+                    <div className="flex-1 min-w-0 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="font-medium text-slate-700 truncate max-w-[200px]" title={item.file.name}>
+                          {item.file.name}
+                        </span>
+                        <span className="text-[11px] text-slate-400 font-mono">
+                          {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                        </span>
+                      </div>
+
+                      <input
+                        type="text"
+                        value={item.caption}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setUploadQueue((prev) =>
+                            prev.map((q) => (q.id === item.id ? { ...q, caption: val } : q))
+                          );
+                        }}
+                        disabled={isUploading}
+                        placeholder="Optional caption for this photo..."
+                        className="w-full text-[11px] px-2 py-1 border border-slate-200 rounded-xs bg-white"
+                      />
+
+                      {/* Status indicator / progress bar */}
+                      {item.status === 'uploading' && (
+                        <div className="w-full bg-slate-200 h-1 rounded-full overflow-hidden">
+                          <div
+                            className="bg-[#588B76] h-full transition-all duration-300"
+                            style={{ width: `${item.progress}%` }}
+                          />
+                        </div>
+                      )}
+                      {item.status === 'completed' && (
+                        <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Uploaded successfully
+                        </span>
+                      )}
+                      {item.status === 'error' && (
+                        <span className="text-[10px] text-red-600 font-semibold flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" /> {item.errorMessage || 'Upload failed'}
+                        </span>
+                      )}
+                    </div>
+
+                    {!isUploading && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveQueueItem(item.id)}
+                        className="text-slate-400 hover:text-red-500 p-1 cursor-pointer"
+                        title="Remove from queue"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Bottom Controls */}
+            <div className="flex items-center justify-between pt-3 border-t border-slate-100 text-xs">
+              <span className="text-slate-500 font-medium">
+                {uploadQueue.length} {uploadQueue.length === 1 ? 'file' : 'files'} in queue
+              </span>
+
+              <div className="flex items-center gap-2">
+                {isUploading ? (
+                  <button
+                    type="button"
+                    onClick={handleCancelUpload}
+                    className="px-3 py-1.5 bg-red-50 text-red-600 border border-red-200 font-bold rounded-sm hover:bg-red-100 cursor-pointer"
+                  >
+                    Cancel Upload
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsUploadDrawerOpen(false)}
+                    className="px-3 py-1.5 border border-slate-200 text-slate-600 font-semibold rounded-sm hover:bg-slate-50 cursor-pointer"
+                  >
+                    Close
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleStartUpload}
+                  disabled={uploadQueue.length === 0 || isUploading}
+                  className="px-4 py-1.5 bg-[#18392B] hover:bg-[#10261D] text-white font-bold rounded-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  {isUploading ? (
+                    <>
+                      <RotateCw className="w-3.5 h-3.5 animate-spin" />
+                      <span>Uploading Photos...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      <span>Publish {uploadQueue.length} Photos</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CREATE / EDIT ALBUM MODAL */}
+      {isAlbumModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-slate-200 rounded-sm max-w-lg w-full p-6 space-y-4 shadow-xl">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h4 className="font-serif font-bold text-base text-[#18392B]">
+                {editingAlbumData.id ? 'Edit Photo Album' : 'Create New Photo Album'}
+              </h4>
+              <button
+                type="button"
+                onClick={() => setIsAlbumModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">
+                  Album Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={editingAlbumData.title}
+                  onChange={(e) => setEditingAlbumData({ ...editingAlbumData, title: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded-sm font-serif text-sm"
+                  placeholder="e.g. PCM Student Fellowship 2026"
+                />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block font-semibold text-slate-700">Description</label>
+                  {(editingAlbumData.title.includes('|') || editingAlbumData.description.includes('|') || editingAlbumData.description.toLowerCase().includes('photos by:')) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const parsed = parsePhotoStory({
+                          title: editingAlbumData.title,
+                          description: editingAlbumData.description,
+                          eventName: editingAlbumData.eventName,
+                          eventDate: editingAlbumData.eventDate,
+                          location: editingAlbumData.location,
+                        });
+                        setEditingAlbumData({
+                          ...editingAlbumData,
+                          title: parsed.displayTitle || editingAlbumData.title,
+                          description: parsed.paragraphs.join('\n\n') + (parsed.photographer ? `\n\nPhotos by: ${parsed.photographer}` : '') + (parsed.publisher ? `\n${parsed.publisher}` : ''),
+                          eventName: parsed.cleanEventName || editingAlbumData.eventName,
+                          eventDate: parsed.storyDate || editingAlbumData.eventDate,
+                        });
+                      }}
+                      className="text-[11px] font-bold text-[#18392B] hover:text-[#10261D] flex items-center gap-1 cursor-pointer bg-[#18392B]/5 hover:bg-[#18392B]/10 px-2 py-0.5 rounded-xs transition"
+                    >
+                      <Sparkles className="w-3 h-3 text-[#18392B]" />
+                      <span>Format Dispatch Copy</span>
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  rows={4}
+                  value={editingAlbumData.description}
+                  onChange={(e) => setEditingAlbumData({ ...editingAlbumData, description: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded-sm leading-relaxed"
+                  placeholder="Describe the occasion, highlights, and spiritual experiences..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Event / Ministry Name</label>
+                  <input
+                    type="text"
+                    value={editingAlbumData.eventName}
+                    onChange={(e) => setEditingAlbumData({ ...editingAlbumData, eventName: e.target.value })}
+                    className="w-full p-2 border border-slate-200 rounded-sm"
+                    placeholder="e.g. Annual Mountain Practicum"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Event Date</label>
+                  <input
+                    type="text"
+                    value={editingAlbumData.eventDate}
+                    onChange={(e) => setEditingAlbumData({ ...editingAlbumData, eventDate: e.target.value })}
+                    className="w-full p-2 border border-slate-200 rounded-sm font-mono"
+                    placeholder="e.g. September 2026"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Location</label>
+                  <input
+                    type="text"
+                    value={editingAlbumData.location}
+                    onChange={(e) => setEditingAlbumData({ ...editingAlbumData, location: e.target.value })}
+                    className="w-full p-2 border border-slate-200 rounded-sm"
+                    placeholder="e.g. Lamtang, Benguet"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">Publish Status</label>
+                  <select
+                    value={editingAlbumData.status}
+                    onChange={(e) =>
+                      setEditingAlbumData({ ...editingAlbumData, status: e.target.value as any })
+                    }
+                    className="w-full p-2 border border-slate-200 rounded-sm bg-white"
+                  >
+                    <option value="published">Published (Visible to Public)</option>
+                    <option value="unpublished">Unpublished (Draft / Hidden)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setIsAlbumModalOpen(false)}
+                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-600 rounded-sm hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveAlbum}
+                className="px-4 py-1.5 bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold rounded-sm cursor-pointer shadow-xs"
+              >
+                {editingAlbumData.id ? 'Save Changes' : 'Create Album'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT PHOTO CAPTION MODAL */}
+      {editingPhoto && selectedAlbum && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-slate-200 rounded-sm max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h4 className="font-serif font-bold text-base text-[#18392B]">
+              Edit Photo Details
+            </h4>
+
+            <div className="space-y-3 text-xs">
+              <div className="h-40 w-full relative bg-slate-100 rounded-xs overflow-hidden border border-slate-200">
+                <SafeAdminImage
+                  src={editingPhoto.imageUrl}
+                  alt="Edit photo"
+                  fill
+                  className="object-contain"
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">Photo Caption</label>
+                <textarea
+                  rows={3}
+                  value={editingPhoto.caption || ''}
+                  onChange={(e) => setEditingPhoto({ ...editingPhoto, caption: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded-sm leading-relaxed"
+                  placeholder="Add a detailed caption describing this campus moment..."
+                />
+              </div>
+
+              <div>
+                <label className="block font-semibold text-slate-700 mb-1">File Name</label>
+                <input
+                  type="text"
+                  value={editingPhoto.fileName || ''}
+                  onChange={(e) => setEditingPhoto({ ...editingPhoto, fileName: e.target.value })}
+                  className="w-full p-2 border border-slate-200 rounded-sm font-mono text-slate-600"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  if (selectedAlbum) {
+                    setPhotoToDelete({ albumId: selectedAlbum.id, photo: editingPhoto });
+                    setEditingPhoto(null);
+                  }
+                }}
+                className="px-3 py-1.5 text-xs font-semibold text-red-600 hover:bg-red-50 rounded-sm flex items-center gap-1.5 cursor-pointer transition border border-red-200"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete Photo</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingPhoto(null)}
+                  className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-600 rounded-sm hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await updateStudentLifePhoto(selectedAlbum.id, editingPhoto.id, {
+                      caption: editingPhoto.caption,
+                      fileName: editingPhoto.fileName,
+                    });
+                    setEditingPhoto(null);
+                    addToast('success', 'Caption Updated', 'Photo caption saved.');
+                  }}
+                  className="px-4 py-1.5 bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold rounded-sm cursor-pointer shadow-xs"
+                >
+                  Save Caption
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MOVE PHOTO MODAL */}
+      {movingPhoto && selectedAlbum && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white border border-slate-200 rounded-sm max-w-md w-full p-6 space-y-4 shadow-xl">
+            <h4 className="font-serif font-bold text-base text-[#18392B]">
+              Move Photo to Another Album
+            </h4>
+
+            <p className="text-xs text-slate-600">
+              Select destination album to transfer this image from &quot;{selectedAlbum.title}&quot;.
+            </p>
+
+            <div className="space-y-2 text-xs">
+              <label className="block font-semibold text-slate-700">Destination Album</label>
+              <select
+                value={targetMoveAlbumId}
+                onChange={(e) => setTargetMoveAlbumId(e.target.value)}
+                className="w-full p-2 border border-slate-200 rounded-sm bg-white"
+              >
+                {studentLifeAlbums
+                  .filter((a) => a.id !== selectedAlbum.id)
+                  .map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.title} ({a.photos?.length || 0} photos)
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setMovingPhoto(null)}
+                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-600 rounded-sm hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteMovePhoto}
+                className="px-4 py-1.5 bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold rounded-sm cursor-pointer shadow-xs"
+              >
+                Confirm Move
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* LIGHTBOX PREVIEW MODAL FOR ADMIN */}
+      {previewPhotoUrl && (() => {
+        const currentLightboxPhoto = selectedAlbum?.photos?.find((p) => p.imageUrl === previewPhotoUrl) || null;
+        const isCurrentCover = selectedAlbum && currentLightboxPhoto?.imageUrl === selectedAlbum.coverPhotoUrl;
+
+        return (
+          <div
+            className="fixed inset-0 bg-black/95 backdrop-blur-sm flex flex-col items-center justify-between z-50 p-4"
+            onClick={() => setPreviewPhotoUrl(null)}
+          >
+            {/* Top Bar with actions */}
+            <div
+              className="w-full max-w-5xl flex items-center justify-between py-2 text-white z-10 bg-black/40 px-4 rounded-sm"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="min-w-0 pr-4">
+                <p className="text-xs font-semibold text-white truncate">
+                  {currentLightboxPhoto?.fileName || 'Photo Preview'}
+                </p>
+                {currentLightboxPhoto?.caption && (
+                  <p className="text-[11px] text-slate-300 truncate">
+                    &ldquo;{currentLightboxPhoto.caption}&rdquo;
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {selectedAlbum && currentLightboxPhoto && !isCurrentCover && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStudentLifeAlbumCover(selectedAlbum.id, currentLightboxPhoto.imageUrl);
+                    }}
+                    className="px-2.5 py-1 bg-white/15 hover:bg-white/25 text-white text-xs font-medium rounded-xs transition cursor-pointer"
+                    title="Set as album cover photo"
+                  >
+                    Set as Cover
+                  </button>
+                )}
+
+                {selectedAlbum && currentLightboxPhoto && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPhotoToDelete({ albumId: selectedAlbum.id, photo: currentLightboxPhoto });
+                      setPreviewPhotoUrl(null);
+                    }}
+                    className="px-2.5 py-1 bg-red-600/80 hover:bg-red-600 text-white text-xs font-medium rounded-xs flex items-center gap-1.5 transition cursor-pointer"
+                    title="Delete this photo"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Photo</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewPhotoUrl(null)}
+                  className="text-white hover:text-slate-300 p-1.5 cursor-pointer rounded-xs hover:bg-white/10"
+                  title="Close preview"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Photo Center */}
+            <div
+              className="relative max-w-4xl max-h-[82vh] w-full h-full flex-1 my-2"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <SafeAdminImage
+                src={previewPhotoUrl}
+                alt={currentLightboxPhoto?.caption || 'Preview'}
+                fill
+                className="object-contain"
+              />
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* PHOTO DELETION CONFIRMATION MODAL */}
+      {photoToDelete && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+          onClick={() => !isDeletingPhoto && setPhotoToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-md shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-red-50/60">
+              <div className="flex items-center gap-2 text-red-700">
+                <div className="p-1.5 bg-red-100 rounded-sm">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </div>
+                <h4 className="font-serif font-bold text-base text-slate-900">
+                  Delete Photo from Album
+                </h4>
+              </div>
+              <button
+                type="button"
+                disabled={isDeletingPhoto}
+                onClick={() => setPhotoToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer disabled:opacity-40"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-3">
+              <div className="flex gap-3 bg-slate-50 p-2.5 rounded-sm border border-slate-200">
+                <div className="relative w-16 h-16 shrink-0 rounded-xs overflow-hidden bg-slate-200">
+                  <SafeAdminImage
+                    src={photoToDelete.photo.imageUrl}
+                    alt={photoToDelete.photo.caption || 'Thumbnail'}
+                    fill
+                    className="object-cover"
+                  />
+                </div>
+                <div className="min-w-0 flex-1 flex flex-col justify-center text-xs">
+                  <p className="font-semibold text-slate-800 truncate">
+                    {photoToDelete.photo.fileName || 'Snapshot'}
+                  </p>
+                  {photoToDelete.photo.caption && (
+                    <p className="text-slate-600 italic line-clamp-2 mt-0.5">
+                      &ldquo;{photoToDelete.photo.caption}&rdquo;
+                    </p>
+                  )}
+                  {selectedAlbum && (
+                    <p className="text-[11px] text-[#18392B] font-medium mt-1">
+                      Album: {selectedAlbum.title}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Are you sure you want to permanently delete this photo? It will be removed from this album and will no longer be visible in the public Student Life gallery.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isDeletingPhoto}
+                onClick={() => setPhotoToDelete(null)}
+                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-700 rounded-sm hover:bg-white cursor-pointer disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingPhoto}
+                onClick={handleConfirmDeletePhoto}
+                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 transition"
+              >
+                {isDeletingPhoto ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Photo</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ALBUM DELETION CONFIRMATION MODAL */}
+      {albumToDelete && (
+        <div
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs flex items-center justify-center z-50 p-4"
+          onClick={() => !isDeletingAlbum && setAlbumToDelete(null)}
+        >
+          <div
+            className="bg-white rounded-md shadow-2xl max-w-md w-full overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-red-50/60">
+              <div className="flex items-center gap-2 text-red-700">
+                <div className="p-1.5 bg-red-100 rounded-sm">
+                  <Trash2 className="w-4 h-4 text-red-600" />
+                </div>
+                <h4 className="font-serif font-bold text-base text-slate-900">
+                  Delete Album
+                </h4>
+              </div>
+              <button
+                type="button"
+                disabled={isDeletingAlbum}
+                onClick={() => setAlbumToDelete(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 cursor-pointer disabled:opacity-40"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-2 text-xs text-slate-600">
+              <p>
+                Are you sure you want to delete the album <strong className="text-slate-900">&ldquo;{albumToDelete.title}&rdquo;</strong>?
+              </p>
+              {albumToDelete.photoCount > 0 && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-800 p-2.5 rounded-sm flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>
+                    This album contains <strong>{albumToDelete.photoCount} {albumToDelete.photoCount === 1 ? 'photo' : 'photos'}</strong> which will also be removed from the gallery.
+                  </span>
+                </div>
+              )}
+              <p className="text-slate-500 text-[11px]">
+                This action cannot be undone.
+              </p>
+            </div>
+
+            <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={isDeletingAlbum}
+                onClick={() => setAlbumToDelete(null)}
+                className="px-3 py-1.5 border border-slate-200 text-xs font-semibold text-slate-700 rounded-sm hover:bg-white cursor-pointer disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingAlbum}
+                onClick={handleConfirmDeleteAlbum}
+                className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-sm flex items-center gap-1.5 cursor-pointer shadow-xs disabled:opacity-50 transition"
+              >
+                {isDeletingAlbum ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Album</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

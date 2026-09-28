@@ -1,0 +1,421 @@
+{
+  "entities": {
+    "SiteConfig": {
+      "title": "Site Configuration",
+      "description": "Global institutional settings, contacts, SEO, branding, and content blocks.",
+      "type": "object",
+      "properties": {
+        "siteIdentity": { "type": "object", "description": "Names, abbreviations, tagline, logos." },
+        "contactInfo": { "type": "object", "description": "Phone numbers, emails, addresses, hours." },
+        "seoSettings": { "type": "object", "description": "Meta titles, descriptions, keywords." },
+        "homeAbout": { "type": "object", "description": "Welcome letter, president quote, campus highlights." },
+        "missionVisionValues": { "type": "object", "description": "Mission, vision, core pillars." },
+        "ctaSections": { "type": "object", "description": "Action banners." },
+        "admissionsConfig": { "type": "object", "description": "Tuition, calendar dates, steps." },
+        "footerConfig": { "type": "object", "description": "Footer copyright and accreditation." },
+        "studentLife": { "type": "object", "description": "Student life banner, spiritual pillars, organizations, and ministry." },
+        "navigationMenu": { "type": "array", "description": "Navbar structure." }
+      },
+      "required": ["siteIdentity", "contactInfo"]
+    },
+    "AcademicProgram": {
+      "title": "Academic Degree Program",
+      "description": "Degree, diploma, or certificate offerings.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 200 },
+        "code": { "type": "string", "maxLength": 50 },
+        "level": { "type": "string", "enum": ["Undergraduate", "Graduate", "Diploma", "Certificate"] },
+        "description": { "type": "string" },
+        "totalUnits": { "type": "number" },
+        "duration": { "type": "string" },
+        "tuitionEstimate": { "type": "string" },
+        "prerequisites": { "type": "array" },
+        "coreCourses": { "type": "array" },
+        "careerOutcomes": { "type": "array" },
+        "status": { "type": "string", "enum": ["Published", "Draft", "Archived"] }
+      },
+      "required": ["id", "name", "code", "level"]
+    },
+    "FacultyMember": {
+      "title": "Faculty Member",
+      "description": "Faculty profile, qualifications, and role.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string", "maxLength": 150 },
+        "role": { "type": "string", "maxLength": 150 },
+        "group": { "type": "string", "enum": ["Administration", "Full-Time Faculty", "Adjunct Faculty", "Staff", "Board of Trustees"] },
+        "degrees": { "type": "array" },
+        "bio": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "email": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "name", "role", "group"]
+    },
+    "AnnouncementItem": {
+      "title": "Announcement Banner",
+      "description": "Ticker announcement item.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "message": { "type": "string" },
+        "category": { "type": "string" },
+        "active": { "type": "boolean" },
+        "link": { "type": "string" }
+      },
+      "required": ["id", "title", "message"]
+    },
+    "NewsArticle": {
+      "title": "News & Story",
+      "description": "College news, feature story, or press release.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 250 },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "author": { "type": "string" },
+        "excerpt": { "type": "string" },
+        "content": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "featured": { "type": "boolean" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "title", "date", "content"]
+    },
+    "CollegeEvent": {
+      "title": "College Event",
+      "description": "Institutional calendar event.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "registrationRequired": { "type": "boolean" },
+        "maxAttendees": { "type": "number" },
+        "registeredAttendees": { "type": "array" }
+      },
+      "required": ["id", "title", "date", "location"]
+    },
+    "UserAccount": {
+      "title": "User Account",
+      "description": "User profile with Google / Firebase authentication and role mapping.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "avatarUrl": { "type": "string" },
+        "role": { "type": "string", "enum": ["Admin", "Student", "Member"] },
+        "adminRole": { "type": "string" },
+        "studentId": { "type": "string" },
+        "department": { "type": "string" },
+        "homeChurch": { "type": "string" },
+        "status": { "type": "string" },
+        "provider": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "lastLogin": { "type": "string" }
+      },
+      "required": ["id", "uid", "email", "role"]
+    },
+    "AdmissionApplication": {
+      "title": "Admission Application",
+      "description": "Online prospective student admission application.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "referenceNumber": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "program": { "type": "string" },
+        "status": { "type": "string", "enum": ["Draft", "Submitted", "Under Review", "Approved", "Rejected"] },
+        "submissionDate": { "type": "string" },
+        "testimony": { "type": "string" },
+        "churchAffiliation": { "type": "string" }
+      },
+      "required": ["id", "referenceNumber", "fullName", "email", "program", "status"]
+    },
+    "YouTubeVideo": {
+      "title": "YouTube Video",
+      "description": "YouTube video record for website video management.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 250 },
+        "youtubeUrl": { "type": "string" },
+        "youtubeVideoId": { "type": "string", "maxLength": 30 },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "displayOrder": { "type": "number" },
+        "isFeatured": { "type": "boolean" },
+        "isPublished": { "type": "boolean" },
+        "showOnHome": { "type": "boolean" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "title", "youtubeVideoId"]
+    },
+    "HomepageVideoConfig": {
+      "title": "Homepage Video Configuration",
+      "description": "Settings controlling the public Homepage Videos section.",
+      "type": "object",
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "sectionTitle": { "type": "string", "maxLength": 150 },
+        "sectionSubtitle": { "type": "string", "maxLength": 300 },
+        "featuredVideoId": { "type": "string" },
+        "maxDisplayCount": { "type": "number" },
+        "layoutStyle": { "type": "string", "enum": ["featured-playlist", "grid"] },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["enabled", "sectionTitle"]
+    },
+    "MediaItem": {
+      "title": "Media Asset",
+      "description": "Permanent media library photographic and document assets with Firebase Storage references.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 250 },
+        "fileName": { "type": "string" },
+        "storagePath": { "type": "string" },
+        "downloadURL": { "type": "string" },
+        "url": { "type": "string" },
+        "category": { "type": "string" },
+        "altText": { "type": "string" },
+        "fileSize": { "type": "string" },
+        "fileSizeBytes": { "type": "number" },
+        "dimensions": { "type": "string" },
+        "contentType": { "type": "string" },
+        "uploadDate": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "uploadedByUid": { "type": "string" },
+        "usedInLocations": { "type": "array" },
+        "tags": { "type": "array" }
+      },
+      "required": ["id", "title", "url"]
+    },
+    "StudentLifePhotoItem": {
+      "title": "Student Life Photo Item",
+      "description": "Individual photo within a Student Life album with metadata and storage URL.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "albumId": { "type": "string" },
+        "imageUrl": { "type": "string" },
+        "thumbnailUrl": { "type": "string" },
+        "fileName": { "type": "string" },
+        "caption": { "type": "string" },
+        "sortOrder": { "type": "number" },
+        "uploadedAt": { "type": "string" },
+        "uploadedBy": { "type": "string" },
+        "fileSize": { "type": "number" }
+      },
+      "required": ["id", "albumId", "imageUrl", "fileName"]
+    },
+    "StudentLifeAlbum": {
+      "title": "Student Life Album",
+      "description": "Multi-image album for Student Life in Pictures with event details and photos.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 200 },
+        "description": { "type": "string" },
+        "eventName": { "type": "string" },
+        "eventDate": { "type": "string" },
+        "location": { "type": "string" },
+        "coverPhotoUrl": { "type": "string" },
+        "photoCount": { "type": "number" },
+        "status": { "type": "string", "enum": ["published", "unpublished"] },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" },
+        "createdBy": { "type": "string" },
+        "sortOrder": { "type": "number" },
+        "photos": { "type": "array" }
+      },
+      "required": ["id", "title", "coverPhotoUrl", "status"]
+    }
+  },
+  "firestore": {
+    "/studentLifeAlbums/{albumId}": {
+      "schema": { "$ref": "#/entities/StudentLifeAlbum" },
+      "description": "Multi-image Facebook-style photo albums for the Student Life in Pictures public section."
+    },
+    "/studentLifePhotos/{photoId}": {
+      "schema": { "$ref": "#/entities/StudentLifePhotoItem" },
+      "description": "Metadata for individual photos within Student Life albums."
+    },
+    "/mediaLibrary/{mediaId}": {
+      "schema": { "$ref": "#/entities/MediaItem" },
+      "description": "Permanent database-backed Media Library assets with Firebase Storage references."
+    },
+    "/siteConfig/{configId}": {
+      "schema": { "$ref": "#/entities/SiteConfig" },
+      "description": "Global institutional configuration documents."
+    },
+    "/programs/{programId}": {
+      "schema": { "$ref": "#/entities/AcademicProgram" },
+      "description": "Academic degree programs and curriculum."
+    },
+    "/faculty/{facultyId}": {
+      "schema": { "$ref": "#/entities/FacultyMember" },
+      "description": "Faculty, staff, and leadership directory."
+    },
+    "/announcements/{announcementId}": {
+      "schema": { "$ref": "#/entities/AnnouncementItem" },
+      "description": "Ticker announcement banner notices."
+    },
+    "/news/{newsId}": {
+      "schema": { "$ref": "#/entities/NewsArticle" },
+      "description": "News articles, press releases, and stories."
+    },
+    "/events/{eventId}": {
+      "schema": { "$ref": "#/entities/CollegeEvent" },
+      "description": "Academic calendar and campus events."
+    },
+    "/applications/{applicationId}": {
+      "schema": { "$ref": "#/entities/AdmissionApplication" },
+      "description": "Online student admission applications."
+    },
+    "/downloads/{downloadId}": {
+      "schema": "DownloadableResource",
+      "description": "Student handbook, application forms, and catalogs."
+    },
+    "/testimonials/{testimonialId}": {
+      "schema": "Testimonial",
+      "description": "Alumni, student, and ministry partner quotes."
+    },
+    "/stats/{statId}": {
+      "schema": "ImpactStat",
+      "description": "Key institutional metrics and alumni milestones."
+    },
+    "/faqs/{faqId}": {
+      "schema": "FAQItem",
+      "description": "Frequently asked questions for admissions and campus life."
+    },
+    "/sermons/{sermonId}": {
+      "schema": "SermonLecture",
+      "description": "Chapel messages and audio recordings."
+    },
+    "/scrapbook/{scrapbookId}": {
+      "schema": "ScrapbookItem",
+      "description": "Historical milestones and archive photographs."
+    },
+    "/mediaItems/{mediaId}": {
+      "schema": "MediaItem",
+      "description": "Media library assets and images."
+    },
+    "/galleryAlbums/{albumId}": {
+      "schema": "GalleryAlbum",
+      "description": "Photo gallery albums."
+    },
+    "/adminUsers/{adminId}": {
+      "schema": "AdminUser",
+      "description": "Administrative users and roles."
+    },
+    "/studentProfiles/{studentId}": {
+      "schema": "StudentProfile",
+      "description": "Student portal grades, enrollment, and tuition."
+    },
+    "/enrollments/{enrollmentId}": {
+      "schema": "OnlineEnrollment",
+      "description": "Student term enrollment applications, subject loads, and document submissions."
+    },
+    "/preEnlistments/{preEnlistmentId}": {
+      "schema": "PreEnlistmentRecord",
+      "description": "Student course pre-enlistment records and advisor reviews."
+    },
+    "/addDropRequests/{requestId}": {
+      "schema": "AddDropRequest",
+      "description": "Course addition, dropping, and section change requests."
+    },
+    "/academicPeriods/{periodId}": {
+      "schema": "AcademicPeriod",
+      "description": "Academic school years, semesters, and enrollment status windows."
+    },
+    "/subjects/{subjectId}": {
+      "schema": "SubjectCourse",
+      "description": "Master curriculum course catalog, prerequisites, and units."
+    },
+    "/sections/{sectionId}": {
+      "schema": "CourseSection",
+      "description": "Class sections, schedules, room assignments, and capacity tracking."
+    },
+    "/instructors/{instructorId}": {
+      "schema": "InstructorFaculty",
+      "description": "Faculty instructors, teaching loads, and department assignments."
+    },
+    "/feeSchedules/{feeId}": {
+      "schema": "FeeScheduleItem",
+      "description": "Tuition, laboratory, miscellaneous fee structures and unit rates."
+    },
+    "/enrollmentSystemConfig/{configId}": {
+      "schema": "EnrollmentSystemConfig",
+      "description": "Enrollment system toggles, locks, and portal announcements."
+    },
+    "/studentNotifications/{notifId}": {
+      "schema": "StudentNotification",
+      "description": "Student notification notices and alerts."
+    },
+    "/activityLogs/{logId}": {
+      "schema": "ActivityLogItem",
+      "description": "Audit log for admin modifications."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserAccount" },
+      "description": "Authenticated user accounts and Google profiles."
+    },
+    "/videos/{videoId}": {
+      "schema": { "$ref": "#/entities/YouTubeVideo" },
+      "description": "YouTube videos managed by administrators for display on the website."
+    },
+    "/homepageVideoConfig/{configId}": {
+      "schema": { "$ref": "#/entities/HomepageVideoConfig" },
+      "description": "Configuration settings for the HOME page video ministry section."
+    },
+    "/siteContent/{contentId}": {
+      "schema": {
+        "title": "Site Content Document",
+        "description": "Authoritative content blocks such as slideshow configuration.",
+        "type": "object",
+        "properties": {
+          "slides": { "type": "array" },
+          "updatedAt": { "type": "string" },
+          "updatedBy": { "type": "string" },
+          "isPublished": { "type": "boolean" }
+        }
+      },
+      "description": "Authoritative site content documents including the homepage hero slideshow."
+    },
+    "/slideshowImages/{imageId}": {
+      "schema": {
+        "title": "Slideshow Image Document",
+        "description": "Dedicated binary image document for hero slides to avoid 1MB document payload limits.",
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "image": { "type": "string" },
+          "filename": { "type": "string" },
+          "updatedAt": { "type": "string" }
+        },
+        "required": ["id", "image"]
+      },
+      "description": "Dedicated image document for hero slideshow slides."
+    }
+  }
+}

@@ -1,0 +1,212 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient resembling the photo's interior backdrop -->
+    <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#b69b7d" />
+      <stop offset="40%" stop-color="#9a8166" />
+      <stop offset="70%" stop-color="#3d4349" />
+      <stop offset="100%" stop-color="#1f2327" />
+    </linearGradient>
+
+    <!-- Warm curtain folds background -->
+    <linearGradient id="curtain-fold" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#a68c6d" stop-opacity="0.8" />
+      <stop offset="30%" stop-color="#cbb294" stop-opacity="0.9" />
+      <stop offset="60%" stop-color="#8e7558" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#5a4835" stop-opacity="0.7" />
+    </linearGradient>
+
+    <!-- Skin Gradients -->
+    <linearGradient id="skin-base" x1="30%" y1="0%" x2="70%" y2="100%">
+      <stop offset="0%" stop-color="#f0c29f" />
+      <stop offset="50%" stop-color="#dfa57e" />
+      <stop offset="100%" stop-color="#c98c63" />
+    </linearGradient>
+    <linearGradient id="skin-shadow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#b6774e" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#8f5633" stop-opacity="0.8" />
+    </linearGradient>
+    <linearGradient id="skin-highlight" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffdfc7" stop-opacity="0.7" />
+      <stop offset="100%" stop-color="#dfa57e" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- Hair Gradient -->
+    <linearGradient id="hair-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#2a221f" />
+      <stop offset="50%" stop-color="#181311" />
+      <stop offset="100%" stop-color="#0a0807" />
+    </linearGradient>
+    <linearGradient id="hair-shine" x1="0%" y1="0%" x2="100%" y2="50%">
+      <stop offset="0%" stop-color="#4a3c36" stop-opacity="0.6" />
+      <stop offset="100%" stop-color="#181311" stop-opacity="0" />
+    </linearGradient>
+
+    <!-- White Shirt & Collar Gradients -->
+    <linearGradient id="shirt-white" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#f5f7fa" />
+      <stop offset="100%" stop-color="#e2e8f0" />
+    </linearGradient>
+    <linearGradient id="collar-shadow" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#cbd5e1" stop-opacity="0.7" />
+      <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.9" />
+    </linearGradient>
+
+    <!-- Drop Shadows -->
+    <filter id="soft-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.25" />
+    </filter>
+    <filter id="jaw-shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="5" stdDeviation="4" flood-color="#6e3c1e" flood-opacity="0.3" />
+    </filter>
+  </defs>
+
+  <!-- Background Rect -->
+  <rect width="400" height="500" fill="url(#bg-grad)" />
+
+  <!-- Curtain folds in the background on left -->
+  <path d="M 0,0 L 140,0 L 110,240 L 0,220 Z" fill="url(#curtain-fold)" opacity="0.65" />
+  <path d="M 40,0 L 95,0 L 75,200 L 20,190 Z" fill="#e2caa8" opacity="0.25" />
+  <!-- Dark vehicle/window reflection on right -->
+  <rect x="220" y="80" width="180" height="200" fill="#252a30" opacity="0.7" rx="8" />
+  <line x1="240" y1="120" x2="380" y2="120" stroke="#3d444d" stroke-width="2" opacity="0.5" />
+  <line x1="240" y1="160" x2="380" y2="160" stroke="#3d444d" stroke-width="2" opacity="0.5" />
+
+  <!-- Body / Torso / White Shirt -->
+  <!-- Shoulders & Upper Body -->
+  <path d="M 20,500 L 20,440 Q 60,370 130,345 Q 160,335 200,335 Q 240,335 270,345 Q 340,370 380,440 L 380,500 Z" fill="url(#shirt-white)" filter="url(#soft-shadow)" />
+
+  <!-- Shirt Seams and Folds -->
+  <!-- Left Shoulder Fold -->
+  <path d="M 70,410 Q 110,430 150,460" stroke="#cbd5e1" stroke-width="2.5" fill="none" opacity="0.7" />
+  <!-- Right Shoulder Fold -->
+  <path d="M 330,410 Q 290,430 250,460" stroke="#cbd5e1" stroke-width="2.5" fill="none" opacity="0.7" />
+
+  <!-- Inner Undershirt (Crew Neck) -->
+  <path d="M 175,340 Q 200,360 225,340 Q 220,380 200,385 Q 180,380 175,340 Z" fill="#ffffff" stroke="#e2e8f0" stroke-width="1.5" />
+
+  <!-- Front Placket & Buttons of White Barong Shirt -->
+  <path d="M 193,375 L 207,375 L 206,500 L 194,500 Z" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" />
+  <!-- Button 1 -->
+  <circle cx="200" cy="405" r="4.5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" />
+  <circle cx="200" cy="405" r="2" fill="#cbd5e1" />
+  <!-- Button 2 -->
+  <circle cx="200" cy="455" r="4.5" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" />
+  <circle cx="200" cy="455" r="2" fill="#cbd5e1" />
+
+  <!-- Collar Left Flap -->
+  <path d="M 160,330 L 125,375 L 180,370 L 185,335 Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#soft-shadow)" />
+  <!-- Collar Right Flap -->
+  <path d="M 240,330 L 275,375 L 220,370 L 215,335 Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="1.5" filter="url(#soft-shadow)" />
+
+  <!-- Neck -->
+  <path d="M 165,260 Q 165,340 180,350 Q 200,355 220,350 Q 235,340 235,260 Z" fill="url(#skin-base)" />
+  <!-- Neck Shadow under chin -->
+  <path d="M 165,265 Q 200,295 235,265 Q 220,310 200,315 Q 180,310 165,265 Z" fill="url(#skin-shadow)" />
+
+  <!-- Head Base -->
+  <!-- Ears -->
+  <!-- Left Ear -->
+  <path d="M 125,185 Q 110,195 115,225 Q 120,245 132,235 Z" fill="url(#skin-base)" stroke="#c98c63" stroke-width="1" />
+  <path d="M 122,198 Q 118,212 124,222" fill="none" stroke="#9c5f37" stroke-width="2" opacity="0.6" />
+  <!-- Right Ear -->
+  <path d="M 275,185 Q 290,195 285,225 Q 280,245 268,235 Z" fill="url(#skin-base)" stroke="#c98c63" stroke-width="1" />
+  <path d="M 278,198 Q 282,212 276,222" fill="none" stroke="#9c5f37" stroke-width="2" opacity="0.6" />
+
+  <!-- Face Shape -->
+  <path d="M 130,150 Q 125,210 135,245 Q 148,278 178,288 Q 200,293 222,288 Q 252,278 265,245 Q 275,210 270,150 Q 260,105 200,105 Q 140,105 130,150 Z" fill="url(#skin-base)" filter="url(#jaw-shadow)" />
+
+  <!-- Cheek & Forehead Highlights -->
+  <ellipse cx="165" cy="195" rx="20" ry="12" fill="url(#skin-highlight)" />
+  <ellipse cx="235" cy="195" rx="20" ry="12" fill="url(#skin-highlight)" />
+  <ellipse cx="200" cy="140" rx="35" ry="15" fill="url(#skin-highlight)" />
+
+  <!-- Jawline Shading -->
+  <path d="M 140,240 Q 165,275 200,282 Q 235,275 260,240 Q 248,270 200,274 Q 152,270 140,240 Z" fill="url(#skin-shadow)" opacity="0.4" />
+
+  <!-- Goatee / Beard Shadow on Chin & Under Lip (as in photo) -->
+  <!-- Soul patch below bottom lip -->
+  <ellipse cx="200" cy="254" rx="5" ry="4" fill="#3a271d" opacity="0.75" />
+  <!-- Chin goatee patch -->
+  <ellipse cx="200" cy="276" rx="14" ry="7" fill="#3a271d" opacity="0.7" />
+  <path d="M 188,276 Q 200,283 212,276 Q 200,279 188,276 Z" fill="#241812" opacity="0.8" />
+
+  <!-- Eyes and Eyebrows -->
+  <!-- Left Eyebrow -->
+  <path d="M 150,165 Q 168,158 185,166" fill="none" stroke="#1d1613" stroke-width="4.5" stroke-linecap="round" />
+  <!-- Right Eyebrow -->
+  <path d="M 215,166 Q 232,158 250,165" fill="none" stroke="#1d1613" stroke-width="4.5" stroke-linecap="round" />
+
+  <!-- Left Eye (Smiling crinkle) -->
+  <path d="M 153,178 Q 168,170 182,179 Q 168,187 153,178 Z" fill="#ffffff" stroke="#c98c63" stroke-width="0.8" />
+  <circle cx="168" cy="178" r="4.5" fill="#231914" />
+  <circle cx="169" cy="177" r="1.5" fill="#ffffff" />
+  <path d="M 150,177 Q 168,172 185,177" fill="none" stroke="#231914" stroke-width="2.5" stroke-linecap="round" />
+  <!-- Smile lines at outer left eye -->
+  <path d="M 148,176 Q 144,180 146,184" fill="none" stroke="#9c5f37" stroke-width="1.5" opacity="0.6" />
+
+  <!-- Right Eye (Smiling crinkle) -->
+  <path d="M 218,179 Q 232,170 247,178 Q 232,187 218,179 Z" fill="#ffffff" stroke="#c98c63" stroke-width="0.8" />
+  <circle cx="232" cy="178" r="4.5" fill="#231914" />
+  <circle cx="233" cy="177" r="1.5" fill="#ffffff" />
+  <path d="M 215,177 Q 232,172 250,177" fill="none" stroke="#231914" stroke-width="2.5" stroke-linecap="round" />
+  <!-- Smile lines at outer right eye -->
+  <path d="M 252,176 Q 256,180 254,184" fill="none" stroke="#9c5f37" stroke-width="1.5" opacity="0.6" />
+
+  <!-- Nose -->
+  <path d="M 200,165 Q 198,198 193,208 Q 186,212 188,216 Q 193,220 200,220 Q 207,220 212,216 Q 214,212 207,208 Q 202,198 200,165 Z" fill="none" />
+  <!-- Nose bridge highlight -->
+  <path d="M 199,170 L 199,204" stroke="#ffdfc7" stroke-width="3" stroke-linecap="round" opacity="0.8" />
+  <!-- Nose base & nostrils -->
+  <path d="M 188,214 Q 200,221 212,214" fill="none" stroke="#8a4d29" stroke-width="2.5" stroke-linecap="round" />
+  <ellipse cx="192" cy="214" rx="2" ry="1.5" fill="#542b14" />
+  <ellipse cx="208" cy="214" rx="2" ry="1.5" fill="#542b14" />
+
+  <!-- Cheerful Smile / Mouth -->
+  <!-- Smile shadow line -->
+  <path d="M 166,224 Q 170,238 178,245" fill="none" stroke="#9c5f37" stroke-width="2" stroke-linecap="round" opacity="0.5" />
+  <path d="M 234,224 Q 230,238 222,245" fill="none" stroke="#9c5f37" stroke-width="2" stroke-linecap="round" opacity="0.5" />
+
+  <!-- Mouth Outer -->
+  <path d="M 172,234 Q 200,230 228,234 Q 230,250 200,254 Q 170,250 172,234 Z" fill="#501d1c" stroke="#873531" stroke-width="1" />
+  <!-- Upper Teeth (White smile as in photo) -->
+  <path d="M 175,235 Q 200,232 225,235 Q 223,243 200,244 Q 177,243 175,235 Z" fill="#ffffff" />
+  <!-- Subtle tooth dividers -->
+  <line x1="200" y1="234" x2="200" y2="244" stroke="#e2e8f0" stroke-width="1" />
+  <line x1="192" y1="234" x2="192" y2="242" stroke="#e2e8f0" stroke-width="0.8" />
+  <line x1="208" y1="234" x2="208" y2="242" stroke="#e2e8f0" stroke-width="0.8" />
+  <line x1="184" y1="235" x2="184" y2="240" stroke="#e2e8f0" stroke-width="0.6" />
+  <line x1="216" y1="235" x2="216" y2="240" stroke="#e2e8f0" stroke-width="0.6" />
+
+  <!-- Lower Lip -->
+  <path d="M 182,248 Q 200,256 218,248 Q 200,253 182,248 Z" fill="#b86962" />
+
+  <!-- Hair (Side swept, modern clean cut as in photo) -->
+  <path d="M 128,155 Q 124,115 140,88 Q 165,65 205,65 Q 245,65 268,90 Q 280,115 272,158 Q 266,130 258,110 Q 230,90 200,90 Q 160,90 142,115 Q 133,130 128,155 Z" fill="url(#hair-grad)" />
+  
+  <!-- Forehead hairline swept fringe -->
+  <path d="M 140,110 Q 170,95 205,100 Q 235,108 260,115 Q 245,102 215,96 Q 175,94 140,110 Z" fill="url(#hair-shine)" />
+  <path d="M 130,135 Q 145,115 175,106 Q 160,118 152,130 Z" fill="#181311" />
+  <!-- Sideburns -->
+  <path d="M 128,155 L 132,192 L 137,185 L 135,160 Z" fill="#181311" />
+  <path d="M 272,155 L 268,192 L 263,185 L 265,160 Z" fill="#181311" />
+
+  <!-- Subtle Gold Institutional Badge Watermark in Corner -->
+  <g transform="translate(330, 20) scale(0.6)" opacity="0.65">
+    <circle cx="50" cy="50" r="45" fill="none" stroke="#D4AF37" stroke-width="3" stroke-dasharray="6,4" />
+    <circle cx="50" cy="50" r="38" fill="#18392B" stroke="#D4AF37" stroke-width="2" />
+    <text x="50" y="44" font-family="serif" font-size="14" font-weight="bold" fill="#D4AF37" text-anchor="middle">PCM</text>
+    <text x="50" y="60" font-family="sans-serif" font-size="9" font-weight="600" fill="#D0DED8" text-anchor="middle">TRUSTEE</text>
+  </g>
+
+  <!-- Bottom Name Banner Overlay -->
+  <rect x="0" y="455" width="400" height="45" fill="#18392B" fill-opacity="0.95" />
+  <line x1="0" y1="455" x2="400" y2="455" stroke="#D4AF37" stroke-width="2" />
+  <text x="200" y="475" font-family="serif" font-size="14" font-weight="bold" fill="#ffffff" text-anchor="middle" letter-spacing="0.5">
+    ATTY. JOSEPH MICHAEL LARUTA
+  </text>
+  <text x="200" y="490" font-family="sans-serif" font-size="10" font-weight="500" fill="#D0DED8" text-anchor="middle" letter-spacing="0.3">
+    Chairman, Board of Trustees • Law &amp; Philosophy
+  </text>
+</svg>

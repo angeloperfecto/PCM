@@ -1,0 +1,1543 @@
+export type NavSection =
+  | 'home'
+  | 'why-choose-pcm'
+  | 'about'
+  | 'academics'
+  | 'admissions'
+  | 'student-life'
+  | 'ministry'
+  | 'news-events'
+  | 'resources'
+  | 'scrapbook'
+  | 'donation'
+  | 'contact'
+  | 'apply'
+  | 'portal'
+  | 'admin'
+  | 'migration-report';
+
+export type ContentStatus = 'Published' | 'Draft' | 'Scheduled' | 'Unpublished' | 'Archived';
+
+export type ProgramLevel = 'senior-high' | 'undergraduate' | 'graduate' | 'certificate' | 'diploma' | 'SHS' | 'Associate' | 'Undergraduate' | 'Graduate' | 'Certificate' | string;
+
+export interface AcademicProgram {
+  id: string;
+  name: string;
+  title?: string;
+  code: string;
+  level?: ProgramLevel;
+  degreeLevel?: 'SHS' | 'Associate' | 'Undergraduate' | 'Graduate' | 'Certificate' | string;
+  duration: string;
+  credits?: number;
+  totalUnits?: number;
+  units?: number;
+  studyMode?: 'On-Campus Full-Time' | 'Modular / Hybrid' | 'Evening & Weekend' | 'Online & Modular' | string;
+  shortDescription?: string;
+  fullDescription?: string;
+  description?: string;
+  objectives?: string[];
+  curriculum?: {
+    yearOrModule: string;
+    courses: { code: string; title: string; units: number; description?: string }[];
+  }[];
+  careerOpportunities?: string[];
+  careerOutcomes?: string[];
+  admissionRequirements?: string[];
+  admissionReqs?: string[];
+  tuitionPerUnit?: number;
+  tuitionEst?: string;
+  featured?: boolean;
+  status?: ContentStatus;
+  order?: number;
+}
+
+export type Program = AcademicProgram;
+
+export interface AnnouncementItem {
+  id: string;
+  title: string;
+  date: string;
+  category: 'Admissions' | 'Academic' | 'Chapel' | 'Conference' | 'General';
+  linkUrl?: string;
+  isUrgent?: boolean;
+  active: boolean;
+  status?: ContentStatus;
+  order?: number;
+}
+
+export type Announcement = AnnouncementItem;
+
+export interface NewsArticle {
+  id: string;
+  slug?: string;
+  title: string;
+  category: 'Academic' | 'Ministry' | 'Community' | 'Campus Life' | 'Spiritual Formation' | 'Admissions' | 'Spiritual' | string;
+  date: string;
+  author: string;
+  readTime?: string;
+  excerpt: string;
+  content: string;
+  imageUrl?: string;
+  image?: string;
+  featured?: boolean;
+  published?: boolean;
+  tags?: string[];
+  status?: ContentStatus;
+  order?: number;
+}
+
+export interface CollegeEvent {
+  id: string;
+  title: string;
+  date: string;
+  time: string;
+  location: string;
+  category: 'Conference' | 'Chapel' | 'Seminar' | 'Orientation' | 'Retreat' | 'Graduation' | 'Academic' | 'Spiritual' | 'Community' | 'Outreach' | string;
+  description: string;
+  speaker?: string;
+  featured?: boolean;
+  registrationOpen?: boolean;
+  registrationFee?: string;
+  maxAttendees?: number;
+  capacity?: number;
+  registeredCount?: number;
+  registeredAttendees?: Array<{ name: string; email: string; date: string }>;
+  imageUrl?: string;
+  image?: string;
+  status?: ContentStatus;
+  order?: number;
+}
+
+export type PCMEvent = CollegeEvent;
+
+export interface FacultyMember {
+  id: string;
+  name: string;
+  title?: string;
+  group: 'Board of Trustees' | 'Administration' | 'Faculty' | 'Emeritus & Adjunct' | 'Key Administrators' | 'Resident Faculty' | 'Adjunct Faculty' | 'Administrative Staff' | string;
+  role: string;
+  department?: string;
+  credentials?: string;
+  degrees?: string[];
+  subjectTaught?: string[];
+  coursesTaught?: string[];
+  bio: string;
+  imageUrl?: string;
+  image?: string;
+  email?: string;
+  phone?: string;
+  featured?: boolean;
+  status?: ContentStatus;
+  order?: number;
+  updatedAt?: string;
+}
+
+export interface Testimonial {
+  id: string;
+  name: string;
+  role: string;
+  category: 'Student' | 'Alumni' | 'Faculty' | 'Ministry Leader';
+  quote: string;
+  programOrMinistry: string;
+  batchOrYear?: string;
+  avatarUrl?: string;
+  status?: ContentStatus;
+  order?: number;
+}
+
+export interface ImpactStat {
+  id: string;
+  value: string;
+  label: string;
+  description: string;
+  iconName: string;
+  order?: number;
+}
+
+export type ApplicationStatus =
+  | 'Draft'
+  | 'Submitted'
+  | 'Under Review'
+  | 'Additional Documents Required'
+  | 'Exam Scheduled'
+  | 'Interviewed'
+  | 'Accepted'
+  | 'Waitlisted'
+  | 'Rejected'
+  | 'Enrolled';
+
+export interface AdmissionApplication {
+  id: string;
+  referenceNumber: string;
+  trackingNumber?: string;
+  createdAt?: string;
+  submissionDate?: string;
+  updatedAt?: string;
+  status: ApplicationStatus;
+  programId?: string;
+  programName?: string;
+  program?: string;
+  studyMode?: string;
+  
+  // Personal Info
+  fullName: string;
+  email: string;
+  phone: string;
+  birthDate?: string;
+  birthdate?: string;
+  dateOfBirth?: string;
+  gender?: 'Male' | 'Female' | 'Prefer not to say' | string;
+  civilStatus?: 'Single' | 'Married' | 'Widowed' | string;
+  citizenship?: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  
+  // Faith & Ministry Background
+  salvationYear?: string;
+  yearsInFaith?: string;
+  waterBaptized?: boolean;
+  homeChurch?: string;
+  churchName?: string;
+  church?: string;
+  churchAffiliation?: string;
+  christianTestimony?: string;
+  churchDenomination?: string;
+  pastorName?: string;
+  pastorContact?: string;
+  currentMinistryInvolvement?: string;
+  ministryExperience?: string;
+  personalTestimony?: string;
+  salvationTestimony?: string;
+  callingStatement?: string;
+  financialAidRequired?: boolean;
+  
+  // Academic Background
+  highestEducation?: string;
+  previousSchool?: string;
+  previousCollege?: string;
+  highSchool?: string;
+  yearGraduated?: string;
+  gpaOrHonors?: string;
+  
+  // Documents
+  documents?: {
+    idPhoto?: boolean;
+    transcriptOfRecords?: boolean;
+    pastoralRecommendation?: boolean;
+    personalTestimonyDoc?: boolean;
+    birthCertificate?: boolean;
+  };
+  
+  // Internal Notes for Admissions Staff
+  adminNotes?: string;
+  internalNotes?: string[];
+  notes?: string[];
+  interviewerRemarks?: string;
+  studentId?: string;
+  enrolledAt?: string;
+}
+
+export type Application = AdmissionApplication;
+
+export interface StudentCourse {
+  id: string;
+  code: string;
+  title: string;
+  units: number;
+  schedule: string;
+  room: string;
+  instructor: string;
+  midtermGrade?: number | string;
+  finalGrade?: number | string;
+  status: 'In Progress' | 'Completed' | 'Enrolled' | 'Dropped';
+}
+
+export interface PracticumEntry {
+  id: string;
+  date: string;
+  ministryType:
+    | 'Preaching / Teaching'
+    | 'Youth Ministry'
+    | 'Evangelism & Outreach'
+    | 'Counseling & Visitation'
+    | 'Worship & Media'
+    | 'Church Administration'
+    | string;
+  location: string;
+  hours: number;
+  description: string;
+  supervisorName: string;
+  status: 'Pending Review' | 'Pending Verification' | 'Approved' | 'Rejected' | string;
+}
+
+export type EnrollmentStatus =
+  | 'Draft'
+  | 'Submitted'
+  | 'Under Review'
+  | 'For Verification'
+  | 'Approved'
+  | 'Enrolled'
+  | 'Rejected'
+  | 'Returned for Correction'
+  | 'Cancelled'
+  | 'Not Enrolled';
+
+export type DocumentVerificationStatus =
+  | 'Pending Verification'
+  | 'Verified'
+  | 'Rejected'
+  | 'Requires Resubmission'
+  | 'Action Required';
+
+export interface StudentDocument {
+  id: string;
+  documentType?:
+    | 'Form 138 / High School Report Card'
+    | 'Transcript of Records (TOR)'
+    | 'Certificate of Good Moral Character'
+    | 'Pastoral Recommendation Letter'
+    | 'PSA Birth Certificate'
+    | '2x2 ID Photo'
+    | 'Proof of Downpayment / Payment Slip'
+    | 'Christian Testimony Essay'
+    | 'Medical / Physical Exam Clearance'
+    | 'Certificate of Graduation / Diploma'
+    | 'Honorable Dismissal / Transfer Credential'
+    | string;
+  type?: string;
+  fileName?: string;
+  name?: string;
+  fileUrl?: string;
+  url?: string;
+  fileSize?: string;
+  size?: string;
+  uploadDate?: string;
+  date?: string;
+  schoolYear?: string;
+  semester?: string;
+  verificationStatus?: DocumentVerificationStatus;
+  status?: DocumentVerificationStatus | string;
+  adminFeedback?: string;
+  remarks?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+}
+
+export interface StudentPaymentRecord {
+  id: string;
+  referenceNo?: string;
+  referenceNumber?: string;
+  receiptNo?: string;
+  officialReceiptNumber?: string;
+  amount: number;
+  paymentDate?: string;
+  date?: string;
+  term?: string;
+  notes?: string;
+  method?: 'GCash' | 'Bank Transfer (BDO)' | 'Bank Transfer (Metrobank)' | 'Over-the-Counter Cashier' | 'Scholarship Grant' | string;
+  paymentMethod?: string;
+  status?: 'Verified' | 'Pending Verification' | 'Rejected';
+  proofUrl?: string;
+  receiptUrl?: string;
+  description?: string;
+  remarks?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  recordedBy?: string;
+}
+
+export interface StudentSubjectHistory {
+  id?: string;
+  code: string;
+  title: string;
+  units: number;
+  grade: number | string;
+  semester: string;
+  academicYear: string;
+  status: 'Passed' | 'In Progress' | 'Incomplete' | 'Credited' | 'Failed';
+  midtermGrade?: number | string;
+  finalGrade?: number | string;
+  instructor?: string;
+}
+
+export interface StudentRequirementItem {
+  id: string;
+  name: string;
+  description: string;
+  required: boolean;
+  status: 'Pending' | 'Submitted' | 'Under Review' | 'Verified' | 'Rejected';
+  file?: {
+    name: string;
+    url: string;
+    size?: string;
+    type?: string;
+  };
+  uploadDate?: string;
+  verifiedBy?: string;
+  verificationDate?: string;
+  remarks?: string;
+}
+
+export interface StudentProfile {
+  id: string; // Document ID (e.g. std-2024-0418)
+  studentId: string; // Permanent Unique Identifier (e.g. 2024-PCM-0418)
+  applicationNumber?: string; // Application Number (e.g. APP-2026-1042)
+  referenceNumber?: string; // Reference Number (e.g. PCM-2026-1042)
+  fullName: string;
+  name?: string;
+  firstName?: string;
+  middleName?: string;
+  lastName?: string;
+  suffix?: string;
+  preferredName?: string;
+  email: string;
+  linkedGoogleUid?: string;
+  authUid?: string;
+  portalPassword?: string;
+  avatarUrl: string;
+  profilePhoto?: string;
+
+  // Personal Information
+  dateOfBirth?: string;
+  birthDate?: string;
+  placeOfBirth?: string;
+  age?: number;
+  sex?: 'Male' | 'Female' | string;
+  gender?: 'Male' | 'Female' | string;
+  civilStatus?: 'Single' | 'Married' | 'Widowed' | 'Separated' | string;
+  nationality?: string;
+  religion?: string;
+
+  // Contact Information
+  mobileNumber?: string;
+  contactNumber?: string;
+  phone?: string;
+  facebookAccount?: string;
+  currentAddress?: string;
+  permanentAddress?: string;
+  address?: string;
+  city?: string;
+  province?: string;
+  zipCode?: string;
+
+  // Family & Emergency Contact
+  fatherName?: string;
+  motherName?: string;
+  guardianName?: string;
+  guardianRelationship?: string;
+  guardianContactNumber?: string;
+  guardianPhone?: string;
+  guardianEmail?: string;
+  guardianAddress?: string;
+  emergencyContactPerson?: string;
+  emergencyContactName?: string;
+  emergencyContactNumber?: string;
+  emergencyContactPhone?: string;
+  emergencyContactRelationship?: string;
+  emergencyContactRelation?: string;
+  emergencyContact?: {
+    name: string;
+    relationship: string;
+    phone: string;
+  };
+
+  // Educational Background
+  lastSchoolAttended?: string;
+  schoolAddress?: string;
+  highestEducationalAttainment?: string;
+  previousCourse?: string;
+  yearGraduated?: string;
+  graduationDate?: string;
+  previousSchoolId?: string;
+  honorsAwards?: string;
+  generalAverage?: string | number;
+
+  // Church & Ministry Information
+  homeChurch: string;
+  churchName?: string;
+  churchAddress?: string;
+  churchContactNumber?: string;
+  pastorName?: string;
+  pastorContactNumber?: string;
+  pastorPhone?: string;
+  ministryDepartment?: string;
+  ministryRole?: string;
+  yearsInMinistry?: number | string;
+  dateStartedInMinistry?: string;
+  ministryExperience?: string;
+  churchRecommendationStatus?: 'Pending' | 'Received' | 'Verified' | 'Waived';
+  pastorRecommendationStatus?: 'Pending' | 'Received' | 'Verified' | 'Waived';
+  presbytery?: string;
+  mentorName: string;
+  spiritualMentor?: string;
+  isBaptized?: boolean;
+  waterBaptized?: boolean;
+  baptismDate?: string;
+
+  // PCM Enrollment Information
+  applicantType?: 'New Student' | 'Returning Student' | 'Transfer Student';
+  program: string;
+  programId?: string;
+  degreeProgram?: string;
+  major?: string;
+  specialization?: string;
+  yearLevel: string;
+  section?: string;
+  assignedAdviser?: string;
+  academicStatus: 'Regular' | 'Irregular' | 'Probationary' | "Dean's List" | 'Graduating' | 'Alumni' | string;
+  enrollmentStatus: EnrollmentStatus;
+  currentSemester: string;
+  semester?: string;
+  academicYear: string;
+  applicationDate?: string;
+  enrollmentDate?: string;
+  registeredDate?: string;
+
+  // Requirements & Documents
+  requirements?: StudentRequirementItem[];
+  uploadedDocuments?: StudentDocument[];
+  documents?: StudentDocument[];
+
+  // Student Account Information
+  authProvider?: string;
+  accountStatus?: 'Active' | 'Inactive' | 'Pending Verification' | 'Suspended';
+  verificationStatus?: 'Unverified' | 'Verified';
+  lastLogin?: string;
+  portalAccess?: boolean;
+
+  // Enrollment & Payment Information
+  enrollmentFee?: number;
+  tuitionTotal: number;
+  tuitionPaid: number;
+  tuitionBalance?: number;
+  paymentStatus?: 'Unpaid' | 'Partially Paid' | 'Paid' | 'Overdue' | 'Waived';
+  paymentRecords?: StudentPaymentRecord[];
+  paymentHistory?: StudentPaymentRecord[];
+  scholarshipDiscount?: number;
+  scholarshipType?: string;
+  officialReceiptNumber?: string;
+  paymentRemarks?: string;
+
+  // Academic Records
+  gpa: number;
+  totalUnitsEarned: number;
+  courses: StudentCourse[];
+  subjectHistory?: StudentSubjectHistory[];
+  practicumEntries: PracticumEntry[];
+  attendanceAverage?: string | number;
+
+  // Administrative Notes & Metadata
+  adminNotes?: string;
+  adminRemarks?: string;
+  isArchived?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface SelectedSubject {
+  id?: string;
+  code: string;
+  title: string;
+  units: number;
+  schedule: string;
+  room: string;
+  instructor: string;
+  section?: string;
+}
+
+export type EnrollmentSubmenuTab =
+  | 'profile'
+  | 'pre-enlistment'
+  | 'enrollment'
+  | 'add-drop'
+  | 'adding-dropping'
+  | 'assessment'
+  | 'amount-due';
+
+export type Course = StudentCourse;
+
+export interface AcademicSubject {
+  id: string;
+  code: string;
+  title: string;
+  description?: string;
+  category?: string;
+  units: number;
+  schedule: string;
+  room: string;
+  instructor: string;
+  instructorId?: string;
+  prerequisites: string[];
+  prerequisite?: string;
+  corequisites?: string[];
+  subjectType?: 'Lecture' | 'Laboratory' | 'Practicum' | 'Seminar';
+  semester: string;
+  academicYear: string;
+  section: string;
+  capacity: number;
+  enrolledCount: number;
+  status: 'Open' | 'Closed' | 'Waitlist';
+  isArchived?: boolean;
+  remarks?: string;
+  program?: string;
+  yearLevel?: string;
+}
+
+export interface AcademicPeriod {
+  id: string;
+  academicYear: string; // e.g. "2026–2027"
+  semester: string; // e.g. "1st Semester"
+  isCurrent: boolean;
+  enrollmentStatus: 'Open' | 'Closed';
+  enrollmentStartDate?: string;
+  enrollmentEndDate?: string;
+  preEnlistmentStatus: 'Open' | 'Closed';
+  preEnlistmentStartDate?: string;
+  preEnlistmentEndDate?: string;
+  addDropStatus: 'Open' | 'Closed';
+  addDropStartDate?: string;
+  addDropEndDate?: string;
+  status: 'Active' | 'Upcoming' | 'Archived';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface ClassSection {
+  id: string;
+  sectionName: string; // e.g. "Section A", "BTH-3A"
+  sectionCode: string; // e.g. "SEC-HOM301-A"
+  subjectCode: string;
+  subjectTitle: string;
+  units: number;
+  instructorId?: string;
+  instructorName: string;
+  academicYear: string;
+  semester: string;
+  schedule: string; // e.g. "MWF 9:00 AM – 10:30 AM"
+  classroom: string; // e.g. "Room 204"
+  maxCapacity: number;
+  enrolledCount: number;
+  status: 'Open' | 'Closed' | 'Waitlist';
+  enrolledStudentIds?: string[];
+  remarks?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface InstructorRecord {
+  id: string;
+  employeeId: string;
+  fullName: string;
+  title: string; // e.g. "Rev. Dr.", "Prof.", "Pastor"
+  email: string;
+  phone?: string;
+  department: string;
+  status: 'Active' | 'On Leave' | 'Inactive';
+  specialization?: string;
+  assignedSubjectCodes?: string[];
+  assignedSectionsCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface EnrollmentSystemConfig {
+  id: string;
+  maxUnitsAllowed: number;
+  minUnitsAllowed: number;
+  maxSubjectsAllowed: number;
+  enforcePrerequisites: boolean;
+  enforceScheduleConflicts: boolean;
+  enforceSectionCapacity: boolean;
+  requirePreEnlistment: boolean;
+  requireEnrollmentApproval: boolean;
+  allowOnlineAddDrop: boolean;
+  defaultTuitionPerUnit: number;
+  defaultRegistrationFee: number;
+  eligibilityRules?: string;
+  requiredDocumentsList?: string[];
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export type EnrollmentAdminSubTab =
+  | 'dashboard'
+  | 'enrollments'
+  | 'pre-enlistment'
+  | 'add-drop'
+  | 'students'
+  | 'academic-periods'
+  | 'subjects'
+  | 'sections'
+  | 'instructors'
+  | 'fees'
+  | 'amount-due'
+  | 'settings'
+  | 'audit-trail';
+
+export interface PreEnlistmentRecord {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  program: string;
+  degreeProgram?: string;
+  yearLevel: string;
+  semester: string;
+  academicYear: string;
+  selectedSubjects?: SelectedSubject[];
+  selectedSubjectCodes?: string[];
+  totalUnits: number;
+  status: 'Draft' | 'Submitted' | 'Approved' | 'Returned for Revision' | 'Rejected';
+  remarks?: string;
+  adminRemarks?: string;
+  submittedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export type AddDropAction = 'Add' | 'Drop';
+export type AddDropStatus = 'Pending' | 'Approved' | 'Rejected' | 'Completed';
+
+export interface AddDropRequest {
+  id: string;
+  studentId: string;
+  studentName: string;
+  studentEmail?: string;
+  program: string;
+  degreeProgram?: string;
+  academicYear: string;
+  semester: string;
+  subjectCode: string;
+  subjectTitle: string;
+  units: number;
+  action: AddDropAction;
+  reason: string;
+  dateSubmitted: string;
+  status: AddDropStatus;
+  adminRemarks?: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  createdAt: string;
+}
+
+export interface FeeStructureItem {
+  id: string;
+  category: 'Tuition' | 'Miscellaneous' | 'Laboratory' | 'Other';
+  name: string;
+  amount: number;
+  isPerUnit?: boolean;
+  required: boolean;
+  description?: string;
+}
+
+export interface StudentAssessment {
+  id: string;
+  studentId: string;
+  academicYear: string;
+  semester: string;
+  tuitionTotal: number;
+  tuitionPerUnit: number;
+  totalUnits: number;
+  miscellaneousTotal: number;
+  miscBreakdown: { id: string; name: string; amount: number }[];
+  laboratoryTotal: number;
+  labBreakdown: { id: string; name: string; amount: number }[];
+  otherFeesTotal: number;
+  otherBreakdown: { id: string; name: string; amount: number }[];
+  discountsTotal: number;
+  discountsBreakdown: { id: string; name: string; amount: number; percentage?: number }[];
+  adjustmentsTotal: number;
+  adjustmentsBreakdown: { id: string; name: string; amount: number; note?: string }[];
+  totalAssessment: number;
+  previousBalance: number;
+  totalAmountPaid: number;
+  currentAmountDue: number;
+  paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid' | 'Overdue';
+  dueDate: string;
+  updatedAt: string;
+}
+
+export interface OnlineEnrollment {
+  id: string; // enr-2026-XXXX
+  referenceNumber: string; // ENR-2026-0842
+  applicationNumber?: string; // Application Reference Number (e.g. PCM-2026-9354)
+  studentId: string; // Permanent PCM Student ID (e.g. 2024-PCM-0418)
+  studentUid?: string;
+  studentName: string;
+  email?: string;
+  phone?: string;
+  studentEmail?: string;
+  studentContact?: string;
+  schoolYear: string; // e.g. '2026–2027'
+  semester: string; // e.g. '1st Semester'
+  programId?: string;
+  programName?: string;
+  programTitle?: string;
+  programCode?: string;
+  yearLevel: string;
+  enrollmentType?: 'Regular' | 'Irregular' | 'Returning' | 'Cross-Enrollee' | 'New / Transferee';
+  selectedSubjects: SelectedSubject[];
+  totalUnits: number;
+  tuitionPerUnit?: number;
+  miscellaneousFees?: number;
+  estimatedTuition: number;
+  downpaymentAmount?: number;
+  paymentMethod?: string;
+  paymentOption?: string;
+  proofOfPaymentUrl?: string;
+  paymentReference?: string;
+  personalInfo?: {
+    birthDate?: string;
+    gender?: string;
+    civilStatus?: string;
+    address?: string;
+    guardianName?: string;
+    guardianPhone?: string;
+    homeChurch?: string;
+    pastorName?: string;
+  };
+  uploadedDocuments?: StudentDocument[];
+  documents?: StudentDocument[];
+  status: EnrollmentStatus;
+  submissionDate?: string;
+  submittedAt?: string;
+  lastSavedAt?: string;
+  reviewedAt?: string;
+  reviewedBy?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  adminRemarks?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface StudentNotification {
+  id: string;
+  studentId: string;
+  title: string;
+  message: string;
+  type: 'enrollment' | 'grade' | 'document' | 'payment' | 'announcement' | 'system' | string;
+  read: boolean;
+  createdAt: string;
+  linkTab?: 'enrollment' | 'schedule' | 'grades' | 'financial' | 'documents' | 'practicum' | 'settings' | string;
+  linkSection?: string;
+  actionUrl?: string;
+}
+
+export type AdminRole =
+  | 'Super Admin'
+  | 'Admin'
+  | 'Staff/Editor'
+  | 'Registrar'
+  | 'Finance'
+  | 'Academic Admin'
+  | 'Content Admin'
+  | 'Editor';
+
+export type UserRole =
+  | 'Super Admin'
+  | 'Admin'
+  | 'Staff/Editor'
+  | 'Student/User'
+  | 'Pending User'
+  | 'Student'
+  | 'Faculty'
+  | 'Alumni'
+  | 'Member';
+
+export type AccountStatus =
+  | 'Active'
+  | 'Approved'
+  | 'Pending'
+  | 'Pending Verification'
+  | 'Rejected'
+  | 'Disabled'
+  | 'Inactive';
+
+export type VerificationStatus =
+  | 'Pending'
+  | 'Approved'
+  | 'Rejected'
+  | 'Verified';
+
+export interface UserAccount {
+  id: string; // Firebase UID
+  uid: string;
+  email: string;
+  name: string;
+  displayName?: string;
+  photoURL?: string;
+  avatarUrl?: string;
+  role: UserRole;
+  adminRole?: AdminRole;
+  studentId?: string;
+  department?: string;
+  homeChurch?: string;
+  status: AccountStatus;
+  verificationStatus?: VerificationStatus;
+  authMethod?: 'password' | 'google.com' | string;
+  provider: string; // 'google.com' | 'password'
+  emailVerified?: boolean;
+  requestedRole?: UserRole | AdminRole;
+  requestedAt?: string;
+  rejectionReason?: string;
+  permissions?: string[];
+  approvedBy?: string;
+  approvedAt?: string;
+  createdAt: string;
+  lastLogin?: string;
+}
+
+export type NewUserAccountInput = {
+  name: string;
+  email: string;
+  role: UserRole;
+  displayName?: string;
+  uid?: string;
+  adminRole?: AdminRole;
+  studentId?: string;
+  department?: string;
+  homeChurch?: string;
+  status?: AccountStatus;
+  verificationStatus?: VerificationStatus;
+  authMethod?: 'password' | 'google.com' | string;
+  provider?: string;
+  photoURL?: string;
+  avatarUrl?: string;
+  emailVerified?: boolean;
+  requestedRole?: UserRole | AdminRole;
+  requestedAt?: string;
+  permissions?: string[];
+  lastLogin?: string;
+};
+
+export interface DeletedUserRecord {
+  id: string;
+  uid?: string;
+  email: string;
+  name: string;
+  role: UserRole | string;
+  adminRole?: AdminRole | string;
+  department?: string;
+  studentId?: string;
+  deletedAt: string;
+  deletedBy: string;
+  reason?: string;
+  originalAccount?: UserAccount;
+}
+
+export interface AdminUser {
+  id: string;
+  name: string;
+  email: string;
+  username: string;
+  password?: string;
+  role: AdminRole;
+  avatarUrl?: string;
+  department?: string;
+  status?: 'Active' | 'Inactive' | string;
+  createdAt: string;
+  lastLogin?: string;
+}
+
+export interface DownloadableResource {
+  id: string;
+  title: string;
+  category: 'Prospectus' | 'Application Form' | 'Academic Calendar' | 'Student Handbook' | 'Journal' | 'Practicum Manual' | 'Official Forms' | 'Admissions' | 'Academic' | 'Theology' | 'Institutional' | 'Forms' | string;
+  fileSize: string;
+  format?: 'PDF' | 'DOCX' | 'ZIP' | string;
+  fileType?: string;
+  downloadCount?: number;
+  downloadsCount?: number;
+  description: string;
+  fileUrl?: string;
+  url?: string;
+  year?: string;
+  status?: ContentStatus;
+  order?: number;
+}
+
+export type DownloadResource = DownloadableResource;
+
+export interface SermonLecture {
+  id: string;
+  title: string;
+  speaker: string;
+  series: string;
+  date: string;
+  duration: string;
+  passage: string;
+  audioUrl?: string;
+  videoUrl?: string;
+  category: 'Chapel Service' | 'Theology Lecture' | 'Spiritual Retreat' | 'Commencement';
+  description: string;
+  status?: ContentStatus;
+}
+
+export interface FAQItem {
+  id: string;
+  category: 'Admissions' | 'Academics' | 'Student Life' | 'Financial & Scholarships' | 'Spiritual Formation';
+  question: string;
+  answer: string;
+  order?: number;
+}
+
+export interface ScrapbookItem {
+  id: string;
+  title: string;
+  category: 'Campus Life & Lamtang' | 'Chapel & Worship' | 'Missions & Outreach' | 'Graduation & Convocation' | 'Retreats & Fellowship' | 'Heritage & Pioneers';
+  imageUrl: string;
+  date: string;
+  year: string;
+  location: string;
+  caption: string;
+  tags: string[];
+  status?: ContentStatus;
+  order?: number;
+}
+
+export interface GalleryPhoto {
+  id: string;
+  url: string;
+  caption: string;
+  date?: string;
+  category?: string;
+}
+
+export interface GalleryAlbum {
+  id: string;
+  title: string;
+  category: string;
+  description: string;
+  date: string;
+  coverImage: string;
+  photos: GalleryPhoto[];
+  status: ContentStatus;
+  order: number;
+}
+
+export interface MediaItem {
+  id: string;
+  title: string;
+  fileName?: string;
+  originalFileName?: string;
+  storagePath?: string;
+  downloadURL?: string;
+  url: string;
+  dataUrl?: string;
+  category: 'Banner' | 'Faculty' | 'Campus' | 'Events' | 'Documents' | 'Logos' | 'General' | 'Chapel' | 'Archive' | string;
+  folder?: string;
+  altText: string;
+  caption?: string;
+  fileSize: string;
+  fileSizeBytes?: number;
+  dimensions?: string;
+  width?: number;
+  height?: number;
+  contentType?: string;
+  uploadDate?: string;
+  uploadedAt?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  uploadedBy?: string;
+  uploadedByUid?: string;
+  isActive?: boolean;
+  displayOrder?: number;
+  usedInLocations?: string[];
+  tags?: string[];
+}
+
+export interface ActivityLogItem {
+  id: string;
+  timestamp: string;
+  adminName?: string;
+  userName?: string;
+  adminRole?: AdminRole | string;
+  userRole?: string;
+  action: 'CREATE' | 'UPDATE' | 'DELETE' | 'PUBLISH' | 'UNPUBLISH' | 'RESTORE' | 'SETTINGS' | string;
+  entityType?: string;
+  entity?: string;
+  entityId?: string;
+  entityName?: string;
+  description?: string;
+  details?: string;
+}
+
+export interface HeroSlide {
+  id: string;
+  image: string;
+  tag: string;
+  headline: string;
+  subtext: string;
+  primaryCtaText?: string;
+  primaryBtnText?: string;
+  primaryCtaLink?: NavSection | string;
+  primaryBtnLink?: string;
+  secondaryCtaText?: string;
+  secondaryBtnText?: string;
+  secondaryCtaLink?: string;
+  secondaryBtnLink?: string;
+  active: boolean;
+  order?: number;
+  createdAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
+
+export interface NavMenuItem {
+  id: string;
+  label: string;
+  section: NavSection;
+  isExternal?: boolean;
+  externalUrl?: string;
+  isVisible: boolean;
+  order: number;
+  dropdown?: {
+    id: string;
+    label: string;
+    subSection?: string;
+    actionType?: 'navigate' | 'modal';
+    modalTarget?: 'statementOfFaith' | 'requestInfo' | 'tuitionCalculator';
+    order: number;
+    isVisible: boolean;
+  }[];
+}
+
+export interface SiteConfig {
+  siteIdentity: {
+    institutionName: string;
+    name?: string;
+    acronym: string;
+    motto: string;
+    tagline: string;
+    establishedYear: string;
+    foundedYear?: number | string;
+    affiliation: string;
+    logoUrl?: string;
+  };
+  seoSettings: {
+    metaTitle: string;
+    metaDescription: string;
+    keywords: string;
+    ogTitle: string;
+    ogDescription: string;
+    ogImage: string;
+    canonicalUrl: string;
+  };
+  contactInfo: {
+    addressLine1: string;
+    addressLine2: string;
+    address?: string;
+    poBox: string;
+    phonePrimary: string;
+    phoneSecondary: string;
+    phone?: string;
+    emailGeneral: string;
+    emailAdmissions: string;
+    admissionsEmail?: string;
+    emailPresident: string;
+    email?: string;
+    officeHoursWeekday: string;
+    officeHoursWeekend: string;
+    officeHours?: string;
+    googleMapsEmbedUrl: string;
+    googleMapsDirectionsUrl: string;
+    facebookUrl: string;
+    youtubeUrl: string;
+    instagramUrl: string;
+    contactFormRecipientEmail: string;
+  };
+  socialLinks?: {
+    facebook?: string;
+    youtube?: string;
+    instagram?: string;
+  };
+  seo?: {
+    metaTitle?: string;
+    metaDescription?: string;
+    keywords?: string;
+  };
+  heroSlides: HeroSlide[];
+  homeAbout: {
+    badgeText: string;
+    headline: string;
+    leadParagraph: string;
+    bodyParagraph: string;
+    historyExcerpt: string;
+    presidentQuote: string;
+    presidentName: string;
+    presidentTitle: string;
+    presidentImage: string;
+  };
+  missionVisionValues: {
+    missionTitle: string;
+    missionStatement: string;
+    mission?: string;
+    visionTitle: string;
+    visionStatement: string;
+    vision?: string;
+    valuesTitle: string;
+    valuesSubtitle: string;
+    coreValues: {
+      id: string;
+      title: string;
+      description: string;
+      scriptureReference: string;
+      iconName: string;
+    }[];
+  };
+  ctaSections: {
+    homeCtaTitle: string;
+    homeCtaSubtitle: string;
+    homeCtaPrimaryButtonText: string;
+    homeCtaPrimaryButtonLink: NavSection;
+    homeCtaSecondaryButtonText: string;
+    homeCtaSecondaryButtonLink: NavSection;
+    homeCtaTag: string;
+    giveCtaTitle: string;
+    giveCtaSubtitle: string;
+    giveCtaButtonText: string;
+  };
+  admissionsConfig: {
+    academicYear: string;
+    semester: string;
+    statusBadge: string;
+    tuitionPerUnit: number;
+    estimatedSemestralTuition: string;
+    downpaymentRequired: string;
+    scholarshipSummary: string;
+    applicationFee: string;
+    entranceExamSchedule: string;
+    orientationDate: string;
+    classesStartDate: string;
+    steps: {
+      stepNumber: number;
+      title: string;
+      description: string;
+      duration: string;
+    }[];
+  };
+  navigationMenu: NavMenuItem[];
+  historyMilestones?: {
+    year: string;
+    title: string;
+    desc: string;
+  }[];
+  distinctives?: {
+    id: string;
+    title: string;
+    short: string;
+    desc: string;
+    highlights: string[];
+    iconName?: string;
+  }[];
+  studentLife?: StudentLifeConfig;
+  footerConfig: {
+    campusDescription: string;
+    aboutText?: string;
+    accreditationText: string;
+    copyrightText: string;
+    quickLinksTitle: string;
+    academicLinksTitle: string;
+    resourcesLinksTitle: string;
+  };
+}
+
+export interface SpiritualPillar {
+  id: string;
+  title: string;
+  description: string;
+  iconName?: string;
+  actionText?: string;
+  actionUrl?: string;
+}
+
+export interface StudentOrganization {
+  id: string;
+  name: string;
+  role: string;
+  description?: string;
+  iconName?: string;
+  meetingSchedule?: string;
+  advisor?: string;
+}
+
+export interface DailyScheduleItem {
+  id: string;
+  time: string;
+  activity: string;
+  description: string;
+}
+
+export interface MinistryOpportunityItem {
+  id: string;
+  title: string;
+  role: string;
+  location: string;
+  description: string;
+  iconName?: string;
+  schedule?: string;
+  tags?: string[];
+}
+
+export interface StudentLeaderOfficer {
+  id: string;
+  name: string;
+  position: string;
+  program: string;
+  yearLevel: string;
+  bio?: string;
+  photoUrl?: string;
+  contactEmail?: string;
+}
+
+export interface CampusGuidelineItem {
+  id: string;
+  category: 'Spiritual' | 'Academic' | 'Dormitory' | 'General';
+  title: string;
+  details: string;
+  iconName?: string;
+}
+
+export interface StudentLifePhoto {
+  id: string;
+  title: string;
+  category: 'Chapel' | 'Fellowship' | 'Dormitory' | 'Ministry' | 'Sports' | 'Campus';
+  imageUrl: string;
+  caption?: string;
+  date?: string;
+}
+
+export interface StudentLifePhotoItem {
+  id: string;
+  albumId: string;
+  imageUrl: string;
+  thumbnailUrl?: string;
+  fileName: string;
+  caption?: string;
+  sortOrder: number;
+  uploadedAt: string;
+  uploadedBy?: string;
+  fileSize?: number;
+  dimensions?: { width: number; height: number };
+}
+
+export interface StudentLifeAlbum {
+  id: string;
+  title: string;
+  description: string;
+  eventName: string;
+  eventDate: string;
+  location: string;
+  coverPhotoUrl: string;
+  photoCount: number;
+  status: 'published' | 'unpublished';
+  createdAt: string;
+  updatedAt: string;
+  createdBy?: string;
+  sortOrder?: number;
+  photos: StudentLifePhotoItem[];
+}
+
+export interface StudentLifeConfig {
+  bannerBadge?: string;
+  bannerTitle?: string;
+  bannerSubtitle?: string;
+  applyButtonText?: string;
+  sermonsButtonText?: string;
+  pillarsBadge?: string;
+  pillarsTitle?: string;
+  pillarsSubtitle?: string;
+  pillars: SpiritualPillar[];
+  orgsBadge?: string;
+  orgsTitle?: string;
+  orgsSubtitle?: string;
+  organizations: StudentOrganization[];
+  dailySchedule: DailyScheduleItem[];
+  dormitoryHeadline?: string;
+  dormitoryDescription?: string;
+  dormitoryAmenities: string[];
+  dormitoryGuidelines?: string;
+  ministryBadge?: string;
+  ministryTitle?: string;
+  ministryDescription?: string;
+  ministryPrimaryButtonText?: string;
+  ministrySecondaryButtonText?: string;
+  ministryOpportunities?: MinistryOpportunityItem[];
+  leadersBadge?: string;
+  leadersTitle?: string;
+  leadersSubtitle?: string;
+  studentLeaders?: StudentLeaderOfficer[];
+  guidelinesBadge?: string;
+  guidelinesTitle?: string;
+  guidelinesSubtitle?: string;
+  campusGuidelines?: CampusGuidelineItem[];
+  galleryBadge?: string;
+  galleryTitle?: string;
+  gallerySubtitle?: string;
+  galleryPhotos?: StudentLifePhoto[];
+}
+
+export interface MigrationAuditItem {
+  id: string;
+  sourceUrl: string;
+  targetPage: string;
+  pageTitle: string;
+  status: 'MIGRATED' | 'PARTIALLY MIGRATED' | 'REQUIRES REVIEW' | 'FAILED';
+  imagesCount: number;
+  documentsCount: number;
+  linksCount: number;
+  notes: string;
+  lastChecked: string;
+}
+
+export type PaymentMethodType = 'gcash' | 'bank' | 'bank_transfer' | 'online_card' | 'wire' | 'other' | string;
+
+export interface DonationPaymentMethod {
+  id: string;
+  name: string;
+  type: PaymentMethodType;
+  accountName: string;
+  accountNumber: string;
+  bankName?: string;
+  bankBranch?: string;
+  branch?: string;
+  gcashNumber?: string;
+  swiftCode?: string;
+  qrCodeUrl?: string;
+  instructions: string | string[];
+  active: boolean;
+  order: number;
+  badge?: string;
+  notes?: string;
+}
+
+export type DonationStatus =
+  | 'Pending Verification'
+  | 'Confirmed / Received'
+  | 'Acknowledged / Official Receipt Issued'
+  | 'Verified & Acknowledged'
+  | 'Receipt Issued'
+  | 'Cancelled'
+  | string;
+
+export interface DonationRecord {
+  id: string;
+  trackingCode: string;
+  donorName: string;
+  donorEmail: string;
+  donorPhone?: string;
+  amount: number;
+  currency: string;
+  paymentMethodId: string;
+  paymentMethodName: string;
+  purpose: string;
+  message?: string;
+  prayerRequest?: string;
+  isAnonymous?: boolean;
+  receiptRequested?: boolean;
+  requestOfficialReceipt?: boolean;
+  receiptAddress?: string;
+  taxIdOrTin?: string;
+  transactionRef?: string;
+  referenceNumber?: string;
+  proofImageUrl?: string;
+  status: DonationStatus;
+  createdAt: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
+  adminNotes?: string;
+  notes?: string;
+  billingAddress?: string;
+}
+
+export interface FeaturedCause {
+  id: string;
+  title: string;
+  targetEst?: string;
+  targetAmount?: number;
+  icon: string;
+  description: string;
+  raisedEst?: string;
+  raisedAmount?: number;
+  beneficiaries?: string;
+}
+
+export interface DonationSettings {
+  title?: string;
+  subtitle?: string;
+  description?: string;
+  stewardshipEmail?: string;
+  stewardshipPhone?: string;
+  heroHeadline: string;
+  heroSubtitle: string;
+  scriptureVerse: string;
+  scriptureReference: string;
+  impactHeadline: string;
+  impactDescription: string;
+  taxExemptInfo: string;
+  stewardshipOfficer: {
+    name: string;
+    title: string;
+    email: string;
+    phone: string;
+    officeLocation: string;
+  };
+  featuredCauses: FeaturedCause[];
+  stewardshipPillars: {
+    title: string;
+    description: string;
+    icon: string;
+  }[];
+  frequentlyAskedQuestions: {
+    question: string;
+    answer: string;
+  }[];
+}
+
+export interface YouTubeVideo {
+  id: string;
+  title: string;
+  youtubeUrl: string;
+  youtubeVideoId: string;
+  description: string;
+  category: string;
+  thumbnailUrl: string;
+  displayOrder: number;
+  isFeatured: boolean;
+  isPublished: boolean;
+  showOnHome: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HomepageVideoConfig {
+  enabled: boolean;
+  sectionTitle: string;
+  sectionSubtitle: string;
+  featuredVideoId: string;
+  maxDisplayCount: number;
+  layoutStyle: 'featured-playlist' | 'grid';
+  updatedAt?: string;
+}
+
+export interface ContactInquiry {
+  id: string;
+  name: string;
+  email: string;
+  phone?: string;
+  department?: string;
+  subject?: string;
+  message: string;
+  programInterest?: string;
+  type: 'general_inquiry' | 'program_info_request' | 'campus_visit';
+  status: 'New' | 'In Review' | 'Responded' | 'Archived';
+  createdAt: string;
+  updatedAt?: string;
+}
+
+

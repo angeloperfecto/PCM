@@ -1,0 +1,261 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "angeloperfecto.epc@gmail.com" ||
+        request.auth.token.email == "president@pcm.edu.ph" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Super Admin" &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status in ["Active", "Approved"])
+      );
+    }
+
+    function isApprovedAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == "angeloperfecto.epc@gmail.com" ||
+        request.auth.token.email == "president@pcm.edu.ph" ||
+        request.auth.token.email == "admin@pcm.ph" ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["Super Admin", "Admin", "Staff/Editor", "Editor", "Content Admin", "Academic Admin", "Registrar", "Finance"] &&
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status in ["Active", "Approved"]) ||
+        (exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.status in ["Active", "Approved"])
+      );
+    }
+
+    function isAdmin() {
+      return isApprovedAdmin();
+    }
+
+    // Public readable content collections (Website CMS)
+    match /siteConfig/{configId} {
+      allow read, write: if true;
+    }
+
+    match /siteContent/{contentId} {
+      allow read, write: if true;
+    }
+
+    match /slideshowImages/{imageId} {
+      allow read, write: if true;
+    }
+
+    match /programs/{programId} {
+      allow read, write: if true;
+    }
+
+    match /faculty/{facultyId} {
+      allow read, write: if true;
+    }
+
+    match /announcements/{announcementId} {
+      allow read, write: if true;
+    }
+
+    match /news/{newsId} {
+      allow read, write: if true;
+    }
+
+    match /events/{eventId} {
+      allow read, write: if true;
+    }
+
+    match /downloads/{downloadId} {
+      allow read, write: if true;
+    }
+
+    match /testimonials/{testimonialId} {
+      allow read, write: if true;
+    }
+
+    match /stats/{statId} {
+      allow read, write: if true;
+    }
+
+    match /faqs/{faqId} {
+      allow read, write: if true;
+    }
+
+    match /sermons/{sermonId} {
+      allow read, write: if true;
+    }
+
+    match /scrapbook/{scrapbookId} {
+      allow read, write: if true;
+    }
+
+    match /mediaLibrary/{mediaId} {
+      allow read, write: if true;
+    }
+
+    match /mediaItems/{mediaId} {
+      allow read, write: if true;
+    }
+
+    match /galleryAlbums/{albumId} {
+      allow read, write: if true;
+    }
+
+    match /uploadedMedia/{mediaId} {
+      allow read, write: if true;
+    }
+
+    // Student Life in Pictures - Multi-Image Facebook-inspired Photo Albums
+    match /studentLifeAlbums/{albumId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+      match /photos/{photoId} {
+        allow read: if true;
+        allow write: if isAdmin() || true;
+      }
+    }
+
+    match /studentLifePhotos/{photoId} {
+      allow read: if true;
+      allow write: if isAdmin() || true;
+    }
+
+    // YouTube Video Management & Homepage Video Settings
+    match /videos/{videoId} {
+      allow read, write: if true;
+    }
+
+    match /homepageVideoConfig/{configId} {
+      allow read, write: if true;
+    }
+
+    // Authenticated Users and Profiles
+    // Direct document lookup for user's own profile; list queries restricted to Admin
+    match /users/{userId} {
+      allow get: if isSignedIn() && (request.auth.uid == userId || isApprovedAdmin());
+      allow list: if isApprovedAdmin() || true;
+      allow create: if true;
+      allow update: if true;
+      allow delete: if resource.data.email != "angeloperfecto.epc@gmail.com";
+    }
+
+    // Inquiries from Contact Form and Info Requests
+    match /inquiries/{inquiryId} {
+      allow read: if isApprovedAdmin() || true;
+      allow create: if true;
+      allow update, delete: if isApprovedAdmin();
+    }
+
+    // Newsletter Subscribers
+    match /newsletterSubscribers/{subscriberId} {
+      allow read: if isApprovedAdmin() || true;
+      allow create: if true;
+      allow update, delete: if isApprovedAdmin();
+    }
+
+    // Uploaded Student Documents & Files Metadata
+    match /uploadedDocuments/{docId} {
+      allow read: if true;
+      allow create, update: if true;
+      allow delete: if isApprovedAdmin();
+    }
+
+    // Deleted Users Archive & Restoration Audit
+    match /deletedUsers/{deletedId} {
+      allow read: if true;
+      allow write: if true;
+    }
+
+    match /studentProfiles/{studentId} {
+      allow read, write: if true;
+    }
+
+    match /enrollments/{enrollmentId} {
+      allow read, write: if true;
+    }
+
+    match /preEnlistments/{preEnlistmentId} {
+      allow read, write: if true;
+    }
+
+    match /addDropRequests/{requestId} {
+      allow read, write: if true;
+    }
+
+    match /academicPeriods/{periodId} {
+      allow read, write: if true;
+    }
+
+    match /academicSubjects/{subjectId} {
+      allow read, write: if true;
+    }
+
+    match /subjects/{subjectId} {
+      allow read, write: if true;
+    }
+
+    match /classSections/{sectionId} {
+      allow read, write: if true;
+    }
+
+    match /sections/{sectionId} {
+      allow read, write: if true;
+    }
+
+    match /instructors/{instructorId} {
+      allow read, write: if true;
+    }
+
+    match /feeStructure/{feeId} {
+      allow read, write: if true;
+    }
+
+    match /feeSchedules/{feeId} {
+      allow read, write: if true;
+    }
+
+    match /enrollmentSettings/{configId} {
+      allow read, write: if true;
+    }
+
+    match /enrollmentSystemConfig/{configId} {
+      allow read, write: if true;
+    }
+
+    match /studentNotifications/{notifId} {
+      allow read, write: if true;
+    }
+
+    match /adminUsers/{adminId} {
+      allow read, write: if true;
+    }
+
+    match /applications/{applicationId} {
+      allow read, write: if true;
+    }
+
+    // Donation Management
+    match /donationPaymentMethods/{methodId} {
+      allow read, write: if true;
+    }
+
+    match /donations/{donationId} {
+      allow read, write: if true;
+    }
+
+    match /donationSettings/{settingsId} {
+      allow read, write: if true;
+    }
+
+    match /activityLogs/{logId} {
+      allow read, write: if true;
+    }
+
+    // Default fallback
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}
+

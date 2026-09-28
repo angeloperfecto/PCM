@@ -1,0 +1,132 @@
+import { NextRequest, NextResponse } from 'next/server';
+import fs from 'fs/promises';
+import path from 'path';
+import { doc, setDoc } from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { getServerFirestore, isIgnorableFirestoreError, getServerFirebaseApp } from '@/lib/serverFirebase';
+import { firebaseConfig } from '@/lib/firebaseConfig';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
+export async function POST(req: NextRequest) {
+  try {
+    const formData = await req.formData();
+    const file = formData.get('file') as File | null;
+    const slideIdParam = formData.get('slideId') as string | null;
+
+    if (!file) {
+      return NextResponse.json({ error: 'No file provided' }, { status: 400 });
+    }
+
+    if (!file.type.startsWith('image/')) {
+      return NextResponse.json({ error: 'File must be an image (PNG, JPG, WEBP, etc.)' }, { status: 400 });
+    }
+
+    // Allow any file size for admin uploads (up to 250MB)
+    const MAX_SIZE = 250 * 1024 * 1024;
+    if (file.size > MAX_SIZE) {
+      return NextResponse.json({ error: 'Image file size exceeds maximum 250MB capacity.' }, { status: 400 });
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const timestamp = Date.now();
+    const slideId = slideIdParam || `hero-${timestamp}`;
+    const rawFileName = file.name || `slide_${timestamp}.jpg`;
+    const ext = path.extname(rawFileName) || '.jpg';
+    const cleanBase = path.basename(rawFileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
+    const uniqueFilename = `slide_${timestamp}_${cleanBase}.webp`;
+
+    // 1. Optimize image using sharp for fast delivery & compact storage (if available)
+    let optimizedBuffer: Buffer = buffer;
+    try {
+      const sharpModule = await import('sharp');
+      const sharp = sharpModule.default;
+      optimizedBuffer = await sharp(buffer)
+        .resize({ width: 1920, height: 1080, fit: 'cover', withoutEnlargement: true })
+        .webp({ quality: 80 })
+        .toBuffer();
+    } catch {
+      // Fallback if sharp is not installed or format is not supported
+      optimizedBuffer = buffer;
+    }
+
+    // Only construct dataUrl if under safe 800KB Firestore document limit
+    const fitsInFirestore = optimizedBuffer.length < 800000;
+    const dataUrl = fitsInFirestore
+      ? `data:image/webp;base64,${optimizedBuffer.toString('base64')}`
+      : '';
+    const publicEndpointUrl = `/api/slideshow/image?id=${slideId}&v=${timestamp}`;
+
+    // 2. Authoritative Persistence: Save to Firestore siteContent/slideshow_image_<slideId>
+    // This guarantees immediate global visibility for ALL users across any container, shared link, or device!
+    let savedToFirestore = false;
+    try {
+      const db = getServerFirestore();
+      const docRef = doc(db, 'siteContent', `slideshow_image_${slideId}`);
+      await setDoc(
+        docRef,
+        {
+          id: slideId,
+          image: dataUrl || publicEndpointUrl,
+          filename: uniqueFilename,
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      savedToFirestore = true;
+    } catch (fsErr: any) {
+      if (!isIgnorableFirestoreError(fsErr)) {
+        console.debug('Slideshow image Firestore set notice:', fsErr?.message || fsErr);
+      }
+    }
+
+    // 3. Probe if Firebase Storage bucket is active and reachable (if configured)
+    let downloadUrl: string | null = null;
+    if (
+      firebaseConfig.storageBucket &&
+      !firebaseConfig.storageBucket.includes('intelligent-park-95fd2')
+    ) {
+      try {
+        const app = getServerFirebaseApp();
+        const storage = getStorage(app);
+        storage.maxUploadRetryTime = 3000;
+        const storagePath = `slideshow/${uniqueFilename}`;
+        const storageRef = ref(storage, storagePath);
+        await uploadBytes(storageRef, optimizedBuffer, {
+          contentType: 'image/webp',
+        });
+        downloadUrl = await getDownloadURL(storageRef);
+      } catch (storageErr) {
+        console.warn('Firebase Storage upload notice:', storageErr);
+      }
+    }
+
+    // 4. Save to local disk uploads directory as cache
+    try {
+      const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'slideshow');
+      await fs.mkdir(uploadDir, { recursive: true });
+      const filePath = path.join(uploadDir, uniqueFilename);
+      await fs.writeFile(filePath, optimizedBuffer);
+    } catch (diskErr) {
+      console.warn('Local disk write notice:', diskErr);
+    }
+
+    // Consistent, globally accessible public endpoint
+    const publicUrl = downloadUrl || `/api/slideshow/image?id=${slideId}&v=${timestamp}`;
+
+    return NextResponse.json({
+      success: true,
+      url: publicUrl,
+      dataUrl,
+      slideId,
+      filename: uniqueFilename,
+      provider: savedToFirestore ? 'firestore_synced' : 'local_cache',
+    });
+  } catch (error: any) {
+    console.error('Error in /api/slideshow/upload:', error);
+    return NextResponse.json({ error: error.message || 'Internal upload error' }, { status: 500 });
+  }
+}
