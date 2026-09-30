@@ -318,6 +318,7 @@ export const AdminScrapbookTab: React.FC = () => {
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       className="object-cover group-hover:scale-102 transition-transform duration-300"
                       referrerPolicy="no-referrer"
+                      unoptimized={Boolean(item.imageUrl?.startsWith('data:') || item.imageUrl?.startsWith('blob:'))}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-300">
@@ -529,6 +530,7 @@ export const AdminScrapbookTab: React.FC = () => {
                       sizes="(max-width: 640px) 100vw, 500px"
                       className="object-cover"
                       referrerPolicy="no-referrer"
+                      unoptimized={Boolean(formImageUrl?.startsWith('data:') || formImageUrl?.startsWith('blob:'))}
                     />
                   </div>
                 )}

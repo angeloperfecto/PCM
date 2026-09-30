@@ -531,6 +531,7 @@ export const DonationView: React.FC = () => {
                             height={192}
                             className="w-48 h-48 object-contain rounded-lg mx-auto"
                             referrerPolicy="no-referrer"
+                            unoptimized={Boolean(selectedMethod.qrCodeUrl?.startsWith('data:') || selectedMethod.qrCodeUrl?.startsWith('blob:'))}
                           />
                         </div>
                         <p className="text-xs text-slate-600 font-medium">

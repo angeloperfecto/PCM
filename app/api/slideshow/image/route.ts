@@ -75,11 +75,11 @@ export async function GET(req: NextRequest) {
     if (now >= quotaExceededUntil) {
       try {
         const db = getServerFirestore();
-        // Use a 2.5s timeout promise so offline or slow handshakes gracefully fall back to local disk/defaults
+        // Use a 6s timeout promise so queries have sufficient time to complete
         const fetchDocWithTimeout = Promise.race([
           getDoc(doc(db, 'siteContent', `slideshow_image_${id}`)),
           new Promise<null>((_, reject) =>
-            setTimeout(() => reject(new Error('Firestore read timeout')), 2500)
+            setTimeout(() => reject(new Error('Firestore read timeout')), 6000)
           ),
         ]);
 
@@ -163,17 +163,10 @@ export async function GET(req: NextRequest) {
       // Local disk check skipped
     }
 
-    // 3. Fallback: Redirect to default high quality Unsplash banner
+    // 3. Fallback: Redirect to default high quality Unsplash banner without caching fallback in memory
     const fallbackUrl =
       DEFAULT_FALLBACKS[id] ||
       'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600&auto=format&fit=crop';
-    
-    // Cache fallback redirect to prevent repeated downstream operations
-    imageMemoryCache.set(id, {
-      type: 'redirect',
-      redirectUrl: fallbackUrl,
-      cachedAt: now,
-    });
 
     return NextResponse.redirect(fallbackUrl, { status: 307 });
   } catch {

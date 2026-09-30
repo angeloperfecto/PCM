@@ -34,6 +34,10 @@ service cloud.firestore {
     }
 
     // Public readable content collections (Website CMS)
+    match /systemConfig/{configId} {
+      allow read, write: if true;
+    }
+
     match /siteConfig/{configId} {
       allow read, write: if true;
     }

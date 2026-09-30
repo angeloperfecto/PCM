@@ -59,6 +59,7 @@ export const TestimonialsSection: React.FC = () => {
                       className="object-cover"
                       sizes="56px"
                       referrerPolicy="no-referrer"
+                      unoptimized={Boolean(current.avatarUrl?.startsWith('data:') || current.avatarUrl?.startsWith('blob:'))}
                     />
                   </div>
                 )}

@@ -1136,6 +1136,7 @@ export const AdminDonationsTab: React.FC = () => {
                             height={40}
                             className="w-full h-full object-contain"
                             referrerPolicy="no-referrer"
+                            unoptimized={Boolean(methodForm.qrCodeUrl?.startsWith('data:') || methodForm.qrCodeUrl?.startsWith('blob:'))}
                           />
                         </div>
                       )}

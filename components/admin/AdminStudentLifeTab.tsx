@@ -1489,6 +1489,7 @@ export const AdminStudentLifeTab: React.FC = () => {
                       sizes="64px"
                       className="object-cover"
                       referrerPolicy="no-referrer"
+                      unoptimized={Boolean(leader.photoUrl?.startsWith('data:') || leader.photoUrl?.startsWith('blob:'))}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-[#18392B] text-white font-bold text-lg">

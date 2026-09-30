@@ -1505,20 +1505,64 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         setFirebaseSyncStatus('syncing');
 
-        // Helper to safely seed a genuinely empty collection once without ever overwriting existing data
+        // 0. Verify system initialization marker in Firestore:
+        // NEVER auto-seed or restore hardcoded sample data if the system was already initialized
+        // or if Firestore already contains documents.
+        let isSystemAlreadyInitialized = false;
+        try {
+          const metaSnap = await getDoc(doc(db, 'systemConfig', 'metadata'));
+          if (metaSnap.exists() && metaSnap.data()?.isInitialized) {
+            isSystemAlreadyInitialized = true;
+          } else {
+            // Check if core collections already have records in Firestore
+            const [progCheck, facCheck, newsCheck, siteConfigCheck] = await Promise.all([
+              getDocs(collection(db, 'programs')).catch(() => null),
+              getDocs(collection(db, 'faculty')).catch(() => null),
+              getDocs(collection(db, 'news')).catch(() => null),
+              getDoc(doc(db, 'siteConfig', 'global')).catch(() => null),
+            ]);
+
+            const hasExistingData =
+              (progCheck && !progCheck.empty) ||
+              (facCheck && !facCheck.empty) ||
+              (newsCheck && !newsCheck.empty) ||
+              (siteConfigCheck && siteConfigCheck.exists());
+
+            if (hasExistingData) {
+              isSystemAlreadyInitialized = true;
+              await safeSetDoc(doc(db, 'systemConfig', 'metadata'), {
+                isInitialized: true,
+                initializedAt: new Date().toISOString(),
+                reason: 'Existing database collections detected',
+              });
+            }
+          }
+        } catch (initErr) {
+          console.warn('[PCM Firestore] Notice checking system metadata:', initErr);
+          isSystemAlreadyInitialized = true; // Err on side of safety: NEVER overwrite existing data!
+        }
+
+        // Helper to safely seed a genuinely empty collection ONCE ONLY during initial setup of a brand new database
         const seedIfEmpty = async (colName: string, initialItems: any[]) => {
+          // If system has already been initialized, DO NOT seed! An empty collection means an admin intentionally has 0 items!
+          if (isSystemAlreadyInitialized) return;
           if (seededCollections.has(colName)) return;
           seededCollections.add(colName);
           try {
             const snap = await getDocs(collection(db, colName));
             if (snap.empty && initialItems && initialItems.length > 0) {
-              console.info(`[PCM Firestore] Collection ${colName} is empty. Seeding initial baseline records...`);
+              console.info(`[PCM Firestore] Fresh database detected. Seeding baseline records for ${colName}...`);
               const batch = writeBatch(db);
               initialItems.forEach((item: any) => {
                 const docId = item.id || `seed-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
                 batch.set(doc(db, colName, docId), cleanFirestoreData(item), { merge: true });
               });
               await batch.commit();
+              await safeSetDoc(doc(db, 'systemConfig', 'metadata'), {
+                isInitialized: true,
+                initializedAt: new Date().toISOString(),
+              });
+              isSystemAlreadyInitialized = true;
             }
           } catch (e) {
             console.warn(`[PCM Firestore] Seed check notice for ${colName}:`, e);
@@ -1536,15 +1580,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 const updated = {
                   ...prev,
                   ...data,
-                  heroSlides: data.heroSlides ?? prev.heroSlides,
+                  heroSlides: data.heroSlides !== undefined ? data.heroSlides : prev.heroSlides,
                 };
                 return JSON.stringify(prev) === JSON.stringify(updated) ? prev : updated;
               });
               setFirebaseSyncStatus('synced');
               setIsFirebaseConnected(true);
               setLastSyncedAt(new Date());
-            } else {
-              // Only create default if missing in Firestore
+            } else if (!isSystemAlreadyInitialized) {
+              // Only create default if brand new empty database
               await safeSetDoc(doc(db, 'siteConfig', 'global'), INITIAL_SITE_CONFIG);
             }
           },
@@ -1591,7 +1635,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicProgram[];
               setPrograms((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('programs', INITIAL_PROGRAMS);
+              setPrograms([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('programs', INITIAL_PROGRAMS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1628,7 +1675,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 return match || currentSelected;
               });
             } else {
-              await seedIfEmpty('faculty', INITIAL_FACULTY);
+              setFaculty([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('faculty', INITIAL_FACULTY);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1651,7 +1701,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AnnouncementItem[];
               setAnnouncements((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('announcements', INITIAL_ANNOUNCEMENTS);
+              setAnnouncements([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('announcements', INITIAL_ANNOUNCEMENTS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1683,7 +1736,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
               setNews((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('news', INITIAL_NEWS);
+              setNews([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('news', INITIAL_NEWS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1715,7 +1771,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
               setEvents((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('events', INITIAL_EVENTS);
+              setEvents([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('events', INITIAL_EVENTS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1746,7 +1805,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               list.sort((a, b) => (a.order || 0) - (b.order || 0));
               setDonationMethods((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('donationPaymentMethods', INITIAL_DONATION_METHODS);
+              setDonationMethods([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('donationPaymentMethods', INITIAL_DONATION_METHODS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1767,7 +1829,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           async (snap) => {
             if (snap.exists()) {
               setDonationSettings(snap.data() as DonationSettings);
-            } else {
+            } else if (!isSystemAlreadyInitialized) {
               await safeSetDoc(doc(db, 'donationSettings', 'global'), INITIAL_DONATION_SETTINGS);
             }
             setIsFirebaseConnected(true);
@@ -1792,7 +1854,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               list.sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
               setVideos((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('videos', INITIAL_VIDEOS);
+              setVideos([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('videos', INITIAL_VIDEOS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1813,7 +1878,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           async (snap) => {
             if (snap.exists()) {
               setHomepageVideoConfig(snap.data() as HomepageVideoConfig);
-            } else {
+            } else if (!isSystemAlreadyInitialized) {
               await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), INITIAL_HOMEPAGE_VIDEO_CONFIG);
             }
             setIsFirebaseConnected(true);
@@ -1850,6 +1915,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 return timeB - timeA;
               });
               setMediaItems((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+            } else {
+              setMediaItems([]);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1872,7 +1939,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[];
               setTestimonials((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('testimonials', INITIAL_TESTIMONIALS);
+              setTestimonials([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('testimonials', INITIAL_TESTIMONIALS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1893,7 +1963,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[];
               setStats((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('stats', INITIAL_STATS);
+              setStats([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('stats', INITIAL_STATS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1914,7 +1987,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[];
               setFaqs((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('faqs', INITIAL_FAQS);
+              setFaqs([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('faqs', INITIAL_FAQS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1935,7 +2011,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[];
               setDownloads((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('downloads', INITIAL_DOWNLOADS);
+              setDownloads([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('downloads', INITIAL_DOWNLOADS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1956,7 +2035,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[];
               setSermons((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('sermons', INITIAL_SERMONS);
+              setSermons([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('sermons', INITIAL_SERMONS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1977,7 +2059,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[];
               setScrapbook((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('scrapbook', INITIAL_SCRAPBOOK);
+              setScrapbook([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('scrapbook', INITIAL_SCRAPBOOK);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1998,7 +2083,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[];
               setGalleryAlbums((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('galleryAlbums', INITIAL_GALLERY_ALBUMS);
+              setGalleryAlbums([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('galleryAlbums', INITIAL_GALLERY_ALBUMS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2033,7 +2121,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               );
               setStudentLifeAlbums((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('studentLifeAlbums', INITIAL_STUDENT_LIFE_ALBUMS);
+              setStudentLifeAlbums([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('studentLifeAlbums', INITIAL_STUDENT_LIFE_ALBUMS);
+              }
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2079,7 +2170,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
               setApplications((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('applications', INITIAL_APPLICATIONS);
+              setApplications([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('applications', INITIAL_APPLICATIONS);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'applications')
@@ -2109,7 +2203,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 return areUserAccountsEqual(prev, next) ? prev : next;
               });
             } else {
-              await seedIfEmpty('studentProfiles', INITIAL_STUDENTS);
+              setStudents([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('studentProfiles', INITIAL_STUDENTS);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'studentProfiles')
@@ -2125,7 +2222,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as OnlineEnrollment[];
               setEnrollments((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('enrollments', INITIAL_ENROLLMENTS);
+              setEnrollments([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('enrollments', INITIAL_ENROLLMENTS);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments')
@@ -2153,7 +2253,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicSubject[];
               setAcademicSubjects((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('academicSubjects', INITIAL_ACADEMIC_SUBJECTS);
+              setAcademicSubjects([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('academicSubjects', INITIAL_ACADEMIC_SUBJECTS);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'academicSubjects')
@@ -2181,7 +2284,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FeeStructureItem[];
               setFeeStructure((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('feeStructure', INITIAL_FEE_STRUCTURE);
+              setFeeStructure([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('feeStructure', INITIAL_FEE_STRUCTURE);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'feeStructure')
@@ -2197,7 +2303,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicPeriod[];
               setAcademicPeriods((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('academicPeriods', INITIAL_ACADEMIC_PERIODS);
+              setAcademicPeriods([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('academicPeriods', INITIAL_ACADEMIC_PERIODS);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'academicPeriods')
@@ -2213,7 +2322,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ClassSection[];
               setClassSections((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('classSections', INITIAL_CLASS_SECTIONS);
+              setClassSections([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('classSections', INITIAL_CLASS_SECTIONS);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'classSections')
@@ -2229,7 +2341,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InstructorRecord[];
               setInstructors((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('instructors', INITIAL_INSTRUCTORS);
+              setInstructors([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('instructors', INITIAL_INSTRUCTORS);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'instructors')
@@ -2243,7 +2358,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           async (snap) => {
             if (snap.exists()) {
               setEnrollmentSystemConfig(snap.data() as EnrollmentSystemConfig);
-            } else {
+            } else if (!isSystemAlreadyInitialized) {
               await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), INITIAL_ENROLLMENT_SYSTEM_CONFIG);
             }
           },
@@ -2272,7 +2387,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationRecord[];
               setDonations((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
-              await seedIfEmpty('donations', INITIAL_DONATIONS);
+              setDonations([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('donations', INITIAL_DONATIONS);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'donations')
@@ -2287,6 +2405,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[];
               setActivityLogs((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+            } else {
+              setActivityLogs([]);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'activityLogs')
@@ -2325,7 +2445,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 return areUserAccountsEqual(prev, next) ? prev : next;
               });
             } else {
-              await seedIfEmpty('adminUsers', INITIAL_ADMIN_USERS);
+              setAdminUsers([]);
+              if (!isSystemAlreadyInitialized) {
+                await seedIfEmpty('adminUsers', INITIAL_ADMIN_USERS);
+              }
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'adminUsers')

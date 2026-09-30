@@ -346,10 +346,10 @@ export async function compressImageFile(
 export function cleanFirestoreData<T>(data: T): T {
   if (data === null || data === undefined) return data;
   if (typeof data === 'string') {
-    // Guard: Prevent Base64 strings from bloating Firestore documents (Firestore hard limit is 1MB per document)
-    // Any image string > 30KB must never be saved directly into a Firestore doc!
-    if (data.startsWith('data:image/') && data.length > 30000) {
-      console.warn('Blocked oversized Base64 image from Firestore payload to protect 1MB document limit.');
+    // Guard: Prevent excessive Base64 strings from exceeding Firestore's 1MB document limit (1,048,576 bytes)
+    // Images up to 850KB are fully preserved. Only truly oversized base64 strings (>850KB) are blocked.
+    if (data.startsWith('data:image/') && data.length > 850000) {
+      console.warn('Blocked oversized Base64 image (>850KB) from Firestore payload to protect 1MB document limit.');
       return '' as unknown as T;
     }
     return data;

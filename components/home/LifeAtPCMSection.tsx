@@ -103,6 +103,7 @@ export const LifeAtPCMSection: React.FC = () => {
                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     referrerPolicy="no-referrer"
+                    unoptimized={Boolean(item.image?.startsWith('data:') || item.image?.startsWith('blob:'))}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#18392B]/95 via-[#18392B]/35 to-transparent" />
                   <div className="absolute bottom-3 left-3 flex items-center gap-2">

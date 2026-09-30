@@ -416,6 +416,20 @@
         "required": ["id", "image"]
       },
       "description": "Dedicated image document for hero slideshow slides."
+    },
+    "/systemConfig/{configId}": {
+      "schema": {
+        "title": "System Configuration Document",
+        "description": "Stores system-level metadata, initialization markers, and permanent storage flags.",
+        "type": "object",
+        "properties": {
+          "isInitialized": { "type": "boolean" },
+          "initializedAt": { "type": "string" },
+          "permanentStorage": { "type": "boolean" },
+          "version": { "type": "string" }
+        }
+      },
+      "description": "Global system configuration, flags, and persistent storage markers."
     }
   }
 }

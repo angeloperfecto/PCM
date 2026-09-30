@@ -612,6 +612,7 @@ export const AdminUsersTab: React.FC = () => {
                         sizes="40px"
                         className="object-cover"
                         referrerPolicy="no-referrer"
+                        unoptimized={Boolean(req.photoURL?.startsWith('data:') || req.photoURL?.startsWith('blob:'))}
                       />
                     </div>
                   ) : (
@@ -965,6 +966,7 @@ export const AdminUsersTab: React.FC = () => {
                                 sizes="36px"
                                 className="object-cover"
                                 referrerPolicy="no-referrer"
+                                unoptimized={Boolean(account.photoURL?.startsWith('data:') || account.photoURL?.startsWith('blob:'))}
                               />
                             </div>
                           ) : (

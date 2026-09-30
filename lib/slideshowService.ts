@@ -151,16 +151,19 @@ export function subscribeToSlideshow(
 
           onUpdate(resolvedSlides);
           return;
+        } else if (data && Array.isArray(data.slides) && data.slides.length === 0) {
+          onUpdate([]);
+          return;
         }
       }
 
-      // Fallback: If siteContent/slideshow document is missing or empty, check siteConfig/global
+      // Fallback: If siteContent/slideshow document is missing, check siteConfig/global
       const configDocRef = doc(db, 'siteConfig', 'global');
       getDoc(configDocRef)
         .then((cfgSnap) => {
           if (cfgSnap.exists()) {
             const cfgData = cfgSnap.data();
-            if (cfgData?.heroSlides && Array.isArray(cfgData.heroSlides) && cfgData.heroSlides.length > 0) {
+            if (cfgData?.heroSlides && Array.isArray(cfgData.heroSlides)) {
               const sorted = [...cfgData.heroSlides]
                 .map((s, idx) => sanitizeSlide(s, idx))
                 .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -168,16 +171,12 @@ export function subscribeToSlideshow(
               return;
             }
           }
-          onUpdate(DEFAULT_HERO_SLIDES);
         })
-        .catch(() => {
-          onUpdate(DEFAULT_HERO_SLIDES);
-        });
+        .catch(() => {});
     },
     (error) => {
       console.warn('Real-time slideshow listener notice:', error);
       if (onError) onError(error);
-      onUpdate(DEFAULT_HERO_SLIDES);
     }
   );
 }

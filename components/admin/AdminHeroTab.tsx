@@ -35,13 +35,14 @@ import {
 } from 'lucide-react';
 
 export const AdminHeroTab: React.FC = () => {
-  const { siteConfig, addToast, canPerformAction, currentAdminUser, currentUserAccount } = usePCM();
+  const { siteConfig, addToast, canPerformAction, currentAdminUser, currentUserAccount, updateSiteConfig } = usePCM();
 
   // Firestore-synced slides (source of truth from central store)
   const slides = useMemo(() => {
-    return siteConfig?.heroSlides && siteConfig.heroSlides.length > 0
-      ? siteConfig.heroSlides
-      : DEFAULT_HERO_SLIDES;
+    if (siteConfig?.heroSlides !== undefined && Array.isArray(siteConfig.heroSlides)) {
+      return siteConfig.heroSlides;
+    }
+    return DEFAULT_HERO_SLIDES;
   }, [siteConfig?.heroSlides]);
 
   const [isSaving, setIsSaving] = useState(false);
@@ -90,6 +91,7 @@ export const AdminHeroTab: React.FC = () => {
     setIsSaving(false);
 
     if (result.success) {
+      updateSiteConfig({ heroSlides: newSlidesList });
       setLastSavedTime(new Date().toLocaleTimeString());
       setLastUpdatedBy(userIdentifier);
       addToast({

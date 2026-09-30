@@ -1206,6 +1206,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
                       sizes="48px"
                       className="object-cover"
                       referrerPolicy="no-referrer"
+                      unoptimized={Boolean((member.imageUrl || member.image)?.startsWith('data:') || (member.imageUrl || member.image)?.startsWith('blob:'))}
                     />
                   </div>
                   <div>
