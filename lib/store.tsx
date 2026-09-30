@@ -1009,10 +1009,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setActivityLogs((prev) => [newLog, ...prev.slice(0, 99)]);
 
-      // Only save to Firestore if user is authenticated
-      if (auth.currentUser) {
-        safeSetDoc(doc(db, 'activityLogs', newLog.id), newLog, { merge: true }).catch(() => {});
-      }
+      // Save activity logs to Firestore (supports both credential and Google admins)
+      safeSetDoc(doc(db, 'activityLogs', newLog.id), newLog, { merge: true }).catch(() => {});
     },
     [currentAdminUser]
   );
@@ -1134,6 +1132,25 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (parsed && parsed.id && !isUserDeletedRef.current(parsed.id) && !isUserDeletedRef.current(parsed.email)) {
           setCurrentAdminUser(parsed);
           setIsAdminLoggedIn(true);
+          const adminAccount: UserAccount = {
+            id: parsed.id,
+            uid: parsed.id,
+            email: parsed.email || 'president@pcm.edu.ph',
+            name: parsed.name,
+            displayName: parsed.name,
+            role: parsed.role === 'Super Admin' ? 'Super Admin' : 'Admin',
+            adminRole: parsed.role,
+            department: parsed.department || 'Administration & Executive Leadership',
+            status: 'Active',
+            verificationStatus: 'Approved',
+            photoURL: parsed.avatarUrl || '',
+            avatarUrl: parsed.avatarUrl || '',
+            authMethod: 'credentials',
+            provider: 'credentials',
+            createdAt: parsed.createdAt || new Date().toISOString(),
+            lastLogin: new Date().toISOString(),
+          };
+          setCurrentUserAccount((prev) => prev || adminAccount);
         }
       }
       const storedUser = localStorage.getItem('pcm_user_session');
@@ -2467,6 +2484,48 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               (err) => handleFirestoreError(err, OperationType.GET, `users/${fbUser.uid}`)
             );
           } else {
+            // When fbUser is null (admin did not sign in with Google or signed in via username/password)
+            const storedAdmin = typeof window !== 'undefined' ? localStorage.getItem('pcm_admin_session') : null;
+            if (storedAdmin) {
+              try {
+                const parsed = JSON.parse(storedAdmin) as AdminUser;
+                if (parsed && parsed.id && !isUserDeletedRef.current(parsed.id) && !isUserDeletedRef.current(parsed.email)) {
+                  setIsAdminLoggedIn(true);
+                  setCurrentAdminUser(parsed);
+                  const adminAcc: UserAccount = {
+                    id: parsed.id,
+                    uid: parsed.id,
+                    email: parsed.email || 'president@pcm.edu.ph',
+                    name: parsed.name,
+                    displayName: parsed.name,
+                    role: parsed.role === 'Super Admin' ? 'Super Admin' : 'Admin',
+                    adminRole: parsed.role,
+                    department: parsed.department || 'Administration & Executive Leadership',
+                    status: 'Active',
+                    verificationStatus: 'Approved',
+                    photoURL: parsed.avatarUrl || '',
+                    avatarUrl: parsed.avatarUrl || '',
+                    authMethod: 'credentials',
+                    provider: 'credentials',
+                    createdAt: parsed.createdAt || new Date().toISOString(),
+                    lastLogin: new Date().toISOString(),
+                  };
+                  setCurrentUserAccount((prev) => prev || adminAcc);
+                  return;
+                }
+              } catch {}
+            }
+            const storedStudent = typeof window !== 'undefined' ? localStorage.getItem('pcm_student_session') : null;
+            if (storedStudent) {
+              try {
+                const parsed = JSON.parse(storedStudent) as StudentProfile;
+                if (parsed && parsed.id && !isUserDeletedRef.current(parsed.id) && !isUserDeletedRef.current(parsed.email)) {
+                  setIsStudentLoggedIn(true);
+                  setStudentProfile(parsed);
+                  return;
+                }
+              } catch {}
+            }
             setCurrentUserAccount(null);
             setIsAdminLoggedIn(false);
           }
@@ -5689,9 +5748,29 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (found) {
       setCurrentAdminUser(found);
       setIsAdminLoggedIn(true);
+      const adminAcc: UserAccount = {
+        id: found.id,
+        uid: found.id,
+        email: found.email || 'president@pcm.edu.ph',
+        name: found.name,
+        displayName: found.name,
+        role: found.role === 'Super Admin' ? 'Super Admin' : 'Admin',
+        adminRole: found.role,
+        department: found.department || 'Administration & Executive Leadership',
+        status: 'Active',
+        verificationStatus: 'Approved',
+        photoURL: found.avatarUrl || '',
+        avatarUrl: found.avatarUrl || '',
+        authMethod: 'credentials',
+        provider: 'credentials',
+        createdAt: found.createdAt || new Date().toISOString(),
+        lastLogin: new Date().toISOString(),
+      };
+      setCurrentUserAccount(adminAcc);
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('pcm_admin_session', JSON.stringify(found));
+          localStorage.setItem('pcm_user_session', JSON.stringify(adminAcc));
         } catch {}
       }
       logActivity('LOGIN', 'Admin Session', found.id, found.name, `Logged into CMS Workspace (${found.role}).`);
@@ -5722,9 +5801,29 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
       setCurrentAdminUser(fallbackUser);
       setIsAdminLoggedIn(true);
+      const fallbackAcc: UserAccount = {
+        id: fallbackUser.id,
+        uid: fallbackUser.id,
+        email: fallbackUser.email,
+        name: fallbackUser.name,
+        displayName: fallbackUser.name,
+        role: 'Super Admin',
+        adminRole: 'Super Admin',
+        department: fallbackUser.department,
+        status: 'Active',
+        verificationStatus: 'Approved',
+        photoURL: fallbackUser.avatarUrl || '',
+        avatarUrl: fallbackUser.avatarUrl || '',
+        authMethod: 'credentials',
+        provider: 'credentials',
+        createdAt: fallbackUser.createdAt,
+        lastLogin: new Date().toISOString(),
+      };
+      setCurrentUserAccount(fallbackAcc);
       if (typeof window !== 'undefined') {
         try {
           localStorage.setItem('pcm_admin_session', JSON.stringify(fallbackUser));
+          localStorage.setItem('pcm_user_session', JSON.stringify(fallbackAcc));
         } catch {}
       }
       logActivity('LOGIN', 'Admin Session', fallbackUser.id, fallbackUser.name, `Logged into CMS Workspace (${fallbackUser.role}).`);
@@ -5739,11 +5838,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const adminLogout = () => {
     logActivity('LOGOUT', 'Admin Session', currentAdminUser?.id || '', currentAdminUser?.name || '', 'Ended admin session.');
     setIsAdminLoggedIn(false);
+    setCurrentUserAccount(null);
     if (typeof window !== 'undefined') {
       try {
         localStorage.removeItem('pcm_admin_session');
+        localStorage.removeItem('pcm_user_session');
       } catch {}
     }
+    signOut(auth).catch(() => {});
     addToast('info', 'Session Terminated', 'You have been signed out of the Admin CMS.');
   };
 

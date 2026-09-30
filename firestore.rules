@@ -131,34 +131,23 @@ service cloud.firestore {
     }
 
     // Authenticated Users and Profiles
-    // Direct document lookup for user's own profile; list queries restricted to Admin
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isApprovedAdmin());
-      allow list: if isApprovedAdmin() || true;
-      allow create: if true;
-      allow update: if true;
-      allow delete: if resource.data.email != "angeloperfecto.epc@gmail.com";
+      allow read, write: if true;
     }
 
     // Inquiries from Contact Form and Info Requests
     match /inquiries/{inquiryId} {
-      allow read: if isApprovedAdmin() || true;
-      allow create: if true;
-      allow update, delete: if isApprovedAdmin();
+      allow read, write: if true;
     }
 
     // Newsletter Subscribers
     match /newsletterSubscribers/{subscriberId} {
-      allow read: if isApprovedAdmin() || true;
-      allow create: if true;
-      allow update, delete: if isApprovedAdmin();
+      allow read, write: if true;
     }
 
     // Uploaded Student Documents & Files Metadata
     match /uploadedDocuments/{docId} {
-      allow read: if true;
-      allow create, update: if true;
-      allow delete: if isApprovedAdmin();
+      allow read, write: if true;
     }
 
     // Deleted Users Archive & Restoration Audit
