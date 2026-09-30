@@ -40,12 +40,13 @@ export const ArticleDetailModal: React.FC = () => {
         {/* Header Photo */}
         <div className="relative h-64 sm:h-72 w-full overflow-hidden bg-[#18392B]">
           <Image
-            src={selectedArticle.imageUrl || selectedArticle.image || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop'}
+            src={selectedArticle.image || selectedArticle.imageUrl || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop'}
             alt={selectedArticle.title}
             fill
             className="object-cover"
             sizes="(max-width: 768px) 100vw, 768px"
             referrerPolicy="no-referrer"
+            unoptimized={Boolean((selectedArticle.image || selectedArticle.imageUrl)?.startsWith('data:') || (selectedArticle.image || selectedArticle.imageUrl)?.startsWith('blob:'))}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#18392B] via-[#18392B]/40 to-transparent" />
 

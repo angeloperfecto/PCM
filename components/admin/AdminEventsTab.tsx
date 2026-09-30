@@ -96,6 +96,7 @@ export const AdminEventsTab: React.FC = () => {
         location: formLocation.trim(),
         description: formDescription.trim(),
         image: formImage.trim(),
+        imageUrl: formImage.trim(),
         registrationOpen: formRegOpen,
         capacity: Number(formCapacity),
       });
@@ -109,6 +110,7 @@ export const AdminEventsTab: React.FC = () => {
         location: formLocation.trim(),
         description: formDescription.trim(),
         image: formImage.trim(),
+        imageUrl: formImage.trim(),
         registrationOpen: formRegOpen,
         capacity: Number(formCapacity),
         registeredCount: 0,

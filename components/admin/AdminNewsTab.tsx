@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { usePCM } from '@/lib/store';
 import { NewsArticle } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
@@ -16,6 +16,7 @@ import {
   Calendar,
   User,
   Image as ImageIcon,
+  Upload,
 } from 'lucide-react';
 
 export const AdminNewsTab: React.FC = () => {
@@ -24,6 +25,7 @@ export const AdminNewsTab: React.FC = () => {
     addNewsArticle,
     updateNewsArticle,
     deleteNewsArticle,
+    uploadMediaFile,
     addToast,
     canPerformAction,
     currentAdminUser,
@@ -35,6 +37,8 @@ export const AdminNewsTab: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingArticle, setEditingArticle] = useState<NewsArticle | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Modal Form State
   const [formTitle, setFormTitle] = useState('');
@@ -46,6 +50,46 @@ export const AdminNewsTab: React.FC = () => {
   const [formImage, setFormImage] = useState('https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1000&auto=format&fit=crop');
   const [formFeatured, setFormFeatured] = useState(false);
   const [formPublished, setFormPublished] = useState(true);
+
+  const handlePhotoFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      addToast({
+        title: 'Invalid File Type',
+        message: 'Please upload an image file (.jpg, .png, .webp, .svg).',
+        type: 'error',
+      });
+      return;
+    }
+
+    setIsUploadingPhoto(true);
+    try {
+      const assetTitle = `${formTitle || 'News'} Cover`;
+      const downloadUrl = await uploadMediaFile(file, 'News', assetTitle);
+      setFormImage(downloadUrl);
+      addToast({
+        title: 'Image Uploaded',
+        message: 'Cover image uploaded and synced with PCM Media Library.',
+        type: 'success',
+      });
+    } catch (uploadError: any) {
+      console.error('News image upload error:', uploadError);
+      // Fallback: convert file to Base64 Data URL so user can always set local file
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          setFormImage(reader.result);
+          addToast({
+            title: 'Image Ready',
+            message: 'Image converted and ready to save.',
+            type: 'info',
+          });
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  };
 
   const openNewModal = () => {
     setEditingArticle(null);
@@ -92,6 +136,7 @@ export const AdminNewsTab: React.FC = () => {
     }
 
     const slug = formTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const trimmedImg = formImage.trim();
 
     if (editingArticle) {
       updateNewsArticle(editingArticle.id, {
@@ -102,7 +147,8 @@ export const AdminNewsTab: React.FC = () => {
         author: formAuthor.trim(),
         excerpt: formExcerpt.trim(),
         content: formContent.trim() || formExcerpt.trim(),
-        image: formImage.trim(),
+        image: trimmedImg,
+        imageUrl: trimmedImg,
         featured: formFeatured,
         published: formPublished,
       });
@@ -116,7 +162,8 @@ export const AdminNewsTab: React.FC = () => {
         author: formAuthor.trim(),
         excerpt: formExcerpt.trim(),
         content: formContent.trim() || formExcerpt.trim(),
-        image: formImage.trim(),
+        image: trimmedImg,
+        imageUrl: trimmedImg,
         featured: formFeatured,
         published: formPublished,
       });
@@ -364,16 +411,57 @@ export const AdminNewsTab: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Feature Cover Image URL
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formImage}
-                  onChange={(e) => setFormImage(e.target.value)}
-                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
-                />
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-slate-700 font-bold">
+                    Feature Cover Image
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isUploadingPhoto}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-[#18392B] hover:bg-[#588B76] text-white rounded text-[11px] font-semibold transition cursor-pointer disabled:opacity-50"
+                  >
+                    <Upload className="w-3 h-3" />
+                    <span>{isUploadingPhoto ? 'Uploading...' : 'Upload Image File'}</span>
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handlePhotoFile(file);
+                      e.target.value = '';
+                    }}
+                  />
+                </div>
+                <div className="flex gap-3 items-center">
+                  <input
+                    type="text"
+                    required
+                    value={formImage}
+                    onChange={(e) => setFormImage(e.target.value)}
+                    placeholder="https://... or upload image"
+                    className="flex-1 p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                  />
+                  {formImage && (
+                    <div className="w-14 h-10 rounded border border-slate-200 overflow-hidden relative bg-slate-100 shrink-0">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={formImage}
+                        alt="Preview"
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLElement).style.display = 'none';
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Upload an image from your computer or enter any public image URL.
+                </p>
               </div>
 
               <div>

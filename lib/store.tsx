@@ -1671,7 +1671,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           collection(db, 'news'),
           async (snap) => {
             if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as NewsArticle[];
+              const list = snap.docs.map((d) => {
+                const data = d.data() as any;
+                const img = data.image || data.imageUrl || '';
+                return {
+                  id: d.id,
+                  ...data,
+                  image: img,
+                  imageUrl: img,
+                } as NewsArticle;
+              });
               setNews((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
               await seedIfEmpty('news', INITIAL_NEWS);
@@ -1694,7 +1703,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           collection(db, 'events'),
           async (snap) => {
             if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as CollegeEvent[];
+              const list = snap.docs.map((d) => {
+                const data = d.data() as any;
+                const img = data.image || data.imageUrl || '';
+                return {
+                  id: d.id,
+                  ...data,
+                  image: img,
+                  imageUrl: img,
+                } as CollegeEvent;
+              });
               setEvents((prev) => (areEntitiesEqual(prev, list) ? prev : list));
             } else {
               await seedIfEmpty('events', INITIAL_EVENTS);
@@ -3556,9 +3574,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // News CRUD
   const addNewsArticle = (article: Omit<NewsArticle, 'id'>): NewsArticle => {
+    const rawImg = article.imageUrl || article.image || '';
     const newArt: NewsArticle = cleanFirestoreData({
       ...article,
       id: `news-${Date.now()}`,
+      imageUrl: rawImg,
+      image: rawImg,
       status: article.status || 'Published',
     });
     setNews((prev) => [newArt, ...prev]);
@@ -3569,9 +3590,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateNewsArticle = (id: string, updates: Partial<NewsArticle>) => {
-    const sanitized = cleanFirestoreData(updates);
+    const rawImg = updates.imageUrl !== undefined ? updates.imageUrl : updates.image;
+    const finalUpdates: Partial<NewsArticle> = {
+      ...updates,
+      ...(rawImg !== undefined ? { image: rawImg, imageUrl: rawImg } : {}),
+    };
+    const sanitized = cleanFirestoreData(finalUpdates);
     setNews((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, ...updates } : n))
+      prev.map((n) => (n.id === id ? { ...n, ...finalUpdates } : n))
     );
     setDoc(doc(db, 'news', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'News Article', id, updates.title || 'News Article', 'Updated article content and cover image.');
@@ -3588,9 +3614,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Events CRUD
   const addEvent = (event: Omit<CollegeEvent, 'id'>): CollegeEvent => {
+    const rawImg = event.imageUrl || event.image || '';
     const newEvt: CollegeEvent = cleanFirestoreData({
       ...event,
       id: `evt-${Date.now()}`,
+      imageUrl: rawImg,
+      image: rawImg,
       registeredAttendees: event.registeredAttendees || [],
     });
     setEvents((prev) => [newEvt, ...prev]);
@@ -3601,9 +3630,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateEvent = (id: string, updates: Partial<CollegeEvent>) => {
-    const sanitized = cleanFirestoreData(updates);
+    const rawImg = updates.imageUrl !== undefined ? updates.imageUrl : updates.image;
+    const finalUpdates: Partial<CollegeEvent> = {
+      ...updates,
+      ...(rawImg !== undefined ? { image: rawImg, imageUrl: rawImg } : {}),
+    };
+    const sanitized = cleanFirestoreData(finalUpdates);
     setEvents((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, ...updates } : e))
+      prev.map((e) => (e.id === id ? { ...e, ...finalUpdates } : e))
     );
     setDoc(doc(db, 'events', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Event', id, updates.title || 'Event', 'Updated event date, venue, and description.');
