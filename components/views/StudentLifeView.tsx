@@ -446,14 +446,14 @@ export const StudentLifeView: React.FC = () => {
                   className="bg-white border border-slate-200 rounded-sm p-5 space-y-3 hover:border-[#588B76] hover:shadow-xs transition text-center"
                 >
                   <div className="w-20 h-20 rounded-full overflow-hidden mx-auto bg-slate-100 border-2 border-[#588B76]/30 relative shadow-inner">
-                    {leader.photoUrl ? (
+                    {typeof leader.photoUrl === 'string' && leader.photoUrl.trim() ? (
                       <Image
-                        src={leader.photoUrl}
-                        alt={leader.name}
+                        src={leader.photoUrl.trim()}
+                        alt={leader.name || 'Leader'}
                         fill
                         sizes="80px"
                         className="object-cover"
-                        unoptimized={leader.photoUrl?.startsWith('data:') || leader.photoUrl?.startsWith('blob:')}
+                        unoptimized={leader.photoUrl.startsWith('data:') || leader.photoUrl.startsWith('blob:')}
                         referrerPolicy="no-referrer"
                       />
                     ) : (

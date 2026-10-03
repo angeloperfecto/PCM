@@ -516,13 +516,15 @@ export const AdminYouTubeTab: React.FC = () => {
                               onClick={() => setPreviewVideo(video)}
                               className="relative w-24 aspect-video rounded-lg overflow-hidden bg-slate-900 cursor-pointer group shadow-xs"
                             >
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={thumb}
-                                alt={video.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                                loading="lazy"
-                              />
+                              {typeof thumb === 'string' && thumb.trim() ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={thumb.trim()}
+                                  alt={video.title}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                  loading="lazy"
+                                />
+                              ) : null}
                               <div className="absolute inset-0 bg-black/30 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                 <Play className="w-4 h-4 text-white fill-current" />
                               </div>

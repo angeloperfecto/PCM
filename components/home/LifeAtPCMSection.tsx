@@ -181,7 +181,7 @@ export const LifeAtPCMSection: React.FC = () => {
           {displayItems.map((item, idx) => {
             const Icon = getLifeIcon(item.iconName);
             const imageSrc =
-              item.image ||
+              (typeof item.image === 'string' && item.image.trim()) ||
               'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&auto=format&fit=crop';
 
             return (
@@ -199,7 +199,8 @@ export const LifeAtPCMSection: React.FC = () => {
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                     referrerPolicy="no-referrer"
                     unoptimized={Boolean(
-                      imageSrc.startsWith('data:') || imageSrc.startsWith('blob:')
+                      typeof imageSrc === 'string' &&
+                      (imageSrc.startsWith('data:') || imageSrc.startsWith('blob:'))
                     )}
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-[#18392B]/95 via-[#18392B]/35 to-transparent" />

@@ -1018,9 +1018,9 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
             {/* Profile Photo Upload */}
             <div className="flex flex-col sm:flex-row items-center gap-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-[#18392B] bg-slate-200 shrink-0">
-                {formData.profilePhoto ? (
+                {typeof formData.profilePhoto === 'string' && formData.profilePhoto.trim() ? (
                   <Image
-                    src={formData.profilePhoto}
+                    src={formData.profilePhoto.trim()}
                     alt="Profile Photo"
                     fill
                     className="object-cover"

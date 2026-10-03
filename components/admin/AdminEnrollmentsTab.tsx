@@ -1199,15 +1199,21 @@ export const AdminEnrollmentsTab: React.FC = () => {
               <div key={member.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 relative">
-                    <Image
-                      src={member.imageUrl || member.image || 'https://images.unsplash.com/photo-1544005313-94ddf0286df2'}
-                      alt={member.name}
-                      fill
-                      sizes="48px"
-                      className="object-cover"
-                      referrerPolicy="no-referrer"
-                      unoptimized={Boolean((member.imageUrl || member.image)?.startsWith('data:') || (member.imageUrl || member.image)?.startsWith('blob:'))}
-                    />
+                    {(() => {
+                      const raw = member.imageUrl || member.image;
+                      const valid = typeof raw === 'string' && raw.trim() ? raw.trim() : 'https://images.unsplash.com/photo-1544005313-94ddf0286df2';
+                      return (
+                        <Image
+                          src={valid}
+                          alt={member.name}
+                          fill
+                          sizes="48px"
+                          className="object-cover"
+                          referrerPolicy="no-referrer"
+                          unoptimized={Boolean(valid.startsWith('data:') || valid.startsWith('blob:'))}
+                        />
+                      );
+                    })()}
                   </div>
                   <div>
                     <h5 className="font-bold text-sm text-slate-900">{member.name}</h5>

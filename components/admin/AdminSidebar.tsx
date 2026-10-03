@@ -32,6 +32,7 @@ import {
   Tv,
   Camera,
   Compass,
+  Flame,
 } from 'lucide-react';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 
@@ -39,6 +40,7 @@ export type AdminTabType =
   | 'overview'
   | 'siteConfig'
   | 'hero'
+  | 'lifeAtPcm'
   | 'programs'
   | 'faculty'
   | 'news'
@@ -183,6 +185,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           highlight: true,
         },
         {
+          id: 'lifeAtPcm',
+          label: 'Life at PCM Highlights',
+          icon: Flame,
+          highlight: true,
+        },
+        {
           id: 'scrapbook',
           label: 'Historical Scrapbook',
           icon: Camera,
@@ -310,11 +318,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   title="Click to update administrator profile image"
                   className="w-9 h-9 rounded-xl bg-[#588B76]/20 border border-[#588B76]/40 flex items-center justify-center text-[#85AA9B] font-bold text-sm font-mono overflow-hidden cursor-pointer relative"
                 >
-                  {currentAdminUser?.avatarUrl ? (
+                  {typeof currentAdminUser?.avatarUrl === 'string' && currentAdminUser.avatarUrl.trim() ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={currentAdminUser.avatarUrl}
-                      alt={currentAdminUser.name}
+                      src={currentAdminUser.avatarUrl.trim()}
+                      alt={currentAdminUser.name || 'Admin'}
                       className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
                     />
                   ) : (
@@ -362,11 +370,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               className="w-9 h-9 rounded-xl bg-[#588B76]/20 border border-[#588B76]/40 flex items-center justify-center text-[#85AA9B] font-bold text-sm font-mono overflow-hidden cursor-pointer relative group"
               title={`${currentAdminUser?.name || 'Admin'} - Click to change photo`}
             >
-              {currentAdminUser?.avatarUrl ? (
+              {typeof currentAdminUser?.avatarUrl === 'string' && currentAdminUser.avatarUrl.trim() ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={currentAdminUser.avatarUrl}
-                  alt={currentAdminUser.name}
+                  src={currentAdminUser.avatarUrl.trim()}
+                  alt={currentAdminUser.name || 'Admin'}
                   className="w-full h-full object-cover"
                 />
               ) : (

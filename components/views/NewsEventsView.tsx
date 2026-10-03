@@ -104,15 +104,21 @@ export const NewsEventsView: React.FC = () => {
               >
                 <div>
                   <div className="h-48 overflow-hidden relative bg-slate-800">
-                    <Image
-                      src={art.image || art.imageUrl || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop'}
-                      alt={art.title}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-500"
-                      sizes="(max-width: 768px) 100vw, 33vw"
-                      referrerPolicy="no-referrer"
-                      unoptimized={Boolean((art.image || art.imageUrl)?.startsWith('data:') || (art.image || art.imageUrl)?.startsWith('blob:'))}
-                    />
+                    {(() => {
+                      const rawSrc = art.image || art.imageUrl;
+                      const validSrc = typeof rawSrc === 'string' && rawSrc.trim() ? rawSrc.trim() : 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop';
+                      return (
+                        <Image
+                          src={validSrc}
+                          alt={art.title}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-500"
+                          sizes="(max-width: 768px) 100vw, 33vw"
+                          referrerPolicy="no-referrer"
+                          unoptimized={Boolean(validSrc.startsWith('data:') || validSrc.startsWith('blob:'))}
+                        />
+                      );
+                    })()}
                     <div className="absolute top-3 left-3 bg-[#18392B]/90 text-white text-[10px] font-mono font-bold uppercase px-2.5 py-0.5 rounded-sm">
                       {art.category}
                     </div>

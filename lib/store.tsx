@@ -617,7 +617,11 @@ function areEntitiesEqual<T extends Record<string, any>>(a: T[] | undefined, b: 
   if (a === b) return true;
   if (!a || !b) return false;
   if (a.length !== b.length) return false;
-  return JSON.stringify(a) === JSON.stringify(b);
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
 }
 
 function areUserAccountsEqual(a: UserAccount[] | undefined, b: UserAccount[] | undefined): boolean {
@@ -1762,7 +1766,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                       : prev.lifeAtPcm,
                 };
                 setCachedData('siteConfig', updated);
-                return JSON.stringify(prev) === JSON.stringify(updated) ? prev : updated;
+                try {
+                  return JSON.stringify(prev) === JSON.stringify(updated) ? prev : updated;
+                } catch {
+                  return updated;
+                }
               });
               setFirebaseSyncStatus('synced');
               setIsFirebaseConnected(true);
@@ -1789,9 +1797,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const data = snap.data();
               if (data?.slides && Array.isArray(data.slides)) {
                 setSiteConfig((prev) => {
-                  if (JSON.stringify(prev.heroSlides) === JSON.stringify(data.slides)) {
-                    return prev;
-                  }
+                  try {
+                    if (JSON.stringify(prev.heroSlides) === JSON.stringify(data.slides)) {
+                      return prev;
+                    }
+                  } catch {}
                   const updated = {
                     ...prev,
                     heroSlides: data.slides,

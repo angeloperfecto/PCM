@@ -169,15 +169,21 @@ export const ScrapbookView: React.FC = () => {
               >
                 {/* Photo container */}
                 <div className="relative h-56 w-full bg-slate-800 overflow-hidden">
-                  <Image
-                    src={item.imageUrl}
-                    alt={item.title}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
-                    unoptimized={item.imageUrl?.startsWith('data:') || item.imageUrl?.startsWith('blob:')}
-                    referrerPolicy="no-referrer"
-                  />
+                  {typeof item.imageUrl === 'string' && item.imageUrl.trim() ? (
+                    <Image
+                      src={item.imageUrl.trim()}
+                      alt={item.title}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-500"
+                      sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      unoptimized={item.imageUrl.startsWith('data:') || item.imageUrl.startsWith('blob:')}
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-400">
+                      <ImageIcon className="w-8 h-8" />
+                    </div>
+                  )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-80 transition-opacity" />
 
                   {/* Top Badge */}
@@ -288,15 +294,17 @@ export const ScrapbookView: React.FC = () => {
 
             {/* Main Photo Area */}
             <div className="relative flex-1 bg-black min-h-[350px] sm:min-h-[420px] flex items-center justify-center">
-              <Image
-                src={selectedScrapbookItem.imageUrl}
-                alt={selectedScrapbookItem.title}
-                fill
-                className="object-contain"
-                sizes="100vw"
-                unoptimized={selectedScrapbookItem.imageUrl?.startsWith('data:') || selectedScrapbookItem.imageUrl?.startsWith('blob:')}
-                referrerPolicy="no-referrer"
-              />
+              {typeof selectedScrapbookItem.imageUrl === 'string' && selectedScrapbookItem.imageUrl.trim() ? (
+                <Image
+                  src={selectedScrapbookItem.imageUrl.trim()}
+                  alt={selectedScrapbookItem.title || 'Archive Photo'}
+                  fill
+                  className="object-contain"
+                  sizes="100vw"
+                  unoptimized={selectedScrapbookItem.imageUrl.startsWith('data:') || selectedScrapbookItem.imageUrl.startsWith('blob:')}
+                  referrerPolicy="no-referrer"
+                />
+              ) : null}
 
               {/* Prev / Next Navigation Arrows */}
               <button

@@ -39,15 +39,21 @@ export const ArticleDetailModal: React.FC = () => {
       >
         {/* Header Photo */}
         <div className="relative h-64 sm:h-72 w-full overflow-hidden bg-[#18392B]">
-          <Image
-            src={selectedArticle.image || selectedArticle.imageUrl || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop'}
-            alt={selectedArticle.title}
-            fill
-            className="object-cover"
-            sizes="(max-width: 768px) 100vw, 768px"
-            referrerPolicy="no-referrer"
-            unoptimized={Boolean((selectedArticle.image || selectedArticle.imageUrl)?.startsWith('data:') || (selectedArticle.image || selectedArticle.imageUrl)?.startsWith('blob:'))}
-          />
+          {(() => {
+            const rawSrc = selectedArticle.image || selectedArticle.imageUrl;
+            const validSrc = typeof rawSrc === 'string' && rawSrc.trim() ? rawSrc.trim() : 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop';
+            return (
+              <Image
+                src={validSrc}
+                alt={selectedArticle.title}
+                fill
+                className="object-cover"
+                sizes="(max-width: 768px) 100vw, 768px"
+                referrerPolicy="no-referrer"
+                unoptimized={Boolean(validSrc.startsWith('data:') || validSrc.startsWith('blob:'))}
+              />
+            );
+          })()}
           <div className="absolute inset-0 bg-gradient-to-t from-[#18392B] via-[#18392B]/40 to-transparent" />
 
           {/* Close button */}

@@ -244,19 +244,29 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
         <div className="bg-[#18392B] text-white p-5 flex items-center justify-between border-b-2 border-[#588B76]">
           <div className="flex items-center gap-3.5">
             <div className="relative w-12 h-12 rounded-xl bg-slate-800 overflow-hidden border border-white/20 shrink-0">
-              {student.avatarUrl || student.profilePhoto ? (
-                <Image
-                  src={student.avatarUrl || student.profilePhoto || ''}
-                  alt={student.fullName}
-                  fill
-                  className="object-cover"
-                  unoptimized
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center font-bold text-white text-sm">
-                  {student.fullName ? student.fullName.slice(0, 2).toUpperCase() : 'ST'}
-                </div>
-              )}
+              {(() => {
+                const photoSrc = typeof student.avatarUrl === 'string' && student.avatarUrl.trim()
+                  ? student.avatarUrl.trim()
+                  : typeof student.profilePhoto === 'string' && student.profilePhoto.trim()
+                  ? student.profilePhoto.trim()
+                  : null;
+                if (photoSrc) {
+                  return (
+                    <Image
+                      src={photoSrc}
+                      alt={student.fullName || 'Student'}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  );
+                }
+                return (
+                  <div className="w-full h-full flex items-center justify-center font-bold text-white text-sm">
+                    {student.fullName ? student.fullName.slice(0, 2).toUpperCase() : 'ST'}
+                  </div>
+                );
+              })()}
             </div>
 
             <div>

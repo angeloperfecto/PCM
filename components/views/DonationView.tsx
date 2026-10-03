@@ -521,17 +521,17 @@ export const DonationView: React.FC = () => {
 
                   {/* QR Code / Visual Graphic Display */}
                   <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-3">
-                    {selectedMethod.qrCodeUrl ? (
+                    {typeof selectedMethod.qrCodeUrl === 'string' && selectedMethod.qrCodeUrl.trim() ? (
                       <div className="space-y-3">
                         <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200 inline-block relative">
                           <Image
-                            src={selectedMethod.qrCodeUrl}
+                            src={selectedMethod.qrCodeUrl.trim()}
                             alt={`${selectedMethod.name} QR Code`}
                             width={192}
                             height={192}
                             className="w-48 h-48 object-contain rounded-lg mx-auto"
                             referrerPolicy="no-referrer"
-                            unoptimized={Boolean(selectedMethod.qrCodeUrl?.startsWith('data:') || selectedMethod.qrCodeUrl?.startsWith('blob:'))}
+                            unoptimized={Boolean(selectedMethod.qrCodeUrl.startsWith('data:') || selectedMethod.qrCodeUrl.startsWith('blob:'))}
                           />
                         </div>
                         <p className="text-xs text-slate-600 font-medium">

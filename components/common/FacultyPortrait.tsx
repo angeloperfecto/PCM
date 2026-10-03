@@ -124,15 +124,16 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   }, [imageUrl, imageSrc, image, defaultCuratedImage]);
 
   // If a valid photo is available and hasn't errored out, render it
-  if (activeImage && activeImage.length > 0 && !hasError) {
-    const isSvg = activeImage.endsWith('.svg');
-    const isDataOrBlob = activeImage.startsWith('data:') || activeImage.startsWith('blob:');
+  if (typeof activeImage === 'string' && activeImage.trim().length > 0 && !hasError) {
+    const trimmed = activeImage.trim();
+    const isSvg = trimmed.endsWith('.svg');
+    const isDataOrBlob = trimmed.startsWith('data:') || trimmed.startsWith('blob:');
     const shouldUnoptimize =
       isSvg ||
       isDataOrBlob ||
-      activeImage.startsWith('http:') ||
-      activeImage.startsWith('https:') ||
-      activeImage.startsWith('/uploads/');
+      trimmed.startsWith('http:') ||
+      trimmed.startsWith('https:') ||
+      trimmed.startsWith('/uploads/');
 
     return (
       <div
@@ -141,7 +142,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
         aria-label={`${name} Portrait`}
       >
         <Image
-          src={activeImage}
+          src={trimmed}
           alt={name || 'Faculty Member'}
           fill={fill}
           {...(!fill ? { width: 300, height: 300 } : {})}
@@ -152,7 +153,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
           referrerPolicy="no-referrer"
           onError={() => {
             // If primary custom upload failed, attempt curated default; otherwise fall back to regalia portrait
-            if (activeImage !== defaultCuratedImage && isValidImageUrl(defaultCuratedImage)) {
+            if (trimmed !== defaultCuratedImage && isValidImageUrl(defaultCuratedImage)) {
               setActiveImage(defaultCuratedImage);
             } else {
               setHasError(true);

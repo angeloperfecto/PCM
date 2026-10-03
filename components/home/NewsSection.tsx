@@ -48,15 +48,21 @@ export const NewsSection: React.FC = () => {
               <div>
                 {/* Article Image */}
                 <div className="relative h-44 overflow-hidden">
-                  <Image
-                    src={article.image || article.imageUrl || 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop'}
-                    alt={article.title}
-                    fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-300"
-                    sizes="(max-width: 768px) 100vw, 33vw"
-                    referrerPolicy="no-referrer"
-                    unoptimized={Boolean((article.image || article.imageUrl)?.startsWith('data:') || (article.image || article.imageUrl)?.startsWith('blob:'))}
-                  />
+                  {(() => {
+                    const rawSrc = article.image || article.imageUrl;
+                    const validSrc = typeof rawSrc === 'string' && rawSrc.trim() ? rawSrc.trim() : 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop';
+                    return (
+                      <Image
+                        src={validSrc}
+                        alt={article.title}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                        referrerPolicy="no-referrer"
+                        unoptimized={Boolean(validSrc.startsWith('data:') || validSrc.startsWith('blob:'))}
+                      />
+                    );
+                  })()}
                   <div className="absolute top-2.5 left-2.5 bg-[#18392B] text-[#D0DED8] text-[10px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-sm shadow">
                     {article.category}
                   </div>

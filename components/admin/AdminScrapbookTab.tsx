@@ -310,15 +310,15 @@ export const AdminScrapbookTab: React.FC = () => {
               <div>
                 {/* Photo Thumbnail */}
                 <div className="h-48 w-full relative bg-slate-100 overflow-hidden">
-                  {item.imageUrl ? (
+                  {typeof item.imageUrl === 'string' && item.imageUrl.trim() ? (
                     <Image
-                      src={item.imageUrl}
+                      src={item.imageUrl.trim()}
                       alt={item.title}
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                       className="object-cover group-hover:scale-102 transition-transform duration-300"
                       referrerPolicy="no-referrer"
-                      unoptimized={Boolean(item.imageUrl?.startsWith('data:') || item.imageUrl?.startsWith('blob:'))}
+                      unoptimized={Boolean(item.imageUrl.startsWith('data:') || item.imageUrl.startsWith('blob:'))}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-300">
@@ -521,19 +521,19 @@ export const AdminScrapbookTab: React.FC = () => {
                   className="w-full p-2 border border-slate-200 rounded-sm focus:border-[#588B76] focus:outline-hidden"
                   placeholder="https://images.unsplash.com/... or /images/..."
                 />
-                {formImageUrl && (
+                {typeof formImageUrl === 'string' && formImageUrl.trim() ? (
                   <div className="mt-2 h-24 w-full relative rounded-sm overflow-hidden border border-slate-200 bg-slate-50">
                     <Image
-                      src={formImageUrl}
+                      src={formImageUrl.trim()}
                       alt="Preview"
                       fill
                       sizes="(max-width: 640px) 100vw, 500px"
                       className="object-cover"
                       referrerPolicy="no-referrer"
-                      unoptimized={Boolean(formImageUrl?.startsWith('data:') || formImageUrl?.startsWith('blob:'))}
+                      unoptimized={Boolean(formImageUrl.startsWith('data:') || formImageUrl.startsWith('blob:'))}
                     />
                   </div>
-                )}
+                ) : null}
               </div>
 
               <div>

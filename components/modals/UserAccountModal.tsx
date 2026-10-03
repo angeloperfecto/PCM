@@ -138,19 +138,26 @@ export const UserAccountModal: React.FC = () => {
                     title="Click to change profile picture"
                     className="w-16 h-16 rounded-full overflow-hidden border-2 border-[#18392B]/20 shadow-xs cursor-pointer relative bg-[#18392B]"
                   >
-                    {currentUserAccount?.photoURL || currentUserAccount?.avatarUrl || firebaseAuthUser?.photoURL || (currentUserAccount?.role === 'Admin' || isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl) ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={currentUserAccount?.photoURL || currentUserAccount?.avatarUrl || firebaseAuthUser?.photoURL || (currentUserAccount?.role === 'Admin' || isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl) || ''}
-                        alt={currentUserAccount?.name || 'User Avatar'}
-                        className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : (
-                      <div className="w-full h-full text-[#97D4B6] font-bold text-xl flex items-center justify-center">
-                        {(currentUserAccount?.name || firebaseAuthUser?.displayName || 'U').charAt(0).toUpperCase()}
-                      </div>
-                    )}
+                    {(() => {
+                      const rawAvatar = currentUserAccount?.photoURL || currentUserAccount?.avatarUrl || firebaseAuthUser?.photoURL || (currentUserAccount?.role === 'Admin' || isAdminLoggedIn ? currentAdminUser?.avatarUrl : studentProfile?.avatarUrl);
+                      const avatarSrc = typeof rawAvatar === 'string' && rawAvatar.trim() ? rawAvatar.trim() : null;
+                      if (avatarSrc) {
+                        return (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={avatarSrc}
+                            alt={currentUserAccount?.name || 'User Avatar'}
+                            className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                            referrerPolicy="no-referrer"
+                          />
+                        );
+                      }
+                      return (
+                        <div className="w-full h-full text-[#97D4B6] font-bold text-xl flex items-center justify-center">
+                          {(currentUserAccount?.name || firebaseAuthUser?.displayName || 'U').charAt(0).toUpperCase()}
+                        </div>
+                      );
+                    })()}
                     {/* Hover overlay */}
                     <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">
                       <Camera className="w-5 h-5 drop-shadow" />

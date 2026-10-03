@@ -272,13 +272,15 @@ export const HomeVideoSection: React.FC = () => {
                       >
                         {/* Thumbnail Container */}
                         <div className="relative w-28 sm:w-32 aspect-video rounded-lg overflow-hidden shrink-0 bg-slate-900">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={thumb}
-                            alt={video.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            loading="lazy"
-                          />
+                          {typeof thumb === 'string' && thumb.trim() ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={thumb.trim()}
+                              alt={video.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                              loading="lazy"
+                            />
+                          ) : null}
                           <div className="absolute inset-0 bg-black/25 flex items-center justify-center group-hover:bg-black/10 transition-colors">
                             <div
                               className={`w-7 h-7 rounded-full flex items-center justify-center ${
@@ -415,13 +417,15 @@ export const HomeVideoSection: React.FC = () => {
                     }`}
                   >
                     <div className="relative aspect-video bg-slate-900 overflow-hidden">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={thumb}
-                        alt={video.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        loading="lazy"
-                      />
+                      {typeof thumb === 'string' && thumb.trim() ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={thumb.trim()}
+                          alt={video.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          loading="lazy"
+                        />
+                      ) : null}
                       <div className="absolute inset-0 bg-black/30 flex items-center justify-center group-hover:bg-black/10 transition-colors">
                         <div className="w-10 h-10 rounded-full bg-white/90 text-slate-900 flex items-center justify-center group-hover:scale-110 shadow-md transition-transform">
                           <Play className="w-4 h-4 fill-current ml-0.5" />

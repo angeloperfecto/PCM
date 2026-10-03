@@ -164,24 +164,31 @@ export const StudentProfileModule: React.FC = () => {
                 title="Click to update official student photo"
                 className="w-24 h-24 rounded-2xl bg-gradient-to-br from-[#18392B] to-[#588B76] text-white flex items-center justify-center font-serif text-2xl font-bold shadow-md ring-4 ring-[#588B76]/20 overflow-hidden cursor-pointer relative"
               >
-                {studentProfile.avatarUrl || studentProfile.profilePhoto ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={studentProfile.avatarUrl || studentProfile.profilePhoto}
-                    alt={studentProfile.fullName}
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
-                  />
-                ) : (
-                  <span>
-                    {studentProfile.fullName
-                      ? studentProfile.fullName
-                          .split(' ')
-                          .map((n) => n[0])
-                          .join('')
-                          .slice(0, 2)
-                      : 'ST'}
-                  </span>
-                )}
+                {(() => {
+                  const rawPhoto = studentProfile.avatarUrl || studentProfile.profilePhoto;
+                  const photoSrc = typeof rawPhoto === 'string' && rawPhoto.trim() ? rawPhoto.trim() : null;
+                  if (photoSrc) {
+                    return (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={photoSrc}
+                        alt={studentProfile.fullName || 'Student'}
+                        className="w-full h-full object-cover group-hover:scale-105 transition duration-300"
+                      />
+                    );
+                  }
+                  return (
+                    <span>
+                      {studentProfile.fullName
+                        ? studentProfile.fullName
+                            .split(' ')
+                            .map((n) => n[0])
+                            .join('')
+                            .slice(0, 2)
+                        : 'ST'}
+                    </span>
+                  );
+                })()}
 
                 {/* Hover overlay */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white">

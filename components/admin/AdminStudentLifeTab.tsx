@@ -1497,15 +1497,15 @@ export const AdminStudentLifeTab: React.FC = () => {
                 </div>
 
                 <div className="w-16 h-16 rounded-full overflow-hidden mx-auto bg-slate-200 border-2 border-[#588B76]/40 relative">
-                  {leader.photoUrl ? (
+                  {typeof leader.photoUrl === 'string' && leader.photoUrl.trim() ? (
                     <Image
-                      src={leader.photoUrl}
-                      alt={leader.name}
+                      src={leader.photoUrl.trim()}
+                      alt={leader.name || 'Leader'}
                       fill
                       sizes="64px"
                       className="object-cover"
                       referrerPolicy="no-referrer"
-                      unoptimized={Boolean(leader.photoUrl?.startsWith('data:') || leader.photoUrl?.startsWith('blob:'))}
+                      unoptimized={Boolean(leader.photoUrl.startsWith('data:') || leader.photoUrl.startsWith('blob:'))}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center bg-[#18392B] text-white font-bold text-lg">

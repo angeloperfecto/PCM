@@ -137,6 +137,18 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       title: 'Student Life, Spiritual Formation & Campus Activities',
       subtitle: 'Manage chapel services, discipleship pods, student organizations, dormitories, and weekly ministry assignments.',
     },
+    lifeAtPcm: {
+      title: 'Life at PCM Configuration & Management',
+      subtitle: 'Configure homepage Life at PCM section badges, titles, descriptions, card items, icons, and photos.',
+    },
+    scrapbook: {
+      title: 'Historical Scrapbook & Memory Archives',
+      subtitle: 'Manage legacy campus photos, decades of ministry heritage, and alumni historical galleries.',
+    },
+    youtube: {
+      title: 'YouTube Video & Livestream Management',
+      subtitle: 'Embed ministry sermon videos, student life highlights, and homepage featured video showcase.',
+    },
     users: {
       title: 'CMS Users, Roles & RBAC Security',
       subtitle: 'Administrator access levels, credential management, and audit logs.',
@@ -334,11 +346,11 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             title="Click to change admin profile photo"
           >
             <div className="w-5 h-5 rounded-full overflow-hidden bg-[#588B76]/30 flex items-center justify-center text-[10px] font-bold text-[#85AA9B] relative shrink-0 border border-[#588B76]/50">
-              {currentAdminUser?.avatarUrl ? (
+              {typeof currentAdminUser?.avatarUrl === 'string' && currentAdminUser.avatarUrl.trim() ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={currentAdminUser.avatarUrl}
-                  alt={currentAdminUser.name}
+                  src={currentAdminUser.avatarUrl.trim()}
+                  alt={currentAdminUser.name || 'Admin'}
                   className="w-full h-full object-cover"
                 />
               ) : (

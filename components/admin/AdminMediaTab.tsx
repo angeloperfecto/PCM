@@ -1272,38 +1272,53 @@ export const AdminMediaTab: React.FC = () => {
 
             {/* Image Preview Box */}
             <div className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200 group">
-              {!previewImgError ? (
-                <Image
-                  src={detailItem.dataUrl || detailItem.downloadURL || detailItem.url}
-                  alt={detailItem.altText || detailItem.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 672px"
-                  className="object-contain"
-                  unoptimized={Boolean((detailItem.dataUrl || detailItem.downloadURL || detailItem.url)?.startsWith('data:') || (detailItem.dataUrl || detailItem.downloadURL || detailItem.url)?.startsWith('blob:'))}
-                  referrerPolicy="no-referrer"
-                  onError={() => {
-                    console.warn('Preview image failed to load for:', detailItem.title);
-                    setPreviewImgError(true);
-                  }}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center p-6 text-center text-slate-300">
-                  <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 text-amber-400">
-                    <ImageIcon className="w-6 h-6" />
+              {(() => {
+                const mediaSrc = typeof detailItem.dataUrl === 'string' && detailItem.dataUrl.trim()
+                  ? detailItem.dataUrl.trim()
+                  : typeof detailItem.downloadURL === 'string' && detailItem.downloadURL.trim()
+                  ? detailItem.downloadURL.trim()
+                  : typeof detailItem.url === 'string' && detailItem.url.trim()
+                  ? detailItem.url.trim()
+                  : null;
+
+                if (!previewImgError && mediaSrc) {
+                  return (
+                    <Image
+                      src={mediaSrc}
+                      alt={detailItem.altText || detailItem.title}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 672px"
+                      className="object-contain"
+                      unoptimized={Boolean(mediaSrc.startsWith('data:') || mediaSrc.startsWith('blob:'))}
+                      referrerPolicy="no-referrer"
+                      onError={() => {
+                        console.warn('Preview image failed to load for:', detailItem.title);
+                        setPreviewImgError(true);
+                      }}
+                    />
+                  );
+                }
+
+                return (
+                  <div className="flex flex-col items-center justify-center p-6 text-center text-slate-300">
+                    <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center mb-3 text-amber-400">
+                      <ImageIcon className="w-6 h-6" />
+                    </div>
+                    <p className="font-semibold text-sm text-white mb-1">{detailItem.title}</p>
+                    <p className="text-xs text-slate-400 max-w-xs mb-3">
+                      Asset image is currently optimizing or unavailable from remote storage.
+                    </p>
+                    <button
+                      onClick={() => replaceFileInputRef.current?.click()}
+                      className="px-3 py-1.5 rounded-lg bg-[#588B76] hover:bg-[#18392B] text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Upload New Image File</span>
+                    </button>
                   </div>
-                  <p className="font-semibold text-sm text-white mb-1">{detailItem.title}</p>
-                  <p className="text-xs text-slate-400 max-w-xs mb-3">
-                    Asset image is currently optimizing or unavailable from remote storage.
-                  </p>
-                  <button
-                    onClick={() => replaceFileInputRef.current?.click()}
-                    className="px-3 py-1.5 rounded-lg bg-[#588B76] hover:bg-[#18392B] text-white text-xs font-semibold transition flex items-center gap-1.5 shadow-sm"
-                  >
-                    <Upload className="w-3.5 h-3.5" />
-                    <span>Upload New Image File</span>
-                  </button>
-                </div>
-              )}
+                );
+              })()}
+
               {!previewImgError && (detailItem.dataUrl || detailItem.downloadURL || detailItem.url) && (
                 <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
                   <a

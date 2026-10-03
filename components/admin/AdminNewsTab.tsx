@@ -445,19 +445,16 @@ export const AdminNewsTab: React.FC = () => {
                     placeholder="https://... or upload image"
                     className="flex-1 p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                   />
-                  {formImage && (
+                  {typeof formImage === 'string' && formImage.trim() ? (
                     <div className="w-14 h-10 rounded border border-slate-200 overflow-hidden relative bg-slate-100 shrink-0">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={formImage}
+                        src={formImage.trim()}
                         alt="Preview"
                         className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLElement).style.display = 'none';
-                        }}
                       />
                     </div>
-                  )}
+                  ) : null}
                 </div>
                 <p className="text-[10px] text-slate-400 mt-1">
                   Upload an image from your computer or enter any public image URL.

@@ -21,6 +21,7 @@ import { AdminEnrollmentsTab } from '@/components/admin/AdminEnrollmentsTab';
 import { AdminUsersTab } from '@/components/admin/AdminUsersTab';
 import { AdminDonationsTab } from '@/components/admin/AdminDonationsTab';
 import { AdminStudentLifeTab } from '@/components/admin/AdminStudentLifeTab';
+import { AdminLifeAtPCMManager } from '@/components/admin/AdminLifeAtPCMManager';
 import { AdminScrapbookTab } from '@/components/admin/AdminScrapbookTab';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
@@ -65,6 +66,7 @@ export const AdminView: React.FC = () => {
     'overview',
     'siteConfig',
     'hero',
+    'lifeAtPcm',
     'programs',
     'faculty',
     'news',
@@ -411,6 +413,7 @@ export const AdminView: React.FC = () => {
             {activeTab === 'overview' && <AdminOverviewTab onSelectTab={(tab) => setActiveTab(tab as any)} />}
             {activeTab === 'siteConfig' && <AdminSiteConfigTab />}
             {activeTab === 'hero' && <AdminHeroTab />}
+            {activeTab === 'lifeAtPcm' && <AdminLifeAtPCMManager />}
             {activeTab === 'programs' && <AdminProgramsTab />}
             {activeTab === 'faculty' && <AdminFacultyTab />}
             {activeTab === 'news' && <AdminNewsTab />}

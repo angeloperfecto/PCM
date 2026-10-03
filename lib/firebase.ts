@@ -343,7 +343,7 @@ export async function compressImageFile(
   });
 }
 
-export function cleanFirestoreData<T>(data: T): T {
+export function cleanFirestoreData<T>(data: T, seen = new WeakSet()): T {
   if (data === null || data === undefined) return data;
   if (typeof data === 'string') {
     // Guard: Prevent excessive Base64 strings from exceeding Firestore's 1MB document limit (1,048,576 bytes)
@@ -354,14 +354,39 @@ export function cleanFirestoreData<T>(data: T): T {
     }
     return data;
   }
-  if (Array.isArray(data)) {
-    return data.map(cleanFirestoreData) as unknown as T;
+  if (typeof data === 'number' || typeof data === 'boolean' || typeof data === 'bigint') {
+    return data;
   }
-  if (typeof data === 'object' && !(data instanceof Date)) {
+  if (data instanceof Date) {
+    return data;
+  }
+  // Guard against DOM elements, Event objects, or Nodes (which contain circular __reactFiber references)
+  if (typeof window !== 'undefined') {
+    if (data instanceof Element || data instanceof Event || data instanceof Node || (data as any)?.nodeType) {
+      return null as unknown as T;
+    }
+  }
+  if (typeof data === 'function' || typeof data === 'symbol') {
+    return null as unknown as T;
+  }
+  if (typeof data === 'object') {
+    if (seen.has(data as object)) {
+      return null as unknown as T;
+    }
+    seen.add(data as object);
+    if (Array.isArray(data)) {
+      return data.map((item) => cleanFirestoreData(item, seen)) as unknown as T;
+    }
     const res: any = {};
     for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined) {
-        res[key] = cleanFirestoreData(value);
+      if (
+        value !== undefined &&
+        typeof value !== 'function' &&
+        typeof value !== 'symbol' &&
+        !key.startsWith('_react') &&
+        !key.startsWith('__react')
+      ) {
+        res[key] = cleanFirestoreData(value, seen);
       }
     }
     return res as T;

@@ -243,11 +243,11 @@ export const ChangeAvatarModal: React.FC<ChangeAvatarModalProps> = ({
               {/* ID Badge Preview (Squircle Frame - matches user image) */}
               <div className="flex flex-col items-center gap-1.5">
                 <div className="relative">
-                  {selectedUrl ? (
+                  {typeof selectedUrl === 'string' && selectedUrl.trim() ? (
                     <div className="w-20 h-20 rounded-2xl overflow-hidden shadow-md ring-4 ring-purple-100 border border-slate-200 bg-slate-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={selectedUrl}
+                        src={selectedUrl.trim()}
                         alt="Preview"
                         className="w-full h-full object-cover"
                       />
@@ -267,11 +267,11 @@ export const ChangeAvatarModal: React.FC<ChangeAvatarModalProps> = ({
               {/* Circular Badge Preview (Navbar & Lists) */}
               <div className="flex flex-col items-center gap-1.5">
                 <div className="relative">
-                  {selectedUrl ? (
+                  {typeof selectedUrl === 'string' && selectedUrl.trim() ? (
                     <div className="w-16 h-16 rounded-full overflow-hidden shadow-md ring-2 ring-emerald-500/40 border border-slate-200 bg-slate-100">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={selectedUrl}
+                        src={selectedUrl.trim()}
                         alt="Circular Preview"
                         className="w-full h-full object-cover"
                       />
@@ -410,12 +410,14 @@ export const ChangeAvatarModal: React.FC<ChangeAvatarModalProps> = ({
                       }`}
                       title={preset.label}
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={preset.url}
-                        alt={preset.label}
-                        className="w-full h-full object-cover group-hover:scale-105 transition"
-                      />
+                      {typeof preset.url === 'string' && preset.url.trim() ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={preset.url.trim()}
+                          alt={preset.label}
+                          className="w-full h-full object-cover group-hover:scale-105 transition"
+                        />
+                      ) : null}
                       {isSelected && (
                         <div className="absolute inset-0 bg-emerald-900/40 flex items-center justify-center">
                           <span className="w-6 h-6 rounded-full bg-emerald-600 text-white flex items-center justify-center shadow">

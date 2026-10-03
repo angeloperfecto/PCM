@@ -1127,19 +1127,19 @@ export const AdminDonationsTab: React.FC = () => {
                         onChange={(e) => setMethodForm({ ...methodForm, qrCodeUrl: e.target.value })}
                         className="flex-1 p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
                       />
-                      {methodForm.qrCodeUrl && (
+                      {typeof methodForm.qrCodeUrl === 'string' && methodForm.qrCodeUrl.trim() ? (
                         <div className="w-10 h-10 border border-slate-200 rounded-lg p-0.5 bg-white shrink-0 flex items-center justify-center overflow-hidden relative">
                           <Image
-                            src={methodForm.qrCodeUrl}
+                            src={methodForm.qrCodeUrl.trim()}
                             alt="QR"
                             width={40}
                             height={40}
                             className="w-full h-full object-contain"
                             referrerPolicy="no-referrer"
-                            unoptimized={Boolean(methodForm.qrCodeUrl?.startsWith('data:') || methodForm.qrCodeUrl?.startsWith('blob:'))}
+                            unoptimized={Boolean(methodForm.qrCodeUrl.startsWith('data:') || methodForm.qrCodeUrl.startsWith('blob:'))}
                           />
                         </div>
-                      )}
+                      ) : null}
                     </div>
                   </div>
                 </div>

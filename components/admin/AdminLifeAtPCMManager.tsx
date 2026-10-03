@@ -584,19 +584,21 @@ export const AdminLifeAtPCMManager: React.FC = () => {
                 >
                   {/* Image & Gradient */}
                   <div className="h-36 relative overflow-hidden bg-slate-100">
-                    <Image
-                      src={
-                        item.image ||
-                        'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&auto=format&fit=crop'
-                      }
-                      alt={item.title}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      referrerPolicy="no-referrer"
-                      unoptimized={Boolean(
-                        item.image?.startsWith('data:') || item.image?.startsWith('blob:')
-                      )}
-                    />
+                    {(() => {
+                      const itemImgSrc = typeof item.image === 'string' && item.image.trim()
+                        ? item.image.trim()
+                        : 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&auto=format&fit=crop';
+                      return (
+                        <Image
+                          src={itemImgSrc}
+                          alt={item.title}
+                          fill
+                          className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          referrerPolicy="no-referrer"
+                          unoptimized={Boolean(itemImgSrc.startsWith('data:') || itemImgSrc.startsWith('blob:'))}
+                        />
+                      );
+                    })()}
                     <div className="absolute inset-0 bg-gradient-to-t from-slate-900/80 via-slate-900/20 to-transparent" />
 
                     {/* Order & Active Badges */}
@@ -862,22 +864,26 @@ export const AdminLifeAtPCMManager: React.FC = () => {
                 </span>
                 <div className="max-w-sm mx-auto bg-[#D0DED8]/20 rounded-xl overflow-hidden border border-[#588B76] shadow-md flex flex-col">
                   <div className="h-36 relative overflow-hidden bg-slate-200">
-                    {formImage ? (
-                      <Image
-                        src={formImage}
-                        alt="Preview"
-                        fill
-                        className="object-cover"
-                        referrerPolicy="no-referrer"
-                        unoptimized={Boolean(
-                          formImage.startsWith('data:') || formImage.startsWith('blob:')
-                        )}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-400">
-                        <ImageIcon className="w-8 h-8" />
-                      </div>
-                    )}
+                    {(() => {
+                      const previewSrc = typeof formImage === 'string' && formImage.trim() ? formImage.trim() : null;
+                      if (previewSrc) {
+                        return (
+                          <Image
+                            src={previewSrc}
+                            alt="Preview"
+                            fill
+                            className="object-cover"
+                            referrerPolicy="no-referrer"
+                            unoptimized={Boolean(previewSrc.startsWith('data:') || previewSrc.startsWith('blob:'))}
+                          />
+                        );
+                      }
+                      return (
+                        <div className="w-full h-full flex items-center justify-center text-slate-400">
+                          <ImageIcon className="w-8 h-8" />
+                        </div>
+                      );
+                    })()}
                     <div className="absolute inset-0 bg-gradient-to-t from-[#18392B]/95 via-[#18392B]/35 to-transparent" />
                     <div className="absolute bottom-2.5 left-2.5 flex items-center gap-2">
                       <div className="w-7 h-7 rounded-lg bg-[#588B76] text-white flex items-center justify-center font-bold shadow">

@@ -1184,12 +1184,14 @@ export const AdminFacultyTab: React.FC = () => {
                             }`}
                           >
                             <div className="w-full h-12 rounded overflow-hidden relative bg-slate-200 mb-1">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img
-                                src={item.url}
-                                alt={item.altText || item.title}
-                                className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
-                              />
+                              {typeof item.url === 'string' && item.url.trim() ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={item.url.trim()}
+                                  alt={item.altText || item.title || 'Media thumbnail'}
+                                  className="w-full h-full object-cover group-hover:scale-105 transition duration-200"
+                                />
+                              ) : null}
                             </div>
                             <span className="text-[10px] font-medium text-slate-700 truncate w-full line-clamp-1">
                               {item.title}

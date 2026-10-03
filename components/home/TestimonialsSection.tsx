@@ -50,19 +50,19 @@ export const TestimonialsSection: React.FC = () => {
             {/* Author Profile */}
             <div className="pt-6 border-t border-[#D0DED8] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                {current.avatarUrl && (
+                {typeof current.avatarUrl === 'string' && current.avatarUrl.trim() ? (
                   <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-[#588B76] shadow-sm shrink-0">
                     <Image
-                      src={current.avatarUrl}
+                      src={current.avatarUrl.trim()}
                       alt={current.name}
                       fill
                       className="object-cover"
                       sizes="56px"
                       referrerPolicy="no-referrer"
-                      unoptimized={Boolean(current.avatarUrl?.startsWith('data:') || current.avatarUrl?.startsWith('blob:'))}
+                      unoptimized={Boolean(current.avatarUrl.startsWith('data:') || current.avatarUrl.startsWith('blob:'))}
                     />
                   </div>
-                )}
+                ) : null}
                 <div>
                   <h4 className="font-serif text-base font-bold text-[#18392B]">
                     {current.name}

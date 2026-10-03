@@ -321,11 +321,11 @@ export const AdminOverviewTab: React.FC<AdminOverviewTabProps> = ({
           </button>
 
           <button
-            onClick={() => onSelectTab('studentLife')}
-            className="flex items-center gap-2 bg-[#18392B] hover:bg-[#10261D] text-white p-3 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs justify-center"
+            onClick={() => onSelectTab('lifeAtPcm')}
+            className="flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] text-white p-3 rounded-lg text-xs font-bold transition cursor-pointer shadow-xs justify-center"
           >
             <Sparkles className="w-4 h-4 shrink-0 text-amber-300" />
-            <span>Life at PCM Details</span>
+            <span>Life at PCM Config</span>
           </button>
 
           <button

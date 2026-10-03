@@ -27,7 +27,7 @@ const SafeAdminImage: React.FC<{
 
   return (
     <Image
-      src={hasError || !src ? FALLBACK_PHOTO : src}
+      src={hasError || !src || typeof src !== 'string' || !src.trim() ? FALLBACK_PHOTO : src.trim()}
       alt={alt}
       fill={fill}
       sizes={sizes}
