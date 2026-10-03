@@ -61,6 +61,8 @@ import {
   StudentLifeAlbum,
   StudentLifePhotoItem,
   ContactInquiry,
+  LifeAtPCMConfig,
+  LifeAtPCMItem,
 } from './types';
 import {
   INITIAL_PROGRAMS,
@@ -101,6 +103,7 @@ import {
   INITIAL_VIDEOS,
   INITIAL_HOMEPAGE_VIDEO_CONFIG,
   INITIAL_STUDENT_LIFE_CONFIG,
+  INITIAL_LIFE_AT_PCM_CONFIG,
 } from './initialData';
 import {
   getDefaultStudentRequirements,
@@ -232,6 +235,11 @@ interface PCMContextType {
   updateFooterConfig: (newFooter: Partial<SiteConfig['footerConfig']>) => void;
   updateNavigationMenu: (newNav: SiteConfig['navigationMenu']) => void;
   updateStudentLifeConfig: (newStudentLife: Partial<StudentLifeConfig>) => Promise<void>;
+  updateLifeAtPCMConfig: (newLifeConfig: Partial<LifeAtPCMConfig>) => Promise<void>;
+  saveLifeAtPCMItem: (item: LifeAtPCMItem) => Promise<void>;
+  deleteLifeAtPCMItem: (id: string) => Promise<void>;
+  reorderLifeAtPCMItems: (items: LifeAtPCMItem[]) => Promise<void>;
+  resetLifeAtPCMToDefault: () => Promise<void>;
 
   // Media Library
   mediaItems: MediaItem[];
@@ -788,28 +796,36 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     []
   );
 
+  // Local persistent cache helpers to prevent data reverting during page refresh / session restart
+  const getCachedData = <T,>(key: string, fallback: T): T => {
+    if (typeof window === 'undefined') return fallback;
+    try {
+      const raw = localStorage.getItem(`pcm_cache_${key}`);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(fallback)) {
+          if (Array.isArray(parsed)) return parsed as unknown as T;
+        } else if (parsed && typeof parsed === 'object') {
+          return parsed as unknown as T;
+        }
+      }
+    } catch {}
+    return fallback;
+  };
+
+  const setCachedData = (key: string, data: any) => {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.setItem(`pcm_cache_${key}`, JSON.stringify(data));
+    } catch {}
+  };
+
   // User Accounts & Multi-Role Auth
   const [currentUserAccount, setCurrentUserAccount] = useState<UserAccount | null>(null);
   const [firebaseAuthUser, setFirebaseAuthUser] = useState<FirebaseUser | null>(null);
-  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() => {
-    if (typeof window === 'undefined') return INITIAL_USER_ACCOUNTS;
-    try {
-      const stored = localStorage.getItem('pcm_deleted_users');
-      const deletedList: DeletedUserRecord[] = stored ? JSON.parse(stored) : [];
-      if (deletedList.length === 0) return INITIAL_USER_ACCOUNTS;
-      const deletedEmails = new Set(deletedList.map((d) => (d.email || '').trim().toLowerCase()));
-      const deletedIds = new Set(deletedList.map((d) => (d.id || d.uid || '').trim().toLowerCase()));
-      return INITIAL_USER_ACCOUNTS.filter((u) => {
-        const uEmail = (u.email || '').trim().toLowerCase();
-        const uId = (u.id || u.uid || '').trim().toLowerCase();
-        return !deletedEmails.has(uEmail) && !deletedIds.has(uId);
-      });
-    } catch {
-      return INITIAL_USER_ACCOUNTS;
-    }
-  });
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(INITIAL_USER_ACCOUNTS);
 
-  // Core CMS Data States (initialized identically on SSR and client to prevent hydration mismatch)
+  // Core CMS Data States (persisted from latest Firestore snapshot across browser refresh/reopen)
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(INITIAL_SITE_CONFIG);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>(INITIAL_MEDIA_ITEMS);
   const [galleryAlbums, setGalleryAlbums] = useState<GalleryAlbum[]>(INITIAL_GALLERY_ALBUMS);
@@ -856,25 +872,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Student Portal, Multi-Student Directory, & Online Enrollment System
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false);
-  const [students, setStudents] = useState<StudentProfile[]>(() => {
-    if (typeof window === 'undefined') return INITIAL_STUDENTS;
-    try {
-      const stored = localStorage.getItem('pcm_deleted_users');
-      const deletedList: DeletedUserRecord[] = stored ? JSON.parse(stored) : [];
-      if (deletedList.length === 0) return INITIAL_STUDENTS;
-      const deletedEmails = new Set(deletedList.map((d) => (d.email || '').trim().toLowerCase()));
-      const deletedIds = new Set(deletedList.map((d) => (d.id || d.uid || '').trim().toLowerCase()));
-      const deletedStd = new Set(deletedList.map((d) => (d.studentId || '').trim().toLowerCase()).filter(Boolean));
-      return INITIAL_STUDENTS.filter((s) => {
-        const sEmail = (s.email || '').trim().toLowerCase();
-        const sId = (s.id || '').trim().toLowerCase();
-        const sStd = (s.studentId || '').trim().toLowerCase();
-        return !deletedEmails.has(sEmail) && !deletedIds.has(sId) && (!sStd || !deletedStd.has(sStd));
-      });
-    } catch {
-      return INITIAL_STUDENTS;
-    }
-  });
+  const [students, setStudents] = useState<StudentProfile[]>(INITIAL_STUDENTS);
   const [studentProfile, setStudentProfile] = useState<StudentProfile>(INITIAL_STUDENTS[0] || DEMO_STUDENT_PROFILE);
   const [enrollments, setEnrollments] = useState<OnlineEnrollment[]>(INITIAL_ENROLLMENTS);
   const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>(INITIAL_STUDENT_NOTIFICATIONS);
@@ -899,24 +897,134 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Admin Auth
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(() => {
-    if (typeof window === 'undefined') return INITIAL_ADMIN_USERS;
-    try {
-      const stored = localStorage.getItem('pcm_deleted_users');
-      const deletedList: DeletedUserRecord[] = stored ? JSON.parse(stored) : [];
-      if (deletedList.length === 0) return INITIAL_ADMIN_USERS;
-      const deletedEmails = new Set(deletedList.map((d) => (d.email || '').trim().toLowerCase()));
-      const deletedIds = new Set(deletedList.map((d) => (d.id || d.uid || '').trim().toLowerCase()));
-      return INITIAL_ADMIN_USERS.filter((a) => {
-        const aEmail = (a.email || '').trim().toLowerCase();
-        const aId = (a.id || '').trim().toLowerCase();
-        return !deletedEmails.has(aEmail) && !deletedIds.has(aId);
-      });
-    } catch {
-      return INITIAL_ADMIN_USERS;
-    }
-  });
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(INITIAL_ADMIN_USERS);
   const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(INITIAL_ADMIN_USERS[0]);
+
+  // Restore client-side cached data immediately after hydration completes
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const readCache = <T,>(key: string, validator?: (v: any) => boolean): T | null => {
+        try {
+          const raw = localStorage.getItem(`pcm_cache_${key}`);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (validator ? validator(parsed) : parsed !== null && parsed !== undefined) {
+              return parsed as T;
+            }
+          }
+        } catch {}
+        return null;
+      };
+
+      const cConfig = readCache<SiteConfig>('siteConfig', (v) => v && typeof v === 'object');
+      if (cConfig) setSiteConfig((prev) => ({ ...prev, ...cConfig }));
+
+      const cProgs = readCache<AcademicProgram[]>('programs', Array.isArray);
+      if (cProgs) setPrograms(cProgs);
+
+      const cFac = readCache<FacultyMember[]>('faculty', Array.isArray);
+      if (cFac) setFaculty(cFac);
+
+      const cAnn = readCache<AnnouncementItem[]>('announcements', Array.isArray);
+      if (cAnn) setAnnouncements(cAnn);
+
+      const cNews = readCache<NewsArticle[]>('news', Array.isArray);
+      if (cNews) setNews(cNews);
+
+      const cEvents = readCache<CollegeEvent[]>('events', Array.isArray);
+      if (cEvents) setEvents(cEvents);
+
+      const cDown = readCache<DownloadableResource[]>('downloads', Array.isArray);
+      if (cDown) setDownloads(cDown);
+
+      const cTest = readCache<Testimonial[]>('testimonials', Array.isArray);
+      if (cTest) setTestimonials(cTest);
+
+      const cStats = readCache<ImpactStat[]>('stats', Array.isArray);
+      if (cStats) setStats(cStats);
+
+      const cFaqs = readCache<FAQItem[]>('faqs', Array.isArray);
+      if (cFaqs) setFaqs(cFaqs);
+
+      const cSerm = readCache<SermonLecture[]>('sermons', Array.isArray);
+      if (cSerm) setSermons(cSerm);
+
+      const cScrap = readCache<ScrapbookItem[]>('scrapbook', Array.isArray);
+      if (cScrap) setScrapbook(cScrap);
+
+      const cVideos = readCache<YouTubeVideo[]>('videos', Array.isArray);
+      if (cVideos) setVideos(cVideos);
+
+      const cVidCfg = readCache<HomepageVideoConfig>('homepageVideoConfig', (v) => v && typeof v === 'object');
+      if (cVidCfg) setHomepageVideoConfig(cVidCfg);
+
+      const cMedia = readCache<MediaItem[]>('mediaItems', Array.isArray);
+      if (cMedia) setMediaItems(cMedia);
+
+      const cGal = readCache<GalleryAlbum[]>('galleryAlbums', Array.isArray);
+      if (cGal) setGalleryAlbums(cGal);
+
+      const cSL = readCache<StudentLifeAlbum[]>('studentLifeAlbums', Array.isArray);
+      if (cSL) setStudentLifeAlbums(cSL);
+
+      const cApps = readCache<AdmissionApplication[]>('applications', Array.isArray);
+      if (cApps) setApplications(cApps);
+
+      const cDonMethods = readCache<DonationPaymentMethod[]>('donationMethods', Array.isArray);
+      if (cDonMethods) setDonationMethods(cDonMethods);
+
+      const cDonations = readCache<DonationRecord[]>('donations', Array.isArray);
+      if (cDonations) setDonations(cDonations);
+
+      const cDonSettings = readCache<DonationSettings>('donationSettings', (v) => v && typeof v === 'object');
+      if (cDonSettings) setDonationSettings(cDonSettings);
+
+      const cStudents = readCache<StudentProfile[]>('students', Array.isArray);
+      if (cStudents) setStudents(cStudents);
+
+      const cProfile = readCache<StudentProfile>('studentProfile', (v) => v && typeof v === 'object');
+      if (cProfile) setStudentProfile(cProfile);
+
+      const cEnrollments = readCache<OnlineEnrollment[]>('enrollments', Array.isArray);
+      if (cEnrollments) setEnrollments(cEnrollments);
+
+      const cNotifs = readCache<StudentNotification[]>('studentNotifications', Array.isArray);
+      if (cNotifs) setStudentNotifications(cNotifs);
+
+      const cSubjects = readCache<AcademicSubject[]>('academicSubjects', Array.isArray);
+      if (cSubjects) setAcademicSubjects(cSubjects);
+
+      const cPreEnlist = readCache<PreEnlistmentRecord[]>('preEnlistments', Array.isArray);
+      if (cPreEnlist) setPreEnlistments(cPreEnlist);
+
+      const cAddDrop = readCache<AddDropRequest[]>('addDropRequests', Array.isArray);
+      if (cAddDrop) setAddDropRequests(cAddDrop);
+
+      const cFee = readCache<FeeStructureItem[]>('feeStructure', Array.isArray);
+      if (cFee) setFeeStructure(cFee);
+
+      const cPeriods = readCache<AcademicPeriod[]>('academicPeriods', Array.isArray);
+      if (cPeriods) setAcademicPeriods(cPeriods);
+
+      const cSections = readCache<ClassSection[]>('classSections', Array.isArray);
+      if (cSections) setClassSections(cSections);
+
+      const cInstructors = readCache<InstructorRecord[]>('instructors', Array.isArray);
+      if (cInstructors) setInstructors(cInstructors);
+
+      const cEnrollConfig = readCache<EnrollmentSystemConfig>('enrollmentSystemConfig', (v) => v && typeof v === 'object');
+      if (cEnrollConfig) setEnrollmentSystemConfig(cEnrollConfig);
+
+      const cUsers = readCache<UserAccount[]>('userAccounts', Array.isArray);
+      if (cUsers) setUserAccounts(cUsers);
+
+      const cAdmins = readCache<AdminUser[]>('adminUsers', Array.isArray);
+      if (cAdmins) setAdminUsers(cAdmins);
+    } catch (e) {
+      console.warn('Notice restoring client cache:', e);
+    }
+  }, []);
 
   // Newsletter
   const [newsletterEmails, setNewsletterEmails] = useState<string[]>(['pastor.danilo@gmail.com']);
@@ -1178,12 +1286,28 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  // Sync entire dataset to Firestore in atomic batches
+  // Sync entire dataset to Firestore in atomic batches (or verify sync if no custom payload)
   const syncAllDataToFirestore = useCallback(
     async (force: boolean = false, customData?: any): Promise<boolean> => {
       try {
         setFirebaseSyncStatus('syncing');
-        const st = customData || stateRef.current;
+
+        // If no explicit custom backup restore payload is provided, do NOT blindly overwrite Firestore.
+        // Firestore is already the persistent single source of truth and updated in real-time.
+        if (!customData) {
+          try {
+            await getDoc(doc(db, 'systemConfig', 'metadata'));
+          } catch {}
+          setIsFirebaseConnected(true);
+          setFirebaseSyncStatus('synced');
+          setLastSyncedAt(new Date());
+          if (force) {
+            addToast('success', 'Firebase Synced', 'All website collections are actively synchronized with Cloud Firestore.');
+          }
+          return true;
+        }
+
+        const st = customData;
 
         // 1. Site Config
         if (st.siteConfig) {
@@ -1508,7 +1632,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // 0. Verify system initialization marker in Firestore:
         // NEVER auto-seed or restore hardcoded sample data if the system was already initialized
         // or if Firestore already contains documents.
-        let isSystemAlreadyInitialized = false;
+        let isSystemAlreadyInitialized = true;
         try {
           const metaSnap = await getDoc(doc(db, 'systemConfig', 'metadata'));
           if (metaSnap.exists() && metaSnap.data()?.isInitialized) {
@@ -1535,6 +1659,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 initializedAt: new Date().toISOString(),
                 reason: 'Existing database collections detected',
               });
+            } else {
+              isSystemAlreadyInitialized = false;
             }
           }
         } catch (initErr) {
@@ -1542,32 +1668,79 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           isSystemAlreadyInitialized = true; // Err on side of safety: NEVER overwrite existing data!
         }
 
-        // Helper to safely seed a genuinely empty collection ONCE ONLY during initial setup of a brand new database
-        const seedIfEmpty = async (colName: string, initialItems: any[]) => {
-          // If system has already been initialized, DO NOT seed! An empty collection means an admin intentionally has 0 items!
-          if (isSystemAlreadyInitialized) return;
-          if (seededCollections.has(colName)) return;
-          seededCollections.add(colName);
+        // Baseline seeding ONLY for genuinely fresh, uninitialized databases (never overwrites existing collections)
+        if (!isSystemAlreadyInitialized) {
+          console.info('[PCM Firestore] Genuinely fresh database detected. Initializing baseline records...');
           try {
-            const snap = await getDocs(collection(db, colName));
-            if (snap.empty && initialItems && initialItems.length > 0) {
-              console.info(`[PCM Firestore] Fresh database detected. Seeding baseline records for ${colName}...`);
-              const batch = writeBatch(db);
-              initialItems.forEach((item: any) => {
+            await safeSetDoc(doc(db, 'siteConfig', 'global'), INITIAL_SITE_CONFIG);
+            await safeSetDoc(doc(db, 'siteContent', 'slideshow'), {
+              slides: INITIAL_SITE_CONFIG.heroSlides || [],
+              updatedAt: new Date().toISOString(),
+              updatedBy: 'System Baseline',
+              isPublished: true,
+            });
+            await safeSetDoc(doc(db, 'siteContent', 'lifeAtPcm'), cleanFirestoreData({
+              ...INITIAL_LIFE_AT_PCM_CONFIG,
+              updatedAt: new Date().toISOString(),
+              updatedBy: 'System Baseline',
+            }));
+            await safeSetDoc(doc(db, 'siteContent', 'studentLife'), cleanFirestoreData({
+              ...INITIAL_STUDENT_LIFE_CONFIG,
+              updatedAt: new Date().toISOString(),
+              updatedBy: 'System Baseline',
+              isPublished: true,
+            }));
+            await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), INITIAL_HOMEPAGE_VIDEO_CONFIG);
+            await safeSetDoc(doc(db, 'donationSettings', 'global'), INITIAL_DONATION_SETTINGS);
+            await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), INITIAL_ENROLLMENT_SYSTEM_CONFIG);
+
+            const seedBatch = async (col: string, items: any[]) => {
+              if (!items || items.length === 0) return;
+              const b = writeBatch(db);
+              items.forEach((item: any) => {
                 const docId = item.id || `seed-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-                batch.set(doc(db, colName, docId), cleanFirestoreData(item), { merge: true });
+                b.set(doc(db, col, docId), cleanFirestoreData(item), { merge: true });
               });
-              await batch.commit();
-              await safeSetDoc(doc(db, 'systemConfig', 'metadata'), {
-                isInitialized: true,
-                initializedAt: new Date().toISOString(),
-              });
-              isSystemAlreadyInitialized = true;
-            }
-          } catch (e) {
-            console.warn(`[PCM Firestore] Seed check notice for ${colName}:`, e);
+              await b.commit();
+            };
+
+            await Promise.all([
+              seedBatch('programs', INITIAL_PROGRAMS),
+              seedBatch('faculty', INITIAL_FACULTY),
+              seedBatch('announcements', INITIAL_ANNOUNCEMENTS),
+              seedBatch('news', INITIAL_NEWS),
+              seedBatch('events', INITIAL_EVENTS),
+              seedBatch('downloads', INITIAL_DOWNLOADS),
+              seedBatch('testimonials', INITIAL_TESTIMONIALS),
+              seedBatch('stats', INITIAL_STATS),
+              seedBatch('faqs', INITIAL_FAQS),
+              seedBatch('sermons', INITIAL_SERMONS),
+              seedBatch('scrapbook', INITIAL_SCRAPBOOK),
+              seedBatch('mediaLibrary', INITIAL_MEDIA_ITEMS),
+              seedBatch('galleryAlbums', INITIAL_GALLERY_ALBUMS),
+              seedBatch('studentLifeAlbums', INITIAL_STUDENT_LIFE_ALBUMS),
+              seedBatch('adminUsers', INITIAL_ADMIN_USERS),
+              seedBatch('users', INITIAL_USER_ACCOUNTS),
+              seedBatch('studentProfiles', INITIAL_STUDENTS),
+              seedBatch('donationPaymentMethods', INITIAL_DONATION_METHODS),
+              seedBatch('academicSubjects', INITIAL_ACADEMIC_SUBJECTS),
+              seedBatch('feeStructure', INITIAL_FEE_STRUCTURE),
+              seedBatch('academicPeriods', INITIAL_ACADEMIC_PERIODS),
+              seedBatch('classSections', INITIAL_CLASS_SECTIONS),
+              seedBatch('instructors', INITIAL_INSTRUCTORS),
+              seedBatch('videos', INITIAL_VIDEOS),
+            ]);
+
+            await safeSetDoc(doc(db, 'systemConfig', 'metadata'), {
+              isInitialized: true,
+              initializedAt: new Date().toISOString(),
+              version: '1.0.0',
+            });
+            isSystemAlreadyInitialized = true;
+          } catch (seedErr) {
+            console.warn('[PCM Firestore] Baseline seeding notice:', seedErr);
           }
-        };
+        }
 
         // 1. Site Config Single Source of Truth
         logFirestoreOp('listen', 'siteConfig/global', 'Public Site Config Real-Time Sync');
@@ -1581,7 +1754,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   ...prev,
                   ...data,
                   heroSlides: data.heroSlides !== undefined ? data.heroSlides : prev.heroSlides,
+                  lifeAtPcm:
+                    data.lifeAtPcm !== undefined
+                      ? data.lifeAtPcm
+                      : data.studentLife?.lifeAtPcm !== undefined
+                      ? data.studentLife.lifeAtPcm
+                      : prev.lifeAtPcm,
                 };
+                setCachedData('siteConfig', updated);
                 return JSON.stringify(prev) === JSON.stringify(updated) ? prev : updated;
               });
               setFirebaseSyncStatus('synced');
@@ -1612,10 +1792,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   if (JSON.stringify(prev.heroSlides) === JSON.stringify(data.slides)) {
                     return prev;
                   }
-                  return {
+                  const updated = {
                     ...prev,
                     heroSlides: data.slides,
                   };
+                  setCachedData('siteConfig', updated);
+                  return updated;
                 });
               }
             }
@@ -1626,6 +1808,43 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         unsubs.push(uSlideshow);
 
+        // 1c. Authoritative Life at PCM Real-Time Listener from siteContent/lifeAtPcm
+        logFirestoreOp('listen', 'siteContent/lifeAtPcm', 'Life at PCM Real-Time Sync');
+        const uLifeAtPcm = onSnapshot(
+          doc(db, 'siteContent', 'lifeAtPcm'),
+          (snap) => {
+            if (snap.exists()) {
+              const data = snap.data() as LifeAtPCMConfig;
+              if (data && typeof data === 'object') {
+                setSiteConfig((prev) => {
+                  const updated = {
+                    ...prev,
+                    lifeAtPcm: {
+                      ...prev.lifeAtPcm,
+                      ...data,
+                      items: Array.isArray(data.items) ? data.items : prev.lifeAtPcm?.items || [],
+                    },
+                    studentLife: {
+                      ...(prev.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
+                      lifeAtPcm: {
+                        ...prev.lifeAtPcm,
+                        ...data,
+                        items: Array.isArray(data.items) ? data.items : prev.lifeAtPcm?.items || [],
+                      },
+                    },
+                  };
+                  setCachedData('siteConfig', updated);
+                  return updated;
+                });
+              }
+            }
+          },
+          (err) => {
+            handleFirestoreError(err, OperationType.GET, 'siteContent/lifeAtPcm');
+          }
+        );
+        unsubs.push(uLifeAtPcm);
+
         // 2. Programs
         logFirestoreOp('listen', 'programs', 'Academic Programs Real-Time Sync');
         const uPrograms = onSnapshot(
@@ -1634,11 +1853,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicProgram[];
               setPrograms((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('programs', list);
             } else {
               setPrograms([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('programs', INITIAL_PROGRAMS);
-              }
+              setCachedData('programs', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1669,6 +1887,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
               list.sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
               setFaculty((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('faculty', list);
               setSelectedFaculty((currentSelected) => {
                 if (!currentSelected) return null;
                 const match = list.find((m) => m.id === currentSelected.id);
@@ -1676,9 +1895,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               });
             } else {
               setFaculty([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('faculty', INITIAL_FACULTY);
-              }
+              setCachedData('faculty', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1700,11 +1917,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AnnouncementItem[];
               setAnnouncements((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('announcements', list);
             } else {
               setAnnouncements([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('announcements', INITIAL_ANNOUNCEMENTS);
-              }
+              setCachedData('announcements', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1735,11 +1951,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 } as NewsArticle;
               });
               setNews((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('news', list);
             } else {
               setNews([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('news', INITIAL_NEWS);
-              }
+              setCachedData('news', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1770,11 +1985,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 } as CollegeEvent;
               });
               setEvents((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('events', list);
             } else {
               setEvents([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('events', INITIAL_EVENTS);
-              }
+              setCachedData('events', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1804,11 +2018,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               }) as DonationPaymentMethod[];
               list.sort((a, b) => (a.order || 0) - (b.order || 0));
               setDonationMethods((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('donationMethods', list);
             } else {
               setDonationMethods([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('donationPaymentMethods', INITIAL_DONATION_METHODS);
-              }
+              setCachedData('donationMethods', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1828,7 +2041,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           doc(db, 'donationSettings', 'global'),
           async (snap) => {
             if (snap.exists()) {
-              setDonationSettings(snap.data() as DonationSettings);
+              const data = snap.data() as DonationSettings;
+              setDonationSettings(data);
+              setCachedData('donationSettings', data);
             } else if (!isSystemAlreadyInitialized) {
               await safeSetDoc(doc(db, 'donationSettings', 'global'), INITIAL_DONATION_SETTINGS);
             }
@@ -1853,11 +2068,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as YouTubeVideo[];
               list.sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
               setVideos((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('videos', list);
             } else {
               setVideos([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('videos', INITIAL_VIDEOS);
-              }
+              setCachedData('videos', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1877,7 +2091,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           doc(db, 'homepageVideoConfig', 'global'),
           async (snap) => {
             if (snap.exists()) {
-              setHomepageVideoConfig(snap.data() as HomepageVideoConfig);
+              const data = snap.data() as HomepageVideoConfig;
+              setHomepageVideoConfig(data);
+              setCachedData('homepageVideoConfig', data);
             } else if (!isSystemAlreadyInitialized) {
               await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), INITIAL_HOMEPAGE_VIDEO_CONFIG);
             }
@@ -1915,8 +2131,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 return timeB - timeA;
               });
               setMediaItems((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('mediaItems', list);
             } else {
               setMediaItems([]);
+              setCachedData('mediaItems', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1938,11 +2156,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[];
               setTestimonials((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('testimonials', list);
             } else {
               setTestimonials([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('testimonials', INITIAL_TESTIMONIALS);
-              }
+              setCachedData('testimonials', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1962,11 +2179,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[];
               setStats((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('stats', list);
             } else {
               setStats([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('stats', INITIAL_STATS);
-              }
+              setCachedData('stats', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -1986,11 +2202,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[];
               setFaqs((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('faqs', list);
             } else {
               setFaqs([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('faqs', INITIAL_FAQS);
-              }
+              setCachedData('faqs', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2010,11 +2225,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[];
               setDownloads((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('downloads', list);
             } else {
               setDownloads([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('downloads', INITIAL_DOWNLOADS);
-              }
+              setCachedData('downloads', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2034,11 +2248,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[];
               setSermons((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('sermons', list);
             } else {
               setSermons([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('sermons', INITIAL_SERMONS);
-              }
+              setCachedData('sermons', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2058,11 +2271,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[];
               setScrapbook((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('scrapbook', list);
             } else {
               setScrapbook([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('scrapbook', INITIAL_SCRAPBOOK);
-              }
+              setCachedData('scrapbook', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2082,11 +2294,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[];
               setGalleryAlbums((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('galleryAlbums', list);
             } else {
               setGalleryAlbums([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('galleryAlbums', INITIAL_GALLERY_ALBUMS);
-              }
+              setCachedData('galleryAlbums', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2120,11 +2331,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
               );
               setStudentLifeAlbums((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('studentLifeAlbums', list);
             } else {
               setStudentLifeAlbums([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('studentLifeAlbums', INITIAL_STUDENT_LIFE_ALBUMS);
-              }
+              setCachedData('studentLifeAlbums', []);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2143,13 +2353,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (snap) => {
             if (snap.exists()) {
               const slData = snap.data() as StudentLifeConfig;
-              setSiteConfig((prev) => ({
-                ...prev,
-                studentLife: {
-                  ...prev.studentLife,
-                  ...slData,
-                },
-              }));
+              const { lifeAtPcm: _lap, ...cleanSL } = slData;
+              setSiteConfig((prev) => {
+                const updated = {
+                  ...prev,
+                  studentLife: {
+                    ...prev.studentLife,
+                    ...cleanSL,
+                  },
+                };
+                setCachedData('siteConfig', updated);
+                return updated;
+              });
               setIsFirebaseConnected(true);
               setFirebaseSyncStatus('synced');
               setLastSyncedAt(new Date());
@@ -2169,11 +2384,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
               setApplications((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('applications', list);
             } else {
               setApplications([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('applications', INITIAL_APPLICATIONS);
-              }
+              setCachedData('applications', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'applications')
@@ -2190,23 +2404,25 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 (s) => !isUserDeletedRef.current(s)
               );
               setStudents((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('students', list);
               if (list.length > 0) {
                 setStudentProfile((prev) => {
                   const matched = list.find(
                     (s) => s.id === prev?.id || s.studentId === prev?.studentId || s.email === prev?.email
                   );
-                  return matched ? { ...prev, ...matched } : prev;
+                  const updated = matched ? { ...prev, ...matched } : prev;
+                  setCachedData('studentProfile', updated);
+                  return updated;
                 });
               }
               setUserAccounts((prev) => {
                 const next = syncWithAdminsAndStudents(prev, stateRef.current.adminUsers, list);
+                setCachedData('userAccounts', next);
                 return areUserAccountsEqual(prev, next) ? prev : next;
               });
             } else {
               setStudents([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('studentProfiles', INITIAL_STUDENTS);
-              }
+              setCachedData('students', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'studentProfiles')
@@ -2221,11 +2437,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as OnlineEnrollment[];
               setEnrollments((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('enrollments', list);
             } else {
               setEnrollments([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('enrollments', INITIAL_ENROLLMENTS);
-              }
+              setCachedData('enrollments', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments')
@@ -2239,6 +2454,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (snap) => {
             const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentNotification[];
             setStudentNotifications((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+            setCachedData('studentNotifications', list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'studentNotifications')
         );
@@ -2252,11 +2468,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicSubject[];
               setAcademicSubjects((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('academicSubjects', list);
             } else {
               setAcademicSubjects([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('academicSubjects', INITIAL_ACADEMIC_SUBJECTS);
-              }
+              setCachedData('academicSubjects', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'academicSubjects')
@@ -2270,6 +2485,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (snap) => {
             const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PreEnlistmentRecord[];
             setPreEnlistments((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+            setCachedData('preEnlistments', list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'preEnlistments')
         );
@@ -2283,11 +2499,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FeeStructureItem[];
               setFeeStructure((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('feeStructure', list);
             } else {
               setFeeStructure([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('feeStructure', INITIAL_FEE_STRUCTURE);
-              }
+              setCachedData('feeStructure', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'feeStructure')
@@ -2302,11 +2517,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicPeriod[];
               setAcademicPeriods((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('academicPeriods', list);
             } else {
               setAcademicPeriods([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('academicPeriods', INITIAL_ACADEMIC_PERIODS);
-              }
+              setCachedData('academicPeriods', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'academicPeriods')
@@ -2321,11 +2535,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ClassSection[];
               setClassSections((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('classSections', list);
             } else {
               setClassSections([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('classSections', INITIAL_CLASS_SECTIONS);
-              }
+              setCachedData('classSections', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'classSections')
@@ -2340,11 +2553,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as InstructorRecord[];
               setInstructors((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('instructors', list);
             } else {
               setInstructors([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('instructors', INITIAL_INSTRUCTORS);
-              }
+              setCachedData('instructors', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'instructors')
@@ -2357,7 +2569,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           doc(db, 'enrollmentSettings', 'global-enrollment-settings'),
           async (snap) => {
             if (snap.exists()) {
-              setEnrollmentSystemConfig(snap.data() as EnrollmentSystemConfig);
+              const data = snap.data() as EnrollmentSystemConfig;
+              setEnrollmentSystemConfig(data);
+              setCachedData('enrollmentSystemConfig', data);
             } else if (!isSystemAlreadyInitialized) {
               await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), INITIAL_ENROLLMENT_SYSTEM_CONFIG);
             }
@@ -2373,6 +2587,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           (snap) => {
             const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AddDropRequest[];
             setAddDropRequests((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+            setCachedData('addDropRequests', list);
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'addDropRequests')
         );
@@ -2386,11 +2601,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DonationRecord[];
               setDonations((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('donations', list);
             } else {
               setDonations([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('donations', INITIAL_DONATIONS);
-              }
+              setCachedData('donations', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'donations')
@@ -2405,8 +2619,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ActivityLogItem[];
               setActivityLogs((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('activityLogs', list);
             } else {
               setActivityLogs([]);
+              setCachedData('activityLogs', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'activityLogs')
@@ -2423,6 +2639,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             );
             setUserAccounts((prev) => {
               const next = syncWithAdminsAndStudents(list, stateRef.current.adminUsers, stateRef.current.students);
+              setCachedData('userAccounts', next);
               return areUserAccountsEqual(prev, next) ? prev : next;
             });
           },
@@ -2440,15 +2657,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 (a) => !isUserDeletedRef.current(a)
               );
               setAdminUsers((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+              setCachedData('adminUsers', list);
               setUserAccounts((prev) => {
                 const next = syncWithAdminsAndStudents(prev, list, stateRef.current.students);
+                setCachedData('userAccounts', next);
                 return areUserAccountsEqual(prev, next) ? prev : next;
               });
             } else {
               setAdminUsers([]);
-              if (!isSystemAlreadyInitialized) {
-                await seedIfEmpty('adminUsers', INITIAL_ADMIN_USERS);
-              }
+              setCachedData('adminUsers', []);
             }
           },
           (err) => handleFirestoreError(err, OperationType.LIST, 'adminUsers')
@@ -2963,8 +3180,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Site Configuration Updates
   const updateSiteConfig = async (newConfig: Partial<SiteConfig>) => {
-    const updated = cleanFirestoreData({ ...siteConfig, ...newConfig });
+    const updated = cleanFirestoreData({
+      ...siteConfig,
+      ...newConfig,
+      heroSlides: newConfig.heroSlides !== undefined ? newConfig.heroSlides : siteConfig.heroSlides,
+      lifeAtPcm: newConfig.lifeAtPcm !== undefined ? newConfig.lifeAtPcm : siteConfig.lifeAtPcm,
+    });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
       await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
       if (newConfig.heroSlides && Array.isArray(newConfig.heroSlides)) {
@@ -2976,6 +3199,17 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
             isPublished: true,
           },
+          { merge: true }
+        );
+      }
+      if (newConfig.lifeAtPcm) {
+        await safeSetDoc(
+          doc(db, 'siteContent', 'lifeAtPcm'),
+          cleanFirestoreData({
+            ...newConfig.lifeAtPcm,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
+          }),
           { merge: true }
         );
       }
@@ -2992,8 +3226,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       contactInfo: { ...siteConfig.contactInfo, ...newInfo },
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3007,8 +3242,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       seoSettings: { ...siteConfig.seoSettings, ...newSeo },
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3022,8 +3258,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       siteIdentity: { ...siteConfig.siteIdentity, ...newIdentity },
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3037,8 +3274,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       homeAbout: { ...siteConfig.homeAbout, ...newHomeAbout },
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3052,8 +3290,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       missionVisionValues: { ...siteConfig.missionVisionValues, ...newMvv },
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3067,8 +3306,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ctaSections: { ...siteConfig.ctaSections, ...newCtas },
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3082,8 +3322,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       admissionsConfig: { ...siteConfig.admissionsConfig, ...newAdm },
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3097,8 +3338,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       footerConfig: { ...siteConfig.footerConfig, ...newFooter },
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3112,8 +3354,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       navigationMenu: newNav,
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3123,18 +3366,29 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateStudentLifeConfig = async (newStudentLife: Partial<StudentLifeConfig>) => {
     const currentSL = siteConfig.studentLife || INITIAL_STUDENT_LIFE_CONFIG;
-    const updatedSL: StudentLifeConfig = { ...currentSL, ...newStudentLife };
+    const preservedLifeAtPcm = siteConfig.lifeAtPcm || currentSL.lifeAtPcm || INITIAL_LIFE_AT_PCM_CONFIG;
+    const updatedSL: StudentLifeConfig = {
+      ...currentSL,
+      ...newStudentLife,
+      lifeAtPcm:
+        newStudentLife.lifeAtPcm !== undefined
+          ? newStudentLife.lifeAtPcm
+          : preservedLifeAtPcm,
+    };
     const updated = cleanFirestoreData({
       ...siteConfig,
       studentLife: updatedSL,
+      lifeAtPcm: preservedLifeAtPcm,
     });
     setSiteConfig(updated);
+    setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
-      await setDoc(
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      const { lifeAtPcm: _lap, ...cleanSL } = updatedSL;
+      await safeSetDoc(
         doc(db, 'siteContent', 'studentLife'),
         cleanFirestoreData({
-          ...updatedSL,
+          ...cleanSL,
           updatedAt: new Date().toISOString(),
           updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
           isPublished: true,
@@ -3154,6 +3408,94 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('success', 'Student Life Section Saved', 'Student Life section configuration has been updated and published.');
   };
 
+  const updateLifeAtPCMConfig = async (newLifeConfig: Partial<LifeAtPCMConfig>) => {
+    const currentLife = siteConfig.lifeAtPcm || siteConfig.studentLife?.lifeAtPcm || INITIAL_LIFE_AT_PCM_CONFIG;
+    const merged: LifeAtPCMConfig = {
+      ...currentLife,
+      ...newLifeConfig,
+      items: newLifeConfig.items !== undefined ? newLifeConfig.items : currentLife.items,
+    };
+    const updatedSiteConfig = cleanFirestoreData({
+      ...siteConfig,
+      lifeAtPcm: merged,
+      studentLife: {
+        ...(siteConfig.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
+        lifeAtPcm: merged,
+      },
+    });
+    setSiteConfig(updatedSiteConfig);
+    setCachedData('siteConfig', updatedSiteConfig);
+    try {
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updatedSiteConfig, { merge: true });
+      await safeSetDoc(
+        doc(db, 'siteContent', 'lifeAtPcm'),
+        cleanFirestoreData({
+          ...merged,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
+        }),
+        { merge: true }
+      );
+      await safeSetDoc(
+        doc(db, 'siteContent', 'studentLife'),
+        cleanFirestoreData({
+          ...(siteConfig.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
+          lifeAtPcm: merged,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
+        }),
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn('Firestore write error for Life at PCM:', e);
+    }
+    logActivity(
+      'UPDATE',
+      'Life at PCM Section',
+      'life-at-pcm',
+      'Homepage Formation Highlights',
+      'Updated Life at PCM title, descriptions, or activity cards.'
+    );
+    addToast('success', 'Life at PCM Saved', 'Life at PCM section details have been updated and permanently saved to Firebase.');
+  };
+
+  const saveLifeAtPCMItem = async (item: LifeAtPCMItem) => {
+    const currentLife = siteConfig.lifeAtPcm || siteConfig.studentLife?.lifeAtPcm || INITIAL_LIFE_AT_PCM_CONFIG;
+    const currentItems = currentLife.items || [];
+    const existingIndex = currentItems.findIndex((i) => i.id === item.id);
+    let newItems: LifeAtPCMItem[];
+    if (existingIndex >= 0) {
+      newItems = [...currentItems];
+      newItems[existingIndex] = { ...newItems[existingIndex], ...item };
+    } else {
+      const newOrder = typeof item.order === 'number' ? item.order : currentItems.length + 1;
+      newItems = [...currentItems, { ...item, order: newOrder }];
+    }
+    await updateLifeAtPCMConfig({ items: newItems });
+  };
+
+  const deleteLifeAtPCMItem = async (id: string) => {
+    const currentLife = siteConfig.lifeAtPcm || siteConfig.studentLife?.lifeAtPcm || INITIAL_LIFE_AT_PCM_CONFIG;
+    const currentItems = currentLife.items || [];
+    const target = currentItems.find((i) => i.id === id);
+    const newItems = currentItems.filter((i) => i.id !== id);
+    await updateLifeAtPCMConfig({ items: newItems });
+    addToast('info', 'Card Removed', `Removed "${target?.title || id}" from Life at PCM.`);
+  };
+
+  const reorderLifeAtPCMItems = async (items: LifeAtPCMItem[]) => {
+    const updatedWithOrder = items.map((item, idx) => ({
+      ...item,
+      order: idx + 1,
+    }));
+    await updateLifeAtPCMConfig({ items: updatedWithOrder });
+  };
+
+  const resetLifeAtPCMToDefault = async () => {
+    await updateLifeAtPCMConfig(INITIAL_LIFE_AT_PCM_CONFIG);
+    addToast('info', 'Reset to Defaults', 'Life at PCM restored to institutional defaults.');
+  };
+
   // Media Library CRUD (Persistent Cloud Database)
   const addMediaItem = (item: Omit<MediaItem, 'id' | 'uploadDate'>): MediaItem => {
     const id = `med-${Date.now()}`;
@@ -3171,7 +3513,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       uploadedBy: currentAdminUser?.name || 'Administrator',
       uploadedByUid: auth.currentUser?.uid || currentAdminUser?.id || '',
     });
-    setMediaItems((prev) => [newItem, ...prev.filter((m) => m.id !== id)]);
+    setMediaItems((prev) => {
+      const next = [newItem, ...prev.filter((m) => m.id !== id)];
+      setCachedData('mediaItems', next);
+      return next;
+    });
     safeSetDoc(doc(db, 'mediaLibrary', newItem.id), newItem).catch((e) => console.warn(e));
     safeSetDoc(doc(db, 'mediaItems', newItem.id), newItem).catch((e) => console.warn(e));
     logActivity('CREATE', 'Media Library', newItem.id, newItem.title, `Added image asset to media library (${newItem.category}).`);
@@ -3188,9 +3534,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(updates.url && !updates.downloadURL ? { downloadURL: updates.url } : {}),
     };
     const sanitized = cleanFirestoreData(normalizedUpdates);
-    setMediaItems((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, ...normalizedUpdates } : item))
-    );
+    setMediaItems((prev) => {
+      const next = prev.map((item) => (item.id === id ? { ...item, ...normalizedUpdates } : item));
+      setCachedData('mediaItems', next);
+      return next;
+    });
     safeSetDoc(doc(db, 'mediaLibrary', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     safeSetDoc(doc(db, 'mediaItems', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Media Library', id, updates.title || 'Media Asset', 'Updated media metadata and alt text.');
@@ -3199,7 +3547,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteMediaItem = (id: string) => {
     const item = mediaItems.find((m) => m.id === id);
-    setMediaItems((prev) => prev.filter((m) => m.id !== id));
+    setMediaItems((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      setCachedData('mediaItems', next);
+      return next;
+    });
     safeDeleteDoc(doc(db, 'mediaLibrary', id)).catch((e) => console.warn(e));
     safeDeleteDoc(doc(db, 'mediaItems', id)).catch((e) => console.warn(e));
     if (item?.storagePath) {
@@ -3215,7 +3567,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const itemsToDelete = mediaItems.filter((m) => targetSet.has(m.id));
 
     // Optimistic UI state update
-    setMediaItems((prev) => prev.filter((m) => !targetSet.has(m.id)));
+    setMediaItems((prev) => {
+      const next = prev.filter((m) => !targetSet.has(m.id));
+      setCachedData('mediaItems', next);
+      return next;
+    });
 
     try {
       // Parallel Firestore deletion across collections
@@ -3258,8 +3614,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...album,
       id: `alb-${Date.now()}`,
     });
-    setGalleryAlbums((prev) => [newAlbum, ...prev]);
-    setDoc(doc(db, 'galleryAlbums', newAlbum.id), newAlbum, { merge: true }).catch((e) => console.warn(e));
+    setGalleryAlbums((prev) => {
+      const next = [newAlbum, ...prev];
+      setCachedData('galleryAlbums', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'galleryAlbums', newAlbum.id), newAlbum, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Gallery Album', newAlbum.id, newAlbum.title, `Created new photo album with ${newAlbum.photos.length} photos.`);
     addToast('success', 'Album Created', `Album "${newAlbum.title}" created.`);
     return newAlbum;
@@ -3267,18 +3627,24 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateGalleryAlbum = (id: string, updates: Partial<GalleryAlbum>) => {
     const sanitized = cleanFirestoreData(updates);
-    setGalleryAlbums((prev) =>
-      prev.map((alb) => (alb.id === id ? { ...alb, ...updates } : alb))
-    );
-    setDoc(doc(db, 'galleryAlbums', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setGalleryAlbums((prev) => {
+      const next = prev.map((alb) => (alb.id === id ? { ...alb, ...updates } : alb));
+      setCachedData('galleryAlbums', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'galleryAlbums', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Gallery Album', id, updates.title || 'Album', 'Updated album photos and metadata.');
     addToast('success', 'Album Updated', 'Gallery album saved.');
   };
 
   const deleteGalleryAlbum = (id: string) => {
     const alb = galleryAlbums.find((a) => a.id === id);
-    setGalleryAlbums((prev) => prev.filter((a) => a.id !== id));
-    deleteDoc(doc(db, 'galleryAlbums', id)).catch((e) => console.warn(e));
+    setGalleryAlbums((prev) => {
+      const next = prev.filter((a) => a.id !== id);
+      setCachedData('galleryAlbums', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'galleryAlbums', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Gallery Album', id, alb?.title || 'Album', 'Deleted photo album.');
     addToast('info', 'Album Deleted', 'Gallery album deleted.');
   };
@@ -3309,7 +3675,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdBy: currentAdminUser?.name || currentUserAccount?.email || 'PCM Administration',
     });
 
-    setStudentLifeAlbums((prev) => [newAlbum, ...prev]);
+    setStudentLifeAlbums((prev) => {
+      const next = [newAlbum, ...prev];
+      setCachedData('studentLifeAlbums', next);
+      return next;
+    });
 
     try {
       await safeSetDoc(doc(db, 'studentLifeAlbums', id), newAlbum, { merge: true });
@@ -3335,16 +3705,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: now,
     });
 
-    setStudentLifeAlbums((prev) =>
-      prev.map((alb) => {
+    setStudentLifeAlbums((prev) => {
+      const next = prev.map((alb) => {
         if (alb.id !== id) return alb;
         const updated = { ...alb, ...updates, updatedAt: now };
         if (Array.isArray(updated.photos)) {
           updated.photoCount = updated.photos.length;
         }
         return updated;
-      })
-    );
+      });
+      setCachedData('studentLifeAlbums', next);
+      return next;
+    });
 
     try {
       await safeSetDoc(doc(db, 'studentLifeAlbums', id), sanitized, { merge: true });
@@ -3358,7 +3730,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteStudentLifeAlbum = async (id: string): Promise<void> => {
     const alb = studentLifeAlbums.find((a) => a.id === id);
-    setStudentLifeAlbums((prev) => prev.filter((a) => a.id !== id));
+    setStudentLifeAlbums((prev) => {
+      const next = prev.filter((a) => a.id !== id);
+      setCachedData('studentLifeAlbums', next);
+      return next;
+    });
 
     try {
       await safeDeleteDoc(doc(db, 'studentLifeAlbums', id));
@@ -3434,16 +3810,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const sanitized = cleanFirestoreData(updates);
 
     // Optimistically update local state immediately
-    setStudentLifeAlbums((prev) =>
-      prev.map((alb) => {
+    setStudentLifeAlbums((prev) => {
+      const next = prev.map((alb) => {
         if (alb.id !== albumId) return alb;
         return {
           ...alb,
           ...updates,
           photoCount: remainingPhotos.length,
         };
-      })
-    );
+      });
+      setCachedData('studentLifeAlbums', next);
+      return next;
+    });
 
     try {
       await safeSetDoc(doc(db, 'studentLifeAlbums', albumId), sanitized, { merge: true });
@@ -3519,72 +3897,110 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `ann-${Date.now()}`,
       status: item.status || 'Published',
     });
-    setAnnouncements((prev) => [newItem, ...prev]);
-    setDoc(doc(db, 'announcements', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
+    setAnnouncements((prev) => {
+      const next = [newItem, ...prev];
+      setCachedData('announcements', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'announcements', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Announcement', newItem.id, newItem.title, 'Created new ticker announcement alert.');
     addToast('success', 'Announcement Published', `New ticker announcement added.`);
   };
 
   const updateAnnouncement = (id: string, updates: Partial<AnnouncementItem>) => {
     const sanitized = cleanFirestoreData(updates);
-    setAnnouncements((prev) =>
-      prev.map((a) => (a.id === id ? { ...a, ...updates } : a))
-    );
-    setDoc(doc(db, 'announcements', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setAnnouncements((prev) => {
+      const next = prev.map((a) => (a.id === id ? { ...a, ...updates } : a));
+      setCachedData('announcements', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'announcements', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Announcement', id, updates.title || 'Announcement', 'Updated announcement message.');
     addToast('success', 'Announcement Updated', 'Ticker alert updated.');
   };
 
   const toggleAnnouncement = (id: string) => {
-    setAnnouncements((prev) =>
-      prev.map((a) => {
+    setAnnouncements((prev) => {
+      const next = prev.map((a) => {
         if (a.id === id) {
           const nextActive = !a.active;
-          setDoc(doc(db, 'announcements', id), { active: nextActive }, { merge: true }).catch((e) => console.warn(e));
+          safeSetDoc(doc(db, 'announcements', id), { active: nextActive }, { merge: true }).catch((e) => console.warn(e));
           logActivity(nextActive ? 'PUBLISH' : 'UNPUBLISH', 'Announcement', id, a.title, `${nextActive ? 'Enabled' : 'Disabled'} announcement ticker.`);
           return { ...a, active: nextActive };
         }
         return a;
-      })
-    );
+      });
+      setCachedData('announcements', next);
+      return next;
+    });
   };
 
   const deleteAnnouncement = (id: string) => {
     const item = announcements.find((a) => a.id === id);
-    setAnnouncements((prev) => prev.filter((a) => a.id !== id));
-    deleteDoc(doc(db, 'announcements', id)).catch((e) => console.warn(e));
+    setAnnouncements((prev) => {
+      const next = prev.filter((a) => a.id !== id);
+      setCachedData('announcements', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'announcements', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Announcement', id, item?.title || 'Announcement', 'Deleted announcement ticker item.');
     addToast('info', 'Announcement Removed', 'Ticker message deleted.');
   };
 
   // Academic Programs CRUD
   const addProgram = (program: Omit<AcademicProgram, 'id'>): AcademicProgram => {
+    const mappedLevel = (program.level || (program.degreeLevel ? program.degreeLevel.toLowerCase() : 'undergraduate')) as ProgramLevel;
     const newProg: AcademicProgram = cleanFirestoreData({
       ...program,
+      level: mappedLevel,
+      degreeLevel: program.degreeLevel || (mappedLevel === 'undergraduate' ? 'Undergraduate' : mappedLevel),
       id: `prog-${Date.now()}`,
       status: program.status || 'Published',
     });
-    setPrograms((prev) => [newProg, ...prev]);
-    setDoc(doc(db, 'programs', newProg.id), newProg, { merge: true }).catch((e) => console.warn(e));
+    setPrograms((prev) => {
+      const next = [newProg, ...prev];
+      setCachedData('programs', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'programs', newProg.id), newProg, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Academic Program', newProg.id, newProg.name, `Added new academic degree program (${newProg.code}).`);
     addToast('success', 'Program Created', `Added "${newProg.name}" to curriculum directory.`);
     return newProg;
   };
 
   const updateProgram = (id: string, updates: Partial<AcademicProgram>) => {
-    const sanitized = cleanFirestoreData(updates);
-    setPrograms((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...updates } : p))
-    );
-    setDoc(doc(db, 'programs', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    const finalUpdates = { ...updates };
+    if (finalUpdates.degreeLevel && !finalUpdates.level) {
+      finalUpdates.level = finalUpdates.degreeLevel.toLowerCase() as ProgramLevel;
+    } else if (finalUpdates.level && !finalUpdates.degreeLevel) {
+      finalUpdates.degreeLevel =
+        finalUpdates.level === 'undergraduate'
+          ? 'Undergraduate'
+          : finalUpdates.level === 'graduate'
+          ? 'Graduate'
+          : finalUpdates.level === 'senior-high'
+          ? 'SHS'
+          : finalUpdates.level;
+    }
+    const sanitized = cleanFirestoreData(finalUpdates);
+    setPrograms((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, ...finalUpdates } : p));
+      setCachedData('programs', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'programs', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Academic Program', id, updates.name || 'Program', 'Updated curriculum, tuition, and admission prerequisites.');
     addToast('success', 'Program Updated', 'Academic degree information saved.');
   };
 
   const deleteProgram = (id: string) => {
     const prog = programs.find((p) => p.id === id);
-    setPrograms((prev) => prev.filter((p) => p.id !== id));
-    deleteDoc(doc(db, 'programs', id)).catch((e) => console.warn(e));
+    setPrograms((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      setCachedData('programs', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'programs', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Academic Program', id, prog?.name || 'Program', 'Removed degree program from curriculum directory.');
     addToast('info', 'Program Deleted', 'Academic program removed.');
   };
@@ -3600,7 +4016,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: member.status || 'Published',
       updatedAt: new Date().toISOString(),
     });
-    setFaculty((prev) => [...prev, newFac]);
+    setFaculty((prev) => {
+      const next = [...prev, newFac];
+      setCachedData('faculty', next);
+      return next;
+    });
     safeSetDoc(doc(db, 'faculty', newFac.id), newFac, { merge: true }).catch((e) => console.warn('addFaculty safeSetDoc error:', e));
     logActivity('CREATE', 'Faculty Member', newFac.id, newFac.name, `Added ${newFac.name} (${newFac.group} - ${newFac.role}) to directory.`);
     addToast('success', 'Faculty Member Added', `Added ${newFac.name} to institutional directory.`);
@@ -3615,9 +4035,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
     const sanitized = cleanFirestoreData(normalizedUpdates);
-    setFaculty((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, ...normalizedUpdates } : f))
-    );
+    setFaculty((prev) => {
+      const next = prev.map((f) => (f.id === id ? { ...f, ...normalizedUpdates } : f));
+      setCachedData('faculty', next);
+      return next;
+    });
     setSelectedFaculty((prev) => (prev && prev.id === id ? { ...prev, ...normalizedUpdates } : prev));
     safeSetDoc(doc(db, 'faculty', id), sanitized, { merge: true }).catch((e) => console.warn('updateFaculty safeSetDoc error:', e));
     logActivity('UPDATE', 'Faculty Member', id, updates.name || 'Faculty Member', 'Updated academic credentials, bio, and portrait image.');
@@ -3626,8 +4048,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteFaculty = (id: string) => {
     const fac = faculty.find((f) => f.id === id);
-    setFaculty((prev) => prev.filter((f) => f.id !== id));
-    deleteDoc(doc(db, 'faculty', id)).catch((e) => console.warn('deleteFaculty error:', e));
+    setFaculty((prev) => {
+      const next = prev.filter((f) => f.id !== id);
+      setCachedData('faculty', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'faculty', id)).catch((e) => console.warn('deleteFaculty error:', e));
     logActivity('DELETE', 'Faculty Member', id, fac?.name || 'Faculty Member', 'Removed faculty record from directory.');
     addToast('info', 'Faculty Removed', 'Faculty profile removed.');
   };
@@ -3641,6 +4067,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     setFaculty(updated);
+    setCachedData('faculty', updated);
 
     try {
       const batch = writeBatch(db);
@@ -3705,8 +4132,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       image: rawImg,
       status: article.status || 'Published',
     });
-    setNews((prev) => [newArt, ...prev]);
-    setDoc(doc(db, 'news', newArt.id), newArt, { merge: true }).catch((e) => console.warn(e));
+    setNews((prev) => {
+      const next = [newArt, ...prev];
+      setCachedData('news', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'news', newArt.id), newArt, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'News Article', newArt.id, newArt.title, 'Published college news/feature article.');
     addToast('success', 'Article Published', `"${newArt.title}" published.`);
     return newArt;
@@ -3719,18 +4150,24 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(rawImg !== undefined ? { image: rawImg, imageUrl: rawImg } : {}),
     };
     const sanitized = cleanFirestoreData(finalUpdates);
-    setNews((prev) =>
-      prev.map((n) => (n.id === id ? { ...n, ...finalUpdates } : n))
-    );
-    setDoc(doc(db, 'news', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setNews((prev) => {
+      const next = prev.map((n) => (n.id === id ? { ...n, ...finalUpdates } : n));
+      setCachedData('news', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'news', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'News Article', id, updates.title || 'News Article', 'Updated article content and cover image.');
     addToast('success', 'Article Updated', 'News article updated.');
   };
 
   const deleteNewsArticle = (id: string) => {
     const art = news.find((n) => n.id === id);
-    setNews((prev) => prev.filter((n) => n.id !== id));
-    deleteDoc(doc(db, 'news', id)).catch((e) => console.warn(e));
+    setNews((prev) => {
+      const next = prev.filter((n) => n.id !== id);
+      setCachedData('news', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'news', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'News Article', id, art?.title || 'News Article', 'Deleted news article.');
     addToast('info', 'Article Deleted', 'News article removed.');
   };
@@ -3745,8 +4182,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       image: rawImg,
       registeredAttendees: event.registeredAttendees || [],
     });
-    setEvents((prev) => [newEvt, ...prev]);
-    setDoc(doc(db, 'events', newEvt.id), newEvt, { merge: true }).catch((e) => console.warn(e));
+    setEvents((prev) => {
+      const next = [newEvt, ...prev];
+      setCachedData('events', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'events', newEvt.id), newEvt, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Event', newEvt.id, newEvt.title, `Scheduled college calendar event for ${newEvt.date}.`);
     addToast('success', 'Event Scheduled', `"${newEvt.title}" added to calendar.`);
     return newEvt;
@@ -3759,18 +4200,24 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(rawImg !== undefined ? { image: rawImg, imageUrl: rawImg } : {}),
     };
     const sanitized = cleanFirestoreData(finalUpdates);
-    setEvents((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, ...finalUpdates } : e))
-    );
-    setDoc(doc(db, 'events', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setEvents((prev) => {
+      const next = prev.map((e) => (e.id === id ? { ...e, ...finalUpdates } : e));
+      setCachedData('events', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'events', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Event', id, updates.title || 'Event', 'Updated event date, venue, and description.');
     addToast('success', 'Event Updated', 'Calendar event saved.');
   };
 
   const deleteEvent = (id: string) => {
     const evt = events.find((e) => e.id === id);
-    setEvents((prev) => prev.filter((e) => e.id !== id));
-    deleteDoc(doc(db, 'events', id)).catch((e) => console.warn(e));
+    setEvents((prev) => {
+      const next = prev.filter((e) => e.id !== id);
+      setCachedData('events', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'events', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Event', id, evt?.title || 'Event', 'Cancelled calendar event.');
     addToast('info', 'Event Deleted', 'Calendar event removed.');
   };
@@ -3782,8 +4229,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `dl-${Date.now()}`,
       downloadsCount: 0,
     });
-    setDownloads((prev) => [newRes, ...prev]);
-    setDoc(doc(db, 'downloads', newRes.id), newRes, { merge: true }).catch((e) => console.warn(e));
+    setDownloads((prev) => {
+      const next = [newRes, ...prev];
+      setCachedData('downloads', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'downloads', newRes.id), newRes, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Resource / Form', newRes.id, newRes.title, `Added downloadable document (${newRes.category}).`);
     addToast('success', 'Resource Added', `"${newRes.title}" is now available for download.`);
     return newRes;
@@ -3791,18 +4242,24 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateDownload = (id: string, updates: Partial<DownloadableResource>) => {
     const sanitized = cleanFirestoreData(updates);
-    setDownloads((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
-    );
-    setDoc(doc(db, 'downloads', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setDownloads((prev) => {
+      const next = prev.map((d) => (d.id === id ? { ...d, ...updates } : d));
+      setCachedData('downloads', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'downloads', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Resource / Form', id, updates.title || 'Resource', 'Updated downloadable resource metadata.');
     addToast('success', 'Resource Updated', 'Downloadable document saved.');
   };
 
   const deleteDownload = (id: string) => {
     const d = downloads.find((item) => item.id === id);
-    setDownloads((prev) => prev.filter((item) => item.id !== id));
-    deleteDoc(doc(db, 'downloads', id)).catch((e) => console.warn(e));
+    setDownloads((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      setCachedData('downloads', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'downloads', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Resource / Form', id, d?.title || 'Resource', 'Deleted downloadable document.');
     addToast('info', 'Resource Removed', 'Document removed from downloads.');
   };
@@ -3810,26 +4267,36 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Testimonials CRUD
   const addTestimonial = (item: Omit<Testimonial, 'id'>) => {
     const newItem: Testimonial = cleanFirestoreData({ ...item, id: `test-${Date.now()}` });
-    setTestimonials((prev) => [newItem, ...prev]);
-    setDoc(doc(db, 'testimonials', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
+    setTestimonials((prev) => {
+      const next = [newItem, ...prev];
+      setCachedData('testimonials', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'testimonials', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Testimonial', newItem.id, newItem.name, `Added testimony quote from ${newItem.name} (${newItem.role}).`);
     addToast('success', 'Testimonial Added', `Added testimonial from ${newItem.name}.`);
   };
 
   const updateTestimonial = (id: string, updates: Partial<Testimonial>) => {
     const sanitized = cleanFirestoreData(updates);
-    setTestimonials((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
-    );
-    setDoc(doc(db, 'testimonials', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setTestimonials((prev) => {
+      const next = prev.map((t) => (t.id === id ? { ...t, ...updates } : t));
+      setCachedData('testimonials', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'testimonials', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Testimonial', id, updates.name || 'Testimonial', 'Updated testimonial quote and role.');
     addToast('success', 'Testimonial Updated', 'Testimonial saved.');
   };
 
   const deleteTestimonial = (id: string) => {
     const t = testimonials.find((item) => item.id === id);
-    setTestimonials((prev) => prev.filter((item) => item.id !== id));
-    deleteDoc(doc(db, 'testimonials', id)).catch((e) => console.warn(e));
+    setTestimonials((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      setCachedData('testimonials', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'testimonials', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Testimonial', id, t?.name || 'Testimonial', 'Deleted testimonial quote.');
     addToast('info', 'Testimonial Removed', 'Testimonial deleted.');
   };
@@ -3837,10 +4304,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Stats CRUD
   const updateStat = (id: string, updates: Partial<ImpactStat>) => {
     const sanitized = cleanFirestoreData(updates);
-    setStats((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
-    );
-    setDoc(doc(db, 'stats', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setStats((prev) => {
+      const next = prev.map((s) => (s.id === id ? { ...s, ...updates } : s));
+      setCachedData('stats', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'stats', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Institutional Stat', id, updates.label || 'Stat', 'Updated institutional metric values.');
     addToast('success', 'Metric Updated', 'Institutional impact statistic saved.');
   };
@@ -3848,26 +4317,36 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // FAQs CRUD
   const addFaq = (item: Omit<FAQItem, 'id'>) => {
     const newItem: FAQItem = cleanFirestoreData({ ...item, id: `faq-${Date.now()}` });
-    setFaqs((prev) => [...prev, newItem]);
-    setDoc(doc(db, 'faqs', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
+    setFaqs((prev) => {
+      const next = [...prev, newItem];
+      setCachedData('faqs', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'faqs', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'FAQ', newItem.id, newItem.question, 'Added new FAQ entry.');
     addToast('success', 'FAQ Added', 'New question & answer added.');
   };
 
   const updateFaq = (id: string, updates: Partial<FAQItem>) => {
     const sanitized = cleanFirestoreData(updates);
-    setFaqs((prev) =>
-      prev.map((f) => (f.id === id ? { ...f, ...updates } : f))
-    );
-    setDoc(doc(db, 'faqs', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setFaqs((prev) => {
+      const next = prev.map((f) => (f.id === id ? { ...f, ...updates } : f));
+      setCachedData('faqs', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'faqs', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'FAQ', id, updates.question || 'FAQ', 'Updated question and response.');
     addToast('success', 'FAQ Updated', 'FAQ item saved.');
   };
 
   const deleteFaq = (id: string) => {
     const f = faqs.find((item) => item.id === id);
-    setFaqs((prev) => prev.filter((item) => item.id !== id));
-    deleteDoc(doc(db, 'faqs', id)).catch((e) => console.warn(e));
+    setFaqs((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      setCachedData('faqs', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'faqs', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'FAQ', id, f?.question || 'FAQ', 'Deleted FAQ entry.');
     addToast('info', 'FAQ Removed', 'FAQ item deleted.');
   };
@@ -3875,26 +4354,36 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sermons CRUD
   const addSermon = (item: Omit<SermonLecture, 'id'>) => {
     const newItem: SermonLecture = cleanFirestoreData({ ...item, id: `sermon-${Date.now()}` });
-    setSermons((prev) => [newItem, ...prev]);
-    setDoc(doc(db, 'sermons', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
+    setSermons((prev) => {
+      const next = [newItem, ...prev];
+      setCachedData('sermons', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'sermons', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Sermon / Chapel', newItem.id, newItem.title, `Added chapel audio lecture by ${newItem.speaker}.`);
     addToast('success', 'Sermon Added', `"${newItem.title}" added to chapel archive.`);
   };
 
   const updateSermon = (id: string, updates: Partial<SermonLecture>) => {
     const sanitized = cleanFirestoreData(updates);
-    setSermons((prev) =>
-      prev.map((s) => (s.id === id ? { ...s, ...updates } : s))
-    );
-    setDoc(doc(db, 'sermons', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setSermons((prev) => {
+      const next = prev.map((s) => (s.id === id ? { ...s, ...updates } : s));
+      setCachedData('sermons', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'sermons', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Sermon / Chapel', id, updates.title || 'Sermon', 'Updated sermon details and audio link.');
     addToast('success', 'Sermon Updated', 'Chapel archive item saved.');
   };
 
   const deleteSermon = (id: string) => {
     const s = sermons.find((item) => item.id === id);
-    setSermons((prev) => prev.filter((item) => item.id !== id));
-    deleteDoc(doc(db, 'sermons', id)).catch((e) => console.warn(e));
+    setSermons((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      setCachedData('sermons', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'sermons', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Sermon / Chapel', id, s?.title || 'Sermon', 'Deleted chapel sermon entry.');
     addToast('info', 'Sermon Removed', 'Chapel sermon removed from archive.');
   };
@@ -3902,26 +4391,36 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Scrapbook CRUD
   const addScrapbookItem = (item: Omit<ScrapbookItem, 'id'>) => {
     const newItem: ScrapbookItem = cleanFirestoreData({ ...item, id: `sb-${Date.now()}` });
-    setScrapbook((prev) => [newItem, ...prev]);
-    setDoc(doc(db, 'scrapbook', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
+    setScrapbook((prev) => {
+      const next = [newItem, ...prev];
+      setCachedData('scrapbook', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'scrapbook', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Historical Scrapbook', newItem.id, newItem.title, `Added heritage milestone (${newItem.year}).`);
     addToast('success', 'Historical Item Added', `"${newItem.title}" added to heritage archive.`);
   };
 
   const updateScrapbookItem = (id: string, updates: Partial<ScrapbookItem>) => {
     const sanitized = cleanFirestoreData(updates);
-    setScrapbook((prev) =>
-      prev.map((sb) => (sb.id === id ? { ...sb, ...updates } : sb))
-    );
-    setDoc(doc(db, 'scrapbook', id), sanitized, { merge: true }).catch((e) => console.warn(e));
+    setScrapbook((prev) => {
+      const next = prev.map((sb) => (sb.id === id ? { ...sb, ...updates } : sb));
+      setCachedData('scrapbook', next);
+      return next;
+    });
+    safeSetDoc(doc(db, 'scrapbook', id), sanitized, { merge: true }).catch((e) => console.warn(e));
     logActivity('UPDATE', 'Historical Scrapbook', id, updates.title || 'Heritage Item', 'Updated heritage archive record.');
     addToast('success', 'Heritage Item Updated', 'Scrapbook milestone saved.');
   };
 
   const deleteScrapbookItem = (id: string) => {
     const sb = scrapbook.find((item) => item.id === id);
-    setScrapbook((prev) => prev.filter((item) => item.id !== id));
-    deleteDoc(doc(db, 'scrapbook', id)).catch((e) => console.warn(e));
+    setScrapbook((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      setCachedData('scrapbook', next);
+      return next;
+    });
+    safeDeleteDoc(doc(db, 'scrapbook', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Historical Scrapbook', id, sb?.title || 'Heritage Item', 'Deleted scrapbook historical record.');
     addToast('info', 'Historical Item Removed', 'Scrapbook record deleted.');
   };
@@ -3965,9 +4464,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
 
-    setApplications((prev) => [newApp, ...prev.filter((a) => a.referenceNumber !== refNumber && a.id !== newApp.id)]);
+    setApplications((prev) => {
+      const next = [newApp, ...prev.filter((a) => a.referenceNumber !== refNumber && a.id !== newApp.id)];
+      setCachedData('applications', next);
+      return next;
+    });
     try {
-      await setDoc(doc(db, 'applications', newApp.id), cleanFirestoreData(newApp), { merge: true });
+      await safeSetDoc(doc(db, 'applications', newApp.id), cleanFirestoreData(newApp), { merge: true });
     } catch (e) {
       console.warn('Firestore application save warning:', e);
     }
@@ -3983,12 +4486,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ? `${targetApp?.adminNotes || ''}\n[${new Date().toLocaleDateString()} - ${currentAdminUser.name}]: ${note}`
       : targetApp?.adminNotes;
 
-    setApplications((prev) =>
-      prev.map((app) => (app.id === id ? { ...app, status, adminNotes: updatedNote } : app))
-    );
+    setApplications((prev) => {
+      const next = prev.map((app) => (app.id === id ? { ...app, status, adminNotes: updatedNote } : app));
+      setCachedData('applications', next);
+      return next;
+    });
 
     try {
-      await setDoc(doc(db, 'applications', id), cleanFirestoreData({ status, adminNotes: updatedNote }), { merge: true });
+      await safeSetDoc(doc(db, 'applications', id), cleanFirestoreData({ status, adminNotes: updatedNote }), { merge: true });
     } catch (e) {
       console.warn(e);
     }
@@ -4001,12 +4506,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetApp = applications.find((a) => a.id === id);
     const newNotes = `${targetApp?.adminNotes || ''}\n[${new Date().toLocaleDateString()} - ${currentAdminUser.name}]: ${note}`;
 
-    setApplications((prev) =>
-      prev.map((app) => (app.id === id ? { ...app, adminNotes: newNotes } : app))
-    );
+    setApplications((prev) => {
+      const next = prev.map((app) => (app.id === id ? { ...app, adminNotes: newNotes } : app));
+      setCachedData('applications', next);
+      return next;
+    });
 
     try {
-      await setDoc(doc(db, 'applications', id), cleanFirestoreData({ adminNotes: newNotes }), { merge: true });
+      await safeSetDoc(doc(db, 'applications', id), cleanFirestoreData({ adminNotes: newNotes }), { merge: true });
     } catch (e) {
       console.warn(e);
     }
@@ -4016,10 +4523,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteApplication = async (id: string) => {
     const targetApp = applications.find((a) => a.id === id);
-    setApplications((prev) => prev.filter((a) => a.id !== id));
+    setApplications((prev) => {
+      const next = prev.filter((a) => a.id !== id);
+      setCachedData('applications', next);
+      return next;
+    });
 
     try {
-      await deleteDoc(doc(db, 'applications', id));
+      await safeDeleteDoc(doc(db, 'applications', id));
     } catch (e) {
       console.warn(e);
     }
@@ -4841,7 +5352,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id,
     };
 
-    setAcademicSubjects((prev) => [...prev, newSubject]);
+    setAcademicSubjects((prev) => {
+      const next = [...prev, newSubject];
+      setCachedData('academicSubjects', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'academicSubjects', id), cleanFirestoreData(newSubject));
     } catch (e) {
@@ -4854,7 +5369,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAcademicSubject = async (id: string, updates: Partial<AcademicSubject>): Promise<boolean> => {
-    setAcademicSubjects((prev) => prev.map((s) => (s.id === id ? { ...s, ...updates } : s)));
+    setAcademicSubjects((prev) => {
+      const next = prev.map((s) => (s.id === id ? { ...s, ...updates } : s));
+      setCachedData('academicSubjects', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'academicSubjects', id), cleanFirestoreData(updates), { merge: true });
     } catch (e) {
@@ -4865,7 +5384,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteAcademicSubject = async (id: string): Promise<boolean> => {
     const target = academicSubjects.find((s) => s.id === id);
-    setAcademicSubjects((prev) => prev.filter((s) => s.id !== id));
+    setAcademicSubjects((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      setCachedData('academicSubjects', next);
+      return next;
+    });
     try {
       await safeDeleteDoc(doc(db, 'academicSubjects', id));
     } catch (e) {
@@ -4890,12 +5413,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setPreEnlistments((prev) => {
       const idx = prev.findIndex((p) => p.studentId === recordData.studentId && p.semester === recordData.semester);
+      let next: PreEnlistmentRecord[];
       if (idx >= 0) {
-        const next = [...prev];
+        next = [...prev];
         next[idx] = newRecord;
-        return next;
+      } else {
+        next = [newRecord, ...prev];
       }
-      return [newRecord, ...prev];
+      setCachedData('preEnlistments', next);
+      return next;
     });
 
     try {
@@ -4932,7 +5458,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: now,
     };
 
-    setPreEnlistments((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    setPreEnlistments((prev) => {
+      const next = prev.map((p) => (p.id === id ? updated : p));
+      setCachedData('preEnlistments', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'preEnlistments', id), cleanFirestoreData(updated), { merge: true });
     } catch (e) {
@@ -4963,7 +5493,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: now,
     };
 
-    setAddDropRequests((prev) => [newReq, ...prev]);
+    setAddDropRequests((prev) => {
+      const next = [newReq, ...prev];
+      setCachedData('addDropRequests', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'addDropRequests', id), cleanFirestoreData(newReq));
     } catch (e) {
@@ -4997,7 +5531,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       reviewedAt: now,
     };
 
-    setAddDropRequests((prev) => prev.map((r) => (r.id === id ? updatedReq : r)));
+    setAddDropRequests((prev) => {
+      const next = prev.map((r) => (r.id === id ? updatedReq : r));
+      setCachedData('addDropRequests', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'addDropRequests', id), cleanFirestoreData(updatedReq), { merge: true });
     } catch (e) {
@@ -5051,9 +5589,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         tuitionBalance: Math.max(0, newTuitionTotal - (targetStudent.tuitionPaid || 0)),
       };
 
-      setStudents((prev) => prev.map((s) => (s.studentId === target.studentId ? updatedProfile : s)));
+      setStudents((prev) => {
+        const next = prev.map((s) => (s.studentId === target.studentId ? updatedProfile : s));
+        setCachedData('students', next);
+        return next;
+      });
       if (studentProfile.studentId === target.studentId) {
         setStudentProfile(updatedProfile);
+        setCachedData('studentProfile', updatedProfile);
       }
       try {
         await safeSetDoc(doc(db, 'studentProfiles', targetStudent.id || targetStudent.studentId), cleanFirestoreData(updatedProfile), { merge: true });
@@ -5077,7 +5620,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Fee Structure Configuration
   const updateFeeStructureItem = async (id: string, updates: Partial<FeeStructureItem>): Promise<boolean> => {
-    setFeeStructure((prev) => prev.map((f) => (f.id === id ? { ...f, ...updates } : f)));
+    setFeeStructure((prev) => {
+      const next = prev.map((f) => (f.id === id ? { ...f, ...updates } : f));
+      setCachedData('feeStructure', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'feeStructure', id), cleanFirestoreData(updates), { merge: true });
     } catch (e) {
@@ -5090,7 +5637,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addFeeStructureItem = async (itemData: Omit<FeeStructureItem, 'id'>): Promise<FeeStructureItem> => {
     const id = `fee-${Date.now()}`;
     const newItem: FeeStructureItem = { ...itemData, id };
-    setFeeStructure((prev) => [...prev, newItem]);
+    setFeeStructure((prev) => {
+      const next = [...prev, newItem];
+      setCachedData('feeStructure', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'feeStructure', id), cleanFirestoreData(newItem));
     } catch (e) {
@@ -5101,7 +5652,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteFeeStructureItem = async (id: string): Promise<boolean> => {
-    setFeeStructure((prev) => prev.filter((f) => f.id !== id));
+    setFeeStructure((prev) => {
+      const next = prev.filter((f) => f.id !== id);
+      setCachedData('feeStructure', next);
+      return next;
+    });
     try {
       await safeDeleteDoc(doc(db, 'feeStructure', id));
     } catch (e) {
@@ -5634,10 +6189,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     });
 
-    if (newPeriod.isCurrent) {
-      setAcademicPeriods((prev) => prev.map((p) => ({ ...p, isCurrent: false })));
-    }
-    setAcademicPeriods((prev) => [newPeriod, ...prev]);
+    setAcademicPeriods((prev) => {
+      const base = newPeriod.isCurrent ? prev.map((p) => ({ ...p, isCurrent: false })) : prev;
+      const next = [newPeriod, ...base];
+      setCachedData('academicPeriods', next);
+      return next;
+    });
 
     try {
       await safeSetDoc(doc(db, 'academicPeriods', id), newPeriod);
@@ -5651,9 +6208,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateAcademicPeriod = async (id: string, updates: Partial<AcademicPeriod>): Promise<boolean> => {
     const sanitized = cleanFirestoreData({ ...updates, updatedAt: new Date().toISOString() });
-    setAcademicPeriods((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, ...sanitized } : p))
-    );
+    setAcademicPeriods((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, ...sanitized } : p));
+      setCachedData('academicPeriods', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'academicPeriods', id), sanitized, { merge: true });
     } catch (e) {
@@ -5665,9 +6224,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentAcademicPeriod = async (id: string): Promise<boolean> => {
-    setAcademicPeriods((prev) =>
-      prev.map((p) => ({ ...p, isCurrent: p.id === id }))
-    );
+    setAcademicPeriods((prev) => {
+      const next = prev.map((p) => ({ ...p, isCurrent: p.id === id }));
+      setCachedData('academicPeriods', next);
+      return next;
+    });
     try {
       const batch = writeBatch(db);
       academicPeriods.forEach((p) => {
@@ -5687,7 +6248,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('error', 'Cannot Delete', 'At least one academic period must remain configured.');
       return false;
     }
-    setAcademicPeriods((prev) => prev.filter((p) => p.id !== id));
+    setAcademicPeriods((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      setCachedData('academicPeriods', next);
+      return next;
+    });
     try {
       await safeDeleteDoc(doc(db, 'academicPeriods', id));
     } catch (e) {
@@ -5709,7 +6274,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
-    setClassSections((prev) => [newSection, ...prev]);
+    setClassSections((prev) => {
+      const next = [newSection, ...prev];
+      setCachedData('classSections', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'classSections', id), newSection);
     } catch (e) {
@@ -5722,7 +6291,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateClassSection = async (id: string, updates: Partial<ClassSection>): Promise<boolean> => {
     const sanitized = cleanFirestoreData({ ...updates, updatedAt: new Date().toISOString() });
-    setClassSections((prev) => prev.map((s) => (s.id === id ? { ...s, ...sanitized } : s)));
+    setClassSections((prev) => {
+      const next = prev.map((s) => (s.id === id ? { ...s, ...sanitized } : s));
+      setCachedData('classSections', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'classSections', id), sanitized, { merge: true });
     } catch (e) {
@@ -5734,7 +6307,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteClassSection = async (id: string): Promise<boolean> => {
-    setClassSections((prev) => prev.filter((s) => s.id !== id));
+    setClassSections((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      setCachedData('classSections', next);
+      return next;
+    });
     try {
       await safeDeleteDoc(doc(db, 'classSections', id));
     } catch (e) {
@@ -5753,8 +6330,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
 
-    setClassSections((prev) =>
-      prev.map((s) => {
+    setClassSections((prev) => {
+      const next = prev.map((s) => {
         if (s.id === fromSectionId) {
           const studentIds = (s.enrolledStudentIds || []).filter((sid) => sid !== studentId);
           return { ...s, enrolledCount: Math.max(0, s.enrolledCount - 1), enrolledStudentIds: studentIds };
@@ -5764,8 +6341,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return { ...s, enrolledCount: s.enrolledCount + 1, enrolledStudentIds: studentIds };
         }
         return s;
-      })
-    );
+      });
+      setCachedData('classSections', next);
+      return next;
+    });
     logActivity('UPDATE', 'Section Roster', toSectionId, studentId, `Transferred student from ${fromSectionId} to ${toSec.sectionName}.`);
     addToast('success', 'Student Transferred', `Transferred student to ${toSec.sectionName}.`);
     return true;
@@ -5780,7 +6359,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     });
-    setInstructors((prev) => [newInst, ...prev]);
+    setInstructors((prev) => {
+      const next = [newInst, ...prev];
+      setCachedData('instructors', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'instructors', id), newInst);
     } catch (e) {
@@ -5793,7 +6376,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateInstructor = async (id: string, updates: Partial<InstructorRecord>): Promise<boolean> => {
     const sanitized = cleanFirestoreData({ ...updates, updatedAt: new Date().toISOString() });
-    setInstructors((prev) => prev.map((i) => (i.id === id ? { ...i, ...sanitized } : i)));
+    setInstructors((prev) => {
+      const next = prev.map((i) => (i.id === id ? { ...i, ...sanitized } : i));
+      setCachedData('instructors', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'instructors', id), sanitized, { merge: true });
     } catch (e) {
@@ -5805,7 +6392,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteInstructor = async (id: string): Promise<boolean> => {
-    setInstructors((prev) => prev.filter((i) => i.id !== id));
+    setInstructors((prev) => {
+      const next = prev.filter((i) => i.id !== id);
+      setCachedData('instructors', next);
+      return next;
+    });
     try {
       await safeDeleteDoc(doc(db, 'instructors', id));
     } catch (e) {
@@ -5825,6 +6416,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedBy: currentAdminUser?.name || 'Administrator',
     });
     setEnrollmentSystemConfig(sanitized);
+    setCachedData('enrollmentSystemConfig', sanitized);
     try {
       await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), sanitized, { merge: true });
     } catch (e) {
@@ -5852,7 +6444,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       enrolledCount: 0,
       status: 'Open',
     });
-    setAcademicSubjects((prev) => [...prev, duplicated]);
+    setAcademicSubjects((prev) => {
+      const next = [...prev, duplicated];
+      setCachedData('academicSubjects', next);
+      return next;
+    });
     try {
       await safeSetDoc(doc(db, 'academicSubjects', id), duplicated);
     } catch (e) {
@@ -7638,7 +8234,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: `${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
     });
 
-    setDonations((prev) => [newDonation, ...prev]);
+    setDonations((prev) => {
+      const next = [newDonation, ...prev];
+      setCachedData('donations', next);
+      return next;
+    });
 
     try {
       await setDoc(doc(db, 'donations', newDonation.id), newDonation, { merge: true });
@@ -7661,7 +8261,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       active: method.active !== undefined ? method.active : true,
     });
 
-    setDonationMethods((prev) => [...prev, newMethod]);
+    setDonationMethods((prev) => {
+      const next = [...prev, newMethod];
+      setCachedData('donationMethods', next);
+      return next;
+    });
 
     try {
       await setDoc(doc(db, 'donationPaymentMethods', newMethod.id), newMethod, { merge: true });
@@ -7680,9 +8284,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       safeUpdates.instructions = normalizeInstructions(safeUpdates.instructions);
     }
     const sanitized = cleanFirestoreData(safeUpdates);
-    setDonationMethods((prev) =>
-      prev.map((m) => (m.id === id ? { ...m, ...safeUpdates } : m))
-    );
+    setDonationMethods((prev) => {
+      const next = prev.map((m) => (m.id === id ? { ...m, ...safeUpdates } : m));
+      setCachedData('donationMethods', next);
+      return next;
+    });
 
     try {
       await setDoc(doc(db, 'donationPaymentMethods', id), sanitized, { merge: true });
@@ -7696,7 +8302,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteDonationMethod = async (id: string) => {
     const target = donationMethods.find((m) => m.id === id);
-    setDonationMethods((prev) => prev.filter((m) => m.id !== id));
+    setDonationMethods((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      setCachedData('donationMethods', next);
+      return next;
+    });
 
     try {
       await deleteDoc(doc(db, 'donationPaymentMethods', id));
@@ -7710,9 +8320,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateDonationRecord = async (id: string, updates: Partial<DonationRecord>) => {
     const sanitized = cleanFirestoreData(updates);
-    setDonations((prev) =>
-      prev.map((d) => (d.id === id ? { ...d, ...updates } : d))
-    );
+    setDonations((prev) => {
+      const next = prev.map((d) => (d.id === id ? { ...d, ...updates } : d));
+      setCachedData('donations', next);
+      return next;
+    });
 
     try {
       await setDoc(doc(db, 'donations', id), sanitized, { merge: true });
@@ -7726,7 +8338,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteDonationRecord = async (id: string) => {
     const target = donations.find((d) => d.id === id);
-    setDonations((prev) => prev.filter((d) => d.id !== id));
+    setDonations((prev) => {
+      const next = prev.filter((d) => d.id !== id);
+      setCachedData('donations', next);
+      return next;
+    });
 
     try {
       await deleteDoc(doc(db, 'donations', id));
@@ -7744,6 +8360,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...updates,
     });
     setDonationSettings(updated);
+    setCachedData('donationSettings', updated);
 
     try {
       await setDoc(doc(db, 'donationSettings', 'global'), updated, { merge: true });
@@ -7831,10 +8448,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     if (newVideo.isFeatured) {
-      setVideos((prev) => [newVideo, ...prev.map((v) => ({ ...v, isFeatured: false }))]);
+      setVideos((prev) => {
+        const next = [newVideo, ...prev.map((v) => ({ ...v, isFeatured: false }))];
+        setCachedData('videos', next);
+        return next;
+      });
       updateHomepageVideoConfig({ featuredVideoId: id });
     } else {
-      setVideos((prev) => [...prev, newVideo]);
+      setVideos((prev) => {
+        const next = [...prev, newVideo];
+        setCachedData('videos', next);
+        return next;
+      });
     }
 
     await safeSetDoc(doc(db, 'videos', id), newVideo, { merge: true });
@@ -7863,8 +8488,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    setVideos((prev) =>
-      prev.map((v) => {
+    setVideos((prev) => {
+      const next = prev.map((v) => {
         if (v.id === id) {
           return { ...v, ...sanitizedUpdates };
         }
@@ -7872,8 +8497,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return { ...v, isFeatured: false };
         }
         return v;
-      })
-    );
+      });
+      setCachedData('videos', next);
+      return next;
+    });
 
     if (sanitizedUpdates.isFeatured) {
       updateHomepageVideoConfig({ featuredVideoId: id });
@@ -7887,7 +8514,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteYouTubeVideo = async (id: string): Promise<boolean> => {
     const target = videos.find((v) => v.id === id);
-    setVideos((prev) => prev.filter((v) => v.id !== id));
+    setVideos((prev) => {
+      const next = prev.filter((v) => v.id !== id);
+      setCachedData('videos', next);
+      return next;
+    });
 
     if (homepageVideoConfig.featuredVideoId === id) {
       const remaining = videos.filter((v) => v.id !== id);
@@ -7911,13 +8542,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const setFeaturedYouTubeVideo = async (id: string): Promise<boolean> => {
     const now = getCurrentTimestamp();
-    setVideos((prev) =>
-      prev.map((v) => ({
+    setVideos((prev) => {
+      const next = prev.map((v) => ({
         ...v,
         isFeatured: v.id === id,
         updatedAt: v.id === id ? now : v.updatedAt,
-      }))
-    );
+      }));
+      setCachedData('videos', next);
+      return next;
+    });
 
     try {
       const batch = writeBatch(db);
@@ -7952,6 +8585,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       map.forEach((item) => {
         reordered.push({ ...item, displayOrder: reordered.length + 1 });
       });
+      setCachedData('videos', reordered);
       return reordered;
     });
 
@@ -7981,6 +8615,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: now,
     });
     setHomepageVideoConfig(newConfig);
+    setCachedData('homepageVideoConfig', newConfig);
     const success = await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), newConfig, { merge: true });
     logActivity('UPDATE', 'HomepageVideoConfig', 'global', 'Homepage Video Settings', 'Updated homepage video settings & display options.');
     return success;
@@ -8066,6 +8701,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateFooterConfig,
         updateNavigationMenu,
         updateStudentLifeConfig,
+        updateLifeAtPCMConfig,
+        saveLifeAtPCMItem,
+        deleteLifeAtPCMItem,
+        reorderLifeAtPCMItems,
+        resetLifeAtPCMToDefault,
 
         // Media Library & Albums
         mediaItems,

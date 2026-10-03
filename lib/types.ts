@@ -1235,6 +1235,7 @@ export interface SiteConfig {
     highlights: string[];
     iconName?: string;
   }[];
+  lifeAtPcm?: LifeAtPCMConfig;
   studentLife?: StudentLifeConfig;
   footerConfig: {
     campusDescription: string;
@@ -1380,6 +1381,27 @@ export interface StudentLifeConfig {
   galleryTitle?: string;
   gallerySubtitle?: string;
   galleryPhotos?: StudentLifePhoto[];
+  lifeAtPcm?: LifeAtPCMConfig;
+}
+
+export interface LifeAtPCMItem {
+  id: string;
+  title: string;
+  desc: string;
+  iconName?: string;
+  image: string;
+  active?: boolean;
+  order?: number;
+}
+
+export interface LifeAtPCMConfig {
+  badge?: string;
+  title?: string;
+  subtitle?: string;
+  ctaText?: string;
+  ctaLink?: string;
+  enabled?: boolean;
+  items: LifeAtPCMItem[];
 }
 
 export interface MigrationAuditItem {

@@ -52,7 +52,9 @@ export const AdminSiteConfigTab: React.FC = () => {
 
     setIsSaving(true);
     try {
-      await updateSiteConfig(formData);
+      // Exclude heroSlides, lifeAtPcm, and studentLife to ensure saving Site Config never overwrites the slideshow, life at PCM cards, or student life settings
+      const { heroSlides: _hs, lifeAtPcm: _lap, studentLife: _sl, ...siteConfigPayload } = formData;
+      await updateSiteConfig(siteConfigPayload);
       setIsDirty(false);
       addToast({
         title: 'Configuration Saved',

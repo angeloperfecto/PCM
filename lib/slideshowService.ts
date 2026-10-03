@@ -5,7 +5,7 @@ import { HeroSlide } from './types';
 export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
   {
     id: 'hero-1',
-    image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1600&auto=format&fit=crop',
+    image: '/api/slideshow/image?id=hero-1&v=1789132251784',
     tag: 'Accredited Theological Education',
     headline: 'EQUIPPING SERVANTS FOR KINGDOM IMPACT',
     subtext:
@@ -17,12 +17,12 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
     active: true,
     order: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    updatedBy: 'System Seed',
+    updatedAt: '2026-09-11T13:10:55.586Z',
+    updatedBy: 'angeloperfecto.epc@gmail.com',
   },
   {
     id: 'hero-2',
-    image: 'https://images.unsplash.com/photo-1511578314322-379afb476865?q=80&w=1600&auto=format&fit=crop',
+    image: '/api/slideshow/image?id=hero-2&v=1789132251784',
     tag: 'Spiritual Formation & Worship',
     headline: 'ROOTED IN TRUTH. PASSIONATE IN WORSHIP.',
     subtext:
@@ -34,12 +34,12 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
     active: true,
     order: 1,
     createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    updatedBy: 'System Seed',
+    updatedAt: '2026-09-11T13:10:55.586Z',
+    updatedBy: 'angeloperfecto.epc@gmail.com',
   },
   {
     id: 'hero-3',
-    image: 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?q=80&w=1600&auto=format&fit=crop',
+    image: '/api/slideshow/image?id=hero-3&v=1789132251784',
     tag: 'Hands-On Pastoral Apprenticeship',
     headline: 'REAL-WORLD MINISTRY IN 85+ LOCAL CHURCHES',
     subtext:
@@ -51,8 +51,8 @@ export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
     active: true,
     order: 2,
     createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-    updatedBy: 'System Seed',
+    updatedAt: '2026-09-11T13:10:55.586Z',
+    updatedBy: 'angeloperfecto.epc@gmail.com',
   },
 ];
 

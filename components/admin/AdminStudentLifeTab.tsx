@@ -15,6 +15,7 @@ import {
 } from '@/lib/types';
 import { INITIAL_STUDENT_LIFE_CONFIG } from '@/lib/initialData';
 import { AdminStudentLifeGallery } from './AdminStudentLifeGallery';
+import { AdminLifeAtPCMManager } from './AdminLifeAtPCMManager';
 import {
   Flame,
   Users,
@@ -38,6 +39,7 @@ import {
   Camera,
   HelpCircle,
   Calendar,
+  LayoutGrid,
   Layers,
   ChevronRight,
   Info,
@@ -77,6 +79,7 @@ export const AdminStudentLifeTab: React.FC = () => {
   }
 
   type SubTabType =
+    | 'lifeAtPcm'
     | 'banner'
     | 'pillars'
     | 'orgs'
@@ -87,7 +90,7 @@ export const AdminStudentLifeTab: React.FC = () => {
     | 'guidelines'
     | 'gallery';
 
-  const [activeSubTab, setActiveSubTab] = useState<SubTabType>('banner');
+  const [activeSubTab, setActiveSubTab] = useState<SubTabType>('lifeAtPcm');
   const [isSaving, setIsSaving] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
@@ -130,7 +133,9 @@ export const AdminStudentLifeTab: React.FC = () => {
 
     setIsSaving(true);
     try {
-      await updateStudentLifeConfig(config);
+      // Exclude lifeAtPcm to ensure saving Student Life never overwrites the Life at PCM cards managed by AdminLifeAtPCMManager
+      const { lifeAtPcm: _lap, ...cleanSL } = config as any;
+      await updateStudentLifeConfig(cleanSL);
       setIsDirty(false);
       addToast('success', 'Student Life Updated', 'Changes to Student Life have been saved and synchronized with Firestore.');
     } catch (err) {
@@ -308,6 +313,12 @@ export const AdminStudentLifeTab: React.FC = () => {
   };
 
   const subTabs = [
+    {
+      id: 'lifeAtPcm',
+      label: 'Life at PCM (Homepage)',
+      icon: LayoutGrid,
+      count: (siteConfig?.lifeAtPcm?.items || siteConfig?.studentLife?.lifeAtPcm?.items || []).length || 8,
+    },
     { id: 'banner', label: 'Banner & Hero', icon: Flame, count: undefined },
     { id: 'pillars', label: 'Spiritual Pillars', icon: BookOpen, count: config.pillars?.length },
     { id: 'orgs', label: 'Student Orgs', icon: Users, count: config.organizations?.length },
@@ -392,6 +403,11 @@ export const AdminStudentLifeTab: React.FC = () => {
           );
         })}
       </div>
+
+      {/* Tab 0: Life at PCM (Homepage Bento Highlights) */}
+      {activeSubTab === 'lifeAtPcm' && (
+        <AdminLifeAtPCMManager />
+      )}
 
       {/* Tab 1: Banner & Hero */}
       {activeSubTab === 'banner' && (
