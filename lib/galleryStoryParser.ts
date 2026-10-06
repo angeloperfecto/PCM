@@ -13,6 +13,90 @@ export interface ParsedPhotoStory {
   location?: string;
 }
 
+const CATEGORY_PATTERN =
+  /^(news|look|feature|in photos|photos|dispatch|special feature|campus life|ministry spotlight|happening now|now happening|pcm prayer|prayer|diakonos|pcm|fellowship|announcement)/i;
+
+/**
+ * Normalizes text and splits run-on text or concatenated sentences into clean paragraphs.
+ */
+function cleanAndFormatParagraphs(rawText: string, titleToStrip?: string): { paragraphs: string[]; publisher?: string; photographer?: string } {
+  if (!rawText) return { paragraphs: [] };
+
+  let text = rawText.normalize('NFKD').trim();
+
+  // Strip duplicate leading pipe-separated header or duplicate title if repeated at top of description
+  // e.g. "News | Rooted in Faith... | June 12-13, 2026In a meaningful..."
+  text = text.replace(
+    /^(?:news|look|feature|in photos|photos|happening now|now happening|diakonos|pcm)\s*\|[^|\n]+\|?\s*(?:[A-Za-z0-9,–— -]+)?/i,
+    ''
+  );
+
+  if (titleToStrip) {
+    const normTitle = titleToStrip.normalize('NFKD').trim();
+    if (normTitle && text.toLowerCase().startsWith(normTitle.toLowerCase())) {
+      text = text.slice(normTitle.length).trim();
+    }
+  }
+
+  // Expand concatenated sentences where period is immediately followed by a capital letter without space
+  // e.g. "believers.A total of 53" -> "believers.\n\nA total of 53"
+  text = text.replace(/([.!?])([A-Z])/g, '$1\n\n$2');
+
+  // Also handle year or lowercase immediately followed by capital letter
+  text = text.replace(/([0-9]{4}|[a-z])([A-Z][a-z])/g, '$1\n\n$2');
+
+  let photographer: string | undefined;
+  let publisher: string | undefined;
+  const initialBlocks = text.split(/\r?\n\s*\r?\n|\r?\n/).map((p) => p.trim()).filter(Boolean);
+  const candidateParagraphs: string[] = [];
+
+  for (const block of initialBlocks) {
+    // Check for photographer credit
+    const photoMatch = block.match(/^(?:photos?|captured|documentation)\s+by\s*[:\-–—]\s*(.+)$/i);
+    if (photoMatch) {
+      photographer = photoMatch[1].trim();
+      continue;
+    }
+
+    // Check for PCM institutional mission / dedication statement
+    if (/dedicated to raising servant-leaders grounded in Christian faith/i.test(block)) {
+      publisher = block.trim();
+      continue;
+    }
+
+    // Check for other publisher / newsletter labels
+    if (/^(diakonos|official newsletter|philippine college of ministry|pcm administration)$/i.test(block)) {
+      publisher = block.trim();
+      continue;
+    }
+
+    // If block is still unusually long with multiple sentences (over 450 characters), break gracefully into 2-3 sentence chunks
+    if (block.length > 500 && (block.match(/\.\s+[A-Z]/g) || []).length >= 3) {
+      const sentences = block.match(/[^.!?]+[.!?]+(\s+|$)/g) || [block];
+      let currentChunk = '';
+      for (const sentence of sentences) {
+        if ((currentChunk + sentence).length > 350 && currentChunk.trim().length > 0) {
+          candidateParagraphs.push(currentChunk.trim());
+          currentChunk = sentence;
+        } else {
+          currentChunk += sentence;
+        }
+      }
+      if (currentChunk.trim().length > 0) {
+        candidateParagraphs.push(currentChunk.trim());
+      }
+    } else {
+      candidateParagraphs.push(block);
+    }
+  }
+
+  return {
+    paragraphs: candidateParagraphs,
+    publisher,
+    photographer,
+  };
+}
+
 /**
  * Parses raw StudentLifeAlbum metadata into an editorial dispatch structure
  * similar to campus newsletter releases (e.g. Diakonos / Facebook news posts).
@@ -24,23 +108,23 @@ export function parsePhotoStory(album: Partial<StudentLifeAlbum> | {
   eventDate?: string;
   location?: string;
 }): ParsedPhotoStory {
-  const rawTitle = (album.title || '').trim();
-  const rawDesc = (album.description || '').trim();
-  const rawEvent = (album.eventName || '').trim();
-  const rawDate = (album.eventDate || '').trim();
-  const rawLocation = (album.location || '').trim();
+  const rawTitle = (album.title || '').normalize('NFKD').trim();
+  const rawDesc = (album.description || '').normalize('NFKD').trim();
+  const rawEvent = (album.eventName || '').normalize('NFKD').trim();
+  const rawDate = (album.eventDate || '').normalize('NFKD').trim();
+  const rawLocation = (album.location || '').normalize('NFKD').trim();
 
   let category = 'IN PHOTOS';
   let isEditorialDispatch = false;
   let displayTitle = rawTitle;
   let extractedDate = rawDate;
 
-  // Check for pipe-separated format in title: "IN PHOTOS | Title | Date"
+  // Check for pipe-separated format in title: "Category | Title | Date"
   if (rawTitle.includes('|')) {
     isEditorialDispatch = true;
     const parts = rawTitle.split('|').map((s) => s.trim()).filter(Boolean);
     if (parts.length >= 2) {
-      if (/^(in photos|photos|dispatch|special feature|campus life|ministry spotlight)/i.test(parts[0])) {
+      if (CATEGORY_PATTERN.test(parts[0])) {
         category = parts[0].toUpperCase();
         displayTitle = parts[1];
         if (parts.length >= 3) {
@@ -48,8 +132,9 @@ export function parsePhotoStory(album: Partial<StudentLifeAlbum> | {
         }
       } else {
         displayTitle = parts[0];
-        if (parts.length >= 2) {
-          extractedDate = parts[1];
+        extractedDate = parts[1];
+        if (parts.length >= 3) {
+          extractedDate = `${parts[1]} (${parts[2]})`;
         }
       }
     }
@@ -59,54 +144,24 @@ export function parsePhotoStory(album: Partial<StudentLifeAlbum> | {
     displayTitle = rawTitle.replace(/^in photos\s*[:\-–—]\s*/i, '').trim();
   }
 
-  // Parse description lines for paragraphs, photographer, publisher
-  let photographer: string | undefined;
-  let publisher: string | undefined;
-  const contentParagraphs: string[] = [];
-
-  const rawParagraphs = rawDesc.split(/\n\s*\n|\r\n\s*\r\n/).map((p) => p.trim()).filter(Boolean);
-
-  for (const block of rawParagraphs) {
-    const lines = block.split(/\n|\r\n/).map((l) => l.trim()).filter(Boolean);
-    const retainedLines: string[] = [];
-
-    for (const line of lines) {
-      // Check for Photos by / Captured by
-      const photoMatch = line.match(/^(?:photos?|captured|documentation)\s+by\s*[:\-–—]\s*(.+)$/i);
-      if (photoMatch) {
-        photographer = photoMatch[1].trim();
-        isEditorialDispatch = true;
-        continue;
-      }
-
-      // Check for Publisher / Newsletter attribution
-      if (/diakonos|official newsletter|philippine college of ministry|pcm administration/i.test(line)) {
-        publisher = line.trim();
-        isEditorialDispatch = true;
-        continue;
-      }
-
-      retainedLines.push(line);
-    }
-
-    if (retainedLines.length > 0) {
-      contentParagraphs.push(retainedLines.join(' '));
-    }
-  }
+  // Format description into distinct, readable paragraphs
+  const { paragraphs, publisher, photographer } = cleanAndFormatParagraphs(rawDesc, displayTitle);
 
   // If no paragraphs could be parsed, fallback to description
-  if (contentParagraphs.length === 0 && rawDesc) {
-    contentParagraphs.push(rawDesc);
-  }
+  const finalParagraphs = paragraphs.length > 0 ? paragraphs : (rawDesc ? [rawDesc] : []);
 
   // Summary generation
-  const summary = contentParagraphs[0]
-    ? contentParagraphs[0].slice(0, 160) + (contentParagraphs[0].length > 160 ? '...' : '')
+  const summary = finalParagraphs[0]
+    ? finalParagraphs[0].slice(0, 160) + (finalParagraphs[0].length > 160 ? '...' : '')
     : rawDesc.slice(0, 160);
 
-  // Clean event name if it repeats the title
+  // Clean event name if it repeats the title or category
   let cleanEventName = rawEvent;
-  if (cleanEventName && displayTitle && cleanEventName.toLowerCase() === displayTitle.toLowerCase()) {
+  if (
+    cleanEventName &&
+    (cleanEventName.toLowerCase() === displayTitle.toLowerCase() ||
+     cleanEventName.toLowerCase() === category.toLowerCase())
+  ) {
     cleanEventName = '';
   }
 
@@ -116,7 +171,7 @@ export function parsePhotoStory(album: Partial<StudentLifeAlbum> | {
     displayTitle: displayTitle || 'Campus Life Photo Album',
     storyDate: extractedDate || rawDate,
     cleanEventName: cleanEventName || undefined,
-    paragraphs: contentParagraphs,
+    paragraphs: finalParagraphs,
     photographer,
     publisher,
     summary,

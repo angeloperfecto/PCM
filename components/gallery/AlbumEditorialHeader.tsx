@@ -142,12 +142,27 @@ export const AlbumEditorialHeader: React.FC<AlbumEditorialHeaderProps> = ({
 
       {/* Story Narrative Paragraphs */}
       {story.paragraphs.length > 0 && (
-        <div className="space-y-3 text-slate-700 text-sm sm:text-base leading-relaxed max-w-4xl border-t border-slate-100 pt-4">
+        <div className="space-y-4 sm:space-y-5 text-slate-700 text-sm sm:text-base leading-relaxed max-w-4xl border-t border-slate-100 pt-5">
           {story.paragraphs.map((p, idx) => (
-            <p key={idx} className="text-justify font-normal">
+            <p
+              key={idx}
+              className={
+                idx === 0
+                  ? 'text-base sm:text-lg font-normal text-slate-900 leading-relaxed text-left'
+                  : 'text-slate-700 leading-relaxed text-left'
+              }
+            >
               {p}
             </p>
           ))}
+        </div>
+      )}
+
+      {/* Institutional Mission / Publisher Citation */}
+      {story.publisher && (
+        <div className="p-3.5 bg-slate-50 border-l-3 border-[#18392B] rounded-r-xs flex items-start gap-2.5 text-xs text-slate-700 italic max-w-4xl">
+          <Newspaper className="w-4 h-4 text-[#18392B] shrink-0 mt-0.5" />
+          <span>{story.publisher}</span>
         </div>
       )}
 
@@ -158,13 +173,6 @@ export const AlbumEditorialHeader: React.FC<AlbumEditorialHeaderProps> = ({
             <div className="flex items-center gap-1.5 bg-[#18392B]/5 text-[#18392B] px-3 py-1 rounded-xs font-medium">
               <Camera className="w-3.5 h-3.5 text-[#18392B]" />
               <span>Photos by: <strong className="font-semibold text-slate-900">{story.photographer}</strong></span>
-            </div>
-          )}
-
-          {story.publisher && (
-            <div className="flex items-center gap-1.5 text-slate-600 bg-slate-50 px-3 py-1 rounded-xs italic">
-              <Newspaper className="w-3.5 h-3.5 text-slate-400" />
-              <span>{story.publisher}</span>
             </div>
           )}
         </div>

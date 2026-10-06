@@ -1,10 +1,6 @@
-let rawConfig: Partial<FirebaseAppConfig> = {};
-try {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  rawConfig = require('../firebase-applet-config.json');
-} catch {
-  rawConfig = {};
-}
+import rawConfigJson from '@/firebase-applet-config.json';
+
+const rawConfig: Partial<FirebaseAppConfig> = (rawConfigJson || {}) as Partial<FirebaseAppConfig>;
 
 export interface FirebaseAppConfig {
   apiKey: string;

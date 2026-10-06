@@ -1310,7 +1310,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
                         setEditingAlbumData({
                           ...editingAlbumData,
                           title: parsed.displayTitle || editingAlbumData.title,
-                          description: parsed.paragraphs.join('\n\n') + (parsed.photographer ? `\n\nPhotos by: ${parsed.photographer}` : '') + (parsed.publisher ? `\n${parsed.publisher}` : ''),
+                          description: parsed.paragraphs.join('\n\n') + (parsed.photographer ? `\n\nPhotos by: ${parsed.photographer}` : '') + (parsed.publisher ? `\n\n${parsed.publisher}` : ''),
                           eventName: parsed.cleanEventName || editingAlbumData.eventName,
                           eventDate: parsed.storyDate || editingAlbumData.eventDate,
                         });
@@ -1323,10 +1323,10 @@ export const AdminStudentLifeGallery: React.FC = () => {
                   )}
                 </div>
                 <textarea
-                  rows={4}
+                  rows={8}
                   value={editingAlbumData.description}
                   onChange={(e) => setEditingAlbumData({ ...editingAlbumData, description: e.target.value })}
-                  className="w-full p-2 border border-slate-200 rounded-sm leading-relaxed"
+                  className="w-full p-2.5 border border-slate-200 rounded-sm leading-relaxed text-xs sm:text-sm font-sans"
                   placeholder="Describe the occasion, highlights, and spiritual experiences..."
                 />
               </div>
