@@ -68,6 +68,44 @@ import {
   Loader2,
 } from 'lucide-react';
 
+const getPhotoTimestamp = (photo: StudentLifePhotoItem): number => {
+  if (photo.uploadedAt) {
+    const t = new Date(photo.uploadedAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  const match = (photo.id || '').match(/(\d{10,13})/);
+  if (match) {
+    const t = parseInt(match[1], 10);
+    if (!isNaN(t)) return t;
+  }
+  return 0;
+};
+
+const getAlbumLatestTimestamp = (alb: StudentLifeAlbum): number => {
+  let latest = 0;
+  if (alb.photos && alb.photos.length > 0) {
+    for (const p of alb.photos) {
+      const t = getPhotoTimestamp(p);
+      if (t > latest) latest = t;
+    }
+  }
+  if (latest > 0) return latest;
+  if (alb.updatedAt) {
+    const t = new Date(alb.updatedAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (alb.createdAt) {
+    const t = new Date(alb.createdAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  const match = (alb.id || '').match(/(\d{10,13})/);
+  if (match) {
+    const t = parseInt(match[1], 10);
+    if (!isNaN(t)) return t;
+  }
+  return 0;
+};
+
 interface UploadQueueItem {
   id: string;
   file: File;
@@ -198,15 +236,25 @@ export const AdminStudentLifeGallery: React.FC = () => {
     }
   };
 
-  // Filtered albums
-  const filteredAlbums = studentLifeAlbums.filter((alb) => {
-    const matchesSearch =
-      alb.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (alb.eventName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (alb.location || '').toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || alb.status === statusFilter;
-    return matchesSearch && matchesStatus;
-  });
+  // Filtered albums sorted by latest upload
+  const filteredAlbums = studentLifeAlbums
+    .filter((alb) => {
+      const matchesSearch =
+        alb.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (alb.eventName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (alb.location || '').toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesStatus = statusFilter === 'all' || alb.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => getAlbumLatestTimestamp(b) - getAlbumLatestTimestamp(a));
+
+  // Sort photos in current album by latest upload timestamp
+  const handleSortPhotosByLatest = async (albumId: string) => {
+    if (!selectedAlbum) return;
+    const sorted = [...selectedAlbum.photos].sort((a, b) => getPhotoTimestamp(b) - getPhotoTimestamp(a));
+    await reorderStudentLifePhotos(albumId, sorted);
+    addToast('success', 'Photos Sorted', 'All photos in this album ordered by latest upload.');
+  };
 
   // Open album modal for creating
   const handleOpenCreateAlbum = () => {
@@ -845,6 +893,16 @@ export const AdminStudentLifeGallery: React.FC = () => {
               >
                 <Edit2 className="w-3.5 h-3.5" />
                 <span>Edit Album Details</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSortPhotosByLatest(selectedAlbum.id)}
+                className="px-3 py-1.5 border border-[#18392B]/20 text-xs font-semibold text-[#18392B] bg-[#18392B]/5 rounded-sm hover:bg-[#18392B]/10 flex items-center gap-1.5 cursor-pointer transition"
+                title="Sort all photos in this album by latest upload timestamp"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-[#588B76]" />
+                <span>Sort Photos by Latest</span>
               </button>
 
               <button

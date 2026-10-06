@@ -65,6 +65,44 @@ const SafeGalleryImage: React.FC<{
   );
 };
 
+const getPhotoTimestamp = (photo: StudentLifePhotoItem): number => {
+  if (photo.uploadedAt) {
+    const t = new Date(photo.uploadedAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  const match = (photo.id || '').match(/(\d{10,13})/);
+  if (match) {
+    const t = parseInt(match[1], 10);
+    if (!isNaN(t)) return t;
+  }
+  return 0;
+};
+
+const getAlbumLatestTimestamp = (alb: StudentLifeAlbum): number => {
+  let latest = 0;
+  if (alb.photos && alb.photos.length > 0) {
+    for (const p of alb.photos) {
+      const t = getPhotoTimestamp(p);
+      if (t > latest) latest = t;
+    }
+  }
+  if (latest > 0) return latest;
+  if (alb.updatedAt) {
+    const t = new Date(alb.updatedAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  if (alb.createdAt) {
+    const t = new Date(alb.createdAt).getTime();
+    if (!isNaN(t) && t > 0) return t;
+  }
+  const match = (alb.id || '').match(/(\d{10,13})/);
+  if (match) {
+    const t = parseInt(match[1], 10);
+    if (!isNaN(t)) return t;
+  }
+  return 0;
+};
+
 export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> = ({
   badge = 'Campus Moments',
   title = 'STUDENT LIFE IN PICTURES',
@@ -93,17 +131,23 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
     currentIndex: 0,
   });
 
-  // Only published albums for the public site
+  // Only published albums for the public site, sorted by latest upload descending
   const publishedAlbums = useMemo(() => {
-    return (studentLifeAlbums || []).filter((a) => a.status === 'published');
+    const list = (studentLifeAlbums || []).filter((a) => a.status === 'published');
+    return [...list].sort((a, b) => getAlbumLatestTimestamp(b) - getAlbumLatestTimestamp(a));
   }, [studentLifeAlbums]);
 
-  // Active selected album
+  // Active selected album with photos sorted by latest upload descending
   const currentAlbum = useMemo(() => {
-    return publishedAlbums.find((a) => a.id === activeAlbumId) || null;
+    const found = publishedAlbums.find((a) => a.id === activeAlbumId) || null;
+    if (!found) return null;
+    return {
+      ...found,
+      photos: [...(found.photos || [])].sort((a, b) => getPhotoTimestamp(b) - getPhotoTimestamp(a)),
+    };
   }, [publishedAlbums, activeAlbumId]);
 
-  // All published photos flattened
+  // All published photos flattened, sorted by latest upload descending
   const allPublishedPhotos = useMemo(() => {
     const list: { photo: StudentLifePhotoItem; album: StudentLifeAlbum }[] = [];
     publishedAlbums.forEach((alb) => {
@@ -111,7 +155,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
         list.push({ photo: p, album: alb });
       });
     });
-    return list;
+    return list.sort((a, b) => getPhotoTimestamp(b.photo) - getPhotoTimestamp(a.photo));
   }, [publishedAlbums]);
 
   // Filtered albums by search
@@ -284,7 +328,17 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
 
       {/* VIEW 1: ALBUMS GRID (FACEBOOK STYLE) */}
       {activeTab === 'albums' && !currentAlbum && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pb-1 border-b border-slate-100">
+            <span>
+              Showing <strong className="font-semibold text-slate-800">{filteredAlbums.length}</strong> photo albums
+            </span>
+            <span className="inline-flex items-center gap-1.5 font-medium text-[#18392B] bg-[#18392B]/5 px-2.5 py-1 rounded-xs">
+              <Sparkles className="w-3 h-3 text-[#588B76]" />
+              <span>Sorted by Latest Upload</span>
+            </span>
+          </div>
+
           {filteredAlbums.length === 0 ? (
             <div className="text-center py-16 bg-slate-50 border border-dashed border-slate-200 rounded-sm p-8 max-w-lg mx-auto">
               <Camera className="w-10 h-10 text-slate-300 mx-auto mb-2 stroke-1" />
@@ -625,6 +679,16 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
       {/* VIEW 3: ALL PHOTOS FLAT GRID */}
       {activeTab === 'all-photos' && !currentAlbum && (
         <div className="max-w-7xl mx-auto px-4 sm:px-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500 pb-1 border-b border-slate-100">
+            <span>
+              Showing <strong className="font-semibold text-slate-800">{filteredAllPhotos.length}</strong> campus photos
+            </span>
+            <span className="inline-flex items-center gap-1.5 font-medium text-[#18392B] bg-[#18392B]/5 px-2.5 py-1 rounded-xs">
+              <Sparkles className="w-3 h-3 text-[#588B76]" />
+              <span>Sorted by Latest Upload</span>
+            </span>
+          </div>
+
           {filteredAllPhotos.length === 0 ? (
             <div className="text-center py-16 bg-slate-50 border border-dashed border-slate-200 rounded-sm p-8 max-w-lg mx-auto">
               <Camera className="w-10 h-10 text-slate-300 mx-auto mb-2 stroke-1" />
