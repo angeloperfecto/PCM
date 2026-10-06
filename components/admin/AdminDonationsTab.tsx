@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import { DonationPaymentMethod, DonationRecord, DonationSettings, PaymentMethodType, FeaturedCause } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
@@ -1127,7 +1128,7 @@ export const AdminDonationsTab: React.FC = () => {
                         onChange={(e) => setMethodForm({ ...methodForm, qrCodeUrl: e.target.value })}
                         className="flex-1 p-2.5 bg-slate-50 rounded-lg border border-slate-200 text-xs focus:outline-hidden focus:border-[#588B76] focus:bg-white transition"
                       />
-                      {typeof methodForm.qrCodeUrl === 'string' && methodForm.qrCodeUrl.trim() ? (
+                      {isValidImageSrc(methodForm.qrCodeUrl) ? (
                         <div className="w-10 h-10 border border-slate-200 rounded-lg p-0.5 bg-white shrink-0 flex items-center justify-center overflow-hidden relative">
                           <Image
                             src={methodForm.qrCodeUrl.trim()}

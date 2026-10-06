@@ -203,16 +203,36 @@ export async function safeSetDoc(
     // Firestore 1MB document limit guard
     try {
       const payloadSize = JSON.stringify(cleaned).length;
-      if (payloadSize > 900000) {
+      if (payloadSize > 850000) {
         console.warn(`[PCM Firestore Guard] Document ${docRef?.path || ''} size (${payloadSize} bytes) near 1MB. Sanitizing nested base64 strings.`);
         if (cleaned && typeof cleaned === 'object') {
-          if (Array.isArray((cleaned as any).photos)) {
-            (cleaned as any).photos = (cleaned as any).photos.map((p: any) => {
-              if (p?.imageUrl?.startsWith('data:')) {
-                return { ...p, imageUrl: '', thumbnailUrl: '' };
+          const sanitizeList = (arr: any[]) =>
+            arr.map((p: any) => {
+              if (p && typeof p === 'object') {
+                const copy = { ...p };
+                if (typeof copy.imageUrl === 'string' && copy.imageUrl.startsWith('data:')) {
+                  copy.imageUrl = '';
+                  copy.thumbnailUrl = '';
+                }
+                if (typeof copy.image === 'string' && copy.image.startsWith('data:')) {
+                  copy.image = '';
+                }
+                return copy;
               }
               return p;
             });
+
+          if (Array.isArray((cleaned as any).photos)) {
+            (cleaned as any).photos = sanitizeList((cleaned as any).photos);
+          }
+          if (Array.isArray((cleaned as any).slides)) {
+            (cleaned as any).slides = sanitizeList((cleaned as any).slides);
+          }
+          if (Array.isArray((cleaned as any).heroSlides)) {
+            (cleaned as any).heroSlides = sanitizeList((cleaned as any).heroSlides);
+          }
+          if (Array.isArray((cleaned as any).items)) {
+            (cleaned as any).items = sanitizeList((cleaned as any).items);
           }
         }
       }
@@ -231,16 +251,36 @@ export async function safeUpdateDoc(docRef: any, data: any): Promise<boolean> {
     let cleaned = cleanFirestoreData(data);
     try {
       const payloadSize = JSON.stringify(cleaned).length;
-      if (payloadSize > 900000) {
+      if (payloadSize > 850000) {
         console.warn(`[PCM Firestore Guard] Document ${docRef?.path || ''} size (${payloadSize} bytes) near 1MB.`);
         if (cleaned && typeof cleaned === 'object') {
-          if (Array.isArray((cleaned as any).photos)) {
-            (cleaned as any).photos = (cleaned as any).photos.map((p: any) => {
-              if (p?.imageUrl?.startsWith('data:')) {
-                return { ...p, imageUrl: '', thumbnailUrl: '' };
+          const sanitizeList = (arr: any[]) =>
+            arr.map((p: any) => {
+              if (p && typeof p === 'object') {
+                const copy = { ...p };
+                if (typeof copy.imageUrl === 'string' && copy.imageUrl.startsWith('data:')) {
+                  copy.imageUrl = '';
+                  copy.thumbnailUrl = '';
+                }
+                if (typeof copy.image === 'string' && copy.image.startsWith('data:')) {
+                  copy.image = '';
+                }
+                return copy;
               }
               return p;
             });
+
+          if (Array.isArray((cleaned as any).photos)) {
+            (cleaned as any).photos = sanitizeList((cleaned as any).photos);
+          }
+          if (Array.isArray((cleaned as any).slides)) {
+            (cleaned as any).slides = sanitizeList((cleaned as any).slides);
+          }
+          if (Array.isArray((cleaned as any).heroSlides)) {
+            (cleaned as any).heroSlides = sanitizeList((cleaned as any).heroSlides);
+          }
+          if (Array.isArray((cleaned as any).items)) {
+            (cleaned as any).items = sanitizeList((cleaned as any).items);
           }
         }
       }

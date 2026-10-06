@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import { Quote, ChevronLeft, ChevronRight, Sparkles, GraduationCap } from 'lucide-react';
 
 export const TestimonialsSection: React.FC = () => {
@@ -50,7 +51,7 @@ export const TestimonialsSection: React.FC = () => {
             {/* Author Profile */}
             <div className="pt-6 border-t border-[#D0DED8] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div className="flex items-center gap-4">
-                {typeof current.avatarUrl === 'string' && current.avatarUrl.trim() ? (
+                {isValidImageSrc(current.avatarUrl) ? (
                   <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-[#588B76] shadow-sm shrink-0">
                     <Image
                       src={current.avatarUrl.trim()}

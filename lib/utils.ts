@@ -57,3 +57,35 @@ export function instructionsToText(input: unknown): string {
   const steps = normalizeInstructions(input);
   return steps.join('\n');
 }
+
+/**
+ * Strictly validates that a string is a valid Next.js image src.
+ * Must start with '/', 'http://', 'https://', 'data:', or 'blob:'.
+ * Strings like 'Spiritual Formation & Daily Chapel' or plain text titles return false.
+ */
+export function isValidImageSrc(src: unknown): src is string {
+  if (typeof src !== 'string') return false;
+  const trimmed = src.trim();
+  if (!trimmed) return false;
+  return (
+    trimmed.startsWith('/') ||
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('data:') ||
+    trimmed.startsWith('blob:')
+  );
+}
+
+/**
+ * Returns a valid, parseable image URL for Next.js <Image> or <img>.
+ * If the input is not a valid URL or path, returns the provided fallback.
+ */
+export function getSafeImageSrc(
+  src: unknown,
+  fallback = 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop'
+): string {
+  if (isValidImageSrc(src)) {
+    return src.trim();
+  }
+  return fallback;
+}

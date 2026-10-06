@@ -3,9 +3,10 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc, getSafeImageSrc } from '@/lib/utils';
 import { LifeAtPCMConfig, LifeAtPCMItem } from '@/lib/types';
 import { INITIAL_LIFE_AT_PCM_CONFIG } from '@/lib/initialData';
-import { compressImageFile } from '@/lib/firebase';
+import { compressImageFile, uploadFileToFirebaseStorage } from '@/lib/firebase';
 import {
   Flame,
   BookOpen,
@@ -275,13 +276,24 @@ export const AdminLifeAtPCMManager: React.FC = () => {
     setIsUploading(true);
     try {
       // Compress to high-efficiency web image under Firestore boundaries
-      const compressedDataUrl = await compressImageFile(file, 800, 500, 0.82);
-      setFormImage(compressedDataUrl);
-      addToast({
-        type: 'success',
-        title: 'Image Loaded',
-        message: 'Custom image uploaded and ready to save.',
-      });
+      const compressedBlob = await compressImageFile(file, 1200, 800, 0.82);
+      const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+      const finalUrl = await uploadFileToFirebaseStorage(
+        compressedBlob,
+        `lifeAtPcm/${Date.now()}_${safeName}`,
+        {
+          contentType: file.type || 'image/jpeg',
+          fileName: safeName,
+        }
+      );
+      if (finalUrl) {
+        setFormImage(finalUrl);
+        addToast({
+          type: 'success',
+          title: 'Image Uploaded',
+          message: 'Custom image uploaded and ready to save.',
+        });
+      }
     } catch (err) {
       console.warn('Image upload error:', err);
       addToast({
@@ -585,14 +597,16 @@ export const AdminLifeAtPCMManager: React.FC = () => {
                   {/* Image & Gradient */}
                   <div className="h-36 relative overflow-hidden bg-slate-100">
                     {(() => {
-                      const itemImgSrc = typeof item.image === 'string' && item.image.trim()
-                        ? item.image.trim()
-                        : 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&auto=format&fit=crop';
+                      const itemImgSrc = getSafeImageSrc(
+                        item.image,
+                        'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&auto=format&fit=crop'
+                      );
                       return (
                         <Image
                           src={itemImgSrc}
                           alt={item.title}
                           fill
+                          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                           className="object-cover group-hover:scale-105 transition-transform duration-300"
                           referrerPolicy="no-referrer"
                           unoptimized={Boolean(itemImgSrc.startsWith('data:') || itemImgSrc.startsWith('blob:'))}
@@ -865,13 +879,14 @@ export const AdminLifeAtPCMManager: React.FC = () => {
                 <div className="max-w-sm mx-auto bg-[#D0DED8]/20 rounded-xl overflow-hidden border border-[#588B76] shadow-md flex flex-col">
                   <div className="h-36 relative overflow-hidden bg-slate-200">
                     {(() => {
-                      const previewSrc = typeof formImage === 'string' && formImage.trim() ? formImage.trim() : null;
+                      const previewSrc = isValidImageSrc(formImage) ? formImage.trim() : null;
                       if (previewSrc) {
                         return (
                           <Image
                             src={previewSrc}
                             alt="Preview"
                             fill
+                            sizes="(max-width: 640px) 100vw, 384px"
                             className="object-cover"
                             referrerPolicy="no-referrer"
                             unoptimized={Boolean(previewSrc.startsWith('data:') || previewSrc.startsWith('blob:'))}

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import {
   StudentLifeConfig,
   SpiritualPillar,
@@ -1497,7 +1498,7 @@ export const AdminStudentLifeTab: React.FC = () => {
                 </div>
 
                 <div className="w-16 h-16 rounded-full overflow-hidden mx-auto bg-slate-200 border-2 border-[#588B76]/40 relative">
-                  {typeof leader.photoUrl === 'string' && leader.photoUrl.trim() ? (
+                  {isValidImageSrc(leader.photoUrl) ? (
                     <Image
                       src={leader.photoUrl.trim()}
                       alt={leader.name || 'Leader'}

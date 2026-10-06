@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import { StudentLifeAlbum, StudentLifePhotoItem } from '@/lib/types';
 import { parsePhotoStory } from '@/lib/galleryStoryParser';
 import { AlbumEditorialHeader } from '@/components/gallery/AlbumEditorialHeader';
@@ -51,7 +52,7 @@ const SafeGalleryImage: React.FC<{
 
   return (
     <Image
-      src={hasError || !src || typeof src !== 'string' || !src.trim() ? FALLBACK_PHOTO : src.trim()}
+      src={hasError || !isValidImageSrc(src) ? FALLBACK_PHOTO : src.trim()}
       alt={alt}
       fill={fill}
       sizes={sizes}

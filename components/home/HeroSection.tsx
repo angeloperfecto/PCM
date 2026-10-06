@@ -22,11 +22,11 @@ export const HeroSection: React.FC = () => {
   // Compute active slides from central store siteConfig (with fallback)
   const slides = useMemo(() => {
     const rawSlides =
-      siteConfig?.heroSlides !== undefined && Array.isArray(siteConfig.heroSlides) && siteConfig.heroSlides.length > 0
+      siteConfig?.heroSlides !== undefined && Array.isArray(siteConfig.heroSlides)
         ? siteConfig.heroSlides
         : DEFAULT_HERO_SLIDES;
     const active = rawSlides.filter((s) => s.active !== false);
-    return active.length > 0 ? active : rawSlides;
+    return active.length > 0 ? active : rawSlides.length > 0 ? rawSlides : DEFAULT_HERO_SLIDES;
   }, [siteConfig?.heroSlides]);
 
   // Auto-advance slides every 7 seconds

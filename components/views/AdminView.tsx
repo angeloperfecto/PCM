@@ -138,6 +138,40 @@ export const AdminView: React.FC = () => {
     setShowResetConfirm(true);
   };
 
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const success = adminLogin(loginUser, loginPass);
+    if (!success) {
+      addToast({
+        title: 'Authentication Failed',
+        message: 'Invalid administrator username or password.',
+        type: 'error',
+      });
+    }
+  };
+
+  const handleGoogleAdminLogin = async () => {
+    setIsGoogleSigningIn(true);
+    try {
+      const res = await signInWithGoogle('Super Admin', 'angeloperfecto.epc@gmail.com', 'Angelo Perfecto');
+      if (res.success) {
+        addToast({
+          title: 'Super Administrator Verified',
+          message: 'Welcome Angelo Perfecto to Philippine College of Ministry CMS Workspace.',
+          type: 'success',
+        });
+      } else {
+        addToast({
+          title: 'Google Login',
+          message: res.message || 'Unable to authenticate with Google.',
+          type: 'error',
+        });
+      }
+    } finally {
+      setIsGoogleSigningIn(false);
+    }
+  };
+
   // Strict RBAC gate: Student accounts are completely restricted from Admin section
   const isStudentUser =
     currentUserAccount?.role === 'Student' ||
@@ -194,40 +228,6 @@ export const AdminView: React.FC = () => {
       </div>
     );
   }
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const success = adminLogin(loginUser, loginPass);
-    if (!success) {
-      addToast({
-        title: 'Authentication Failed',
-        message: 'Invalid administrator username or password.',
-        type: 'error',
-      });
-    }
-  };
-
-  const handleGoogleAdminLogin = async () => {
-    setIsGoogleSigningIn(true);
-    try {
-      const res = await signInWithGoogle('Super Admin', 'angeloperfecto.epc@gmail.com', 'Angelo Perfecto');
-      if (res.success) {
-        addToast({
-          title: 'Super Administrator Verified',
-          message: 'Welcome Angelo Perfecto to Philippine College of Ministry CMS Workspace.',
-          type: 'success',
-        });
-      } else {
-        addToast({
-          title: 'Google Login',
-          message: res.message || 'Unable to authenticate with Google.',
-          type: 'error',
-        });
-      }
-    } finally {
-      setIsGoogleSigningIn(false);
-    }
-  };
 
   // If Admin is NOT logged in -> Display Auth Gate
   if (!isAdminAuthenticated) {

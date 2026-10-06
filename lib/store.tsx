@@ -4,6 +4,7 @@ import React, { createContext, useContext, useState, useEffect, useRef, useCallb
 import {
   NavSection,
   AcademicProgram,
+  ProgramLevel,
   AnnouncementItem,
   NewsArticle,
   CollegeEvent,
@@ -150,6 +151,7 @@ import {
   safeDeleteDoc,
   blobToDataUrl,
 } from './firebase';
+import { firebaseConfig } from './firebaseConfig';
 
 export interface ToastNotification {
   id: string;
@@ -809,7 +811,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsed = JSON.parse(raw);
         if (Array.isArray(fallback)) {
           if (Array.isArray(parsed)) return parsed as unknown as T;
-        } else if (parsed && typeof parsed === 'object') {
+        } else if (parsed && typeof parsed === 'object' && fallback && typeof fallback === 'object') {
+          return { ...(fallback as any), ...parsed } as unknown as T;
+        } else if (parsed !== null && parsed !== undefined) {
           return parsed as unknown as T;
         }
       }
@@ -827,9 +831,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // User Accounts & Multi-Role Auth
   const [currentUserAccount, setCurrentUserAccount] = useState<UserAccount | null>(null);
   const [firebaseAuthUser, setFirebaseAuthUser] = useState<FirebaseUser | null>(null);
+  // Core CMS Data States
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>(INITIAL_USER_ACCOUNTS);
-
-  // Core CMS Data States (persisted from latest Firestore snapshot across browser refresh/reopen)
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(INITIAL_SITE_CONFIG);
   const [mediaItems, setMediaItems] = useState<MediaItem[]>(INITIAL_MEDIA_ITEMS);
   const [galleryAlbums, setGalleryAlbums] = useState<GalleryAlbum[]>(INITIAL_GALLERY_ALBUMS);
@@ -1638,28 +1641,65 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // or if Firestore already contains documents.
         let isSystemAlreadyInitialized = true;
         try {
-          const metaSnap = await getDoc(doc(db, 'systemConfig', 'metadata'));
-          if (metaSnap.exists() && metaSnap.data()?.isInitialized) {
+          const metaSnap = await getDoc(doc(db, 'systemConfig', 'metadata')).catch(() => null);
+          if (metaSnap && metaSnap.exists() && metaSnap.data()?.isInitialized) {
             isSystemAlreadyInitialized = true;
+            initialSeededRef.current = true;
           } else {
-            // Check if core collections already have records in Firestore
-            const [progCheck, facCheck, newsCheck, siteConfigCheck] = await Promise.all([
+            // Check across all major collections if ANY records already exist in Firestore
+            const [
+              progCheck,
+              facCheck,
+              newsCheck,
+              mediaCheck,
+              siteConfigCheck,
+              annCheck,
+              evtCheck,
+              usrCheck,
+              admCheck,
+            ] = await Promise.all([
               getDocs(collection(db, 'programs')).catch(() => null),
               getDocs(collection(db, 'faculty')).catch(() => null),
               getDocs(collection(db, 'news')).catch(() => null),
+              getDocs(collection(db, 'mediaLibrary')).catch(() => null),
               getDoc(doc(db, 'siteConfig', 'global')).catch(() => null),
+              getDocs(collection(db, 'announcements')).catch(() => null),
+              getDocs(collection(db, 'events')).catch(() => null),
+              getDocs(collection(db, 'users')).catch(() => null),
+              getDocs(collection(db, 'adminUsers')).catch(() => null),
             ]);
 
             const hasExistingData =
-              (progCheck && !progCheck.empty) ||
-              (facCheck && !facCheck.empty) ||
-              (newsCheck && !newsCheck.empty) ||
-              (siteConfigCheck && siteConfigCheck.exists());
+              Boolean(progCheck && !progCheck.empty) ||
+              Boolean(facCheck && !facCheck.empty) ||
+              Boolean(newsCheck && !newsCheck.empty) ||
+              Boolean(mediaCheck && !mediaCheck.empty) ||
+              Boolean(annCheck && !annCheck.empty) ||
+              Boolean(evtCheck && !evtCheck.empty) ||
+              Boolean(usrCheck && !usrCheck.empty) ||
+              Boolean(admCheck && !admCheck.empty) ||
+              Boolean(siteConfigCheck && siteConfigCheck.exists());
 
-            if (hasExistingData) {
+            // If ANY check failed (returned null) or ANY existing documents were detected:
+            // ALWAYS err on the side of safety: Treat system as already initialized to NEVER overwrite!
+            const anyCheckFailed =
+              progCheck === null ||
+              facCheck === null ||
+              newsCheck === null ||
+              mediaCheck === null ||
+              siteConfigCheck === null ||
+              annCheck === null ||
+              evtCheck === null ||
+              usrCheck === null ||
+              admCheck === null;
+
+            if (hasExistingData || anyCheckFailed) {
               isSystemAlreadyInitialized = true;
+              initialSeededRef.current = true;
               await safeSetDoc(doc(db, 'systemConfig', 'metadata'), {
                 isInitialized: true,
+                databaseId: firebaseConfig.firestoreDatabaseId || '',
+                permanentStorage: true,
                 initializedAt: new Date().toISOString(),
                 reason: 'Existing database collections detected',
               });
@@ -1670,73 +1710,109 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch (initErr) {
           console.warn('[PCM Firestore] Notice checking system metadata:', initErr);
           isSystemAlreadyInitialized = true; // Err on side of safety: NEVER overwrite existing data!
+          initialSeededRef.current = true;
         }
 
-        // Baseline seeding ONLY for genuinely fresh, uninitialized databases (never overwrites existing collections)
-        if (!isSystemAlreadyInitialized) {
-          console.info('[PCM Firestore] Genuinely fresh database detected. Initializing baseline records...');
+        // Baseline seeding ONLY for genuinely fresh, completely empty databases (never overwrites existing collections)
+        if (!isSystemAlreadyInitialized && !initialSeededRef.current) {
+          console.info('[PCM Firestore] Genuinely fresh database confirmed. Initializing baseline records...');
           try {
-            await safeSetDoc(doc(db, 'siteConfig', 'global'), INITIAL_SITE_CONFIG);
-            await safeSetDoc(doc(db, 'siteContent', 'slideshow'), {
-              slides: INITIAL_SITE_CONFIG.heroSlides || [],
-              updatedAt: new Date().toISOString(),
-              updatedBy: 'System Baseline',
-              isPublished: true,
-            });
-            await safeSetDoc(doc(db, 'siteContent', 'lifeAtPcm'), cleanFirestoreData({
-              ...INITIAL_LIFE_AT_PCM_CONFIG,
-              updatedAt: new Date().toISOString(),
-              updatedBy: 'System Baseline',
-            }));
-            await safeSetDoc(doc(db, 'siteContent', 'studentLife'), cleanFirestoreData({
-              ...INITIAL_STUDENT_LIFE_CONFIG,
-              updatedAt: new Date().toISOString(),
-              updatedBy: 'System Baseline',
-              isPublished: true,
-            }));
-            await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), INITIAL_HOMEPAGE_VIDEO_CONFIG);
-            await safeSetDoc(doc(db, 'donationSettings', 'global'), INITIAL_DONATION_SETTINGS);
-            await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), INITIAL_ENROLLMENT_SYSTEM_CONFIG);
+            const [cfgSnap, slideSnap, lapSnap, slSnap, vidCfgSnap, donSnap, enrollCfgSnap] = await Promise.all([
+              getDoc(doc(db, 'siteConfig', 'global')).catch(() => null),
+              getDoc(doc(db, 'siteContent', 'slideshow')).catch(() => null),
+              getDoc(doc(db, 'siteContent', 'lifeAtPcm')).catch(() => null),
+              getDoc(doc(db, 'siteContent', 'studentLife')).catch(() => null),
+              getDoc(doc(db, 'homepageVideoConfig', 'global')).catch(() => null),
+              getDoc(doc(db, 'donationSettings', 'global')).catch(() => null),
+              getDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings')).catch(() => null),
+            ]);
 
-            const seedBatch = async (col: string, items: any[]) => {
-              if (!items || items.length === 0) return;
-              const b = writeBatch(db);
-              items.forEach((item: any) => {
-                const docId = item.id || `seed-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-                b.set(doc(db, col, docId), cleanFirestoreData(item), { merge: true });
+            if (cfgSnap !== null && !cfgSnap.exists()) {
+              await safeSetDoc(doc(db, 'siteConfig', 'global'), INITIAL_SITE_CONFIG);
+            }
+            if (slideSnap !== null && !slideSnap.exists()) {
+              await safeSetDoc(doc(db, 'siteContent', 'slideshow'), {
+                slides: INITIAL_SITE_CONFIG.heroSlides || [],
+                updatedAt: new Date().toISOString(),
+                updatedBy: 'System Baseline',
+                isPublished: true,
               });
-              await b.commit();
+            }
+            if (lapSnap !== null && !lapSnap.exists()) {
+              await safeSetDoc(doc(db, 'siteContent', 'lifeAtPcm'), cleanFirestoreData({
+                ...INITIAL_LIFE_AT_PCM_CONFIG,
+                updatedAt: new Date().toISOString(),
+                updatedBy: 'System Baseline',
+              }));
+            }
+            if (slSnap !== null && !slSnap.exists()) {
+              await safeSetDoc(doc(db, 'siteContent', 'studentLife'), cleanFirestoreData({
+                ...INITIAL_STUDENT_LIFE_CONFIG,
+                updatedAt: new Date().toISOString(),
+                updatedBy: 'System Baseline',
+                isPublished: true,
+              }));
+            }
+            if (vidCfgSnap !== null && !vidCfgSnap.exists()) {
+              await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), INITIAL_HOMEPAGE_VIDEO_CONFIG);
+            }
+            if (donSnap !== null && !donSnap.exists()) {
+              await safeSetDoc(doc(db, 'donationSettings', 'global'), INITIAL_DONATION_SETTINGS);
+            }
+            if (enrollCfgSnap !== null && !enrollCfgSnap.exists()) {
+              await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), INITIAL_ENROLLMENT_SYSTEM_CONFIG);
+            }
+
+            // Only seed a collection if that specific collection is genuinely empty
+            const seedBatchIfEmpty = async (col: string, items: any[]) => {
+              if (!items || items.length === 0) return;
+              try {
+                const existing = await getDocs(collection(db, col)).catch(() => null);
+                if (!existing || !existing.empty) {
+                  return;
+                }
+                const b = writeBatch(db);
+                items.forEach((item: any) => {
+                  const docId = item.id || `seed-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                  b.set(doc(db, col, docId), cleanFirestoreData(item), { merge: true });
+                });
+                await b.commit();
+              } catch (e) {
+                console.warn(`[PCM Firestore] Notice seeding ${col}:`, e);
+              }
             };
 
             await Promise.all([
-              seedBatch('programs', INITIAL_PROGRAMS),
-              seedBatch('faculty', INITIAL_FACULTY),
-              seedBatch('announcements', INITIAL_ANNOUNCEMENTS),
-              seedBatch('news', INITIAL_NEWS),
-              seedBatch('events', INITIAL_EVENTS),
-              seedBatch('downloads', INITIAL_DOWNLOADS),
-              seedBatch('testimonials', INITIAL_TESTIMONIALS),
-              seedBatch('stats', INITIAL_STATS),
-              seedBatch('faqs', INITIAL_FAQS),
-              seedBatch('sermons', INITIAL_SERMONS),
-              seedBatch('scrapbook', INITIAL_SCRAPBOOK),
-              seedBatch('mediaLibrary', INITIAL_MEDIA_ITEMS),
-              seedBatch('galleryAlbums', INITIAL_GALLERY_ALBUMS),
-              seedBatch('studentLifeAlbums', INITIAL_STUDENT_LIFE_ALBUMS),
-              seedBatch('adminUsers', INITIAL_ADMIN_USERS),
-              seedBatch('users', INITIAL_USER_ACCOUNTS),
-              seedBatch('studentProfiles', INITIAL_STUDENTS),
-              seedBatch('donationPaymentMethods', INITIAL_DONATION_METHODS),
-              seedBatch('academicSubjects', INITIAL_ACADEMIC_SUBJECTS),
-              seedBatch('feeStructure', INITIAL_FEE_STRUCTURE),
-              seedBatch('academicPeriods', INITIAL_ACADEMIC_PERIODS),
-              seedBatch('classSections', INITIAL_CLASS_SECTIONS),
-              seedBatch('instructors', INITIAL_INSTRUCTORS),
-              seedBatch('videos', INITIAL_VIDEOS),
+              seedBatchIfEmpty('programs', INITIAL_PROGRAMS),
+              seedBatchIfEmpty('faculty', INITIAL_FACULTY),
+              seedBatchIfEmpty('announcements', INITIAL_ANNOUNCEMENTS),
+              seedBatchIfEmpty('news', INITIAL_NEWS),
+              seedBatchIfEmpty('events', INITIAL_EVENTS),
+              seedBatchIfEmpty('downloads', INITIAL_DOWNLOADS),
+              seedBatchIfEmpty('testimonials', INITIAL_TESTIMONIALS),
+              seedBatchIfEmpty('stats', INITIAL_STATS),
+              seedBatchIfEmpty('faqs', INITIAL_FAQS),
+              seedBatchIfEmpty('sermons', INITIAL_SERMONS),
+              seedBatchIfEmpty('scrapbook', INITIAL_SCRAPBOOK),
+              seedBatchIfEmpty('mediaLibrary', INITIAL_MEDIA_ITEMS),
+              seedBatchIfEmpty('galleryAlbums', INITIAL_GALLERY_ALBUMS),
+              seedBatchIfEmpty('studentLifeAlbums', INITIAL_STUDENT_LIFE_ALBUMS),
+              seedBatchIfEmpty('adminUsers', INITIAL_ADMIN_USERS),
+              seedBatchIfEmpty('users', INITIAL_USER_ACCOUNTS),
+              seedBatchIfEmpty('studentProfiles', INITIAL_STUDENTS),
+              seedBatchIfEmpty('donationPaymentMethods', INITIAL_DONATION_METHODS),
+              seedBatchIfEmpty('academicSubjects', INITIAL_ACADEMIC_SUBJECTS),
+              seedBatchIfEmpty('feeStructure', INITIAL_FEE_STRUCTURE),
+              seedBatchIfEmpty('academicPeriods', INITIAL_ACADEMIC_PERIODS),
+              seedBatchIfEmpty('classSections', INITIAL_CLASS_SECTIONS),
+              seedBatchIfEmpty('instructors', INITIAL_INSTRUCTORS),
+              seedBatchIfEmpty('videos', INITIAL_VIDEOS),
             ]);
 
             await safeSetDoc(doc(db, 'systemConfig', 'metadata'), {
               isInitialized: true,
+              databaseId: firebaseConfig.firestoreDatabaseId || '',
+              permanentStorage: true,
               initializedAt: new Date().toISOString(),
               version: '1.0.0',
             });
@@ -1775,9 +1851,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               setFirebaseSyncStatus('synced');
               setIsFirebaseConnected(true);
               setLastSyncedAt(new Date());
-            } else if (!isSystemAlreadyInitialized) {
-              // Only create default if brand new empty database
-              await safeSetDoc(doc(db, 'siteConfig', 'global'), INITIAL_SITE_CONFIG);
             }
           },
           (err) => {
@@ -2054,8 +2127,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const data = snap.data() as DonationSettings;
               setDonationSettings(data);
               setCachedData('donationSettings', data);
-            } else if (!isSystemAlreadyInitialized) {
-              await safeSetDoc(doc(db, 'donationSettings', 'global'), INITIAL_DONATION_SETTINGS);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2104,8 +2175,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const data = snap.data() as HomepageVideoConfig;
               setHomepageVideoConfig(data);
               setCachedData('homepageVideoConfig', data);
-            } else if (!isSystemAlreadyInitialized) {
-              await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), INITIAL_HOMEPAGE_VIDEO_CONFIG);
             }
             setIsFirebaseConnected(true);
             setFirebaseSyncStatus('synced');
@@ -2582,8 +2651,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const data = snap.data() as EnrollmentSystemConfig;
               setEnrollmentSystemConfig(data);
               setCachedData('enrollmentSystemConfig', data);
-            } else if (!isSystemAlreadyInitialized) {
-              await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), INITIAL_ENROLLMENT_SYSTEM_CONFIG);
             }
           },
           (err) => handleFirestoreError(err, OperationType.GET, 'enrollmentSettings')
@@ -3199,16 +3266,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSiteConfig(updated);
     setCachedData('siteConfig', updated);
     try {
-      await setDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
       if (newConfig.heroSlides && Array.isArray(newConfig.heroSlides)) {
-        await setDoc(
+        await safeSetDoc(
           doc(db, 'siteContent', 'slideshow'),
-          {
+          cleanFirestoreData({
             slides: newConfig.heroSlides,
             updatedAt: new Date().toISOString(),
             updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
             isPublished: true,
-          },
+          }),
           { merge: true }
         );
       }

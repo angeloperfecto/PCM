@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import { ScrapbookItem } from '@/lib/types';
 import {
   Image as ImageIcon,
@@ -169,7 +170,7 @@ export const ScrapbookView: React.FC = () => {
               >
                 {/* Photo container */}
                 <div className="relative h-56 w-full bg-slate-800 overflow-hidden">
-                  {typeof item.imageUrl === 'string' && item.imageUrl.trim() ? (
+                  {isValidImageSrc(item.imageUrl) ? (
                     <Image
                       src={item.imageUrl.trim()}
                       alt={item.title}
@@ -294,7 +295,7 @@ export const ScrapbookView: React.FC = () => {
 
             {/* Main Photo Area */}
             <div className="relative flex-1 bg-black min-h-[350px] sm:min-h-[420px] flex items-center justify-center">
-              {typeof selectedScrapbookItem.imageUrl === 'string' && selectedScrapbookItem.imageUrl.trim() ? (
+              {isValidImageSrc(selectedScrapbookItem.imageUrl) ? (
                 <Image
                   src={selectedScrapbookItem.imageUrl.trim()}
                   alt={selectedScrapbookItem.title || 'Archive Photo'}

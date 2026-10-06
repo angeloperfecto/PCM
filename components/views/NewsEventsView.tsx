@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { getSafeImageSrc } from '@/lib/utils';
 import {
   Calendar,
   Clock,
@@ -105,8 +106,7 @@ export const NewsEventsView: React.FC = () => {
                 <div>
                   <div className="h-48 overflow-hidden relative bg-slate-800">
                     {(() => {
-                      const rawSrc = art.image || art.imageUrl;
-                      const validSrc = typeof rawSrc === 'string' && rawSrc.trim() ? rawSrc.trim() : 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop';
+                      const validSrc = getSafeImageSrc(art.image || art.imageUrl);
                       return (
                         <Image
                           src={validSrc}

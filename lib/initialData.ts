@@ -3267,7 +3267,7 @@ export const INITIAL_SITE_CONFIG: SiteConfig = {
     missionTitle: 'Our Mission Statement',
     missionStatement: 'PCM exists to produce servant leaders by holistic training that establishes biblical convictions and Christ-like character, enhances commitment, and elevates ministry competence for the glory of God.',
     visionTitle: 'Our Institutional Vision',
-    visionStatement: 'To be a premier biblical and theological institution recognized across the Philippines and Asia for academic excellence, godly leadership, and pioneering church-planting movements that glorify God.',
+    visionStatement: 'PCM is a theological institution of excellence, producing servant leaders who transform communities, nations, and the world.',
     valuesTitle: 'Institutional Core Values',
     valuesSubtitle: 'The unshakeable biblical pillars that guide our teaching, governance, community life, and spiritual walk.',
     coreValues: [

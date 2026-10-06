@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import { AdminUser, AdminRole, UserRole, UserAccount, AccountStatus, DeletedUserRecord } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
@@ -603,7 +604,7 @@ export const AdminUsersTab: React.FC = () => {
                 className="bg-white p-4 rounded-xl border border-amber-200 shadow-2xs flex flex-col justify-between gap-3"
               >
                 <div className="flex items-start gap-3">
-                  {typeof req.photoURL === 'string' && req.photoURL.trim() ? (
+                  {isValidImageSrc(req.photoURL) ? (
                     <div className="relative w-10 h-10 rounded-full overflow-hidden border border-slate-200 shrink-0">
                       <Image
                         src={req.photoURL.trim()}
@@ -957,7 +958,7 @@ export const AdminUsersTab: React.FC = () => {
                     <tr key={account.uid || account.id} className={`transition ${isPending ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-slate-50/75'}`}>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
-                          {typeof account.photoURL === 'string' && account.photoURL.trim() ? (
+                          {isValidImageSrc(account.photoURL) ? (
                             <div className="relative w-9 h-9 rounded-full overflow-hidden border border-slate-200 shrink-0">
                               <Image
                                 src={account.photoURL.trim()}

@@ -3,6 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import { StudentLifeAlbum, StudentLifePhotoItem, MediaItem } from '@/lib/types';
 import { compressImageFile, uploadFileToFirebaseStorage } from '@/lib/firebase';
 import { parsePhotoStory } from '@/lib/galleryStoryParser';
@@ -27,7 +28,7 @@ const SafeAdminImage: React.FC<{
 
   return (
     <Image
-      src={hasError || !src || typeof src !== 'string' || !src.trim() ? FALLBACK_PHOTO : src.trim()}
+      src={hasError || !isValidImageSrc(src) ? FALLBACK_PHOTO : src.trim()}
       alt={alt}
       fill={fill}
       sizes={sizes}
@@ -1145,6 +1146,7 @@ export const AdminStudentLifeGallery: React.FC = () => {
                         src={item.previewUrl}
                         alt="Preview"
                         fill
+                        sizes="48px"
                         className="object-cover"
                         unoptimized={true}
                         referrerPolicy="no-referrer"

@@ -3,6 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { getSafeImageSrc } from '@/lib/utils';
 import { Calendar, User, Clock, ArrowRight, Sparkles } from 'lucide-react';
 
 export const NewsSection: React.FC = () => {
@@ -49,8 +50,7 @@ export const NewsSection: React.FC = () => {
                 {/* Article Image */}
                 <div className="relative h-44 overflow-hidden">
                   {(() => {
-                    const rawSrc = article.image || article.imageUrl;
-                    const validSrc = typeof rawSrc === 'string' && rawSrc.trim() ? rawSrc.trim() : 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop';
+                    const validSrc = getSafeImageSrc(article.image || article.imageUrl);
                     return (
                       <Image
                         src={validSrc}

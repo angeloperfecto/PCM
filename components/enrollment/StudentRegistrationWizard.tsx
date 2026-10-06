@@ -3,6 +3,7 @@
 import React, { useState, useId, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import {
   StudentProfile,
   StudentRequirementItem,
@@ -1018,12 +1019,14 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
             {/* Profile Photo Upload */}
             <div className="flex flex-col sm:flex-row items-center gap-6 bg-slate-50 p-4 rounded-xl border border-slate-200">
               <div className="relative w-24 h-24 rounded-full overflow-hidden border-2 border-[#18392B] bg-slate-200 shrink-0">
-                {typeof formData.profilePhoto === 'string' && formData.profilePhoto.trim() ? (
+                {isValidImageSrc(formData.profilePhoto) ? (
                   <Image
                     src={formData.profilePhoto.trim()}
                     alt="Profile Photo"
                     fill
+                    sizes="96px"
                     className="object-cover"
+                    referrerPolicy="no-referrer"
                     unoptimized
                   />
                 ) : (

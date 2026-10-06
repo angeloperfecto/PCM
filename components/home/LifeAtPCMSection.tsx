@@ -3,6 +3,7 @@
 import React, { useMemo } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { getSafeImageSrc } from '@/lib/utils';
 import { INITIAL_LIFE_AT_PCM_CONFIG } from '@/lib/initialData';
 import {
   Flame,
@@ -107,7 +108,7 @@ function getLifeIcon(iconName?: string) {
 }
 
 export const LifeAtPCMSection: React.FC = () => {
-  const { siteConfig, navigateTo, isAdminLoggedIn, setActiveTab } = usePCM();
+  const { siteConfig, navigateTo, isAdminLoggedIn } = usePCM();
 
   // Read authoritative configuration from store (Firestore synced)
   const config = useMemo(() => {
@@ -150,8 +151,7 @@ export const LifeAtPCMSection: React.FC = () => {
         <div className="absolute top-4 right-4 sm:top-6 sm:right-8 z-20">
           <button
             onClick={() => {
-              if (setActiveTab) setActiveTab('studentLife');
-              navigateTo('admin');
+              navigateTo('admin', 'studentLife');
             }}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-[#18392B] hover:bg-[#588B76] text-white text-xs font-semibold rounded-full shadow-md transition-all duration-200 cursor-pointer"
             title="Update Life at PCM Details in Admin CMS"
@@ -180,9 +180,10 @@ export const LifeAtPCMSection: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           {displayItems.map((item, idx) => {
             const Icon = getLifeIcon(item.iconName);
-            const imageSrc =
-              (typeof item.image === 'string' && item.image.trim()) ||
-              'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&auto=format&fit=crop';
+            const imageSrc = getSafeImageSrc(
+              item.image,
+              'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&auto=format&fit=crop'
+            );
 
             return (
               <div

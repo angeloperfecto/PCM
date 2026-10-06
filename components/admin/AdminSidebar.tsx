@@ -27,7 +27,6 @@ import {
   Database,
   RotateCcw,
   Upload,
-  CloudCheck,
   RefreshCw,
   Tv,
   Camera,

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import {
   StudentProfile,
   StudentRequirementItem,
@@ -245,9 +246,9 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
           <div className="flex items-center gap-3.5">
             <div className="relative w-12 h-12 rounded-xl bg-slate-800 overflow-hidden border border-white/20 shrink-0">
               {(() => {
-                const photoSrc = typeof student.avatarUrl === 'string' && student.avatarUrl.trim()
+                const photoSrc = isValidImageSrc(student.avatarUrl)
                   ? student.avatarUrl.trim()
-                  : typeof student.profilePhoto === 'string' && student.profilePhoto.trim()
+                  : isValidImageSrc(student.profilePhoto)
                   ? student.profilePhoto.trim()
                   : null;
                 if (photoSrc) {
@@ -256,7 +257,9 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                       src={photoSrc}
                       alt={student.fullName || 'Student'}
                       fill
+                      sizes="48px"
                       className="object-cover"
+                      referrerPolicy="no-referrer"
                       unoptimized
                     />
                   );

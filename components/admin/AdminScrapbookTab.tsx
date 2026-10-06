@@ -3,6 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { isValidImageSrc } from '@/lib/utils';
 import { ScrapbookItem, ContentStatus } from '@/lib/types';
 import {
   Camera,
@@ -310,7 +311,7 @@ export const AdminScrapbookTab: React.FC = () => {
               <div>
                 {/* Photo Thumbnail */}
                 <div className="h-48 w-full relative bg-slate-100 overflow-hidden">
-                  {typeof item.imageUrl === 'string' && item.imageUrl.trim() ? (
+                  {isValidImageSrc(item.imageUrl) ? (
                     <Image
                       src={item.imageUrl.trim()}
                       alt={item.title}
@@ -521,7 +522,7 @@ export const AdminScrapbookTab: React.FC = () => {
                   className="w-full p-2 border border-slate-200 rounded-sm focus:border-[#588B76] focus:outline-hidden"
                   placeholder="https://images.unsplash.com/... or /images/..."
                 />
-                {typeof formImageUrl === 'string' && formImageUrl.trim() ? (
+                {isValidImageSrc(formImageUrl) ? (
                   <div className="mt-2 h-24 w-full relative rounded-sm overflow-hidden border border-slate-200 bg-slate-50">
                     <Image
                       src={formImageUrl.trim()}

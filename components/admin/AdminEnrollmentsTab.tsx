@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { getSafeImageSrc } from '@/lib/utils';
 import {
   OnlineEnrollment,
   StudentProfile,
@@ -1200,8 +1201,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 rounded-xl bg-slate-100 overflow-hidden shrink-0 border border-slate-200 relative">
                     {(() => {
-                      const raw = member.imageUrl || member.image;
-                      const valid = typeof raw === 'string' && raw.trim() ? raw.trim() : 'https://images.unsplash.com/photo-1544005313-94ddf0286df2';
+                      const valid = getSafeImageSrc(member.imageUrl || member.image, 'https://images.unsplash.com/photo-1544005313-94ddf0286df2');
                       return (
                         <Image
                           src={valid}

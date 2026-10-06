@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { DonationRecord, DonationPaymentMethod, PaymentMethodType } from '@/lib/types';
-import { normalizeInstructions } from '@/lib/utils';
+import { normalizeInstructions, isValidImageSrc } from '@/lib/utils';
 import {
   Heart,
   QrCode,
@@ -521,7 +521,7 @@ export const DonationView: React.FC = () => {
 
                   {/* QR Code / Visual Graphic Display */}
                   <div className="flex flex-col items-center justify-center p-6 bg-slate-50 rounded-xl border border-slate-200 text-center space-y-3">
-                    {typeof selectedMethod.qrCodeUrl === 'string' && selectedMethod.qrCodeUrl.trim() ? (
+                    {isValidImageSrc(selectedMethod.qrCodeUrl) ? (
                       <div className="space-y-3">
                         <div className="p-3 bg-white rounded-xl shadow-sm border border-slate-200 inline-block relative">
                           <Image

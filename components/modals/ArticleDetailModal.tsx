@@ -3,6 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { getSafeImageSrc } from '@/lib/utils';
 import {
   X,
   Calendar,
@@ -40,8 +41,10 @@ export const ArticleDetailModal: React.FC = () => {
         {/* Header Photo */}
         <div className="relative h-64 sm:h-72 w-full overflow-hidden bg-[#18392B]">
           {(() => {
-            const rawSrc = selectedArticle.image || selectedArticle.imageUrl;
-            const validSrc = typeof rawSrc === 'string' && rawSrc.trim() ? rawSrc.trim() : 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop';
+            const validSrc = getSafeImageSrc(
+              selectedArticle.image || selectedArticle.imageUrl,
+              'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=1200&auto=format&fit=crop'
+            );
             return (
               <Image
                 src={validSrc}
