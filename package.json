@@ -15,7 +15,7 @@
     "firebase": "^11.10.0",
     "lucide-react": "^0.475.0",
     "motion": "^12.4.7",
-    "next": "15.1.7",
+    "next": "15.1.12",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tailwind-merge": "^3.0.2",
@@ -27,8 +27,14 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.1.7",
+    "eslint-config-next": "15.1.12",
     "postcss": "^8",
     "typescript": "^5"
+  },
+  "allowScripts": {
+    "@firebase/util": true,
+    "protobufjs": true,
+    "sharp": true,
+    "unrs-resolver": true
   }
 }
