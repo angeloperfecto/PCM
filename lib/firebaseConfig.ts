@@ -1,4 +1,10 @@
-import rawConfig from '@/firebase-applet-config.json';
+let rawConfig: Partial<FirebaseAppConfig> = {};
+try {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  rawConfig = require('../firebase-applet-config.json');
+} catch {
+  rawConfig = {};
+}
 
 export interface FirebaseAppConfig {
   apiKey: string;

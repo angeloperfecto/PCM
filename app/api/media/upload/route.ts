@@ -133,14 +133,11 @@ export async function POST(req: NextRequest) {
       await fs.writeFile(filePath, buffer);
       publicUrl = `/uploads/${sanitizedFolder}/${uniqueFilename}`;
     } catch (diskErr) {
-      console.warn('Local disk write notice:', diskErr);
+      console.warn('Local disk write notice (expected in read-only serverless environments):', diskErr);
     }
 
-    const finalUrl = publicUrl;
-
-    if (!finalUrl) {
-      throw new Error('Could not persist file to storage.');
-    }
+    const logicalUrl = `/uploads/${sanitizedFolder}/${uniqueFilename}`;
+    const finalUrl = publicUrl || logicalUrl;
 
     // 4. Metadata and cloud persistence in Firestore (stores dataUrl for files under 800KB for full cross-session recovery)
     const canStoreDataUrl = buffer.length <= 800 * 1024;
@@ -156,7 +153,7 @@ export async function POST(req: NextRequest) {
         folder: sanitizedFolder,
         contentType: fileMime,
         size: buffer.length,
-        url: publicUrl,
+        url: finalUrl,
         dataUrl: dataUrlValue,
         storagePath: `uploads/${sanitizedFolder}/${uniqueFilename}`,
         createdAt: new Date().toISOString(),
