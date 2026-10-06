@@ -115,6 +115,25 @@ import {
 } from './studentDefaults';
 import { extractYouTubeVideoId, getYouTubeThumbnailUrl, generateVideoId, getCurrentTimestamp } from './youtube';
 import { normalizeInstructions } from './utils';
+
+export const ALL_VALID_SECTIONS: NavSection[] = [
+  'home',
+  'why-choose-pcm',
+  'about',
+  'academics',
+  'admissions',
+  'student-life',
+  'ministry',
+  'news-events',
+  'resources',
+  'scrapbook',
+  'donation',
+  'contact',
+  'apply',
+  'portal',
+  'admin',
+  'migration-report',
+];
 import {
   db,
   auth,
@@ -648,7 +667,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const initialSeededRef = useRef(false);
 
   // Navigation
-  const [currentSection, setCurrentSection] = useState<NavSection>('home');
+  const [currentSection, setCurrentSection] = useState<NavSection>(() => {
+    if (typeof window === 'undefined') return 'home';
+    try {
+      const hash = window.location.hash.replace('#', '').toLowerCase();
+      if (ALL_VALID_SECTIONS.includes(hash as NavSection)) {
+        return hash as NavSection;
+      }
+    } catch {}
+    return 'home';
+  });
   const [activeSubSection, setActiveSubSection] = useState<string | null>(null);
 
   // Search
@@ -903,9 +931,26 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const currentAcademicPeriod = academicPeriods.find((p) => p.isCurrent) || academicPeriods[0];
 
   // Admin Auth
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return Boolean(localStorage.getItem('pcm_admin_session'));
+    } catch {
+      return false;
+    }
+  });
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>(INITIAL_ADMIN_USERS);
-  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(INITIAL_ADMIN_USERS[0]);
+  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(() => {
+    if (typeof window === 'undefined') return INITIAL_ADMIN_USERS[0];
+    try {
+      const stored = localStorage.getItem('pcm_admin_session');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && parsed.id) return parsed;
+      }
+    } catch {}
+    return INITIAL_ADMIN_USERS[0];
+  });
 
   // Restore client-side cached data immediately after hydration completes
   useEffect(() => {
@@ -1091,8 +1136,39 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setCurrentSection(section);
     setActiveSubSection(subSection);
+    if (typeof window !== 'undefined') {
+      try {
+        const targetHash = section === 'home' ? '' : `#${section}`;
+        if (window.location.hash !== targetHash) {
+          if (targetHash) {
+            window.history.pushState(null, '', `${window.location.pathname}${targetHash}`);
+          } else {
+            window.history.pushState(null, '', window.location.pathname);
+          }
+        }
+      } catch {}
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  // Synchronize section with browser hash and history navigation
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleUrlChange = () => {
+      const hash = window.location.hash.replace('#', '').toLowerCase();
+      if (ALL_VALID_SECTIONS.includes(hash as NavSection)) {
+        setCurrentSection(hash as NavSection);
+      } else if (!hash) {
+        setCurrentSection('home');
+      }
+    };
+    window.addEventListener('hashchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
+  }, []);
 
   // Activity Logging Helper
   const logActivity = useCallback(
