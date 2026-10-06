@@ -39,6 +39,7 @@ import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 import { StudentRegistrationWizard } from '@/components/enrollment/StudentRegistrationWizard';
 import { getDefaultStudentRequirements, calculateGPAFromGrades } from '@/lib/studentDefaults';
 import { uploadStudentFile } from '@/lib/storageService';
+import { isValidImageSrc } from '@/lib/utils';
 
 export const StudentProfileModule: React.FC = () => {
   const {
@@ -166,7 +167,7 @@ export const StudentProfileModule: React.FC = () => {
               >
                 {(() => {
                   const rawPhoto = studentProfile.avatarUrl || studentProfile.profilePhoto;
-                  const photoSrc = typeof rawPhoto === 'string' && rawPhoto.trim() ? rawPhoto.trim() : null;
+                  const photoSrc = isValidImageSrc(rawPhoto) ? rawPhoto.trim() : null;
                   if (photoSrc) {
                     return (
                       // eslint-disable-next-line @next/next/no-img-element

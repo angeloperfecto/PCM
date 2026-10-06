@@ -11,6 +11,7 @@ import {
   VIDEO_CATEGORIES,
 } from '@/lib/youtube';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
+import { isValidImageSrc } from '@/lib/utils';
 import {
   Tv,
   Plus,
@@ -516,7 +517,7 @@ export const AdminYouTubeTab: React.FC = () => {
                               onClick={() => setPreviewVideo(video)}
                               className="relative w-24 aspect-video rounded-lg overflow-hidden bg-slate-900 cursor-pointer group shadow-xs"
                             >
-                              {typeof thumb === 'string' && thumb.trim() ? (
+                              {isValidImageSrc(thumb) ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
                                   src={thumb.trim()}

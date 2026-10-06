@@ -515,7 +515,7 @@ export const AdminScrapbookTab: React.FC = () => {
               <div>
                 <label className="block font-semibold text-slate-700 mb-1">Photograph URL *</label>
                 <input
-                  type="url"
+                  type="text"
                   required
                   value={formImageUrl}
                   onChange={(e) => setFormImageUrl(e.target.value)}

@@ -59,33 +59,73 @@ export function instructionsToText(input: unknown): string {
 }
 
 /**
- * Strictly validates that a string is a valid Next.js image src.
- * Must start with '/', 'http://', 'https://', 'data:', or 'blob:'.
- * Strings like 'Spiritual Formation & Daily Chapel' or plain text titles return false.
+ * Normalizes an image path or URL.
+ * Automatically adds a leading '/' if the path starts with 'uploads/', 'images/', or 'assets/'.
+ */
+export function normalizeImageSrc(src: unknown): string {
+  if (typeof src !== 'string') return '';
+  const trimmed = src.trim();
+  if (!trimmed) return '';
+
+  if (
+    trimmed.startsWith('uploads/') ||
+    trimmed.startsWith('images/') ||
+    trimmed.startsWith('assets/') ||
+    trimmed.startsWith('api/')
+  ) {
+    return `/${trimmed}`;
+  }
+
+  return trimmed;
+}
+
+/**
+ * Standardized validation for Next.js <Image> and HTML <img> source attributes.
+ * Ensures the source is a valid string, rejects undefined/null placeholders and dangerous pseudo-schemes,
+ * and ensures the value begins with a valid path or URI scheme.
  */
 export function isValidImageSrc(src: unknown): src is string {
   if (typeof src !== 'string') return false;
   const trimmed = src.trim();
   if (!trimmed) return false;
+
+  const lower = trimmed.toLowerCase();
+  if (
+    lower === 'undefined' ||
+    lower === 'null' ||
+    lower === '[object object]' ||
+    lower === 'none' ||
+    lower === 'false' ||
+    lower === 'true' ||
+    lower === 'nan' ||
+    lower === 'placeholder' ||
+    lower.startsWith('javascript:')
+  ) {
+    return false;
+  }
+
   return (
     trimmed.startsWith('/') ||
     trimmed.startsWith('http://') ||
     trimmed.startsWith('https://') ||
     trimmed.startsWith('data:') ||
-    trimmed.startsWith('blob:')
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('uploads/') ||
+    trimmed.startsWith('images/') ||
+    trimmed.startsWith('assets/') ||
+    trimmed.startsWith('api/')
   );
 }
 
 /**
- * Returns a valid, parseable image URL for Next.js <Image> or <img>.
- * If the input is not a valid URL or path, returns the provided fallback.
+ * Standardized helper returning a safe, valid image source or an institutional fallback.
  */
 export function getSafeImageSrc(
   src: unknown,
   fallback = 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=800&auto=format&fit=crop'
 ): string {
   if (isValidImageSrc(src)) {
-    return src.trim();
+    return normalizeImageSrc(src);
   }
   return fallback;
 }

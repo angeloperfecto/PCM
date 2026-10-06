@@ -34,6 +34,7 @@ import {
   Flame,
 } from 'lucide-react';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
+import { isValidImageSrc } from '@/lib/utils';
 
 export type AdminTabType =
   | 'overview'
@@ -317,7 +318,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
                   title="Click to update administrator profile image"
                   className="w-9 h-9 rounded-xl bg-[#588B76]/20 border border-[#588B76]/40 flex items-center justify-center text-[#85AA9B] font-bold text-sm font-mono overflow-hidden cursor-pointer relative"
                 >
-                  {typeof currentAdminUser?.avatarUrl === 'string' && currentAdminUser.avatarUrl.trim() ? (
+                  {isValidImageSrc(currentAdminUser?.avatarUrl) ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
                       src={currentAdminUser.avatarUrl.trim()}
@@ -369,7 +370,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               className="w-9 h-9 rounded-xl bg-[#588B76]/20 border border-[#588B76]/40 flex items-center justify-center text-[#85AA9B] font-bold text-sm font-mono overflow-hidden cursor-pointer relative group"
               title={`${currentAdminUser?.name || 'Admin'} - Click to change photo`}
             >
-              {typeof currentAdminUser?.avatarUrl === 'string' && currentAdminUser.avatarUrl.trim() ? (
+              {isValidImageSrc(currentAdminUser?.avatarUrl) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentAdminUser.avatarUrl.trim()}

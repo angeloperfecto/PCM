@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
-import { isValidImageSrc, getSafeImageSrc } from '@/lib/utils';
+import { isValidImageSrc, getSafeImageSrc, normalizeImageSrc } from '@/lib/utils';
 import { LifeAtPCMConfig, LifeAtPCMItem } from '@/lib/types';
 import { INITIAL_LIFE_AT_PCM_CONFIG } from '@/lib/initialData';
 import { compressImageFile, uploadFileToFirebaseStorage } from '@/lib/firebase';
@@ -287,7 +287,7 @@ export const AdminLifeAtPCMManager: React.FC = () => {
         }
       );
       if (finalUrl) {
-        setFormImage(finalUrl);
+        setFormImage(normalizeImageSrc(finalUrl));
         addToast({
           type: 'success',
           title: 'Image Uploaded',
@@ -331,7 +331,7 @@ export const AdminLifeAtPCMManager: React.FC = () => {
       desc: formDesc.trim(),
       iconName: formIcon,
       image:
-        formImage.trim() ||
+        normalizeImageSrc(formImage) ||
         'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&auto=format&fit=crop',
       active: formActive,
       order: editingItem?.order ?? (currentConfig.items?.length || 0) + 1,
@@ -734,7 +734,7 @@ export const AdminLifeAtPCMManager: React.FC = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSaveModal} className="space-y-5">
+            <form onSubmit={handleSaveModal} noValidate className="space-y-5">
               {/* Title & Active */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="sm:col-span-2">
@@ -824,10 +824,15 @@ export const AdminLifeAtPCMManager: React.FC = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <input
-                      type="url"
+                      type="text"
                       value={formImage}
                       onChange={(e) => setFormImage(e.target.value)}
-                      placeholder="Paste image URL (https://...)"
+                      onBlur={() => {
+                        if (formImage.trim()) {
+                          setFormImage(normalizeImageSrc(formImage));
+                        }
+                      }}
+                      placeholder="Paste image URL (https://...) or upload path"
                       className="w-full text-xs bg-white border border-slate-300 rounded-lg px-3 py-2 text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#588B76]"
                     />
                   </div>
@@ -879,7 +884,7 @@ export const AdminLifeAtPCMManager: React.FC = () => {
                 <div className="max-w-sm mx-auto bg-[#D0DED8]/20 rounded-xl overflow-hidden border border-[#588B76] shadow-md flex flex-col">
                   <div className="h-36 relative overflow-hidden bg-slate-200">
                     {(() => {
-                      const previewSrc = isValidImageSrc(formImage) ? formImage.trim() : null;
+                      const previewSrc = isValidImageSrc(formImage) ? normalizeImageSrc(formImage) : null;
                       if (previewSrc) {
                         return (
                           <Image

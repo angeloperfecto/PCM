@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Image from 'next/image';
+import { isValidImageSrc } from '@/lib/utils';
 
 interface FacultyPortraitProps {
   name: string;
@@ -69,16 +70,6 @@ const DEFAULT_FACULTY_IMAGE_MAP: Record<string, string> = {
   'lubag': 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=800&auto=format&fit=crop',
 };
 
-// Helper to validate whether a string is a potentially valid image URL
-const isValidImageUrl = (url?: string | null): boolean => {
-  if (!url || typeof url !== 'string') return false;
-  const trimmed = url.trim();
-  if (!trimmed || trimmed === 'undefined' || trimmed === 'null' || trimmed === '[object Object]' || trimmed === 'none') {
-    return false;
-  }
-  return true;
-};
-
 export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   name,
   imageUrl,
@@ -92,7 +83,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
 }) => {
   // Determine primary and fallback image candidates with robust validation
   const rawPrimary = (imageUrl || imageSrc || image || '').trim();
-  const primaryImage = isValidImageUrl(rawPrimary) ? rawPrimary : '';
+  const primaryImage = isValidImageSrc(rawPrimary) ? rawPrimary : '';
   let defaultCuratedImage = '';
 
   const cleanId = (id || '').replace(/^(featured|dir|modal|admin|card)-/i, '');
@@ -116,7 +107,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
 
   useEffect(() => {
     const rawTarget = (imageUrl || imageSrc || image || '').trim();
-    const validTarget = isValidImageUrl(rawTarget) ? rawTarget : '';
+    const validTarget = isValidImageSrc(rawTarget) ? rawTarget : '';
     const nextTarget = validTarget || defaultCuratedImage;
 
     setActiveImage(nextTarget);
@@ -153,7 +144,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
           referrerPolicy="no-referrer"
           onError={() => {
             // If primary custom upload failed, attempt curated default; otherwise fall back to regalia portrait
-            if (trimmed !== defaultCuratedImage && isValidImageUrl(defaultCuratedImage)) {
+            if (trimmed !== defaultCuratedImage && isValidImageSrc(defaultCuratedImage)) {
               setActiveImage(defaultCuratedImage);
             } else {
               setHasError(true);

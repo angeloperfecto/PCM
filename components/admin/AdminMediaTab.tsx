@@ -6,6 +6,7 @@ import { usePCM } from '@/lib/store';
 import { MediaItem } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import { getImageDimensions } from '@/lib/firebase';
+import { isValidImageSrc } from '@/lib/utils';
 import {
   Image as ImageIcon,
   Plus,
@@ -1097,7 +1098,7 @@ export const AdminMediaTab: React.FC = () => {
                   <div>
                     <label className="block text-slate-700 font-bold mb-1">Permanent Image URL</label>
                     <input
-                      type="url"
+                      type="text"
                       required
                       value={mediaUrl}
                       onChange={(e) => setMediaUrl(e.target.value)}
@@ -1273,13 +1274,8 @@ export const AdminMediaTab: React.FC = () => {
             {/* Image Preview Box */}
             <div className="relative w-full h-64 bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-200 group">
               {(() => {
-                const mediaSrc = typeof detailItem.dataUrl === 'string' && detailItem.dataUrl.trim()
-                  ? detailItem.dataUrl.trim()
-                  : typeof detailItem.downloadURL === 'string' && detailItem.downloadURL.trim()
-                  ? detailItem.downloadURL.trim()
-                  : typeof detailItem.url === 'string' && detailItem.url.trim()
-                  ? detailItem.url.trim()
-                  : null;
+                const mediaCandidate = detailItem.dataUrl || detailItem.downloadURL || detailItem.url;
+                const mediaSrc = isValidImageSrc(mediaCandidate) ? mediaCandidate.trim() : null;
 
                 if (!previewImgError && mediaSrc) {
                   return (

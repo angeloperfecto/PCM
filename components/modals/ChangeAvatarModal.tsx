@@ -446,10 +446,10 @@ export const ChangeAvatarModal: React.FC<ChangeAvatarModalProps> = ({
                   <Link2 className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <input
                     id="input-avatar-url"
-                    type="url"
+                    type="text"
                     value={customUrlInput}
                     onChange={(e) => setCustomUrlInput(e.target.value)}
-                    placeholder="https://example.com/photo.jpg"
+                    placeholder="https://example.com/photo.jpg or /images/..."
                     className="w-full text-xs pl-9 pr-3 py-2 rounded-lg border border-slate-300 focus:outline-none focus:border-[#18392B] focus:ring-1 focus:ring-[#18392B]"
                   />
                 </div>

@@ -4,6 +4,7 @@ import React, { useState, useMemo } from 'react';
 import { usePCM } from '@/lib/store';
 import { YouTubeVideo } from '@/lib/types';
 import { getYouTubeEmbedUrl, getYouTubeThumbnailUrl, isValidYouTubeId } from '@/lib/youtube';
+import { isValidImageSrc } from '@/lib/utils';
 import {
   Play,
   Tv,
@@ -272,7 +273,7 @@ export const HomeVideoSection: React.FC = () => {
                       >
                         {/* Thumbnail Container */}
                         <div className="relative w-28 sm:w-32 aspect-video rounded-lg overflow-hidden shrink-0 bg-slate-900">
-                          {typeof thumb === 'string' && thumb.trim() ? (
+                          {isValidImageSrc(thumb) ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
                               src={thumb.trim()}
@@ -417,7 +418,7 @@ export const HomeVideoSection: React.FC = () => {
                     }`}
                   >
                     <div className="relative aspect-video bg-slate-900 overflow-hidden">
-                      {typeof thumb === 'string' && thumb.trim() ? (
+                      {isValidImageSrc(thumb) ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={thumb.trim()}

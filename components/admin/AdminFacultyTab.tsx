@@ -5,6 +5,7 @@ import { usePCM } from '@/lib/store';
 import { FacultyMember, MediaItem } from '@/lib/types';
 import { FacultyPortrait } from '@/components/common/FacultyPortrait';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
+import { isValidImageSrc } from '@/lib/utils';
 import {
   Users,
   Plus,
@@ -1184,7 +1185,7 @@ export const AdminFacultyTab: React.FC = () => {
                             }`}
                           >
                             <div className="w-full h-12 rounded overflow-hidden relative bg-slate-200 mb-1">
-                              {typeof item.url === 'string' && item.url.trim() ? (
+                              {isValidImageSrc(item.url) ? (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
                                   src={item.url.trim()}

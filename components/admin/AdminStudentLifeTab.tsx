@@ -1612,13 +1612,13 @@ export const AdminStudentLifeTab: React.FC = () => {
                   <div>
                     <label className="block font-semibold text-slate-700 mb-1">Photo URL</label>
                     <input
-                      type="url"
+                      type="text"
                       value={editingLeader.photoUrl || ''}
                       onChange={(e) =>
                         setEditingLeader({ ...editingLeader, photoUrl: e.target.value })
                       }
                       className="w-full p-2 border border-slate-200 rounded-sm"
-                      placeholder="https://..."
+                      placeholder="https://... or /images/..."
                     />
                   </div>
 

@@ -1122,7 +1122,7 @@ export const AdminDonationsTab: React.FC = () => {
                     <label className="block font-bold text-slate-700">QR Code Image URL</label>
                     <div className="flex gap-2">
                       <input
-                        type="url"
+                        type="text"
                         placeholder="https://... or /images/donation-gcash-qr.png"
                         value={methodForm.qrCodeUrl}
                         onChange={(e) => setMethodForm({ ...methodForm, qrCodeUrl: e.target.value })}

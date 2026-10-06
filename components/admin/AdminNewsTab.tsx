@@ -4,6 +4,7 @@ import React, { useState, useRef } from 'react';
 import { usePCM } from '@/lib/store';
 import { NewsArticle } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
+import { isValidImageSrc } from '@/lib/utils';
 import {
   Megaphone,
   Plus,
@@ -445,7 +446,7 @@ export const AdminNewsTab: React.FC = () => {
                     placeholder="https://... or upload image"
                     className="flex-1 p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
                   />
-                  {typeof formImage === 'string' && formImage.trim() ? (
+                  {isValidImageSrc(formImage) ? (
                     <div className="w-14 h-10 rounded border border-slate-200 overflow-hidden relative bg-slate-100 shrink-0">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img

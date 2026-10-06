@@ -17,6 +17,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
+import { isValidImageSrc } from '@/lib/utils';
 
 interface AdminHeaderProps {
   activeTab?: string;
@@ -346,7 +347,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
             title="Click to change admin profile photo"
           >
             <div className="w-5 h-5 rounded-full overflow-hidden bg-[#588B76]/30 flex items-center justify-center text-[10px] font-bold text-[#85AA9B] relative shrink-0 border border-[#588B76]/50">
-              {typeof currentAdminUser?.avatarUrl === 'string' && currentAdminUser.avatarUrl.trim() ? (
+              {isValidImageSrc(currentAdminUser?.avatarUrl) ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={currentAdminUser.avatarUrl.trim()}
