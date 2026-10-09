@@ -115,6 +115,7 @@ import {
 } from './studentDefaults';
 import { extractYouTubeVideoId, getYouTubeThumbnailUrl, generateVideoId, getCurrentTimestamp } from './youtube';
 import { normalizeInstructions } from './utils';
+import { saveSlideshowToFirestore } from './slideshowService';
 
 export const ALL_VALID_SECTIONS: NavSection[] = [
   'home',
@@ -664,7 +665,7 @@ const PCMContext = createContext<PCMContextType | undefined>(undefined);
 
 export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const counterRef = useRef(0);
-  const initialSeededRef = useRef(false);
+  const initialSeededRef = useRef(true);
 
   // Navigation
   const [currentSection, setCurrentSection] = useState<NavSection>(() => {
@@ -700,15 +701,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [lastSyncedAt, setLastSyncedAt] = useState<Date | null>(null);
 
   // Deleted User Accounts Tombstone & Archive Registry
-  const [deletedUsers, setDeletedUsers] = useState<DeletedUserRecord[]>(() => {
-    if (typeof window === 'undefined') return [];
-    try {
-      const stored = localStorage.getItem('pcm_deleted_users');
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [deletedUsers, setDeletedUsers] = useState<DeletedUserRecord[]>([]);
 
   // Helper to check if any user or email is marked as permanently deleted
   const isUserDeleted = useCallback(
@@ -786,7 +779,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             name: adm.name || existing?.name || 'Administrator',
             displayName: adm.name || existing?.displayName || 'Administrator',
             email: adm.email,
-            role: 'Admin',
+            role: existing?.role || 'Admin',
             adminRole: adm.role || existing?.adminRole || 'Super Admin',
             department: adm.department || existing?.department || 'Office of Administration',
             status: (adm.status as any) || existing?.status || 'Active',
@@ -812,7 +805,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             name: std.fullName || std.name || existing?.name || 'Student',
             displayName: std.fullName || std.name || existing?.displayName || 'Student',
             email: std.email,
-            role: 'Student',
+            role: existing?.role || 'Student',
             studentId: std.studentId,
             department: std.program || std.degreeProgram || existing?.department || 'Undergraduate Theology',
             status: (std.academicStatus === 'Probationary' ? 'Pending' : (existing?.status || 'Active')) as any,
@@ -839,8 +832,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const parsed = JSON.parse(raw);
         if (Array.isArray(fallback)) {
           if (Array.isArray(parsed)) return parsed as unknown as T;
-        } else if (parsed && typeof parsed === 'object' && fallback && typeof fallback === 'object') {
-          return { ...(fallback as any), ...parsed } as unknown as T;
+        } else if (parsed && typeof parsed === 'object') {
+          return parsed as unknown as T;
         } else if (parsed !== null && parsed !== undefined) {
           return parsed as unknown as T;
         }
@@ -859,30 +852,30 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // User Accounts & Multi-Role Auth
   const [currentUserAccount, setCurrentUserAccount] = useState<UserAccount | null>(null);
   const [firebaseAuthUser, setFirebaseAuthUser] = useState<FirebaseUser | null>(null);
-  // Core CMS Data States
-  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(INITIAL_USER_ACCOUNTS);
+  // Core CMS Data States (Persistent source of truth is Firebase/Firestore)
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(INITIAL_SITE_CONFIG);
-  const [mediaItems, setMediaItems] = useState<MediaItem[]>(INITIAL_MEDIA_ITEMS);
-  const [galleryAlbums, setGalleryAlbums] = useState<GalleryAlbum[]>(INITIAL_GALLERY_ALBUMS);
-  const [studentLifeAlbums, setStudentLifeAlbums] = useState<StudentLifeAlbum[]>(INITIAL_STUDENT_LIFE_ALBUMS);
-  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>(INITIAL_ACTIVITY_LOGS);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  const [galleryAlbums, setGalleryAlbums] = useState<GalleryAlbum[]>([]);
+  const [studentLifeAlbums, setStudentLifeAlbums] = useState<StudentLifeAlbum[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogItem[]>([]);
 
-  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>(INITIAL_ANNOUNCEMENTS);
-  const [programs, setPrograms] = useState<AcademicProgram[]>(INITIAL_PROGRAMS);
-  const [news, setNews] = useState<NewsArticle[]>(INITIAL_NEWS);
-  const [events, setEvents] = useState<CollegeEvent[]>(INITIAL_EVENTS);
-  const [faculty, setFaculty] = useState<FacultyMember[]>(INITIAL_FACULTY);
-  const [testimonials, setTestimonials] = useState<Testimonial[]>(INITIAL_TESTIMONIALS);
-  const [stats, setStats] = useState<ImpactStat[]>(INITIAL_STATS);
-  const [faqs, setFaqs] = useState<FAQItem[]>(INITIAL_FAQS);
-  const [downloads, setDownloads] = useState<DownloadableResource[]>(INITIAL_DOWNLOADS);
-  const [sermons, setSermons] = useState<SermonLecture[]>(INITIAL_SERMONS);
-  const [scrapbook, setScrapbook] = useState<ScrapbookItem[]>(INITIAL_SCRAPBOOK);
+  const [announcements, setAnnouncements] = useState<AnnouncementItem[]>([]);
+  const [programs, setPrograms] = useState<AcademicProgram[]>([]);
+  const [news, setNews] = useState<NewsArticle[]>([]);
+  const [events, setEvents] = useState<CollegeEvent[]>([]);
+  const [faculty, setFaculty] = useState<FacultyMember[]>([]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [stats, setStats] = useState<ImpactStat[]>([]);
+  const [faqs, setFaqs] = useState<FAQItem[]>([]);
+  const [downloads, setDownloads] = useState<DownloadableResource[]>([]);
+  const [sermons, setSermons] = useState<SermonLecture[]>([]);
+  const [scrapbook, setScrapbook] = useState<ScrapbookItem[]>([]);
   const [selectedScrapbookItem, setSelectedScrapbookItem] = useState<ScrapbookItem | null>(null);
-  const [migrationAudit, setMigrationAudit] = useState<MigrationAuditItem[]>(INITIAL_MIGRATION_AUDIT);
+  const [migrationAudit, setMigrationAudit] = useState<MigrationAuditItem[]>([]);
 
   // YouTube Videos & Homepage Video Settings
-  const [videos, setVideos] = useState<YouTubeVideo[]>(INITIAL_VIDEOS);
+  const [videos, setVideos] = useState<YouTubeVideo[]>([]);
   const [homepageVideoConfig, setHomepageVideoConfig] = useState<HomepageVideoConfig>(INITIAL_HOMEPAGE_VIDEO_CONFIG);
 
   const featuredVideo = React.useMemo(() => {
@@ -897,60 +890,43 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [videos, homepageVideoConfig.featuredVideoId]);
 
   // Applications
-  const [applications, setApplications] = useState<AdmissionApplication[]>(INITIAL_APPLICATIONS);
+  const [applications, setApplications] = useState<AdmissionApplication[]>([]);
   const [activeTrackerRef, setActiveTrackerRef] = useState<string>('');
 
   // Donation Management & Giving Portal
-  const [donationMethods, setDonationMethods] = useState<DonationPaymentMethod[]>(INITIAL_DONATION_METHODS);
-  const [donations, setDonations] = useState<DonationRecord[]>(INITIAL_DONATIONS);
+  const [donationMethods, setDonationMethods] = useState<DonationPaymentMethod[]>([]);
+  const [donations, setDonations] = useState<DonationRecord[]>([]);
   const [donationSettings, setDonationSettings] = useState<DonationSettings>(INITIAL_DONATION_SETTINGS);
 
   // Student Portal, Multi-Student Directory, & Online Enrollment System
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false);
-  const [students, setStudents] = useState<StudentProfile[]>(INITIAL_STUDENTS);
-  const [studentProfile, setStudentProfile] = useState<StudentProfile>(INITIAL_STUDENTS[0] || DEMO_STUDENT_PROFILE);
-  const [enrollments, setEnrollments] = useState<OnlineEnrollment[]>(INITIAL_ENROLLMENTS);
-  const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>(INITIAL_STUDENT_NOTIFICATIONS);
+  const [students, setStudents] = useState<StudentProfile[]>([]);
+  const [studentProfile, setStudentProfile] = useState<StudentProfile>(DEMO_STUDENT_PROFILE);
+  const [enrollments, setEnrollments] = useState<OnlineEnrollment[]>([]);
+  const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>([]);
   const [currentEnrollmentDraft, setCurrentEnrollmentDraft] = useState<Partial<OnlineEnrollment> | null>(null);
 
   // Enrollment Submenu Active Tab
   const [enrollmentActiveSubTab, setEnrollmentActiveSubTab] = useState<EnrollmentSubmenuTab>('profile');
 
   // Academic Subjects, Pre-Enlistment, Adding & Dropping, and Fee Structure
-  const [academicSubjects, setAcademicSubjects] = useState<AcademicSubject[]>(INITIAL_ACADEMIC_SUBJECTS);
-  const [preEnlistments, setPreEnlistments] = useState<PreEnlistmentRecord[]>(INITIAL_PRE_ENLISTMENTS);
-  const [addDropRequests, setAddDropRequests] = useState<AddDropRequest[]>(INITIAL_ADD_DROP_REQUESTS);
-  const [feeStructure, setFeeStructure] = useState<FeeStructureItem[]>(INITIAL_FEE_STRUCTURE);
+  const [academicSubjects, setAcademicSubjects] = useState<AcademicSubject[]>([]);
+  const [preEnlistments, setPreEnlistments] = useState<PreEnlistmentRecord[]>([]);
+  const [addDropRequests, setAddDropRequests] = useState<AddDropRequest[]>([]);
+  const [feeStructure, setFeeStructure] = useState<FeeStructureItem[]>([]);
 
   // Academic Periods, Class Sections, Instructors, and Enrollment Policy Config
-  const [academicPeriods, setAcademicPeriods] = useState<AcademicPeriod[]>(INITIAL_ACADEMIC_PERIODS);
-  const [classSections, setClassSections] = useState<ClassSection[]>(INITIAL_CLASS_SECTIONS);
-  const [instructors, setInstructors] = useState<InstructorRecord[]>(INITIAL_INSTRUCTORS);
+  const [academicPeriods, setAcademicPeriods] = useState<AcademicPeriod[]>([]);
+  const [classSections, setClassSections] = useState<ClassSection[]>([]);
+  const [instructors, setInstructors] = useState<InstructorRecord[]>([]);
   const [enrollmentSystemConfig, setEnrollmentSystemConfig] = useState<EnrollmentSystemConfig>(INITIAL_ENROLLMENT_SYSTEM_CONFIG);
 
   const currentAcademicPeriod = academicPeriods.find((p) => p.isCurrent) || academicPeriods[0];
 
   // Admin Auth
-  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return false;
-    try {
-      return Boolean(localStorage.getItem('pcm_admin_session'));
-    } catch {
-      return false;
-    }
-  });
-  const [adminUsers, setAdminUsers] = useState<AdminUser[]>(INITIAL_ADMIN_USERS);
-  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(() => {
-    if (typeof window === 'undefined') return INITIAL_ADMIN_USERS[0];
-    try {
-      const stored = localStorage.getItem('pcm_admin_session');
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (parsed && parsed.id) return parsed;
-      }
-    } catch {}
-    return INITIAL_ADMIN_USERS[0];
-  });
+  const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [currentAdminUser, setCurrentAdminUser] = useState<AdminUser>(INITIAL_ADMIN_USERS[0]);
 
   // Restore client-side cached data immediately after hydration completes
   useEffect(() => {
@@ -1716,12 +1692,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // NEVER auto-seed or restore hardcoded sample data if the system was already initialized
         // or if Firestore already contains documents.
         let isSystemAlreadyInitialized = true;
-        try {
-          const metaSnap = await getDoc(doc(db, 'systemConfig', 'metadata')).catch(() => null);
-          if (metaSnap && metaSnap.exists() && metaSnap.data()?.isInitialized) {
-            isSystemAlreadyInitialized = true;
-            initialSeededRef.current = true;
-          } else {
+        if (initialSeededRef.current) {
+          isSystemAlreadyInitialized = true;
+        } else {
+          try {
+            const metaSnap = await getDoc(doc(db, 'systemConfig', 'metadata')).catch(() => null);
+            if (metaSnap && metaSnap.exists() && metaSnap.data()?.isInitialized) {
+              isSystemAlreadyInitialized = true;
+              initialSeededRef.current = true;
+            } else {
             // Check across all major collections if ANY records already exist in Firestore
             const [
               progCheck,
@@ -1783,10 +1762,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               isSystemAlreadyInitialized = false;
             }
           }
-        } catch (initErr) {
-          console.warn('[PCM Firestore] Notice checking system metadata:', initErr);
-          isSystemAlreadyInitialized = true; // Err on side of safety: NEVER overwrite existing data!
-          initialSeededRef.current = true;
+          } catch (initErr) {
+            console.warn('[PCM Firestore] Notice checking system metadata:', initErr);
+            isSystemAlreadyInitialized = true; // Err on side of safety: NEVER overwrite existing data!
+            initialSeededRef.current = true;
+          }
         }
 
         // Baseline seeding ONLY for genuinely fresh, completely empty databases (never overwrites existing collections)
@@ -1906,16 +1886,26 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (snap.exists()) {
               const data = snap.data() as SiteConfig;
               setSiteConfig((prev) => {
-                const updated = {
+                const updated: SiteConfig = {
                   ...prev,
                   ...data,
-                  heroSlides: data.heroSlides !== undefined ? data.heroSlides : prev.heroSlides,
+                  // Firestore is the persistent source of truth.
+                  // Only preserve prev if Firestore explicitly did not provide the property.
+                  heroSlides:
+                    data.heroSlides !== undefined
+                      ? data.heroSlides
+                      : prev.heroSlides,
                   lifeAtPcm:
                     data.lifeAtPcm !== undefined
                       ? data.lifeAtPcm
                       : data.studentLife?.lifeAtPcm !== undefined
                       ? data.studentLife.lifeAtPcm
                       : prev.lifeAtPcm,
+                  studentLife: {
+                    ...(prev.studentLife || {}),
+                    ...(data.studentLife || {}),
+                    ...(data.lifeAtPcm ? { lifeAtPcm: data.lifeAtPcm } : {}),
+                  },
                 };
                 setCachedData('siteConfig', updated);
                 try {
@@ -1979,16 +1969,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   const updated = {
                     ...prev,
                     lifeAtPcm: {
-                      ...prev.lifeAtPcm,
                       ...data,
-                      items: Array.isArray(data.items) ? data.items : prev.lifeAtPcm?.items || [],
+                      items: Array.isArray(data.items) ? data.items : [],
                     },
                     studentLife: {
-                      ...(prev.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
+                      ...(prev.studentLife || {}),
                       lifeAtPcm: {
-                        ...prev.lifeAtPcm,
                         ...data,
-                        items: Array.isArray(data.items) ? data.items : prev.lifeAtPcm?.items || [],
+                        items: Array.isArray(data.items) ? data.items : [],
                       },
                     },
                   };
@@ -3333,26 +3321,23 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Site Configuration Updates
   const updateSiteConfig = async (newConfig: Partial<SiteConfig>) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      ...newConfig,
-      heroSlides: newConfig.heroSlides !== undefined ? newConfig.heroSlides : siteConfig.heroSlides,
-      lifeAtPcm: newConfig.lifeAtPcm !== undefined ? newConfig.lifeAtPcm : siteConfig.lifeAtPcm,
+    const sanitized = cleanFirestoreData(newConfig);
+    setSiteConfig((prev) => {
+      const updated = {
+        ...prev,
+        ...newConfig,
+        heroSlides: newConfig.heroSlides !== undefined ? newConfig.heroSlides : prev.heroSlides,
+        lifeAtPcm: newConfig.lifeAtPcm !== undefined ? newConfig.lifeAtPcm : prev.lifeAtPcm,
+      };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), sanitized, { merge: true });
       if (newConfig.heroSlides && Array.isArray(newConfig.heroSlides)) {
-        await safeSetDoc(
-          doc(db, 'siteContent', 'slideshow'),
-          cleanFirestoreData({
-            slides: newConfig.heroSlides,
-            updatedAt: new Date().toISOString(),
-            updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
-            isPublished: true,
-          }),
-          { merge: true }
+        await saveSlideshowToFirestore(
+          newConfig.heroSlides,
+          currentAdminUser?.name || currentUserAccount?.email || 'Administrator'
         );
       }
       if (newConfig.lifeAtPcm) {
@@ -3366,6 +3351,19 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           { merge: true }
         );
       }
+      if (newConfig.studentLife) {
+        const { lifeAtPcm: _lap, ...cleanSL } = newConfig.studentLife as any;
+        await safeSetDoc(
+          doc(db, 'siteContent', 'studentLife'),
+          cleanFirestoreData({
+            ...cleanSL,
+            updatedAt: new Date().toISOString(),
+            updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
+            isPublished: true,
+          }),
+          { merge: true }
+        );
+      }
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3374,14 +3372,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateContactInfo = async (newInfo: Partial<SiteConfig['contactInfo']>) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      contactInfo: { ...siteConfig.contactInfo, ...newInfo },
+    const updatedContact = { ...siteConfig.contactInfo, ...newInfo };
+    setSiteConfig((prev) => {
+      const updated = { ...prev, contactInfo: { ...(prev.contactInfo || {}), ...newInfo } };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { contactInfo: cleanFirestoreData(updatedContact) }, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3390,14 +3388,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSeoSettings = async (newSeo: Partial<SiteConfig['seoSettings']>) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      seoSettings: { ...siteConfig.seoSettings, ...newSeo },
+    const updatedSeo = { ...siteConfig.seoSettings, ...newSeo };
+    setSiteConfig((prev) => {
+      const updated = { ...prev, seoSettings: { ...(prev.seoSettings || {}), ...newSeo } };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { seoSettings: cleanFirestoreData(updatedSeo) }, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3406,14 +3404,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSiteIdentity = async (newIdentity: Partial<SiteConfig['siteIdentity']>) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      siteIdentity: { ...siteConfig.siteIdentity, ...newIdentity },
+    const updatedIdentity = { ...siteConfig.siteIdentity, ...newIdentity };
+    setSiteConfig((prev) => {
+      const updated = { ...prev, siteIdentity: { ...(prev.siteIdentity || {}), ...newIdentity } };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { siteIdentity: cleanFirestoreData(updatedIdentity) }, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3422,14 +3420,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateHomeAbout = async (newHomeAbout: Partial<SiteConfig['homeAbout']>) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      homeAbout: { ...siteConfig.homeAbout, ...newHomeAbout },
+    const updatedAbout = { ...siteConfig.homeAbout, ...newHomeAbout };
+    setSiteConfig((prev) => {
+      const updated = { ...prev, homeAbout: { ...(prev.homeAbout || {}), ...newHomeAbout } };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { homeAbout: cleanFirestoreData(updatedAbout) }, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3438,14 +3436,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateMissionVisionValues = async (newMvv: Partial<SiteConfig['missionVisionValues']>) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      missionVisionValues: { ...siteConfig.missionVisionValues, ...newMvv },
+    const updatedMvv = { ...siteConfig.missionVisionValues, ...newMvv };
+    setSiteConfig((prev) => {
+      const updated = { ...prev, missionVisionValues: { ...(prev.missionVisionValues || {}), ...newMvv } };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { missionVisionValues: cleanFirestoreData(updatedMvv) }, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3454,14 +3452,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCtaSections = async (newCtas: Partial<SiteConfig['ctaSections']>) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      ctaSections: { ...siteConfig.ctaSections, ...newCtas },
+    const updatedCtas = { ...siteConfig.ctaSections, ...newCtas };
+    setSiteConfig((prev) => {
+      const updated = { ...prev, ctaSections: { ...(prev.ctaSections || {}), ...newCtas } };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { ctaSections: cleanFirestoreData(updatedCtas) }, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3470,14 +3468,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAdmissionsConfig = async (newAdm: Partial<SiteConfig['admissionsConfig']>) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      admissionsConfig: { ...siteConfig.admissionsConfig, ...newAdm },
+    const updatedAdm = { ...siteConfig.admissionsConfig, ...newAdm };
+    setSiteConfig((prev) => {
+      const updated = { ...prev, admissionsConfig: { ...(prev.admissionsConfig || {}), ...newAdm } };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { admissionsConfig: cleanFirestoreData(updatedAdm) }, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3486,14 +3484,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateFooterConfig = async (newFooter: Partial<SiteConfig['footerConfig']>) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      footerConfig: { ...siteConfig.footerConfig, ...newFooter },
+    const updatedFooter = { ...siteConfig.footerConfig, ...newFooter };
+    setSiteConfig((prev) => {
+      const updated = { ...prev, footerConfig: { ...(prev.footerConfig || {}), ...newFooter } };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { footerConfig: cleanFirestoreData(updatedFooter) }, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3502,14 +3500,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateNavigationMenu = async (newNav: SiteConfig['navigationMenu']) => {
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      navigationMenu: newNav,
+    const sanitizedNav = cleanFirestoreData(newNav);
+    setSiteConfig((prev) => {
+      const updated = { ...prev, navigationMenu: newNav };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { navigationMenu: sanitizedNav }, { merge: true });
     } catch (e) {
       console.warn('Firestore write error:', e);
     }
@@ -3519,24 +3517,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateStudentLifeConfig = async (newStudentLife: Partial<StudentLifeConfig>) => {
     const currentSL = siteConfig.studentLife || INITIAL_STUDENT_LIFE_CONFIG;
-    const preservedLifeAtPcm = siteConfig.lifeAtPcm || currentSL.lifeAtPcm || INITIAL_LIFE_AT_PCM_CONFIG;
     const updatedSL: StudentLifeConfig = {
       ...currentSL,
       ...newStudentLife,
-      lifeAtPcm:
-        newStudentLife.lifeAtPcm !== undefined
-          ? newStudentLife.lifeAtPcm
-          : preservedLifeAtPcm,
     };
-    const updated = cleanFirestoreData({
-      ...siteConfig,
-      studentLife: updatedSL,
-      lifeAtPcm: preservedLifeAtPcm,
+    const sanitizedSL = cleanFirestoreData(updatedSL);
+    setSiteConfig((prev) => {
+      const updated = { ...prev, studentLife: updatedSL };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updated);
-    setCachedData('siteConfig', updated);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updated, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { studentLife: sanitizedSL }, { merge: true });
       const { lifeAtPcm: _lap, ...cleanSL } = updatedSL;
       await safeSetDoc(
         doc(db, 'siteContent', 'studentLife'),
@@ -3566,20 +3558,23 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const merged: LifeAtPCMConfig = {
       ...currentLife,
       ...newLifeConfig,
-      items: newLifeConfig.items !== undefined ? newLifeConfig.items : currentLife.items,
+      items: newLifeConfig.items !== undefined ? newLifeConfig.items : (currentLife.items || []),
     };
-    const updatedSiteConfig = cleanFirestoreData({
-      ...siteConfig,
-      lifeAtPcm: merged,
-      studentLife: {
-        ...(siteConfig.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
+    const sanitizedLife = cleanFirestoreData(merged);
+    setSiteConfig((prev) => {
+      const updated = {
+        ...prev,
         lifeAtPcm: merged,
-      },
+        studentLife: {
+          ...(prev.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
+          lifeAtPcm: merged,
+        },
+      };
+      setCachedData('siteConfig', updated);
+      return updated;
     });
-    setSiteConfig(updatedSiteConfig);
-    setCachedData('siteConfig', updatedSiteConfig);
     try {
-      await safeSetDoc(doc(db, 'siteConfig', 'global'), updatedSiteConfig, { merge: true });
+      await safeSetDoc(doc(db, 'siteConfig', 'global'), { lifeAtPcm: sanitizedLife }, { merge: true });
       await safeSetDoc(
         doc(db, 'siteContent', 'lifeAtPcm'),
         cleanFirestoreData({
@@ -4146,16 +4141,20 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('success', 'Program Updated', 'Academic degree information saved.');
   };
 
-  const deleteProgram = (id: string) => {
+  const deleteProgram = async (id: string) => {
     const prog = programs.find((p) => p.id === id);
     setPrograms((prev) => {
       const next = prev.filter((p) => p.id !== id);
       setCachedData('programs', next);
       return next;
     });
-    safeDeleteDoc(doc(db, 'programs', id)).catch((e) => console.warn(e));
+    try {
+      await safeDeleteDoc(doc(db, 'programs', id));
+    } catch (e) {
+      console.warn('deleteProgram Firestore error:', e);
+    }
     logActivity('DELETE', 'Academic Program', id, prog?.name || 'Program', 'Removed degree program from curriculum directory.');
-    addToast('info', 'Program Deleted', 'Academic program removed.');
+    addToast('info', 'Program Deleted', 'Academic program permanently removed.');
   };
 
   // Faculty CRUD
@@ -6070,14 +6069,68 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteStudentProfile = async (studentId: string): Promise<boolean> => {
     const target = students.find((s) => s.id === studentId || s.studentId === studentId);
-    setStudents((prev) => prev.filter((s) => s.id !== studentId && s.studentId !== studentId));
+    const targetEmail = (target?.email || '').toLowerCase().trim();
+    const targetId = target?.id || studentId;
+    const targetStudentNumber = target?.studentId || '';
+
+    // Record tombstone in deletedUsers to ensure permanent deletion across sessions
+    const adminActor = currentAdminUser?.name || currentUserAccount?.name || 'Administrator';
+    const deletedRecord: DeletedUserRecord = {
+      id: targetId,
+      uid: target?.uid || targetId,
+      email: targetEmail || `${studentId}@student.pcm.edu.ph`,
+      name: target?.fullName || target?.name || 'Student Record',
+      role: 'Student',
+      studentId: targetStudentNumber || studentId,
+      deletedAt: new Date().toISOString(),
+      deletedBy: adminActor,
+    };
+
+    setDeletedUsers((prev) => {
+      const next = [
+        ...prev.filter((d) => d.email.toLowerCase() !== deletedRecord.email.toLowerCase() && d.id !== deletedRecord.id),
+        deletedRecord,
+      ];
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('pcm_deleted_users', JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+
+    // Remove from local React states
+    setStudents((prev) => {
+      const next = prev.filter((s) => s.id !== studentId && s.studentId !== studentId && s.id !== targetId);
+      setCachedData('students', next);
+      return next;
+    });
+    setUserAccounts((prev) => {
+      const next = prev.filter((u) => u.id !== studentId && u.uid !== studentId && (u.studentId !== studentId) && (targetEmail ? u.email?.toLowerCase() !== targetEmail : true));
+      setCachedData('userAccounts', next);
+      return next;
+    });
+
+    // Persist deletion to Firestore
     try {
-      await safeDeleteDoc(doc(db, 'studentProfiles', studentId));
+      const docId = (deletedRecord.email || deletedRecord.uid || deletedRecord.id).replace(/[/\\?%*:|"<>]/g, '_').toLowerCase();
+      await safeSetDoc(doc(db, 'deletedUsers', docId), cleanFirestoreData(deletedRecord));
+
+      if (targetId) {
+        await safeDeleteDoc(doc(db, 'studentProfiles', targetId));
+        await safeDeleteDoc(doc(db, 'users', targetId));
+        await safeDeleteDoc(doc(db, 'users', `uid-${targetId}`));
+      }
+      if (studentId && studentId !== targetId) {
+        await safeDeleteDoc(doc(db, 'studentProfiles', studentId));
+        await safeDeleteDoc(doc(db, 'users', studentId));
+      }
     } catch (e) {
-      console.warn(e);
+      console.warn('deleteStudentProfile Firestore error:', e);
     }
-    logActivity('DELETE', 'Student Profile', studentId, target?.fullName || target?.name || 'Student', 'Deleted student record.');
-    addToast('info', 'Student Record Deleted', 'Student profile has been removed.');
+
+    logActivity('DELETE', 'Student Profile', studentId, target?.fullName || target?.name || 'Student', 'Deleted student record permanently.');
+    addToast('info', 'Student Record Deleted', 'Student profile has been permanently removed.');
     return true;
   };
 
@@ -6623,18 +6676,67 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Admin CMS Auth & Management
   const adminLogin = (user: string, pass: string): boolean => {
-    // If the active user profile is a student, deny access to the administrator interface
-    if (currentUserAccount?.role === 'Student' || (isStudentLoggedIn && !isAdminLoggedIn && currentUserAccount?.role !== 'Admin')) {
+    // If the active user profile is a student or pending, deny access to the administrator interface
+    if (currentUserAccount?.role === 'Student' || currentUserAccount?.role === 'Student/User' || (isStudentLoggedIn && !isAdminLoggedIn && currentUserAccount?.role !== 'Admin')) {
       addToast({
         title: 'Access Restricted',
-        message: 'Student accounts are not authorized to authenticate into the Administrator CMS.',
+        message: 'Student and regular accounts are not authorized to authenticate into the Administrator CMS.',
         type: 'error',
+      });
+      return false;
+    }
+
+    if (currentUserAccount?.status === 'Pending' || currentUserAccount?.verificationStatus === 'Pending' || currentUserAccount?.role === 'Pending User') {
+      addToast({
+        title: 'Account Pending Approval',
+        message: 'Your registration is awaiting approval by the Super Admin or an Admin User. Access to the Admin Workspace is restricted until approved.',
+        type: 'warning',
       });
       return false;
     }
 
     const trimmedUser = user.trim().toLowerCase();
     const trimmedPass = pass.trim();
+
+    // Check if matching account is in userAccounts
+    const targetUserAcc = userAccounts.find(
+      (u) => u.email.toLowerCase() === trimmedUser || u.username?.toLowerCase() === trimmedUser
+    );
+
+    if (targetUserAcc) {
+      if (targetUserAcc.status === 'Pending' || targetUserAcc.verificationStatus === 'Pending' || targetUserAcc.role === 'Pending User') {
+        addToast({
+          title: 'Account Pending Approval',
+          message: 'Your admin registration is awaiting approval by the Super Admin or an authorized Admin User. Access to the Admin Workspace is restricted.',
+          type: 'warning',
+        });
+        return false;
+      }
+      if (targetUserAcc.status === 'Rejected') {
+        addToast({
+          title: 'Registration Rejected',
+          message: 'Your admin account request was rejected. Access to the Admin Workspace is denied.',
+          type: 'error',
+        });
+        return false;
+      }
+      if (targetUserAcc.status === 'Disabled' || targetUserAcc.status === 'Inactive') {
+        addToast({
+          title: 'Account Inactive',
+          message: 'This administrator account is currently inactive or disabled.',
+          type: 'error',
+        });
+        return false;
+      }
+      if (['Student', 'Student/User'].includes(targetUserAcc.role)) {
+        addToast({
+          title: 'Access Restricted',
+          message: 'Student accounts are not authorized to access the Admin Workspace.',
+          type: 'error',
+        });
+        return false;
+      }
+    }
 
     // Check against configured adminUsers
     const found = adminUsers.find((u) => {
@@ -7975,10 +8077,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Super Admin Verification and User Management Actions
+  // Super Admin and Admin Verification and User Management Actions
   const approveUserAccess = async (userId: string, assignedAdminRole: AdminRole = 'Admin'): Promise<boolean> => {
-    if (!canPerformAction('Super Admin')) {
-      addToast({ type: 'error', title: 'Super Admin Required', message: 'Only the Super Admin can approve administrative user access.' });
+    if (!canPerformAction('Admin')) {
+      addToast({ type: 'error', title: 'Admin Privileges Required', message: 'Only the Super Admin and authorized Admin Users can approve administrative user access.' });
       return false;
     }
 
@@ -7988,12 +8090,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return false;
     }
 
+    const approverAttribution = currentAdminUser?.name
+      ? `${currentAdminUser.name} (${currentAdminUser.role})`
+      : currentAdminUser?.email || 'Authorized Administrator';
+
     const updates: Partial<UserAccount> = {
       role: 'Admin',
       adminRole: assignedAdminRole,
       status: 'Active',
       verificationStatus: 'Approved',
-      approvedBy: currentAdminUser?.email || 'angeloperfecto.epc@gmail.com',
+      approvedBy: approverAttribution,
       approvedAt: new Date().toISOString(),
     };
 
@@ -8020,7 +8126,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAdminUsers((prev) => [adminRecord, ...prev.filter((a) => a.id !== userId && a.email.toLowerCase() !== target.email.toLowerCase())]);
     safeSetDoc(doc(db, 'adminUsers', userId), cleanFirestoreData(adminRecord)).catch(console.warn);
 
-    logActivity('APPROVAL', 'User Verification', userId, target.name, `Approved admin access (${assignedAdminRole}) for ${target.email}.`);
+    logActivity('APPROVAL', 'User Verification', userId, target.name, `Approved admin access (${assignedAdminRole}) for ${target.email} by ${approverAttribution}.`);
     addToast({
       type: 'success',
       title: 'User Approved & Verified',
@@ -8029,15 +8135,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return true;
   };
 
-  const rejectUserAccess = async (userId: string, reason: string = 'Access denied by Super Admin'): Promise<boolean> => {
-    if (!canPerformAction('Super Admin')) {
-      addToast({ type: 'error', title: 'Super Admin Required', message: 'Only the Super Admin can reject access requests.' });
+  const rejectUserAccess = async (userId: string, reason: string = 'Access denied by Administrator'): Promise<boolean> => {
+    if (!canPerformAction('Admin')) {
+      addToast({ type: 'error', title: 'Admin Privileges Required', message: 'Only the Super Admin and authorized Admin Users can reject access requests.' });
       return false;
     }
 
     const target = userAccounts.find((u) => u.id === userId || u.uid === userId);
-    if (target?.email?.toLowerCase() === 'angeloperfecto.epc@gmail.com') {
-      addToast({ type: 'error', title: 'Protected Account', message: 'The primary Super Administrator account cannot be rejected.' });
+    if (target?.email?.toLowerCase() === 'angeloperfecto.epc@gmail.com' || target?.email?.toLowerCase() === 'president@pcm.edu.ph') {
+      addToast({ type: 'error', title: 'Protected Account', message: 'The primary Super Administrator accounts cannot be rejected.' });
       return false;
     }
 
@@ -8677,6 +8783,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const remaining = videos.filter((v) => v.id !== id);
       if (remaining.length > 0) {
         updateHomepageVideoConfig({ featuredVideoId: remaining[0].id });
+      } else {
+        updateHomepageVideoConfig({ featuredVideoId: '' });
       }
     }
 

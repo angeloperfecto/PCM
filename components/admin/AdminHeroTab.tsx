@@ -10,6 +10,7 @@ import {
   uploadSlideshowImage,
   DEFAULT_HERO_SLIDES,
 } from '@/lib/slideshowService';
+import { db, safeDeleteDoc, doc } from '@/lib/firebase';
 import {
   Sparkles,
   Plus,
@@ -91,7 +92,7 @@ export const AdminHeroTab: React.FC = () => {
     setIsSaving(false);
 
     if (result.success) {
-      updateSiteConfig({ heroSlides: newSlidesList });
+      updateSiteConfig({ heroSlides: result.slides || newSlidesList });
       setLastSavedTime(new Date().toLocaleTimeString());
       setLastUpdatedBy(userIdentifier);
       addToast({
@@ -359,11 +360,15 @@ export const AdminHeroTab: React.FC = () => {
   // Confirm Slide Deletion
   const confirmDeleteSlide = async () => {
     if (!deleteTargetSlide) return;
+    const slideIdToDelete = deleteTargetSlide.id;
     const updatedSlides = slides
-      .filter((s) => s.id !== deleteTargetSlide.id)
+      .filter((s) => s.id !== slideIdToDelete)
       .map((s, idx) => ({ ...s, order: idx }));
 
     setDeleteTargetSlide(null);
+    if (slideIdToDelete) {
+      safeDeleteDoc(doc(db, 'siteContent', `slideshow_image_${slideIdToDelete}`)).catch(() => {});
+    }
     await persistSlides(updatedSlides, 'Slide removed');
   };
 

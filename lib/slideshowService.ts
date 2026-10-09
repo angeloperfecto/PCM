@@ -189,17 +189,14 @@ export function subscribeToSlideshow(
 export async function saveSlideshowToFirestore(
   slides: HeroSlide[],
   updatedBy: string = 'Admin User'
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; slides?: HeroSlide[] }> {
   try {
-    if (!slides || slides.length === 0) {
-      return { success: false, error: 'Cannot save an empty slideshow.' };
-    }
-
     const timestamp = Date.now();
+    const safeSlides = Array.isArray(slides) ? slides : [];
 
     // 1. For any slides with embedded data URLs, store them in individual documents siteContent/slideshow_image_<id>
-    for (let i = 0; i < slides.length; i++) {
-      const s = slides[i];
+    for (let i = 0; i < safeSlides.length; i++) {
+      const s = safeSlides[i];
       const slideId = s.id || `hero-${timestamp}-${i}`;
       s.id = slideId;
 
@@ -222,11 +219,11 @@ export async function saveSlideshowToFirestore(
       }
     }
 
-    // 2. Prepare lean payload for siteContent/slideshow: use clean API endpoint for `image` so the document never exceeds 1MB
-    const leanSlides = slides.map((s, idx) => {
+    // 2. Prepare lean payload for siteContent/slideshow: use clean API endpoint only for embedded data URLs so document never exceeds 1MB
+    const leanSlides = safeSlides.map((s, idx) => {
       const slideId = s.id || `hero-${timestamp}-${idx}`;
       let targetImage = s.image;
-      if (targetImage.startsWith('data:') || targetImage.startsWith('/uploads/')) {
+      if (targetImage && targetImage.startsWith('data:')) {
         targetImage = `/api/slideshow/image?id=${slideId}&v=${timestamp}`;
       }
 
@@ -263,12 +260,12 @@ export async function saveSlideshowToFirestore(
       throw new Error('Verification failed: Document could not be confirmed in Firestore.');
     }
 
-    return { success: true };
+    return { success: true, slides: leanSlides };
   } catch (error: any) {
     console.error('Error saving slideshow to Firestore:', error);
     return {
       success: false,
-      error: error?.message || 'An unknown error occurred while saving to Firestore.',
+      error: error?.message || 'Failed to save slideshow to Firebase.',
     };
   }
 }

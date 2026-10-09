@@ -19,14 +19,15 @@ export const HeroSection: React.FC = () => {
   const { navigateTo, setSelectedSermon, sermons, siteConfig } = usePCM();
   const [currentSlide, setCurrentSlide] = useState(0);
 
-  // Compute active slides from central store siteConfig (with fallback)
+  // Compute active slides from central store siteConfig (respecting Firestore persistence)
   const slides = useMemo(() => {
-    const rawSlides =
-      siteConfig?.heroSlides !== undefined && Array.isArray(siteConfig.heroSlides)
-        ? siteConfig.heroSlides
-        : DEFAULT_HERO_SLIDES;
-    const active = rawSlides.filter((s) => s.active !== false);
-    return active.length > 0 ? active : rawSlides.length > 0 ? rawSlides : DEFAULT_HERO_SLIDES;
+    if (siteConfig?.heroSlides !== undefined && Array.isArray(siteConfig.heroSlides)) {
+      const active = siteConfig.heroSlides.filter((s) => s.active !== false);
+      if (active.length > 0) return active;
+      if (siteConfig.heroSlides.length > 0) return siteConfig.heroSlides;
+      return [];
+    }
+    return DEFAULT_HERO_SLIDES;
   }, [siteConfig?.heroSlides]);
 
   // Auto-advance slides every 7 seconds

@@ -194,7 +194,14 @@ export const AdminLifeAtPCMManager: React.FC = () => {
     setCtaText(currentConfig.ctaText || 'Explore Campus Life & Spiritual Formation');
     setCtaLink(currentConfig.ctaLink || 'student-life');
     setEnabled(currentConfig.enabled !== false);
-  }, [currentConfig]);
+  }, [
+    currentConfig.badge,
+    currentConfig.title,
+    currentConfig.subtitle,
+    currentConfig.ctaText,
+    currentConfig.ctaLink,
+    currentConfig.enabled,
+  ]);
 
   // Handle Header Save
   const handleSaveHeader = async () => {

@@ -121,6 +121,38 @@ export async function GET(req: NextRequest) {
             }
           }
         }
+
+        // 1b. Check siteContent/slideshow slides array if individual image doc wasn't found
+        const ssSnap = await getDoc(doc(db, 'siteContent', 'slideshow')).catch(() => null);
+        if (ssSnap && ssSnap.exists()) {
+          const ssData = ssSnap.data();
+          const slide = (ssData?.slides || []).find((s: any) => s.id === id);
+          if (slide?.image && typeof slide.image === 'string') {
+            if (slide.image.startsWith('data:')) {
+              const matches = slide.image.match(/^data:([^;]+);base64,(.+)$/);
+              if (matches && matches[2]) {
+                const contentType = matches[1] || 'image/webp';
+                const buffer = Buffer.from(matches[2], 'base64');
+                imageMemoryCache.set(id, {
+                  type: 'buffer',
+                  contentType,
+                  buffer,
+                  cachedAt: now,
+                });
+                return new NextResponse(new Uint8Array(buffer), {
+                  status: 200,
+                  headers: {
+                    'Content-Type': contentType,
+                    'Content-Length': buffer.length.toString(),
+                    'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
+                  },
+                });
+              }
+            } else if (slide.image.startsWith('http://') || slide.image.startsWith('https://')) {
+              return NextResponse.redirect(slide.image, { status: 307 });
+            }
+          }
+        }
       } catch (dbErr: any) {
         if (isQuotaExceededError(dbErr)) {
           // Trip circuit breaker to prevent repeated failed calls and log flooding

@@ -868,6 +868,7 @@ export interface UserAccount {
   id: string; // Firebase UID
   uid: string;
   email: string;
+  username?: string;
   name: string;
   displayName?: string;
   photoURL?: string;
