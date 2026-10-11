@@ -112,7 +112,7 @@ const DEFAULT_REASONS = [
 export const WhyChoosePCMView: React.FC = () => {
   const { navigateTo, setStatementOfFaithModalOpen, setRequestInfoModalOpen, siteConfig } = usePCM();
 
-  const distinctivesList = (siteConfig?.distinctives && siteConfig.distinctives.length > 0)
+  const distinctivesList = (siteConfig?.distinctives !== undefined && Array.isArray(siteConfig.distinctives))
     ? siteConfig.distinctives
     : DEFAULT_REASONS;
 

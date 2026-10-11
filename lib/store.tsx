@@ -665,7 +665,11 @@ const PCMContext = createContext<PCMContextType | undefined>(undefined);
 
 export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const counterRef = useRef(0);
-  const initialSeededRef = useRef(true);
+  const initialSeededRef = useRef(false);
+  const hasAuthoritativeSlideshowRef = useRef(false);
+  const hasAuthoritativeLifeAtPcmRef = useRef(false);
+  const hasAuthoritativeStudentLifeRef = useRef(false);
+  const firestoreLoadedCollectionsRef = useRef<Set<string>>(new Set());
 
   // Navigation
   const [currentSection, setCurrentSection] = useState<NavSection>(() => {
@@ -779,7 +783,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             name: adm.name || existing?.name || 'Administrator',
             displayName: adm.name || existing?.displayName || 'Administrator',
             email: adm.email,
-            role: existing?.role || 'Admin',
+            role: 'Admin',
             adminRole: adm.role || existing?.adminRole || 'Super Admin',
             department: adm.department || existing?.department || 'Office of Administration',
             status: (adm.status as any) || existing?.status || 'Active',
@@ -805,7 +809,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             name: std.fullName || std.name || existing?.name || 'Student',
             displayName: std.fullName || std.name || existing?.displayName || 'Student',
             email: std.email,
-            role: existing?.role || 'Student',
+            role: 'Student',
             studentId: std.studentId,
             department: std.program || std.degreeProgram || existing?.department || 'Undergraduate Theology',
             status: (std.academicStatus === 'Probationary' ? 'Pending' : (existing?.status || 'Active')) as any,
@@ -921,7 +925,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [instructors, setInstructors] = useState<InstructorRecord[]>([]);
   const [enrollmentSystemConfig, setEnrollmentSystemConfig] = useState<EnrollmentSystemConfig>(INITIAL_ENROLLMENT_SYSTEM_CONFIG);
 
-  const currentAcademicPeriod = academicPeriods.find((p) => p.isCurrent) || academicPeriods[0];
+  const currentAcademicPeriod = academicPeriods.find((p) => p.isCurrent) || academicPeriods[0] || INITIAL_ACADEMIC_PERIODS[0];
 
   // Admin Auth
   const [isAdminLoggedIn, setIsAdminLoggedIn] = useState<boolean>(false);
@@ -945,110 +949,113 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return null;
       };
 
+      // Only hydrate from client cache if Firestore has not already loaded authoritative live data
+      const isColFresh = (colKey: string) => firestoreLoadedCollectionsRef.current.has(colKey);
+
       const cConfig = readCache<SiteConfig>('siteConfig', (v) => v && typeof v === 'object');
-      if (cConfig) setSiteConfig((prev) => ({ ...prev, ...cConfig }));
+      if (cConfig && !isColFresh('siteConfig')) setSiteConfig((prev) => ({ ...prev, ...cConfig }));
 
       const cProgs = readCache<AcademicProgram[]>('programs', Array.isArray);
-      if (cProgs) setPrograms(cProgs);
+      if (cProgs && !isColFresh('programs')) setPrograms(cProgs);
 
       const cFac = readCache<FacultyMember[]>('faculty', Array.isArray);
-      if (cFac) setFaculty(cFac);
+      if (cFac && !isColFresh('faculty')) setFaculty(cFac);
 
       const cAnn = readCache<AnnouncementItem[]>('announcements', Array.isArray);
-      if (cAnn) setAnnouncements(cAnn);
+      if (cAnn && !isColFresh('announcements')) setAnnouncements(cAnn);
 
       const cNews = readCache<NewsArticle[]>('news', Array.isArray);
-      if (cNews) setNews(cNews);
+      if (cNews && !isColFresh('news')) setNews(cNews);
 
       const cEvents = readCache<CollegeEvent[]>('events', Array.isArray);
-      if (cEvents) setEvents(cEvents);
+      if (cEvents && !isColFresh('events')) setEvents(cEvents);
 
       const cDown = readCache<DownloadableResource[]>('downloads', Array.isArray);
-      if (cDown) setDownloads(cDown);
+      if (cDown && !isColFresh('downloads')) setDownloads(cDown);
 
       const cTest = readCache<Testimonial[]>('testimonials', Array.isArray);
-      if (cTest) setTestimonials(cTest);
+      if (cTest && !isColFresh('testimonials')) setTestimonials(cTest);
 
       const cStats = readCache<ImpactStat[]>('stats', Array.isArray);
-      if (cStats) setStats(cStats);
+      if (cStats && !isColFresh('stats')) setStats(cStats);
 
       const cFaqs = readCache<FAQItem[]>('faqs', Array.isArray);
-      if (cFaqs) setFaqs(cFaqs);
+      if (cFaqs && !isColFresh('faqs')) setFaqs(cFaqs);
 
       const cSerm = readCache<SermonLecture[]>('sermons', Array.isArray);
-      if (cSerm) setSermons(cSerm);
+      if (cSerm && !isColFresh('sermons')) setSermons(cSerm);
 
       const cScrap = readCache<ScrapbookItem[]>('scrapbook', Array.isArray);
-      if (cScrap) setScrapbook(cScrap);
+      if (cScrap && !isColFresh('scrapbook')) setScrapbook(cScrap);
 
       const cVideos = readCache<YouTubeVideo[]>('videos', Array.isArray);
-      if (cVideos) setVideos(cVideos);
+      if (cVideos && !isColFresh('videos')) setVideos(cVideos);
 
       const cVidCfg = readCache<HomepageVideoConfig>('homepageVideoConfig', (v) => v && typeof v === 'object');
-      if (cVidCfg) setHomepageVideoConfig(cVidCfg);
+      if (cVidCfg && !isColFresh('homepageVideoConfig')) setHomepageVideoConfig(cVidCfg);
 
       const cMedia = readCache<MediaItem[]>('mediaItems', Array.isArray);
-      if (cMedia) setMediaItems(cMedia);
+      if (cMedia && !isColFresh('mediaLibrary')) setMediaItems(cMedia);
 
       const cGal = readCache<GalleryAlbum[]>('galleryAlbums', Array.isArray);
-      if (cGal) setGalleryAlbums(cGal);
+      if (cGal && !isColFresh('galleryAlbums')) setGalleryAlbums(cGal);
 
       const cSL = readCache<StudentLifeAlbum[]>('studentLifeAlbums', Array.isArray);
-      if (cSL) setStudentLifeAlbums(cSL);
+      if (cSL && !isColFresh('studentLifeAlbums')) setStudentLifeAlbums(cSL);
 
       const cApps = readCache<AdmissionApplication[]>('applications', Array.isArray);
-      if (cApps) setApplications(cApps);
+      if (cApps && !isColFresh('applications')) setApplications(cApps);
 
       const cDonMethods = readCache<DonationPaymentMethod[]>('donationMethods', Array.isArray);
-      if (cDonMethods) setDonationMethods(cDonMethods);
+      if (cDonMethods && !isColFresh('donationPaymentMethods')) setDonationMethods(cDonMethods);
 
       const cDonations = readCache<DonationRecord[]>('donations', Array.isArray);
-      if (cDonations) setDonations(cDonations);
+      if (cDonations && !isColFresh('donations')) setDonations(cDonations);
 
       const cDonSettings = readCache<DonationSettings>('donationSettings', (v) => v && typeof v === 'object');
-      if (cDonSettings) setDonationSettings(cDonSettings);
+      if (cDonSettings && !isColFresh('donationSettings')) setDonationSettings(cDonSettings);
 
       const cStudents = readCache<StudentProfile[]>('students', Array.isArray);
-      if (cStudents) setStudents(cStudents);
+      if (cStudents && !isColFresh('studentProfiles')) setStudents(cStudents);
 
       const cProfile = readCache<StudentProfile>('studentProfile', (v) => v && typeof v === 'object');
-      if (cProfile) setStudentProfile(cProfile);
+      if (cProfile && !isColFresh('studentProfiles')) setStudentProfile(cProfile);
 
       const cEnrollments = readCache<OnlineEnrollment[]>('enrollments', Array.isArray);
-      if (cEnrollments) setEnrollments(cEnrollments);
+      if (cEnrollments && !isColFresh('enrollments')) setEnrollments(cEnrollments);
 
       const cNotifs = readCache<StudentNotification[]>('studentNotifications', Array.isArray);
-      if (cNotifs) setStudentNotifications(cNotifs);
+      if (cNotifs && !isColFresh('studentNotifications')) setStudentNotifications(cNotifs);
 
       const cSubjects = readCache<AcademicSubject[]>('academicSubjects', Array.isArray);
-      if (cSubjects) setAcademicSubjects(cSubjects);
+      if (cSubjects && !isColFresh('academicSubjects')) setAcademicSubjects(cSubjects);
 
       const cPreEnlist = readCache<PreEnlistmentRecord[]>('preEnlistments', Array.isArray);
-      if (cPreEnlist) setPreEnlistments(cPreEnlist);
+      if (cPreEnlist && !isColFresh('preEnlistments')) setPreEnlistments(cPreEnlist);
 
       const cAddDrop = readCache<AddDropRequest[]>('addDropRequests', Array.isArray);
-      if (cAddDrop) setAddDropRequests(cAddDrop);
+      if (cAddDrop && !isColFresh('addDropRequests')) setAddDropRequests(cAddDrop);
 
       const cFee = readCache<FeeStructureItem[]>('feeStructure', Array.isArray);
-      if (cFee) setFeeStructure(cFee);
+      if (cFee && !isColFresh('feeStructure')) setFeeStructure(cFee);
 
       const cPeriods = readCache<AcademicPeriod[]>('academicPeriods', Array.isArray);
-      if (cPeriods) setAcademicPeriods(cPeriods);
+      if (cPeriods && !isColFresh('academicPeriods')) setAcademicPeriods(cPeriods);
 
       const cSections = readCache<ClassSection[]>('classSections', Array.isArray);
-      if (cSections) setClassSections(cSections);
+      if (cSections && !isColFresh('classSections')) setClassSections(cSections);
 
       const cInstructors = readCache<InstructorRecord[]>('instructors', Array.isArray);
-      if (cInstructors) setInstructors(cInstructors);
+      if (cInstructors && !isColFresh('instructors')) setInstructors(cInstructors);
 
       const cEnrollConfig = readCache<EnrollmentSystemConfig>('enrollmentSystemConfig', (v) => v && typeof v === 'object');
-      if (cEnrollConfig) setEnrollmentSystemConfig(cEnrollConfig);
+      if (cEnrollConfig && !isColFresh('enrollmentSettings')) setEnrollmentSystemConfig(cEnrollConfig);
 
       const cUsers = readCache<UserAccount[]>('userAccounts', Array.isArray);
-      if (cUsers) setUserAccounts(cUsers);
+      if (cUsers && !isColFresh('users')) setUserAccounts(cUsers);
 
       const cAdmins = readCache<AdminUser[]>('adminUsers', Array.isArray);
-      if (cAdmins) setAdminUsers(cAdmins);
+      if (cAdmins && !isColFresh('adminUsers')) setAdminUsers(cAdmins);
     } catch (e) {
       console.warn('Notice restoring client cache:', e);
     }
@@ -1701,67 +1708,80 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               isSystemAlreadyInitialized = true;
               initialSeededRef.current = true;
             } else {
-            // Check across all major collections if ANY records already exist in Firestore
-            const [
-              progCheck,
-              facCheck,
-              newsCheck,
-              mediaCheck,
-              siteConfigCheck,
-              annCheck,
-              evtCheck,
-              usrCheck,
-              admCheck,
-            ] = await Promise.all([
-              getDocs(collection(db, 'programs')).catch(() => null),
-              getDocs(collection(db, 'faculty')).catch(() => null),
-              getDocs(collection(db, 'news')).catch(() => null),
-              getDocs(collection(db, 'mediaLibrary')).catch(() => null),
-              getDoc(doc(db, 'siteConfig', 'global')).catch(() => null),
-              getDocs(collection(db, 'announcements')).catch(() => null),
-              getDocs(collection(db, 'events')).catch(() => null),
-              getDocs(collection(db, 'users')).catch(() => null),
-              getDocs(collection(db, 'adminUsers')).catch(() => null),
-            ]);
+              // Check across all major collections if ANY records already exist in Firestore
+              const [
+                progCheck,
+                facCheck,
+                newsCheck,
+                mediaCheck,
+                siteConfigCheck,
+                annCheck,
+                evtCheck,
+                usrCheck,
+                admCheck,
+                vidCheck,
+                studCheck,
+              ] = await Promise.all([
+                getDocs(collection(db, 'programs')).catch(() => null),
+                getDocs(collection(db, 'faculty')).catch(() => null),
+                getDocs(collection(db, 'news')).catch(() => null),
+                getDocs(collection(db, 'mediaLibrary')).catch(() => null),
+                getDoc(doc(db, 'siteConfig', 'global')).catch(() => null),
+                getDocs(collection(db, 'announcements')).catch(() => null),
+                getDocs(collection(db, 'events')).catch(() => null),
+                getDocs(collection(db, 'users')).catch(() => null),
+                getDocs(collection(db, 'adminUsers')).catch(() => null),
+                getDocs(collection(db, 'videos')).catch(() => null),
+                getDocs(collection(db, 'studentProfiles')).catch(() => null),
+              ]);
 
-            const hasExistingData =
-              Boolean(progCheck && !progCheck.empty) ||
-              Boolean(facCheck && !facCheck.empty) ||
-              Boolean(newsCheck && !newsCheck.empty) ||
-              Boolean(mediaCheck && !mediaCheck.empty) ||
-              Boolean(annCheck && !annCheck.empty) ||
-              Boolean(evtCheck && !evtCheck.empty) ||
-              Boolean(usrCheck && !usrCheck.empty) ||
-              Boolean(admCheck && !admCheck.empty) ||
-              Boolean(siteConfigCheck && siteConfigCheck.exists());
+              const hasExistingData =
+                Boolean(progCheck && !progCheck.empty) ||
+                Boolean(facCheck && !facCheck.empty) ||
+                Boolean(newsCheck && !newsCheck.empty) ||
+                Boolean(mediaCheck && !mediaCheck.empty) ||
+                Boolean(annCheck && !annCheck.empty) ||
+                Boolean(evtCheck && !evtCheck.empty) ||
+                Boolean(usrCheck && !usrCheck.empty) ||
+                Boolean(admCheck && !admCheck.empty) ||
+                Boolean(vidCheck && !vidCheck.empty) ||
+                Boolean(studCheck && !studCheck.empty) ||
+                Boolean(siteConfigCheck && siteConfigCheck.exists());
 
-            // If ANY check failed (returned null) or ANY existing documents were detected:
-            // ALWAYS err on the side of safety: Treat system as already initialized to NEVER overwrite!
-            const anyCheckFailed =
-              progCheck === null ||
-              facCheck === null ||
-              newsCheck === null ||
-              mediaCheck === null ||
-              siteConfigCheck === null ||
-              annCheck === null ||
-              evtCheck === null ||
-              usrCheck === null ||
-              admCheck === null;
+              if (hasExistingData) {
+                isSystemAlreadyInitialized = true;
+                initialSeededRef.current = true;
+                await safeSetDoc(doc(db, 'systemConfig', 'metadata'), {
+                  isInitialized: true,
+                  databaseId: firebaseConfig.firestoreDatabaseId || '',
+                  permanentStorage: true,
+                  initializedAt: new Date().toISOString(),
+                  reason: 'Existing database collections detected',
+                });
+              } else {
+                // If every check failed or returned null (e.g. offline/transient error), default to true to NEVER overwrite data!
+                const allVerifiedEmpty =
+                  progCheck !== null && progCheck.empty &&
+                  facCheck !== null && facCheck.empty &&
+                  newsCheck !== null && newsCheck.empty &&
+                  mediaCheck !== null && mediaCheck.empty &&
+                  annCheck !== null && annCheck.empty &&
+                  evtCheck !== null && evtCheck.empty &&
+                  usrCheck !== null && usrCheck.empty &&
+                  admCheck !== null && admCheck.empty &&
+                  vidCheck !== null && vidCheck.empty &&
+                  studCheck !== null && studCheck.empty &&
+                  siteConfigCheck !== null && !siteConfigCheck.exists();
 
-            if (hasExistingData || anyCheckFailed) {
-              isSystemAlreadyInitialized = true;
-              initialSeededRef.current = true;
-              await safeSetDoc(doc(db, 'systemConfig', 'metadata'), {
-                isInitialized: true,
-                databaseId: firebaseConfig.firestoreDatabaseId || '',
-                permanentStorage: true,
-                initializedAt: new Date().toISOString(),
-                reason: 'Existing database collections detected',
-              });
-            } else {
-              isSystemAlreadyInitialized = false;
+                if (allVerifiedEmpty) {
+                  isSystemAlreadyInitialized = false;
+                } else {
+                  // Err on the side of safety: existing collections present or network initializing
+                  isSystemAlreadyInitialized = true;
+                  initialSeededRef.current = true;
+                }
+              }
             }
-          }
           } catch (initErr) {
             console.warn('[PCM Firestore] Notice checking system metadata:', initErr);
             isSystemAlreadyInitialized = true; // Err on side of safety: NEVER overwrite existing data!
@@ -1783,87 +1803,99 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               getDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings')).catch(() => null),
             ]);
 
-            if (cfgSnap !== null && !cfgSnap.exists()) {
-              await safeSetDoc(doc(db, 'siteConfig', 'global'), INITIAL_SITE_CONFIG);
-            }
-            if (slideSnap !== null && !slideSnap.exists()) {
-              await safeSetDoc(doc(db, 'siteContent', 'slideshow'), {
-                slides: INITIAL_SITE_CONFIG.heroSlides || [],
-                updatedAt: new Date().toISOString(),
-                updatedBy: 'System Baseline',
-                isPublished: true,
-              });
-            }
-            if (lapSnap !== null && !lapSnap.exists()) {
-              await safeSetDoc(doc(db, 'siteContent', 'lifeAtPcm'), cleanFirestoreData({
-                ...INITIAL_LIFE_AT_PCM_CONFIG,
-                updatedAt: new Date().toISOString(),
-                updatedBy: 'System Baseline',
-              }));
-            }
-            if (slSnap !== null && !slSnap.exists()) {
-              await safeSetDoc(doc(db, 'siteContent', 'studentLife'), cleanFirestoreData({
-                ...INITIAL_STUDENT_LIFE_CONFIG,
-                updatedAt: new Date().toISOString(),
-                updatedBy: 'System Baseline',
-                isPublished: true,
-              }));
-            }
-            if (vidCfgSnap !== null && !vidCfgSnap.exists()) {
-              await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), INITIAL_HOMEPAGE_VIDEO_CONFIG);
-            }
-            if (donSnap !== null && !donSnap.exists()) {
-              await safeSetDoc(doc(db, 'donationSettings', 'global'), INITIAL_DONATION_SETTINGS);
-            }
-            if (enrollCfgSnap !== null && !enrollCfgSnap.exists()) {
-              await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), INITIAL_ENROLLMENT_SYSTEM_CONFIG);
-            }
+            // Guard: If ANY document already exists, DO NOT seed
+            const anyDocExists =
+              (cfgSnap && cfgSnap.exists()) ||
+              (slideSnap && slideSnap.exists()) ||
+              (lapSnap && lapSnap.exists()) ||
+              (slSnap && slSnap.exists()) ||
+              (vidCfgSnap && vidCfgSnap.exists()) ||
+              (donSnap && donSnap.exists()) ||
+              (enrollCfgSnap && enrollCfgSnap.exists());
 
-            // Only seed a collection if that specific collection is genuinely empty
-            const seedBatchIfEmpty = async (col: string, items: any[]) => {
-              if (!items || items.length === 0) return;
-              try {
-                const existing = await getDocs(collection(db, col)).catch(() => null);
-                if (!existing || !existing.empty) {
-                  return;
-                }
-                const b = writeBatch(db);
-                items.forEach((item: any) => {
-                  const docId = item.id || `seed-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
-                  b.set(doc(db, col, docId), cleanFirestoreData(item), { merge: true });
-                });
-                await b.commit();
-              } catch (e) {
-                console.warn(`[PCM Firestore] Notice seeding ${col}:`, e);
+            if (!anyDocExists) {
+              if (cfgSnap !== null && !cfgSnap.exists()) {
+                await safeSetDoc(doc(db, 'siteConfig', 'global'), INITIAL_SITE_CONFIG);
               }
-            };
+              if (slideSnap !== null && !slideSnap.exists()) {
+                await safeSetDoc(doc(db, 'siteContent', 'slideshow'), {
+                  slides: INITIAL_SITE_CONFIG.heroSlides || [],
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: 'System Baseline',
+                  isPublished: true,
+                });
+              }
+              if (lapSnap !== null && !lapSnap.exists()) {
+                await safeSetDoc(doc(db, 'siteContent', 'lifeAtPcm'), cleanFirestoreData({
+                  ...INITIAL_LIFE_AT_PCM_CONFIG,
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: 'System Baseline',
+                }));
+              }
+              if (slSnap !== null && !slSnap.exists()) {
+                await safeSetDoc(doc(db, 'siteContent', 'studentLife'), cleanFirestoreData({
+                  ...INITIAL_STUDENT_LIFE_CONFIG,
+                  updatedAt: new Date().toISOString(),
+                  updatedBy: 'System Baseline',
+                  isPublished: true,
+                }));
+              }
+              if (vidCfgSnap !== null && !vidCfgSnap.exists()) {
+                await safeSetDoc(doc(db, 'homepageVideoConfig', 'global'), INITIAL_HOMEPAGE_VIDEO_CONFIG);
+              }
+              if (donSnap !== null && !donSnap.exists()) {
+                await safeSetDoc(doc(db, 'donationSettings', 'global'), INITIAL_DONATION_SETTINGS);
+              }
+              if (enrollCfgSnap !== null && !enrollCfgSnap.exists()) {
+                await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), INITIAL_ENROLLMENT_SYSTEM_CONFIG);
+              }
 
-            await Promise.all([
-              seedBatchIfEmpty('programs', INITIAL_PROGRAMS),
-              seedBatchIfEmpty('faculty', INITIAL_FACULTY),
-              seedBatchIfEmpty('announcements', INITIAL_ANNOUNCEMENTS),
-              seedBatchIfEmpty('news', INITIAL_NEWS),
-              seedBatchIfEmpty('events', INITIAL_EVENTS),
-              seedBatchIfEmpty('downloads', INITIAL_DOWNLOADS),
-              seedBatchIfEmpty('testimonials', INITIAL_TESTIMONIALS),
-              seedBatchIfEmpty('stats', INITIAL_STATS),
-              seedBatchIfEmpty('faqs', INITIAL_FAQS),
-              seedBatchIfEmpty('sermons', INITIAL_SERMONS),
-              seedBatchIfEmpty('scrapbook', INITIAL_SCRAPBOOK),
-              seedBatchIfEmpty('mediaLibrary', INITIAL_MEDIA_ITEMS),
-              seedBatchIfEmpty('galleryAlbums', INITIAL_GALLERY_ALBUMS),
-              seedBatchIfEmpty('studentLifeAlbums', INITIAL_STUDENT_LIFE_ALBUMS),
-              seedBatchIfEmpty('adminUsers', INITIAL_ADMIN_USERS),
-              seedBatchIfEmpty('users', INITIAL_USER_ACCOUNTS),
-              seedBatchIfEmpty('studentProfiles', INITIAL_STUDENTS),
-              seedBatchIfEmpty('donationPaymentMethods', INITIAL_DONATION_METHODS),
-              seedBatchIfEmpty('academicSubjects', INITIAL_ACADEMIC_SUBJECTS),
-              seedBatchIfEmpty('feeStructure', INITIAL_FEE_STRUCTURE),
-              seedBatchIfEmpty('academicPeriods', INITIAL_ACADEMIC_PERIODS),
-              seedBatchIfEmpty('classSections', INITIAL_CLASS_SECTIONS),
-              seedBatchIfEmpty('instructors', INITIAL_INSTRUCTORS),
-              seedBatchIfEmpty('videos', INITIAL_VIDEOS),
-            ]);
+              // Only seed a collection if the collection check definitively succeeded and is empty
+              const seedBatchIfEmpty = async (col: string, items: any[]) => {
+                if (!items || items.length === 0) return;
+                try {
+                  const existing = await getDocs(collection(db, col)).catch(() => null);
+                  if (existing === null || !existing.empty) {
+                    return;
+                  }
+                  const b = writeBatch(db);
+                  items.forEach((item: any) => {
+                    const docId = item.id || `seed-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+                    b.set(doc(db, col, docId), cleanFirestoreData(item), { merge: true });
+                  });
+                  await b.commit();
+                } catch (e) {
+                  console.warn(`[PCM Firestore] Notice seeding ${col}:`, e);
+                }
+              };
+
+              await Promise.all([
+                seedBatchIfEmpty('programs', INITIAL_PROGRAMS),
+                seedBatchIfEmpty('faculty', INITIAL_FACULTY),
+                seedBatchIfEmpty('announcements', INITIAL_ANNOUNCEMENTS),
+                seedBatchIfEmpty('news', INITIAL_NEWS),
+                seedBatchIfEmpty('events', INITIAL_EVENTS),
+                seedBatchIfEmpty('downloads', INITIAL_DOWNLOADS),
+                seedBatchIfEmpty('testimonials', INITIAL_TESTIMONIALS),
+                seedBatchIfEmpty('stats', INITIAL_STATS),
+                seedBatchIfEmpty('faqs', INITIAL_FAQS),
+                seedBatchIfEmpty('sermons', INITIAL_SERMONS),
+                seedBatchIfEmpty('scrapbook', INITIAL_SCRAPBOOK),
+                seedBatchIfEmpty('mediaLibrary', INITIAL_MEDIA_ITEMS),
+                seedBatchIfEmpty('galleryAlbums', INITIAL_GALLERY_ALBUMS),
+                seedBatchIfEmpty('studentLifeAlbums', INITIAL_STUDENT_LIFE_ALBUMS),
+                seedBatchIfEmpty('adminUsers', INITIAL_ADMIN_USERS),
+                seedBatchIfEmpty('users', INITIAL_USER_ACCOUNTS),
+                seedBatchIfEmpty('studentProfiles', INITIAL_STUDENTS),
+                seedBatchIfEmpty('donationPaymentMethods', INITIAL_DONATION_METHODS),
+                seedBatchIfEmpty('academicSubjects', INITIAL_ACADEMIC_SUBJECTS),
+                seedBatchIfEmpty('feeStructure', INITIAL_FEE_STRUCTURE),
+                seedBatchIfEmpty('academicPeriods', INITIAL_ACADEMIC_PERIODS),
+                seedBatchIfEmpty('classSections', INITIAL_CLASS_SECTIONS),
+                seedBatchIfEmpty('instructors', INITIAL_INSTRUCTORS),
+                seedBatchIfEmpty('videos', INITIAL_VIDEOS),
+              ]);
+            }
 
             await safeSetDoc(doc(db, 'systemConfig', 'metadata'), {
               isInitialized: true,
@@ -1873,6 +1905,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               version: '1.0.0',
             });
             isSystemAlreadyInitialized = true;
+            initialSeededRef.current = true;
           } catch (seedErr) {
             console.warn('[PCM Firestore] Baseline seeding notice:', seedErr);
           }
@@ -1885,27 +1918,42 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           async (snap) => {
             if (snap.exists()) {
               const data = snap.data() as SiteConfig;
+              firestoreLoadedCollectionsRef.current.add('siteConfig');
               setSiteConfig((prev) => {
                 const updated: SiteConfig = {
                   ...prev,
                   ...data,
-                  // Firestore is the persistent source of truth.
-                  // Only preserve prev if Firestore explicitly did not provide the property.
                   heroSlides:
-                    data.heroSlides !== undefined
+                    hasAuthoritativeSlideshowRef.current && prev.heroSlides !== undefined
+                      ? prev.heroSlides
+                      : data.heroSlides !== undefined
                       ? data.heroSlides
                       : prev.heroSlides,
                   lifeAtPcm:
-                    data.lifeAtPcm !== undefined
+                    hasAuthoritativeLifeAtPcmRef.current && prev.lifeAtPcm !== undefined
+                      ? prev.lifeAtPcm
+                      : data.lifeAtPcm !== undefined
                       ? data.lifeAtPcm
-                      : data.studentLife?.lifeAtPcm !== undefined
-                      ? data.studentLife.lifeAtPcm
                       : prev.lifeAtPcm,
-                  studentLife: {
-                    ...(prev.studentLife || {}),
-                    ...(data.studentLife || {}),
-                    ...(data.lifeAtPcm ? { lifeAtPcm: data.lifeAtPcm } : {}),
-                  },
+                  studentLife:
+                    hasAuthoritativeStudentLifeRef.current && prev.studentLife !== undefined
+                      ? {
+                          ...prev.studentLife,
+                          ...(hasAuthoritativeLifeAtPcmRef.current && prev.lifeAtPcm
+                            ? { lifeAtPcm: prev.lifeAtPcm }
+                            : {}),
+                        }
+                      : (data.studentLife || prev.studentLife)
+                      ? ({
+                          ...(prev.studentLife || {}),
+                          ...(data.studentLife || {}),
+                          ...(hasAuthoritativeLifeAtPcmRef.current && prev.lifeAtPcm
+                            ? { lifeAtPcm: prev.lifeAtPcm }
+                            : data.lifeAtPcm
+                            ? { lifeAtPcm: data.lifeAtPcm }
+                            : {}),
+                        } as StudentLifeConfig)
+                      : prev.studentLife,
                 };
                 setCachedData('siteConfig', updated);
                 try {
@@ -1935,13 +1983,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (snap.exists()) {
               const data = snap.data();
               if (data?.slides && Array.isArray(data.slides)) {
+                hasAuthoritativeSlideshowRef.current = true;
+                firestoreLoadedCollectionsRef.current.add('slideshow');
                 setSiteConfig((prev) => {
                   try {
                     if (JSON.stringify(prev.heroSlides) === JSON.stringify(data.slides)) {
                       return prev;
                     }
                   } catch {}
-                  const updated = {
+                  const updated: SiteConfig = {
                     ...prev,
                     heroSlides: data.slides,
                   };
@@ -1965,20 +2015,26 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             if (snap.exists()) {
               const data = snap.data() as LifeAtPCMConfig;
               if (data && typeof data === 'object') {
+                hasAuthoritativeLifeAtPcmRef.current = true;
+                firestoreLoadedCollectionsRef.current.add('lifeAtPcm');
                 setSiteConfig((prev) => {
-                  const updated = {
+                  const updated: SiteConfig = {
                     ...prev,
                     lifeAtPcm: {
+                      ...prev.lifeAtPcm,
                       ...data,
-                      items: Array.isArray(data.items) ? data.items : [],
+                      items: Array.isArray(data.items) ? data.items : prev.lifeAtPcm?.items || [],
                     },
-                    studentLife: {
-                      ...(prev.studentLife || {}),
-                      lifeAtPcm: {
-                        ...data,
-                        items: Array.isArray(data.items) ? data.items : [],
-                      },
-                    },
+                    studentLife: prev.studentLife
+                      ? {
+                          ...prev.studentLife,
+                          lifeAtPcm: {
+                            ...prev.lifeAtPcm,
+                            ...data,
+                            items: Array.isArray(data.items) ? data.items : prev.lifeAtPcm?.items || [],
+                          },
+                        }
+                      : prev.studentLife,
                   };
                   setCachedData('siteConfig', updated);
                   return updated;
@@ -1997,6 +2053,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uPrograms = onSnapshot(
           collection(db, 'programs'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('programs');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AcademicProgram[];
               setPrograms((prev) => (areEntitiesEqual(prev, list) ? prev : list));
@@ -2022,6 +2079,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uFaculty = onSnapshot(
           collection(db, 'faculty'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('faculty');
             if (!snap.empty) {
               const list = snap.docs.map((d) => {
                 const data = d.data() as any;
@@ -2061,6 +2119,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uAnnouncements = onSnapshot(
           collection(db, 'announcements'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('announcements');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AnnouncementItem[];
               setAnnouncements((prev) => (areEntitiesEqual(prev, list) ? prev : list));
@@ -2086,6 +2145,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uNews = onSnapshot(
           collection(db, 'news'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('news');
             if (!snap.empty) {
               const list = snap.docs.map((d) => {
                 const data = d.data() as any;
@@ -2120,6 +2180,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uEvents = onSnapshot(
           collection(db, 'events'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('events');
             if (!snap.empty) {
               const list = snap.docs.map((d) => {
                 const data = d.data() as any;
@@ -2154,6 +2215,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uDonMethods = onSnapshot(
           collection(db, 'donationPaymentMethods'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('donationPaymentMethods');
             if (!snap.empty) {
               const list = snap.docs.map((d) => {
                 const data = d.data();
@@ -2187,6 +2249,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uDonSettings = onSnapshot(
           doc(db, 'donationSettings', 'global'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('donationSettings');
             if (snap.exists()) {
               const data = snap.data() as DonationSettings;
               setDonationSettings(data);
@@ -2209,6 +2272,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uVideos = onSnapshot(
           collection(db, 'videos'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('videos');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as YouTubeVideo[];
               list.sort((a, b) => (a.displayOrder ?? 999) - (b.displayOrder ?? 999));
@@ -2235,6 +2299,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uHomeVideoConfig = onSnapshot(
           doc(db, 'homepageVideoConfig', 'global'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('homepageVideoConfig');
             if (snap.exists()) {
               const data = snap.data() as HomepageVideoConfig;
               setHomepageVideoConfig(data);
@@ -2257,6 +2322,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uMediaLibrary = onSnapshot(
           collection(db, 'mediaLibrary'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('mediaLibrary');
             if (!snap.empty) {
               const list = snap.docs.map((d) => {
                 const data = d.data() as any;
@@ -2296,6 +2362,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uTestimonials = onSnapshot(
           collection(db, 'testimonials'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('testimonials');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as Testimonial[];
               setTestimonials((prev) => (areEntitiesEqual(prev, list) ? prev : list));
@@ -2319,6 +2386,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uStats = onSnapshot(
           collection(db, 'stats'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('stats');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ImpactStat[];
               setStats((prev) => (areEntitiesEqual(prev, list) ? prev : list));
@@ -2342,6 +2410,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uFaqs = onSnapshot(
           collection(db, 'faqs'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('faqs');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as FAQItem[];
               setFaqs((prev) => (areEntitiesEqual(prev, list) ? prev : list));
@@ -2365,6 +2434,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uDownloads = onSnapshot(
           collection(db, 'downloads'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('downloads');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DownloadableResource[];
               setDownloads((prev) => (areEntitiesEqual(prev, list) ? prev : list));
@@ -2388,6 +2458,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uSermons = onSnapshot(
           collection(db, 'sermons'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('sermons');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as SermonLecture[];
               setSermons((prev) => (areEntitiesEqual(prev, list) ? prev : list));
@@ -2411,6 +2482,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uScrapbook = onSnapshot(
           collection(db, 'scrapbook'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('scrapbook');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as ScrapbookItem[];
               setScrapbook((prev) => (areEntitiesEqual(prev, list) ? prev : list));
@@ -2434,6 +2506,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uGallery = onSnapshot(
           collection(db, 'galleryAlbums'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('galleryAlbums');
             if (!snap.empty) {
               const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as GalleryAlbum[];
               setGalleryAlbums((prev) => (areEntitiesEqual(prev, list) ? prev : list));
@@ -2457,6 +2530,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const uStudentLifeAlbums = onSnapshot(
           collection(db, 'studentLifeAlbums'),
           async (snap) => {
+            firestoreLoadedCollectionsRef.current.add('studentLifeAlbums');
             if (!snap.empty) {
               const list = snap.docs.map((d) => {
                 const data = d.data();
@@ -2495,15 +2569,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           doc(db, 'siteContent', 'studentLife'),
           (snap) => {
             if (snap.exists()) {
+              hasAuthoritativeStudentLifeRef.current = true;
+              firestoreLoadedCollectionsRef.current.add('studentLife');
               const slData = snap.data() as StudentLifeConfig;
               const { lifeAtPcm: _lap, ...cleanSL } = slData;
               setSiteConfig((prev) => {
-                const updated = {
+                const updated: SiteConfig = {
                   ...prev,
                   studentLife: {
-                    ...prev.studentLife,
+                    ...(prev.studentLife || {}),
                     ...cleanSL,
-                  },
+                    lifeAtPcm: prev.lifeAtPcm || prev.studentLife?.lifeAtPcm,
+                  } as StudentLifeConfig,
                 };
                 setCachedData('siteConfig', updated);
                 return updated;
@@ -2832,45 +2909,80 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               signOut(auth).catch(() => {});
               return;
             }
-            const isSuperAdminEmail = emailLower === 'angeloperfecto.epc@gmail.com';
+            const isSuperAdminEmail =
+              emailLower === 'angeloperfecto.epc@gmail.com' || emailLower === 'president@pcm.edu.ph';
             const isInitialConfigAdmin = INITIAL_ADMIN_USERS.find((u) => u.email.toLowerCase() === emailLower);
+            const isKnownAdmin = (stateRef.current?.adminUsers || []).find(
+              (a) => a.email.toLowerCase() === emailLower || a.id === fbUser.uid
+            );
+
+            let initialRole: UserRole = isSuperAdminEmail
+              ? 'Super Admin'
+              : isKnownAdmin
+              ? (isKnownAdmin.role as UserRole)
+              : isInitialConfigAdmin
+              ? (isInitialConfigAdmin.role as UserRole)
+              : 'Student/User';
+            let initialAdminRole: AdminRole | undefined = isSuperAdminEmail
+              ? 'Super Admin'
+              : isKnownAdmin
+              ? isKnownAdmin.role
+              : isInitialConfigAdmin
+              ? isInitialConfigAdmin.role
+              : undefined;
 
             let acc: UserAccount = {
               id: fbUser.uid,
               uid: fbUser.uid,
               email: fbUser.email || '',
-              name: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM User',
-              displayName: fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM User',
+              name:
+                isKnownAdmin?.name ||
+                isInitialConfigAdmin?.name ||
+                fbUser.displayName ||
+                fbUser.email?.split('@')[0] ||
+                'PCM User',
+              displayName:
+                isKnownAdmin?.name ||
+                isInitialConfigAdmin?.name ||
+                fbUser.displayName ||
+                fbUser.email?.split('@')[0] ||
+                'PCM User',
               photoURL: fbUser.photoURL || '',
               avatarUrl: fbUser.photoURL || '',
-              role: isSuperAdminEmail
-                ? 'Super Admin'
-                : isInitialConfigAdmin
-                ? 'Admin'
-                : 'Student/User',
-              adminRole: isSuperAdminEmail
-                ? 'Super Admin'
-                : isInitialConfigAdmin
-                ? isInitialConfigAdmin.role
-                : undefined,
+              role: initialRole,
+              adminRole: initialAdminRole,
               status: 'Active',
-              verificationStatus: isSuperAdminEmail || isInitialConfigAdmin ? 'Approved' : 'Approved',
+              verificationStatus: isSuperAdminEmail || isKnownAdmin || isInitialConfigAdmin ? 'Approved' : 'Approved',
               authMethod: fbUser.providerData?.[0]?.providerId === 'password' ? 'password' : 'google.com',
               provider: fbUser.providerData?.[0]?.providerId || 'google.com',
               emailVerified: fbUser.emailVerified,
-              createdAt: new Date().toISOString(),
+              createdAt: isKnownAdmin?.createdAt || isInitialConfigAdmin?.createdAt || new Date().toISOString(),
               lastLogin: new Date().toISOString(),
             };
 
-            // Targeted single-document getDoc for active authenticated user profile only
+            // Targeted check of active authenticated user profile and admin collection
             try {
-              const userDocRef = doc(db, 'users', fbUser.uid);
-              const snap = await getDoc(userDocRef);
-              if (snap.exists()) {
-                const stored = snap.data() as UserAccount;
+              const [userSnap, adminSnap] = await Promise.all([
+                getDoc(doc(db, 'users', fbUser.uid)).catch(() => null),
+                getDoc(doc(db, 'adminUsers', fbUser.uid)).catch(() => null),
+              ]);
+
+              if (adminSnap && adminSnap.exists()) {
+                const adminData = adminSnap.data() as AdminUser;
+                acc.role = (adminData.role as UserRole) || 'Admin';
+                acc.adminRole = adminData.role || 'Admin';
+                acc.name = adminData.name || acc.name;
+                acc.displayName = adminData.name || acc.displayName;
+                acc.department = adminData.department || acc.department;
+              }
+
+              if (userSnap && userSnap.exists()) {
+                const stored = userSnap.data() as UserAccount;
                 acc = {
                   ...acc,
                   ...stored,
+                  role: acc.role !== 'Student/User' ? acc.role : stored.role,
+                  adminRole: acc.adminRole || stored.adminRole,
                 };
                 if (isSuperAdminEmail) {
                   acc.role = 'Super Admin';
@@ -2879,7 +2991,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   acc.verificationStatus = 'Approved';
                 }
               } else {
-                safeSetDoc(userDocRef, acc, { merge: true }).catch(() => {});
+                safeSetDoc(doc(db, 'users', fbUser.uid), acc, { merge: true }).catch(() => {});
               }
             } catch {
               // Fallback to local memory/state if client is offline
@@ -3321,6 +3433,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Site Configuration Updates
   const updateSiteConfig = async (newConfig: Partial<SiteConfig>) => {
+    if (newConfig.heroSlides !== undefined) {
+      hasAuthoritativeSlideshowRef.current = true;
+    }
+    if (newConfig.lifeAtPcm !== undefined) {
+      hasAuthoritativeLifeAtPcmRef.current = true;
+    }
+    if (newConfig.studentLife !== undefined) {
+      hasAuthoritativeStudentLifeRef.current = true;
+    }
     const sanitized = cleanFirestoreData(newConfig);
     setSiteConfig((prev) => {
       const updated = {
@@ -3328,6 +3449,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...newConfig,
         heroSlides: newConfig.heroSlides !== undefined ? newConfig.heroSlides : prev.heroSlides,
         lifeAtPcm: newConfig.lifeAtPcm !== undefined ? newConfig.lifeAtPcm : prev.lifeAtPcm,
+        studentLife: newConfig.studentLife !== undefined ? newConfig.studentLife : prev.studentLife,
       };
       setCachedData('siteConfig', updated);
       return updated;
@@ -3352,7 +3474,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
       }
       if (newConfig.studentLife) {
-        const { lifeAtPcm: _lap, ...cleanSL } = newConfig.studentLife as any;
+        const { lifeAtPcm: _lap, ...cleanSL } = newConfig.studentLife;
         await safeSetDoc(
           doc(db, 'siteContent', 'studentLife'),
           cleanFirestoreData({
@@ -3516,6 +3638,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateStudentLifeConfig = async (newStudentLife: Partial<StudentLifeConfig>) => {
+    hasAuthoritativeStudentLifeRef.current = true;
     const currentSL = siteConfig.studentLife || INITIAL_STUDENT_LIFE_CONFIG;
     const updatedSL: StudentLifeConfig = {
       ...currentSL,
@@ -3554,6 +3677,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateLifeAtPCMConfig = async (newLifeConfig: Partial<LifeAtPCMConfig>) => {
+    hasAuthoritativeLifeAtPcmRef.current = true;
     const currentLife = siteConfig.lifeAtPcm || siteConfig.studentLife?.lifeAtPcm || INITIAL_LIFE_AT_PCM_CONFIG;
     const merged: LifeAtPCMConfig = {
       ...currentLife,
@@ -3565,10 +3689,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = {
         ...prev,
         lifeAtPcm: merged,
-        studentLife: {
-          ...(prev.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
-          lifeAtPcm: merged,
-        },
+        studentLife: prev.studentLife
+          ? {
+              ...prev.studentLife,
+              lifeAtPcm: merged,
+            }
+          : prev.studentLife,
       };
       setCachedData('siteConfig', updated);
       return updated;
@@ -3579,16 +3705,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         doc(db, 'siteContent', 'lifeAtPcm'),
         cleanFirestoreData({
           ...merged,
-          updatedAt: new Date().toISOString(),
-          updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
-        }),
-        { merge: true }
-      );
-      await safeSetDoc(
-        doc(db, 'siteContent', 'studentLife'),
-        cleanFirestoreData({
-          ...(siteConfig.studentLife || INITIAL_STUDENT_LIFE_CONFIG),
-          lifeAtPcm: merged,
           updatedAt: new Date().toISOString(),
           updatedBy: currentAdminUser?.name || currentUserAccount?.email || 'Administrator',
         }),
@@ -4141,20 +4257,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('success', 'Program Updated', 'Academic degree information saved.');
   };
 
-  const deleteProgram = async (id: string) => {
+  const deleteProgram = (id: string) => {
     const prog = programs.find((p) => p.id === id);
     setPrograms((prev) => {
       const next = prev.filter((p) => p.id !== id);
       setCachedData('programs', next);
       return next;
     });
-    try {
-      await safeDeleteDoc(doc(db, 'programs', id));
-    } catch (e) {
-      console.warn('deleteProgram Firestore error:', e);
-    }
+    safeDeleteDoc(doc(db, 'programs', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Academic Program', id, prog?.name || 'Program', 'Removed degree program from curriculum directory.');
-    addToast('info', 'Program Deleted', 'Academic program permanently removed.');
+    addToast('info', 'Program Deleted', 'Academic program removed.');
   };
 
   // Faculty CRUD
@@ -5023,6 +5135,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const studentLogout = () => {
     setIsStudentLoggedIn(false);
     setCurrentEnrollmentDraft(null);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('pcm_student_session');
+      } catch {}
+    }
+    signOut(auth).catch(() => {});
     logActivity('LOGOUT', 'Student Session', studentProfile.id, studentProfile.fullName || studentProfile.name || 'Student', 'Student logged out of portal.');
     addToast('info', 'Logged Out', 'Student session ended.');
   };
@@ -6069,68 +6187,23 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteStudentProfile = async (studentId: string): Promise<boolean> => {
     const target = students.find((s) => s.id === studentId || s.studentId === studentId);
-    const targetEmail = (target?.email || '').toLowerCase().trim();
-    const targetId = target?.id || studentId;
-    const targetStudentNumber = target?.studentId || '';
-
-    // Record tombstone in deletedUsers to ensure permanent deletion across sessions
-    const adminActor = currentAdminUser?.name || currentUserAccount?.name || 'Administrator';
-    const deletedRecord: DeletedUserRecord = {
-      id: targetId,
-      uid: target?.uid || targetId,
-      email: targetEmail || `${studentId}@student.pcm.edu.ph`,
-      name: target?.fullName || target?.name || 'Student Record',
-      role: 'Student',
-      studentId: targetStudentNumber || studentId,
-      deletedAt: new Date().toISOString(),
-      deletedBy: adminActor,
-    };
-
-    setDeletedUsers((prev) => {
-      const next = [
-        ...prev.filter((d) => d.email.toLowerCase() !== deletedRecord.email.toLowerCase() && d.id !== deletedRecord.id),
-        deletedRecord,
-      ];
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('pcm_deleted_users', JSON.stringify(next));
-        } catch {}
-      }
-      return next;
-    });
-
-    // Remove from local React states
     setStudents((prev) => {
-      const next = prev.filter((s) => s.id !== studentId && s.studentId !== studentId && s.id !== targetId);
+      const next = prev.filter((s) => s.id !== studentId && s.studentId !== studentId);
       setCachedData('students', next);
       return next;
     });
-    setUserAccounts((prev) => {
-      const next = prev.filter((u) => u.id !== studentId && u.uid !== studentId && (u.studentId !== studentId) && (targetEmail ? u.email?.toLowerCase() !== targetEmail : true));
-      setCachedData('userAccounts', next);
-      return next;
-    });
-
-    // Persist deletion to Firestore
     try {
-      const docId = (deletedRecord.email || deletedRecord.uid || deletedRecord.id).replace(/[/\\?%*:|"<>]/g, '_').toLowerCase();
-      await safeSetDoc(doc(db, 'deletedUsers', docId), cleanFirestoreData(deletedRecord));
-
-      if (targetId) {
-        await safeDeleteDoc(doc(db, 'studentProfiles', targetId));
-        await safeDeleteDoc(doc(db, 'users', targetId));
-        await safeDeleteDoc(doc(db, 'users', `uid-${targetId}`));
+      if (target?.id) {
+        await safeDeleteDoc(doc(db, 'studentProfiles', target.id));
       }
-      if (studentId && studentId !== targetId) {
+      if (studentId && studentId !== target?.id) {
         await safeDeleteDoc(doc(db, 'studentProfiles', studentId));
-        await safeDeleteDoc(doc(db, 'users', studentId));
       }
     } catch (e) {
-      console.warn('deleteStudentProfile Firestore error:', e);
+      console.warn(e);
     }
-
-    logActivity('DELETE', 'Student Profile', studentId, target?.fullName || target?.name || 'Student', 'Deleted student record permanently.');
-    addToast('info', 'Student Record Deleted', 'Student profile has been permanently removed.');
+    logActivity('DELETE', 'Student Profile', studentId, target?.fullName || target?.name || 'Student', 'Deleted student record.');
+    addToast('info', 'Student Record Deleted', 'Student profile has been removed.');
     return true;
   };
 
