@@ -1920,26 +1920,30 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const data = snap.data() as SiteConfig;
               firestoreLoadedCollectionsRef.current.add('siteConfig');
               setSiteConfig((prev) => {
+                const isSlideshowLoaded = hasAuthoritativeSlideshowRef.current || firestoreLoadedCollectionsRef.current.has('slideshow');
+                const isLifeAtPcmLoaded = hasAuthoritativeLifeAtPcmRef.current || firestoreLoadedCollectionsRef.current.has('lifeAtPcm');
+                const isStudentLifeLoaded = hasAuthoritativeStudentLifeRef.current || firestoreLoadedCollectionsRef.current.has('studentLife');
+
                 const updated: SiteConfig = {
                   ...prev,
                   ...data,
                   heroSlides:
-                    hasAuthoritativeSlideshowRef.current && prev.heroSlides !== undefined
+                    isSlideshowLoaded && prev.heroSlides !== undefined
                       ? prev.heroSlides
                       : data.heroSlides !== undefined
                       ? data.heroSlides
                       : prev.heroSlides,
                   lifeAtPcm:
-                    hasAuthoritativeLifeAtPcmRef.current && prev.lifeAtPcm !== undefined
+                    isLifeAtPcmLoaded && prev.lifeAtPcm !== undefined
                       ? prev.lifeAtPcm
                       : data.lifeAtPcm !== undefined
                       ? data.lifeAtPcm
                       : prev.lifeAtPcm,
                   studentLife:
-                    hasAuthoritativeStudentLifeRef.current && prev.studentLife !== undefined
+                    isStudentLifeLoaded && prev.studentLife !== undefined
                       ? {
                           ...prev.studentLife,
-                          ...(hasAuthoritativeLifeAtPcmRef.current && prev.lifeAtPcm
+                          ...(isLifeAtPcmLoaded && prev.lifeAtPcm
                             ? { lifeAtPcm: prev.lifeAtPcm }
                             : {}),
                         }
@@ -1947,7 +1951,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                       ? ({
                           ...(prev.studentLife || {}),
                           ...(data.studentLife || {}),
-                          ...(hasAuthoritativeLifeAtPcmRef.current && prev.lifeAtPcm
+                          ...(isLifeAtPcmLoaded && prev.lifeAtPcm
                             ? { lifeAtPcm: prev.lifeAtPcm }
                             : data.lifeAtPcm
                             ? { lifeAtPcm: data.lifeAtPcm }
@@ -2579,7 +2583,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   studentLife: {
                     ...(prev.studentLife || {}),
                     ...cleanSL,
-                    lifeAtPcm: prev.lifeAtPcm || prev.studentLife?.lifeAtPcm,
+                    lifeAtPcm: prev.lifeAtPcm || slData.lifeAtPcm || prev.studentLife?.lifeAtPcm,
                   } as StudentLifeConfig,
                 };
                 setCachedData('siteConfig', updated);
@@ -3643,6 +3647,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updatedSL: StudentLifeConfig = {
       ...currentSL,
       ...newStudentLife,
+      lifeAtPcm: siteConfig.lifeAtPcm || currentSL.lifeAtPcm,
     };
     const sanitizedSL = cleanFirestoreData(updatedSL);
     setSiteConfig((prev) => {
