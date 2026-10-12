@@ -1920,30 +1920,30 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               const data = snap.data() as SiteConfig;
               firestoreLoadedCollectionsRef.current.add('siteConfig');
               setSiteConfig((prev) => {
-                const isSlideshowLoaded = hasAuthoritativeSlideshowRef.current || firestoreLoadedCollectionsRef.current.has('slideshow');
-                const isLifeAtPcmLoaded = hasAuthoritativeLifeAtPcmRef.current || firestoreLoadedCollectionsRef.current.has('lifeAtPcm');
-                const isStudentLifeLoaded = hasAuthoritativeStudentLifeRef.current || firestoreLoadedCollectionsRef.current.has('studentLife');
-
                 const updated: SiteConfig = {
                   ...prev,
                   ...data,
                   heroSlides:
-                    isSlideshowLoaded && prev.heroSlides !== undefined
+                    hasAuthoritativeSlideshowRef.current && prev.heroSlides !== undefined
                       ? prev.heroSlides
-                      : data.heroSlides !== undefined
+                      : (data.heroSlides !== undefined && Array.isArray(data.heroSlides) && data.heroSlides.length > 0)
                       ? data.heroSlides
-                      : prev.heroSlides,
+                      : (prev.heroSlides && prev.heroSlides.length > 0)
+                      ? prev.heroSlides
+                      : data.heroSlides,
                   lifeAtPcm:
-                    isLifeAtPcmLoaded && prev.lifeAtPcm !== undefined
+                    hasAuthoritativeLifeAtPcmRef.current && prev.lifeAtPcm !== undefined
                       ? prev.lifeAtPcm
-                      : data.lifeAtPcm !== undefined
+                      : (data.lifeAtPcm !== undefined && data.lifeAtPcm?.items && data.lifeAtPcm.items.length > 0)
                       ? data.lifeAtPcm
-                      : prev.lifeAtPcm,
+                      : (prev.lifeAtPcm && prev.lifeAtPcm?.items && prev.lifeAtPcm.items.length > 0)
+                      ? prev.lifeAtPcm
+                      : (data.lifeAtPcm || prev.lifeAtPcm),
                   studentLife:
-                    isStudentLifeLoaded && prev.studentLife !== undefined
+                    hasAuthoritativeStudentLifeRef.current && prev.studentLife !== undefined
                       ? {
                           ...prev.studentLife,
-                          ...(isLifeAtPcmLoaded && prev.lifeAtPcm
+                          ...(hasAuthoritativeLifeAtPcmRef.current && prev.lifeAtPcm
                             ? { lifeAtPcm: prev.lifeAtPcm }
                             : {}),
                         }
@@ -1951,7 +1951,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                       ? ({
                           ...(prev.studentLife || {}),
                           ...(data.studentLife || {}),
-                          ...(isLifeAtPcmLoaded && prev.lifeAtPcm
+                          ...(hasAuthoritativeLifeAtPcmRef.current && prev.lifeAtPcm
+                            ? { lifeAtPcm: prev.lifeAtPcm }
+                            : prev.lifeAtPcm
                             ? { lifeAtPcm: prev.lifeAtPcm }
                             : data.lifeAtPcm
                             ? { lifeAtPcm: data.lifeAtPcm }
@@ -2583,7 +2585,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                   studentLife: {
                     ...(prev.studentLife || {}),
                     ...cleanSL,
-                    lifeAtPcm: prev.lifeAtPcm || slData.lifeAtPcm || prev.studentLife?.lifeAtPcm,
+                    lifeAtPcm: prev.lifeAtPcm || prev.studentLife?.lifeAtPcm,
                   } as StudentLifeConfig,
                 };
                 setCachedData('siteConfig', updated);
@@ -3647,7 +3649,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const updatedSL: StudentLifeConfig = {
       ...currentSL,
       ...newStudentLife,
-      lifeAtPcm: siteConfig.lifeAtPcm || currentSL.lifeAtPcm,
     };
     const sanitizedSL = cleanFirestoreData(updatedSL);
     setSiteConfig((prev) => {

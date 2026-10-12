@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { doc, getDoc } from 'firebase/firestore';
 import { getServerFirestore, isIgnorableFirestoreError } from '@/lib/serverFirebase';
+import { getCachedSlideImage, setCachedSlideImage } from '@/lib/serverImageCache';
 import fs from 'fs';
 import path from 'path';
 
@@ -14,16 +15,6 @@ const DEFAULT_FALLBACKS: Record<string, string> = {
   'hero-3': 'https://images.unsplash.com/photo-1559027615-cd4628902d4a?q=80&w=1600&auto=format&fit=crop',
 };
 
-interface CachedImage {
-  type: 'buffer' | 'redirect';
-  contentType?: string;
-  buffer?: Buffer;
-  redirectUrl?: string;
-  cachedAt: number;
-}
-
-// In-memory cache to prevent repetitive reads against Firestore & filesystem
-const imageMemoryCache = new Map<string, CachedImage>();
 const CACHE_TTL_MS = 15 * 60 * 1000; // 15 minutes
 
 // Circuit breaker for Firestore quota exhaustion
@@ -47,17 +38,16 @@ export async function GET(req: NextRequest) {
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get('id') || searchParams.get('slideId');
-    const version = searchParams.get('v') || searchParams.get('t') || '';
+    const versionParam = searchParams.get('v') || searchParams.get('t') || '';
 
     if (!id) {
       return NextResponse.json({ error: 'Missing image id' }, { status: 400 });
     }
 
-    const cacheKey = version ? `${id}_${version}` : id;
     const now = Date.now();
 
-    // 0. Check in-memory cache
-    const cached = imageMemoryCache.get(cacheKey);
+    // 0. Check in-memory cache (bypass if explicit version/timestamp parameter provided)
+    const cached = !versionParam ? getCachedSlideImage(id) : undefined;
     if (cached && now - cached.cachedAt < CACHE_TTL_MS) {
       if (cached.type === 'buffer' && cached.buffer && cached.contentType) {
         return new NextResponse(new Uint8Array(cached.buffer), {
@@ -68,6 +58,8 @@ export async function GET(req: NextRequest) {
             'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
           },
         });
+      } else if (cached.type === 'redirect' && cached.redirectUrl) {
+        return NextResponse.redirect(cached.redirectUrl, { status: 307 });
       }
     }
 
@@ -96,7 +88,7 @@ export async function GET(req: NextRequest) {
               if (matches && matches[2]) {
                 const contentType = matches[1] || 'image/webp';
                 const buffer = Buffer.from(matches[2], 'base64');
-                imageMemoryCache.set(cacheKey, {
+                setCachedSlideImage(id, {
                   type: 'buffer',
                   contentType,
                   buffer,
@@ -112,7 +104,7 @@ export async function GET(req: NextRequest) {
                 });
               }
             } else if (imgVal.startsWith('http://') || imgVal.startsWith('https://')) {
-              imageMemoryCache.set(cacheKey, {
+              setCachedSlideImage(id, {
                 type: 'redirect',
                 redirectUrl: imgVal,
                 cachedAt: now,
@@ -133,7 +125,7 @@ export async function GET(req: NextRequest) {
               if (matches && matches[2]) {
                 const contentType = matches[1] || 'image/webp';
                 const buffer = Buffer.from(matches[2], 'base64');
-                imageMemoryCache.set(cacheKey, {
+                setCachedSlideImage(id, {
                   type: 'buffer',
                   contentType,
                   buffer,
@@ -175,7 +167,7 @@ export async function GET(req: NextRequest) {
           const buffer = fs.readFileSync(filePath);
           const ext = path.extname(match).toLowerCase();
           const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-          imageMemoryCache.set(cacheKey, {
+          setCachedSlideImage(id, {
             type: 'buffer',
             contentType: mime,
             buffer,

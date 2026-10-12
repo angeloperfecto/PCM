@@ -5,6 +5,7 @@ import { doc, setDoc } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getServerFirestore, isIgnorableFirestoreError, getServerFirebaseApp } from '@/lib/serverFirebase';
 import { firebaseConfig } from '@/lib/firebaseConfig';
+import { invalidateSlideImageCache } from '@/lib/serverImageCache';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -23,40 +24,28 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'File must be an image (PNG, JPG, WEBP, etc.)' }, { status: 400 });
     }
 
-    // Allow any file size for admin uploads (up to 250MB)
-    const MAX_SIZE = 250 * 1024 * 1024;
-    if (file.size > MAX_SIZE) {
-      return NextResponse.json({ error: 'Image file size exceeds maximum 250MB capacity.' }, { status: 400 });
+    // Limit to 4MB for high-res hero banners
+    if (file.size > 4 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: 'Image exceeds maximum limit of 4MB. Please optimize or compress the image.' },
+        { status: 400 }
+      );
     }
+
+    const timestamp = Date.now();
+    const slideId = slideIdParam || `hero-${timestamp}`;
+    const fileExt = path.extname(file.name) || '.webp';
+    const uniqueFilename = `slide_${slideId}_${timestamp}${fileExt}`;
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const timestamp = Date.now();
-    const slideId = slideIdParam || `hero-${timestamp}`;
-    const rawFileName = file.name || `slide_${timestamp}.jpg`;
-    const ext = path.extname(rawFileName) || '.jpg';
-    const cleanBase = path.basename(rawFileName, ext).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const uniqueFilename = `slide_${timestamp}_${cleanBase}.webp`;
+    // Invalidate existing server in-memory image cache for this slide
+    invalidateSlideImageCache(slideId);
 
-    // 1. Optimize image using sharp for fast delivery & compact storage (if available)
-    let optimizedBuffer: Buffer = buffer;
-    try {
-      const sharpModule = await import('sharp');
-      const sharp = sharpModule.default;
-      optimizedBuffer = await sharp(buffer)
-        .resize({ width: 1920, height: 1080, fit: 'cover', withoutEnlargement: true })
-        .webp({ quality: 80 })
-        .toBuffer();
-    } catch {
-      // Fallback if sharp is not installed or format is not supported
-      optimizedBuffer = buffer;
-    }
-
-    // Only construct dataUrl if under safe 800KB Firestore document limit
-    const fitsInFirestore = optimizedBuffer.length < 800000;
-    const dataUrl = fitsInFirestore
-      ? `data:image/webp;base64,${optimizedBuffer.toString('base64')}`
+    // 1. Convert to data URL for immediate fallback and zero-delay embedding
+    const dataUrl = buffer.length <= 1024 * 1024
+      ? `data:${file.type};base64,${buffer.toString('base64')}`
       : '';
     const publicEndpointUrl = `/api/slideshow/image?id=${slideId}&v=${timestamp}`;
 
@@ -93,40 +82,42 @@ export async function POST(req: NextRequest) {
         const app = getServerFirebaseApp();
         const storage = getStorage(app);
         storage.maxUploadRetryTime = 3000;
-        const storagePath = `slideshow/${uniqueFilename}`;
-        const storageRef = ref(storage, storagePath);
-        await uploadBytes(storageRef, optimizedBuffer, {
-          contentType: 'image/webp',
+        const storageRef = ref(storage, `slideshow/${uniqueFilename}`);
+        await uploadBytes(storageRef, buffer, {
+          contentType: file.type,
+          customMetadata: { slideId, uploadedAt: new Date().toISOString() },
         });
         downloadUrl = await getDownloadURL(storageRef);
       } catch (storageErr) {
-        console.warn('Firebase Storage upload notice:', storageErr);
+        console.debug('Optional Firebase Storage upload skipped, relying on Firestore backing:', storageErr);
       }
     }
 
-    // 4. Save to local disk uploads directory as cache
+    // 4. Save to filesystem disk cache in public/uploads/slideshow
     try {
       const uploadDir = path.join(process.cwd(), 'public', 'uploads', 'slideshow');
       await fs.mkdir(uploadDir, { recursive: true });
       const filePath = path.join(uploadDir, uniqueFilename);
-      await fs.writeFile(filePath, optimizedBuffer);
+      await fs.writeFile(filePath, buffer);
     } catch (diskErr) {
-      console.warn('Local disk write notice:', diskErr);
+      console.debug('Optional disk write skipped:', diskErr);
     }
 
-    // Consistent, globally accessible public endpoint
-    const publicUrl = downloadUrl || `/api/slideshow/image?id=${slideId}&v=${timestamp}`;
+    const finalUrl = downloadUrl || publicEndpointUrl;
 
     return NextResponse.json({
       success: true,
-      url: publicUrl,
-      dataUrl,
+      url: finalUrl,
+      dataUrl: dataUrl || finalUrl,
       slideId,
       filename: uniqueFilename,
-      provider: savedToFirestore ? 'firestore_synced' : 'local_cache',
+      savedToFirestore,
     });
   } catch (error: any) {
-    console.error('Error in /api/slideshow/upload:', error);
-    return NextResponse.json({ error: error.message || 'Internal upload error' }, { status: 500 });
+    console.error('Error uploading slideshow image:', error);
+    return NextResponse.json(
+      { error: error?.message || 'Failed to upload slideshow image' },
+      { status: 500 }
+    );
   }
 }
