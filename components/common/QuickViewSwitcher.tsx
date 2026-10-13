@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePCM } from '@/lib/store';
 import {
   GraduationCap,
@@ -18,22 +18,25 @@ export const QuickViewSwitcher: React.FC = () => {
     isStudentLoggedIn,
     setIsStudentLoggedIn,
     isAdminLoggedIn,
-    setIsAdminLoggedIn,
   } = usePCM();
 
   const [isOpen, setIsOpen] = useState(true);
+
+  // Start collapsed on phones so the floating panel doesn't cover page content and buttons.
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 767px)').matches) setIsOpen(false);
+  }, []);
 
   const handleGoToPublic = () => {
     navigateTo('home');
   };
 
   const handleGoToStudentPortal = () => {
-    setIsStudentLoggedIn(true);
     navigateTo('portal');
   };
 
+  // Opens the Admin page; AdminView shows the sign-in gate unless the user is a verified admin.
   const handleGoToAdminCMS = () => {
-    setIsAdminLoggedIn(true);
     navigateTo('admin');
   };
 

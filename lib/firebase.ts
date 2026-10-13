@@ -3,6 +3,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInWithRedirect,
+  sendEmailVerification,
   signOut,
   onAuthStateChanged,
   updateProfile,
@@ -10,9 +12,12 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   updatePassword,
+  connectAuthEmulator,
+  signInWithCredential,
   User as FirebaseUser,
 } from 'firebase/auth';
 import {
+  connectFirestoreEmulator,
   initializeFirestore,
   getFirestore,
   doc,
@@ -63,6 +68,36 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+// Local testing against the Firebase emulators (never enabled in production builds):
+// set NEXT_PUBLIC_USE_FIREBASE_EMULATORS=true at build time. See tests/e2e/README.md.
+// The env check is written inline so production builds drop this block entirely.
+export const usingEmulators = process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true';
+if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === 'true') {
+  try {
+    connectFirestoreEmulator(db, '127.0.0.1', 8085);
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
+  } catch {
+    // Already connected (hot reload).
+  }
+  if (typeof window !== 'undefined') {
+    // Lets automated tests sign in as a Google user without the Google popup. The Auth
+    // emulator accepts unsigned test credentials; real Firebase would reject them.
+    (window as any).__pcmEmulatorSignIn = (email: string, name = email.split('@')[0]) =>
+      signInWithCredential(
+        auth,
+        GoogleAuthProvider.credential(JSON.stringify({ sub: `test-${email}`, email, email_verified: true, name }))
+      );
+    (window as any).__pcmEmulatorSignOut = () => signOut(auth);
+  }
+}
+
+// Authorization header carrying the signed-in user's Firebase ID token, for API routes
+// that only approved admins may call (they verify it with lib/serverAuth.ts).
+export async function authHeaders(): Promise<Record<string, string>> {
+  const token = await auth.currentUser?.getIdToken().catch(() => null);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 // Initialize Storage with low retry limits to avoid hanging if bucket is unprovisioned
 export const storage = getStorage(app);
 try {
@@ -92,6 +127,8 @@ export {
   getDownloadURL,
   deleteObject,
   signInWithPopup,
+  signInWithRedirect,
+  sendEmailVerification,
   signOut,
   onAuthStateChanged,
   updateProfile,
@@ -563,11 +600,15 @@ export async function deleteFileFromFirebaseStorage(storagePath: string): Promis
     let relPath = storagePath.replace(/^\//, '');
     if (relPath.startsWith('uploads/')) {
       if (typeof window !== 'undefined') {
-        fetch('/api/media/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ storagePath: relPath }),
-        }).catch(() => {});
+        authHeaders()
+          .then((headers) =>
+            fetch('/api/media/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...headers },
+              body: JSON.stringify({ storagePath: relPath }),
+            })
+          )
+          .catch(() => {});
       }
       return true;
     }

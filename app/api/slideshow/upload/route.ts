@@ -6,11 +6,18 @@ import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { getServerFirestore, isIgnorableFirestoreError, getServerFirebaseApp } from '@/lib/serverFirebase';
 import { firebaseConfig } from '@/lib/firebaseConfig';
 import { invalidateSlideImageCache } from '@/lib/serverImageCache';
+import { requireAdmin } from '@/lib/serverAuth';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
+  // Hero slides are site content: only approved admins may replace them.
+  const authz = await requireAdmin(req);
+  if (!authz.ok) {
+    return NextResponse.json({ error: authz.error }, { status: authz.status });
+  }
+
   try {
     const formData = await req.formData();
     const file = formData.get('file') as File | null;

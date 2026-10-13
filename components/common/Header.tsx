@@ -37,7 +37,6 @@ export const Header: React.FC = () => {
     setSearchModalOpen,
     isAdminLoggedIn,
     isStudentLoggedIn,
-    setIsAdminLoggedIn,
     setIsStudentLoggedIn,
     setStatementOfFaithModalOpen,
     setTuitionCalculatorModalOpen,
@@ -172,7 +171,6 @@ export const Header: React.FC = () => {
         {
           label: 'Student Online Enrollment Hub',
           action: () => {
-            setIsStudentLoggedIn(true);
             navigateTo('portal');
           },
           icon: GraduationCap,
@@ -180,7 +178,7 @@ export const Header: React.FC = () => {
         {
           label: 'Registrar Admin Enrollment CMS',
           action: () => {
-            setIsAdminLoggedIn(true);
+            // AdminView shows the sign-in gate unless the user is a verified admin.
             navigateTo('admin');
           },
           icon: ShieldCheck,
@@ -188,7 +186,6 @@ export const Header: React.FC = () => {
         {
           label: 'Course Pre-Enlistment Module',
           action: () => {
-            setIsStudentLoggedIn(true);
             navigateTo('portal');
           },
           icon: FileText,
@@ -196,7 +193,6 @@ export const Header: React.FC = () => {
         {
           label: 'Tuition & Fee Assessment Policy',
           action: () => {
-            setIsStudentLoggedIn(true);
             navigateTo('portal');
           },
           icon: DollarSign,

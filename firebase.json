@@ -1,0 +1,13 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-pcmphilippinesco-1fe1b957-9c70-415b-a11f-b6fce7a98c4f",
+      "rules": "firestore.rules"
+    }
+  ],
+  "emulators": {
+    "auth": { "host": "127.0.0.1", "port": 9099 },
+    "firestore": { "host": "127.0.0.1", "port": 8085 },
+    "ui": { "enabled": false }
+  }
+}

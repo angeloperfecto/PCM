@@ -1,5 +1,5 @@
 import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
-import { db, compressImageFile, blobToDataUrl } from './firebase';
+import { db, compressImageFile, blobToDataUrl, authHeaders } from './firebase';
 import { HeroSlide } from './types';
 
 export const DEFAULT_HERO_SLIDES: HeroSlide[] = [
@@ -292,6 +292,7 @@ export async function uploadSlideshowImage(
 
     const response = await fetch('/api/slideshow/upload', {
       method: 'POST',
+      headers: await authHeaders(),
       body: formData,
     });
 

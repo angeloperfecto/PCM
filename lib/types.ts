@@ -154,10 +154,19 @@ export interface ImpactStat {
   order?: number;
 }
 
+// Workflow statuses (see lib/enrollmentWorkflow.ts) plus older values still found on
+// existing applications, which the workflow maps onto the new stages.
 export type ApplicationStatus =
   | 'Draft'
   | 'Submitted'
   | 'Under Review'
+  | 'Requirements Incomplete'
+  | 'For Admission Approval'
+  | 'Admitted'
+  | 'For Assessment'
+  | 'For Payment'
+  | 'For Enrollment'
+  | 'Deferred'
   | 'Additional Documents Required'
   | 'Exam Scheduled'
   | 'Interviewed'
@@ -236,6 +245,23 @@ export interface AdmissionApplication {
   interviewerRemarks?: string;
   studentId?: string;
   enrolledAt?: string;
+
+  // Admission workflow
+  applicantUid?: string; // Firebase uid of the applicant (Google sign-in)
+  applicantEmail?: string;
+  studentRecordId?: string; // studentProfiles document created on enrollment
+  applicantMessage?: string; // latest note from the Admissions Office to the applicant
+  lastDecisionBy?: string;
+  lastDecisionAt?: string;
+  applicantType?: string;
+
+  // Assessment & payment (steps 5-6)
+  assessment?: import('./enrollmentWorkflow').EnrollmentAssessment | null;
+  paymentStatus?: import('./enrollmentWorkflow').PaymentStatus;
+  amountPaidVerified?: number;
+  paymentVerifiedBy?: string;
+  paymentVerifiedAt?: string;
+  paymentWaivedReason?: string;
 }
 
 export type Application = AdmissionApplication;
@@ -677,6 +703,7 @@ export type EnrollmentAdminSubTab =
 
 export interface PreEnlistmentRecord {
   id: string;
+  studentUid?: string;
   studentId: string;
   studentName: string;
   studentEmail?: string;
@@ -703,6 +730,7 @@ export type AddDropStatus = 'Pending' | 'Approved' | 'Rejected' | 'Completed';
 
 export interface AddDropRequest {
   id: string;
+  studentUid?: string;
   studentId: string;
   studentName: string;
   studentEmail?: string;
@@ -818,6 +846,8 @@ export interface OnlineEnrollment {
 export interface StudentNotification {
   id: string;
   studentId: string;
+  recipientUid?: string; // Firebase uid of the applicant/student who may read it
+  applicationId?: string;
   title: string;
   message: string;
   type: 'enrollment' | 'grade' | 'document' | 'payment' | 'announcement' | 'system' | string;
