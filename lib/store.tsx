@@ -6837,6 +6837,42 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [isAdminLoggedIn, currentAdminUser?.role, firebaseAuthUser, adminUsers]);
 
+  // An account deleted by an administrator is signed out in every browser where it is open.
+  // The deletion registry (deletedUsers) is a live listener, so this runs as soon as the
+  // deletion is saved, and also covers a deleted user whose sign-in completed before the
+  // registry had loaded.
+  const forcedSignOutUidRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!firebaseAuthUser) {
+      forcedSignOutUidRef.current = null;
+      return;
+    }
+    const uid = firebaseAuthUser.uid;
+    const email = (firebaseAuthUser.email || '').toLowerCase().trim();
+    const deleted = (email && isUserDeleted(email)) || isUserDeleted(uid);
+    if (!deleted || forcedSignOutUidRef.current === uid) return;
+    forcedSignOutUidRef.current = uid;
+
+    setIsAdminLoggedIn(false);
+    setIsStudentLoggedIn(false);
+    setCurrentUserAccount(null);
+    setCurrentEnrollmentDraft(null);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem('pcm_admin_session');
+        localStorage.removeItem('pcm_user_session');
+        localStorage.removeItem('pcm_student_session');
+      } catch {}
+    }
+    signOut(auth).catch(() => {});
+    addToast({
+      title: 'Signed Out',
+      message: 'This account has been removed by a PCM administrator, so you have been signed out. Contact the school office if you think this is a mistake.',
+      type: 'error',
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseAuthUser, isUserDeleted]);
+
   // Admin CMS Auth & Management
   // Admin sign-in goes through Firebase Auth (email + password). The admin's role is then
   // verified by signInWithEmail / the auth listener against Firestore; no passwords are
@@ -7836,6 +7872,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     });
 
+    // Remove admin rights at the database level straight away (firestore.rules read this index).
+    if (targetEmail) {
+      safeDeleteDoc(doc(db, 'adminEmails', targetEmail)).catch(console.warn);
+    }
+
     for (const dId of possibleDocIds) {
       safeDeleteDoc(doc(db, 'users', dId)).catch(console.warn);
       safeDeleteDoc(doc(db, 'adminUsers', dId)).catch(console.warn);
@@ -7910,14 +7951,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     try {
       await safeSetDoc(doc(db, 'users', restoredAccount.uid || restoredAccount.id), cleanFirestoreData(restoredAccount));
 
-      // If it was an admin user, also restore into adminUsers
-      if (restoredAccount.role === 'Admin' || restoredAccount.role === 'Super Admin' || record.adminRole) {
+      // If it was an admin user (any staff role, e.g. Editor, Registrar, Finance), also restore into adminUsers
+      const restoredAdminRole =
+        record.adminRole ||
+        restoredAccount.adminRole ||
+        (ADMIN_ROLE_NAMES.includes(restoredAccount.role) && restoredAccount.role !== 'Student/User' ? restoredAccount.role : undefined);
+      if (restoredAdminRole) {
         const restoredAdmin: AdminUser = {
           id: restoredAccount.uid || restoredAccount.id,
           name: restoredAccount.name,
           email: restoredAccount.email,
           username: restoredAccount.email.split('@')[0],
-          role: (restoredAccount.adminRole || restoredAccount.role || 'Admin') as AdminRole,
+          role: restoredAdminRole as AdminRole,
           department: restoredAccount.department || 'Office of Administration',
           status: 'Active',
           createdAt: new Date().toISOString(),
