@@ -15,6 +15,7 @@ import {
 } from '@/lib/types';
 import { AdminStudentDetailModal } from './AdminStudentDetailModal';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
+import { AcademicTermModal } from './AcademicTermModal';
 import {
   GraduationCap,
   FileCheck,
@@ -84,6 +85,8 @@ export const AdminEnrollmentsTab: React.FC = () => {
     reviewAddDropRequest,
     deleteAddDropRequest,
     academicPeriods,
+    addAcademicPeriod,
+    updateAcademicPeriod,
     setCurrentAcademicPeriod,
     deleteAcademicPeriod,
     feeStructure,
@@ -172,6 +175,13 @@ export const AdminEnrollmentsTab: React.FC = () => {
     requireFinanceClearance: true,
     emergencySuspensionLock: false,
   });
+
+  // Academic term add/edit window (term null = new term)
+  const [termModal, setTermModal] = useState<{ term: (typeof academicPeriods)[number] | null } | null>(null);
+  const semesterOrder = (s: string) => (/^1st/i.test(s) ? 1 : /^2nd/i.test(s) ? 2 : /summer|mid/i.test(s) ? 3 : 4);
+  const sortedAcademicPeriods = [...academicPeriods].sort(
+    (a, b) => a.academicYear.localeCompare(b.academicYear) || semesterOrder(a.semester) - semesterOrder(b.semester) || a.semester.localeCompare(b.semester)
+  );
 
   // Pending delete confirmation (shared by every list in this tab)
   type DeleteKind = 'student' | 'preEnlistment' | 'enrollment' | 'addDrop' | 'term';
@@ -1055,13 +1065,20 @@ export const AdminEnrollmentsTab: React.FC = () => {
       {/* ========================================================================= */}
       {activeSubTab === 'academic-periods' && (
         <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+          <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h4 className="font-bold text-sm text-[#18392B]">Academic Terms & Registration Windows</h4>
               <p className="text-xs text-slate-500">
                 Configure institutional calendar periods, enrollment active states, and add/drop cutoffs.
               </p>
             </div>
+            <button
+              onClick={() => setTermModal({ term: null })}
+              className="bg-[#18392B] hover:bg-[#588B76] text-white text-xs font-bold px-3.5 py-2 rounded-lg transition flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <Plus className="w-4 h-4" />
+              <span>Add Term</span>
+            </button>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -1070,11 +1087,17 @@ export const AdminEnrollmentsTab: React.FC = () => {
                 No academic terms are configured.
               </p>
             )}
-            {academicPeriods.map((period) => {
-              const formatDate = (value?: string) =>
-                value && !Number.isNaN(Date.parse(value))
-                  ? new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+            {sortedAcademicPeriods.map((period) => {
+              // Dates are stored as YYYY-MM-DD; read them as local dates so they never shift a day.
+              const formatDate = (value?: string) => {
+                const m = value?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+                const d = m ? new Date(+m[1], +m[2] - 1, +m[3]) : value ? new Date(value) : null;
+                return d && !Number.isNaN(d.getTime())
+                  ? d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
                   : value || '—';
+              };
+              const formatRange = (start?: string, end?: string) =>
+                start || end ? `${formatDate(start)} – ${formatDate(end)}` : 'Not set';
               const statusLabel = period.isCurrent ? 'Active' : period.status === 'Active' ? 'Scheduled' : period.status;
               return (
                 <div
@@ -1097,6 +1120,14 @@ export const AdminEnrollmentsTab: React.FC = () => {
                       >
                         {statusLabel}
                       </span>
+                      <button
+                        onClick={() => setTermModal({ term: period })}
+                        className="p-1 text-[#588B76] hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                        title="Edit academic term"
+                        aria-label={`Edit ${period.semester} ${period.academicYear}`}
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
                       {!period.isCurrent && (
                         <button
                           onClick={() =>
@@ -1126,12 +1157,14 @@ export const AdminEnrollmentsTab: React.FC = () => {
                     <div className="flex justify-between gap-2">
                       <span className="text-slate-400">Enrollment Period:</span>
                       <span className="font-medium text-right">
-                        {formatDate(period.enrollmentStartDate)} – {formatDate(period.enrollmentEndDate)}
+                        {formatRange(period.enrollmentStartDate, period.enrollmentEndDate)}
                       </span>
                     </div>
                     <div className="flex justify-between gap-2">
                       <span className="text-slate-400">Add/Drop Deadline:</span>
-                      <span className="font-medium text-amber-700">{formatDate(period.addDropEndDate)}</span>
+                      <span className={`font-medium ${period.addDropEndDate ? 'text-amber-700' : 'text-slate-400'}`}>
+                        {period.addDropEndDate ? formatDate(period.addDropEndDate) : 'Not set'}
+                      </span>
                     </div>
                     <div className="flex justify-between gap-2">
                       <span className="text-slate-400">Enrollment Portal:</span>
@@ -1987,6 +2020,18 @@ export const AdminEnrollmentsTab: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {termModal && (
+        <AcademicTermModal
+          term={termModal.term}
+          existing={academicPeriods}
+          onCancel={() => setTermModal(null)}
+          onSave={async (draft) => {
+            const ok = termModal.term ? await updateAcademicPeriod(termModal.term.id, draft) : !!(await addAcademicPeriod({ ...draft, isCurrent: false }));
+            if (ok) setTermModal(null);
+            return ok;
+          }}
+        />
       )}
       <ConfirmDeleteModal
         isOpen={!!pendingDelete}

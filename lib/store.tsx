@@ -518,7 +518,7 @@ interface PCMContextType {
   academicPeriods: AcademicPeriod[];
   setAcademicPeriods: React.Dispatch<React.SetStateAction<AcademicPeriod[]>>;
   currentAcademicPeriod: AcademicPeriod | undefined;
-  addAcademicPeriod: (period: Omit<AcademicPeriod, 'id'>) => Promise<AcademicPeriod>;
+  addAcademicPeriod: (period: Omit<AcademicPeriod, 'id'>) => Promise<AcademicPeriod | null>;
   updateAcademicPeriod: (id: string, updates: Partial<AcademicPeriod>) => Promise<boolean>;
   setCurrentAcademicPeriod: (id: string) => Promise<boolean>;
   deleteAcademicPeriod: (id: string) => Promise<boolean>;
@@ -6357,46 +6357,35 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Academic Periods Management
-  const addAcademicPeriod = async (periodData: Omit<AcademicPeriod, 'id'>): Promise<AcademicPeriod> => {
+  // Term changes update the list only after Firestore confirms the save.
+  const addAcademicPeriod = async (periodData: Omit<AcademicPeriod, 'id'>): Promise<AcademicPeriod | null> => {
     const id = `period-${Date.now()}`;
-    const newPeriod: AcademicPeriod = cleanFirestoreData({
-      ...periodData,
-      id,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    });
-
+    const now = new Date().toISOString();
+    // New terms never become current here; "Set as Active Term" switches the current term for all records.
+    const newPeriod: AcademicPeriod = cleanFirestoreData({ ...periodData, id, isCurrent: false, createdAt: now, updatedAt: now });
+    if (!(await safeSetDoc(doc(db, 'academicPeriods', id), newPeriod, { merge: false }))) return null;
     setAcademicPeriods((prev) => {
-      const base = newPeriod.isCurrent ? prev.map((p) => ({ ...p, isCurrent: false })) : prev;
-      const next = [newPeriod, ...base];
+      const next = [newPeriod, ...prev.filter((p) => p.id !== id)];
       setCachedData('academicPeriods', next);
       return next;
     });
-
-    try {
-      await safeSetDoc(doc(db, 'academicPeriods', id), newPeriod);
-    } catch (e) {
-      console.warn(e);
-    }
     logActivity('CREATE', 'Academic Period', id, `${newPeriod.academicYear} ${newPeriod.semester}`, 'Created academic period.');
-    addToast('success', 'Academic Period Created', `${newPeriod.academicYear} - ${newPeriod.semester} created.`);
+    addToast('success', 'Academic Term Added', `${newPeriod.semester}, AY ${newPeriod.academicYear} was added.`);
     return newPeriod;
   };
 
   const updateAcademicPeriod = async (id: string, updates: Partial<AcademicPeriod>): Promise<boolean> => {
+    const target = academicPeriods.find((p) => p.id === id);
     const sanitized = cleanFirestoreData({ ...updates, updatedAt: new Date().toISOString() });
+    if (!(await safeSetDoc(doc(db, 'academicPeriods', id), sanitized, { merge: true }))) return false;
     setAcademicPeriods((prev) => {
       const next = prev.map((p) => (p.id === id ? { ...p, ...sanitized } : p));
       setCachedData('academicPeriods', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'academicPeriods', id), sanitized, { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
-    logActivity('UPDATE', 'Academic Period', id, 'Academic Period', 'Updated academic period configuration.');
-    addToast('success', 'Period Updated', 'Academic period settings synchronized.');
+    const label = `${updates.academicYear || target?.academicYear || ''} ${updates.semester || target?.semester || ''}`.trim() || 'Academic Period';
+    logActivity('UPDATE', 'Academic Period', id, label, 'Updated academic period configuration.');
+    addToast('success', 'Academic Term Updated', `${label} was saved.`);
     return true;
   };
 
