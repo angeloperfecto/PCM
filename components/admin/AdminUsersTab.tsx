@@ -49,6 +49,7 @@ export const AdminUsersTab: React.FC = () => {
     userAccounts,
     deletedUsers,
     restoreUserAccount,
+    removeDeletedUserRecord,
     addUserAccount,
     deleteUserAccount,
     updateUserAccountRole,
@@ -84,6 +85,8 @@ export const AdminUsersTab: React.FC = () => {
   const [isAddAccountModalOpen, setIsAddAccountModalOpen] = useState(false);
   const [deleteTargetAccount, setDeleteTargetAccount] = useState<UserAccount | null>(null);
   const [restoreTargetUser, setRestoreTargetUser] = useState<DeletedUserRecord | null>(null);
+  const [removeTargetUser, setRemoveTargetUser] = useState<DeletedUserRecord | null>(null);
+  const [isRemovingRecord, setIsRemovingRecord] = useState(false);
   const [isRestoring, setIsRestoring] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
@@ -831,6 +834,10 @@ export const AdminUsersTab: React.FC = () => {
                 <p className="text-rose-700 text-[11px] font-medium">
                   A user can only be restored if an authorized Administrator explicitly clicks <strong>&quot;Restore User&quot;</strong> below.
                 </p>
+                <p className="text-rose-700 text-[11px]">
+                  <strong>Remove</strong> erases an entry without restoring the account: the person is no longer blocked and would sign in again as a
+                  brand-new user with no previous role or records.
+                </p>
               </div>
             </div>
 
@@ -843,7 +850,7 @@ export const AdminUsersTab: React.FC = () => {
                     <th className="py-3 px-4 font-bold">Former Role</th>
                     <th className="py-3 px-4 font-bold">Deletion Audit</th>
                     <th className="py-3 px-4 font-bold">Status</th>
-                    <th className="py-3 px-4 font-bold text-right">Explicit Restore Action</th>
+                    <th className="py-3 px-4 font-bold text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 text-slate-700">
@@ -910,14 +917,25 @@ export const AdminUsersTab: React.FC = () => {
                         </td>
 
                         <td className="py-3 px-4 text-right">
-                          <button
-                            onClick={() => handleOpenRestore(d)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer shadow-xs"
-                            title="Explicitly restore this user"
-                          >
-                            <RotateCcw className="w-3.5 h-3.5" />
-                            <span>Restore User</span>
-                          </button>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => handleOpenRestore(d)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition cursor-pointer shadow-xs whitespace-nowrap"
+                              title="Explicitly restore this user"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" />
+                              <span>Restore User</span>
+                            </button>
+                            <button
+                              onClick={() => setRemoveTargetUser(d)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 hover:bg-rose-50 font-bold text-xs transition cursor-pointer whitespace-nowrap"
+                              title="Remove this entry from the registry (does not restore the account)"
+                              aria-label={`Remove ${d.name} from the deletion registry`}
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Remove</span>
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -1577,6 +1595,25 @@ export const AdminUsersTab: React.FC = () => {
         confirmLabel="Permanently Delete"
         onConfirm={confirmDeleteAccount}
         onCancel={() => setDeleteTargetAccount(null)}
+      />
+
+      <ConfirmDeleteModal
+        isOpen={!!removeTargetUser}
+        title="Remove from Deletion Registry?"
+        itemName={removeTargetUser ? `${removeTargetUser.name} (${removeTargetUser.email})` : undefined}
+        message="This erases the registry entry. The person will no longer be blocked: if they sign in again they start as a brand-new user with no previous role, profile or records. Their old account is NOT restored — use Restore User for that."
+        confirmLabel="Remove Entry"
+        isLoading={isRemovingRecord}
+        onCancel={() => !isRemovingRecord && setRemoveTargetUser(null)}
+        onConfirm={async () => {
+          if (!removeTargetUser) return;
+          setIsRemovingRecord(true);
+          try {
+            if (await removeDeletedUserRecord(removeTargetUser.email || removeTargetUser.id)) setRemoveTargetUser(null);
+          } finally {
+            setIsRemovingRecord(false);
+          }
+        }}
       />
 
       {/* Explicit Restore User Modal */}
