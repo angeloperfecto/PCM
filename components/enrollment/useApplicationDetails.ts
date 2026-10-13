@@ -3,19 +3,21 @@
 import { useEffect, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { ApplicationHistoryEntry, ApplicationRequirement } from '@/lib/enrollmentWorkflow';
+import type { ApplicationHistoryEntry, ApplicationPayment, ApplicationRequirement } from '@/lib/enrollmentWorkflow';
 
 // Live document checklist and status history for one application. Firestore rules limit
 // these to the applicant who owns the application and to admins.
 export function useApplicationDetails(applicationId?: string | null) {
   const [requirements, setRequirements] = useState<ApplicationRequirement[]>([]);
   const [history, setHistory] = useState<ApplicationHistoryEntry[]>([]);
+  const [payments, setPayments] = useState<ApplicationPayment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setRequirements([]);
     setHistory([]);
+    setPayments([]);
     setError(null);
     if (!applicationId) {
       setLoading(false);
@@ -46,11 +48,21 @@ export function useApplicationDetails(applicationId?: string | null) {
       },
       onError
     );
+    const unsubPayments = onSnapshot(
+      collection(db, 'applications', applicationId, 'payments'),
+      (snap) => {
+        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ApplicationPayment);
+        rows.sort((a, b) => (a.submittedAt || '').localeCompare(b.submittedAt || ''));
+        setPayments(rows);
+      },
+      onError
+    );
     return () => {
       unsubReqs();
       unsubHistory();
+      unsubPayments();
     };
   }, [applicationId]);
 
-  return { requirements, history, loading, error };
+  return { requirements, history, payments, loading, error };
 }

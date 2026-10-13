@@ -30,6 +30,13 @@ await put('adminEmails/registrar@pcm.test', { email: 'registrar@pcm.test', role:
 // An Editor, who may view admissions but not decide.
 await put('adminUsers/adm-editor', { id: 'adm-editor', name: 'Test Editor', email: 'editor@pcm.test', username: 'editor', role: 'Editor', status: 'Active' });
 await put('adminEmails/editor@pcm.test', { email: 'editor@pcm.test', role: 'Editor', active: true, adminId: 'adm-editor' });
+// Finance, who may verify payments but not make admission decisions.
+await put('adminUsers/adm-finance', { id: 'adm-finance', name: 'Test Finance', email: 'finance@pcm.test', username: 'finance', role: 'Finance', status: 'Active' });
+await put('adminEmails/finance@pcm.test', { email: 'finance@pcm.test', role: 'Finance', active: true, adminId: 'adm-finance' });
+// Fee structure used to draft assessments.
+await put('feeStructure/fee-tuition', { id: 'fee-tuition', category: 'Tuition', name: 'Tuition', amount: 850, isPerUnit: true, required: true });
+await put('feeStructure/fee-registration', { id: 'fee-registration', category: 'Miscellaneous', name: 'Registration Fee', amount: 1500, required: true });
+await put('feeStructure/fee-library', { id: 'fee-library', category: 'Miscellaneous', name: 'Library Fee', amount: 1000, required: true });
 // An existing student (no Google account linked yet) to test automatic linking.
 await put('studentProfiles/std-legacy', {
   id: 'std-legacy',

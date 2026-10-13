@@ -4,7 +4,8 @@ import React, { useMemo, useState } from 'react';
 import { Bell, BookOpen, History, Info, MessageSquare } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import { db, auth } from '@/lib/firebase';
-import { uploadRequirementFile } from '@/lib/admissionsService';
+import { submitPayment, uploadRequirementFile } from '@/lib/admissionsService';
+import { ApplicantPaymentSection } from './PaymentSection';
 import { isOpenApplication, nextStepsFor, normalizeStatus, summarizeRequirements } from '@/lib/enrollmentWorkflow';
 import { ApplicationProgress, StatusBadge } from './ApplicationProgress';
 import { RequirementsChecklist } from './RequirementsChecklist';
@@ -25,7 +26,7 @@ export const MyApplicationPanel: React.FC<{ onStartApplication?: () => void }> =
   }, [applications, firebaseAuthUser]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const app = mine.find((a) => a.id === selectedId) || mine[0];
-  const { requirements, history, loading, error } = useApplicationDetails(app?.id);
+  const { requirements, history, payments, loading, error } = useApplicationDetails(app?.id);
 
   if (!firebaseAuthUser) return null;
 
@@ -114,6 +115,16 @@ export const MyApplicationPanel: React.FC<{ onStartApplication?: () => void }> =
           )}
         </div>
       </div>
+
+      <ApplicantPaymentSection
+        status={app.status}
+        assessment={(app as any).assessment}
+        paymentStatus={(app as any).paymentStatus}
+        payments={payments}
+        onSubmit={(input) =>
+          submitPayment(db, { uid: auth.currentUser?.uid || '', name: app.fullName, email: auth.currentUser?.email }, app as any, input)
+        }
+      />
 
       <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6">
         <h4 className="font-serif text-lg font-bold text-[#18392B]">Admission requirements</h4>

@@ -5,8 +5,8 @@ import { CheckCircle2, Circle, Clock, XCircle, PauseCircle, AlertTriangle } from
 import { TRACKER_STAGES, normalizeStatus, stageIndex } from '@/lib/enrollmentWorkflow';
 
 // Status tracker: Application Submitted -> Under Review -> Requirements -> For Admission
-// Approval -> Admitted -> For Enrollment -> Enrolled, with Rejected / Deferred shown as an
-// outcome banner.
+// Approval -> Admitted -> Assessment -> Payment -> For Enrollment -> Enrolled, with
+// Rejected / Deferred shown as an outcome banner.
 export const ApplicationProgress: React.FC<{ status?: string; compact?: boolean }> = ({ status, compact }) => {
   const current = normalizeStatus(status);
   const currentIndex = stageIndex(status);
@@ -27,7 +27,7 @@ export const ApplicationProgress: React.FC<{ status?: string; compact?: boolean 
           <span>Application {current === 'Rejected' ? 'not approved' : 'deferred'}</span>
         </div>
       )}
-      <ol className={`grid gap-2 ${compact ? 'grid-cols-7' : 'grid-cols-1 sm:grid-cols-7'}`}>
+      <ol className={`grid gap-2 ${compact ? 'grid-cols-9' : 'grid-cols-1 sm:grid-cols-3 lg:grid-cols-9'}`}>
         {TRACKER_STAGES.map((stage, i) => {
           const done = !closed && (i < currentIndex || current === 'Enrolled');
           const active = !closed && i === currentIndex && current !== 'Enrolled';
@@ -74,6 +74,8 @@ export const StatusBadge: React.FC<{ status?: string }> = ({ status }) => {
     'Requirements Incomplete': 'bg-amber-100 text-amber-900 border-amber-300',
     'For Admission Approval': 'bg-purple-100 text-purple-800 border-purple-200',
     Admitted: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    'For Assessment': 'bg-cyan-100 text-cyan-800 border-cyan-200',
+    'For Payment': 'bg-yellow-100 text-yellow-900 border-yellow-300',
     'For Enrollment': 'bg-teal-100 text-teal-800 border-teal-200',
     Enrolled: 'bg-[#18392B] text-white border-[#18392B]',
     Rejected: 'bg-rose-100 text-rose-800 border-rose-200',

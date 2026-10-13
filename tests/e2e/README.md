@@ -46,3 +46,20 @@ read at build time.
 - Enrolled student's portal opens with only their own record.
 - Existing student record linked automatically on first Google sign-in (matching email).
 - Mobile (375 px): applicant tracker and admin review panel fit without horizontal scroll.
+
+## Assessment and payment scenarios (2026-10-13, second pass)
+
+Seed also creates Finance `finance@pcm.test` and a fee structure (tuition ₱850/unit,
+registration ₱1,500, library ₱1,000).
+
+- 9-stage tracker shown to the applicant.
+- Registrar: For Assessment blocked until every required document is verified; draft
+  assessment loaded from the fee structure (18 units -> ₱17,800); minimum above the total
+  rejected; saving moves the applicant to For Payment. Finalize not offered before payment.
+- Applicant: sees assessment and instructions; short reference rejected; two payments
+  reported (₱3,000 with proof, ₱2,000).
+- Finance: "Payments to verify" queue; no decision/finalize buttons; first verification
+  keeps For Payment, second reaches the ₱5,000 minimum and moves to For Enrollment.
+- Registrar: finalize creates 2026-PCM-0001 with portal access, tuition ₱17,800, paid
+  ₱5,000, balance ₱12,800 and both payment records; audit trail lists assessment, both
+  verifications and enrollment with names and times; detail corrections are logged.

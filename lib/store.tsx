@@ -176,7 +176,7 @@ import {
   where,
 } from './firebase';
 import { firebaseConfig } from './firebaseConfig';
-import { ENROLLMENT_STAFF_ROLES, normalizeStatus, requirementTemplates } from './enrollmentWorkflow';
+import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, requirementTemplates } from './enrollmentWorkflow';
 import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflow';
 import { submitAdmissionApplication, transitionApplication } from './admissionsService';
 
@@ -414,6 +414,8 @@ interface PCMContextType {
   updateApplicationStatus: (id: string, status: any, note?: string) => Promise<boolean>;
   // Registrar, Admin or Super Admin: may make admission decisions and finalize enrollment.
   canDecideAdmissions: boolean;
+  // Registrar, Admin, Super Admin or Finance: may verify enrollment payments.
+  canVerifyPayments: boolean;
   admissionsActor: () => { uid: string; name: string; email: string; role?: string };
   addApplicationNote: (id: string, note: string) => void;
   deleteApplication: (id: string) => void;
@@ -4642,6 +4644,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Admission decisions are limited to enrollment staff (Registrar, Admin, Super Admin).
   const canDecideAdmissions = isAdminLoggedIn && ENROLLMENT_STAFF_ROLES.includes(currentAdminUser?.role || '');
+  // Payment verification is also open to the Finance office.
+  const canVerifyPayments = isAdminLoggedIn && PAYMENT_STAFF_ROLES.includes(currentAdminUser?.role || '');
 
   const admissionsActor = () => ({
     uid: auth.currentUser?.uid || '',
@@ -9031,6 +9035,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitApplication,
         updateApplicationStatus,
         canDecideAdmissions,
+        canVerifyPayments,
         admissionsActor,
         addApplicationNote,
         deleteApplication,

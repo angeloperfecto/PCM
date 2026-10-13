@@ -209,21 +209,92 @@ service cloud.firestore {
       return /databases/$(database)/documents/applications/$(appId);
     }
 
-    match /applications/{appId} {
-      allow read: if isAdmin() || ownsApplication(resource.data);
-      // New applications start as 'Submitted' and carry no decision fields.
-      allow create: if isSignedIn()
-        && request.resource.data.get('applicantUid', '') == request.auth.uid
-        && request.resource.data.get('status', '') == 'Submitted'
-        && !request.resource.data.keys().hasAny(['studentId', 'studentRecordId', 'enrolledAt', 'lastDecisionBy', 'lastDecisionAt', 'applicantMessage']);
-      // Applicants may only send a "Requirements Incomplete" application back to review
-      // after re-submitting documents; every other change is a staff decision.
-      allow update: if isEnrollmentStaff()
+    // Allowed status moves (mirrors lib/enrollmentWorkflow.ts). Older applications with
+    // retired statuses may be moved into the early stages of the workflow.
+    function allowedNextStatuses(from) {
+      return {
+        'Submitted': ['Under Review', 'Requirements Incomplete', 'Rejected', 'Deferred'],
+        'Under Review': ['Requirements Incomplete', 'For Admission Approval', 'Rejected', 'Deferred'],
+        'Requirements Incomplete': ['Under Review', 'For Admission Approval', 'Rejected', 'Deferred'],
+        'For Admission Approval': ['Admitted', 'Requirements Incomplete', 'Rejected', 'Deferred'],
+        'Admitted': ['For Assessment', 'Requirements Incomplete', 'Deferred'],
+        'For Assessment': ['Admitted', 'For Payment', 'For Enrollment', 'Deferred'],
+        'For Payment': ['For Assessment', 'For Enrollment', 'Deferred'],
+        'For Enrollment': ['For Assessment', 'Enrolled', 'Deferred'],
+        'Enrolled': [],
+        'Rejected': ['Under Review'],
+        'Deferred': ['Under Review']
+      }.get(from, ['Under Review', 'Requirements Incomplete', 'For Admission Approval', 'Admitted', 'Rejected', 'Deferred']);
+    }
+
+    // Official enrollment only from "For Enrollment", with an assessment on file and
+    // payment verified or waived.
+    function validStaffStatusChange() {
+      let from = resource.data.get('status', '');
+      let to = request.resource.data.get('status', '');
+      return from == to
+        || (to in allowedNextStatuses(from)
+          && (to != 'For Payment' || request.resource.data.get('assessment', null) != null)
+          && (to != 'For Enrollment' || request.resource.data.get('paymentStatus', '') in ['Verified', 'Waived'])
+          && (to != 'Enrolled'
+            || (request.resource.data.get('assessment', null) != null
+              && request.resource.data.get('paymentStatus', '') in ['Verified', 'Waived'])));
+    }
+
+    function isPaymentStaff() {
+      return adminRole() in ['Super Admin', 'Admin', 'Registrar', 'Finance'];
+    }
+
+    // role is passed in so the role documents are evaluated once per request.
+    function applicationUpdateAllowed(role) {
+      return (role in ['Super Admin', 'Admin', 'Registrar'] && validStaffStatusChange())
+        // Finance verifies payments: payment fields only, "For Payment" -> "For Enrollment".
+        || (role == 'Finance'
+          && resource.data.get('status', '') == 'For Payment'
+          && request.resource.data.get('status', '') in ['For Payment', 'For Enrollment']
+          && validStaffStatusChange()
+          && changedKeys().hasOnly(['status', 'paymentStatus', 'amountPaidVerified', 'paymentVerifiedBy', 'paymentVerifiedAt',
+            'updatedAt', 'lastDecisionBy', 'lastDecisionAt']))
+        // Applicant: send a "Requirements Incomplete" application back to review after
+        // re-submitting documents...
         || (ownsApplication(resource.data)
           && changedKeys().hasOnly(['status', 'updatedAt'])
           && resource.data.get('status', '') in ['Requirements Incomplete', 'Additional Documents Required']
-          && request.resource.data.get('status', '') == 'Under Review');
+          && request.resource.data.get('status', '') == 'Under Review')
+        // ...or report a payment while "For Payment".
+        || (ownsApplication(resource.data)
+          && changedKeys().hasOnly(['paymentStatus', 'updatedAt'])
+          && resource.data.get('status', '') == 'For Payment'
+          && request.resource.data.get('paymentStatus', '') == 'Submitted');
+    }
+
+    match /applications/{appId} {
+      allow read: if isAdmin() || ownsApplication(resource.data);
+      // New applications start as 'Submitted' and carry no decision or payment fields.
+      allow create: if isSignedIn()
+        && request.resource.data.get('applicantUid', '') == request.auth.uid
+        && request.resource.data.get('status', '') == 'Submitted'
+        && !request.resource.data.keys().hasAny(['studentId', 'studentRecordId', 'enrolledAt', 'lastDecisionBy', 'lastDecisionAt',
+          'applicantMessage', 'assessment', 'paymentStatus', 'amountPaidVerified', 'paymentVerifiedBy', 'paymentVerifiedAt']);
+      allow update: if applicationUpdateAllowed(adminRole());
       allow delete: if isEnrollmentStaff();
+
+      // Payments reported by the applicant; verified by Registrar/Admin/Super Admin/Finance.
+      match /payments/{paymentId} {
+        allow read: if isAdmin() || ownsApplication(get(applicationPath(appId)).data);
+        allow create: if ownsApplication(get(applicationPath(appId)).data)
+          && get(applicationPath(appId)).data.get('status', '') == 'For Payment'
+          && request.resource.data.get('applicantUid', '') == request.auth.uid
+          && request.resource.data.get('status', '') == 'Submitted'
+          && request.resource.data.get('amount', 0) is number
+          && request.resource.data.get('amount', 0) > 0
+          && !request.resource.data.keys().hasAny(['reviewedBy', 'reviewedAt', 'remarks']);
+        allow update: if isPaymentStaff()
+          && resource.data.get('status', '') == 'Submitted'
+          && request.resource.data.get('status', '') in ['Verified', 'Rejected']
+          && changedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt', 'remarks']);
+        allow delete: if isEnrollmentStaff();
+      }
 
       match /requirements/{reqId} {
         allow read: if isAdmin() || ownsApplication(get(applicationPath(appId)).data);
@@ -243,7 +314,7 @@ service cloud.firestore {
 
       match /history/{entryId} {
         allow read: if isAdmin() || ownsApplication(get(applicationPath(appId)).data);
-        allow create: if isEnrollmentStaff()
+        allow create: if isPaymentStaff()
           || (ownsApplication(getAfter(applicationPath(appId)).data)
             && request.resource.data.get('actor', '') == 'applicant'
             && request.resource.data.get('status', '') in ['Submitted', 'Under Review']);

@@ -163,6 +163,8 @@ export type ApplicationStatus =
   | 'Requirements Incomplete'
   | 'For Admission Approval'
   | 'Admitted'
+  | 'For Assessment'
+  | 'For Payment'
   | 'For Enrollment'
   | 'Deferred'
   | 'Additional Documents Required'
@@ -252,6 +254,14 @@ export interface AdmissionApplication {
   lastDecisionBy?: string;
   lastDecisionAt?: string;
   applicantType?: string;
+
+  // Assessment & payment (steps 5-6)
+  assessment?: import('./enrollmentWorkflow').EnrollmentAssessment | null;
+  paymentStatus?: import('./enrollmentWorkflow').PaymentStatus;
+  amountPaidVerified?: number;
+  paymentVerifiedBy?: string;
+  paymentVerifiedAt?: string;
+  paymentWaivedReason?: string;
 }
 
 export type Application = AdmissionApplication;

@@ -16,12 +16,19 @@ import {
   canFinalizeEnrollment,
 } from '@/lib/enrollmentWorkflow';
 import {
+  EDITABLE_APPLICANT_FIELDS,
+  addRequirement,
   createRequirementChecklist,
   finalizeEnrollment,
   requestMissingRequirements,
+  reviewPayment,
   reviewRequirement,
+  saveAssessment,
   transitionApplication,
+  updateApplicantDetails,
+  waivePayment,
 } from '@/lib/admissionsService';
+import { StaffPaymentSection } from '@/components/enrollment/PaymentSection';
 import { ApplicationProgress, StatusBadge } from '@/components/enrollment/ApplicationProgress';
 import { RequirementsChecklist } from '@/components/enrollment/RequirementsChecklist';
 import { useApplicationDetails } from '@/components/enrollment/useApplicationDetails';
@@ -53,7 +60,12 @@ const OUTCOME_STATUSES: WorkflowStatus[] = ['Rejected', 'Deferred'];
 const ALL_STATUSES: WorkflowStatus[] = [...TRACKER_STAGES.map((s) => s.status), ...OUTCOME_STATUSES];
 
 // Statuses where the next move is the Admissions Office's.
-const NEEDS_STAFF_ACTION: WorkflowStatus[] = ['Submitted', 'Under Review', 'For Admission Approval', 'Admitted', 'For Enrollment'];
+const NEEDS_STAFF_ACTION: WorkflowStatus[] = ['Submitted', 'Under Review', 'For Admission Approval', 'Admitted', 'For Assessment', 'For Enrollment'];
+
+const needsStaffAction = (a: Application) =>
+  NEEDS_STAFF_ACTION.includes(normalizeStatus(a.status)) || isPaymentToVerify(a);
+
+const isPaymentToVerify = (a: Application) => normalizeStatus(a.status) === 'For Payment' && a.paymentStatus === 'Submitted';
 
 function csvCell(value: unknown): string {
   const s = value === undefined || value === null ? '' : String(value);
@@ -74,10 +86,20 @@ function downloadCsv(filename: string, rows: unknown[][]) {
 // Decisions are limited to the Registrar, Admin and Super Admin (also enforced by
 // firestore.rules); other admin roles can view.
 export const AdminApplicationsTab: React.FC = () => {
-  const { applications, programs, canDecideAdmissions, admissionsActor, addToast, addApplicationNote, enrollmentSystemConfig } = usePCM();
+  const {
+    applications,
+    programs,
+    canDecideAdmissions,
+    canVerifyPayments,
+    admissionsActor,
+    addToast,
+    addApplicationNote,
+    enrollmentSystemConfig,
+    feeStructure,
+  } = usePCM();
 
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'action' | WorkflowStatus>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'action' | 'payments' | WorkflowStatus>('all');
   const [programFilter, setProgramFilter] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [staffNotes, setStaffNotes] = useState<StaffNotification[]>([]);
@@ -109,8 +131,9 @@ export const AdminApplicationsTab: React.FC = () => {
     return applications
       .filter((a) => {
         const s = normalizeStatus(a.status);
-        if (statusFilter === 'action' && !NEEDS_STAFF_ACTION.includes(s)) return false;
-        if (statusFilter !== 'all' && statusFilter !== 'action' && s !== statusFilter) return false;
+        if (statusFilter === 'action' && !needsStaffAction(a)) return false;
+        if (statusFilter === 'payments' && !isPaymentToVerify(a)) return false;
+        if (statusFilter !== 'all' && statusFilter !== 'action' && statusFilter !== 'payments' && s !== statusFilter) return false;
         if (programFilter !== 'all' && (a.programName || a.program) !== programFilter) return false;
         if (!q) return true;
         return [a.fullName, a.email, a.referenceNumber, a.studentId, a.phone]
@@ -125,7 +148,7 @@ export const AdminApplicationsTab: React.FC = () => {
 
   const exportApplications = () => {
     downloadCsv(`PCM_Admissions_${new Date().toISOString().slice(0, 10)}.csv`, [
-      ['Reference', 'Full Name', 'Email', 'Phone', 'Program', 'Status', 'Student ID', 'Submitted', 'Last Updated', 'Last Decision By'],
+      ['Reference', 'Full Name', 'Email', 'Phone', 'Program', 'Status', 'Assessment Total', 'Minimum Payment', 'Verified Payments', 'Payment Status', 'Student ID', 'Submitted', 'Last Updated', 'Last Decision By'],
       ...filtered.map((a) => [
         a.referenceNumber,
         a.fullName,
@@ -133,6 +156,10 @@ export const AdminApplicationsTab: React.FC = () => {
         a.phone,
         a.programName || a.program,
         normalizeStatus(a.status),
+        a.assessment?.total ?? '',
+        a.assessment?.minimumPayment ?? '',
+        a.amountPaidVerified ?? '',
+        a.paymentStatus || '',
         a.studentId && normalizeStatus(a.status) === 'Enrolled' ? a.studentId : '',
         a.submissionDate || a.createdAt,
         a.updatedAt,
@@ -178,19 +205,31 @@ export const AdminApplicationsTab: React.FC = () => {
       {!canDecideAdmissions && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
           <Lock className="mt-0.5 h-4 w-4 shrink-0" />
-          <span>You can view applications. Admission decisions, document verification and enrollment are handled by the Registrar, Admin or Super Admin.</span>
+          <span>
+            {canVerifyPayments
+              ? 'You can view applications and verify enrollment payments. Admission decisions, document verification and enrollment confirmation are handled by the Registrar, Admin or Super Admin.'
+              : 'You can view applications. Admission decisions, document verification and enrollment are handled by the Registrar, Admin or Super Admin.'}
+          </span>
         </div>
       )}
 
       {/* Stage counters */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-10">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
         <button
           type="button"
           onClick={() => setStatusFilter('action')}
           className={`rounded-xl border p-3 text-left transition ${statusFilter === 'action' ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-300'}`}
         >
           <span className="block text-[10px] font-bold uppercase text-amber-700">Needs action</span>
-          <span className="text-xl font-bold text-slate-900">{applications.filter((a) => NEEDS_STAFF_ACTION.includes(normalizeStatus(a.status))).length}</span>
+          <span className="text-xl font-bold text-slate-900">{applications.filter(needsStaffAction).length}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setStatusFilter(statusFilter === 'payments' ? 'all' : 'payments')}
+          className={`rounded-xl border p-3 text-left transition ${statusFilter === 'payments' ? 'border-yellow-400 bg-yellow-50' : 'border-slate-200 bg-white hover:border-yellow-300'}`}
+        >
+          <span className="block text-[10px] font-bold uppercase text-yellow-800">Payments to verify</span>
+          <span className="text-xl font-bold text-slate-900">{applications.filter(isPaymentToVerify).length}</span>
         </button>
         {ALL_STATUSES.map((s) => (
           <button
@@ -222,6 +261,7 @@ export const AdminApplicationsTab: React.FC = () => {
             <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} aria-label="Filter by status" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
               <option value="all">All statuses</option>
               <option value="action">Needs action</option>
+              <option value="payments">Payments to verify</option>
               {ALL_STATUSES.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
@@ -298,8 +338,15 @@ export const AdminApplicationsTab: React.FC = () => {
 
       {selected && (
         <ApplicationDetail
+          key={selected.id}
           app={selected}
           canDecide={canDecideAdmissions}
+          canVerifyPayments={canVerifyPayments}
+          feeStructure={feeStructure || []}
+          feeDefaults={{
+            tuitionPerUnit: enrollmentSystemConfig?.defaultTuitionPerUnit,
+            registrationFee: enrollmentSystemConfig?.defaultRegistrationFee,
+          }}
           actor={admissionsActor}
           programs={programs}
           requiredDocs={enrollmentSystemConfig?.requiredDocumentsList}
@@ -315,6 +362,9 @@ export const AdminApplicationsTab: React.FC = () => {
 interface DetailProps {
   app: Application;
   canDecide: boolean;
+  canVerifyPayments: boolean;
+  feeStructure: { name: string; amount: number; isPerUnit?: boolean; required?: boolean }[];
+  feeDefaults: { tuitionPerUnit?: number; registrationFee?: number };
   actor: () => { uid: string; name: string; email: string; role?: string };
   programs: any[];
   requiredDocs?: string[];
@@ -323,8 +373,24 @@ interface DetailProps {
   toast: (ok: boolean, title: string, message: string) => void;
 }
 
-const ApplicationDetail: React.FC<DetailProps> = ({ app, canDecide, actor, requiredDocs, onClose, onNote, toast }) => {
-  const { requirements, history, loading } = useApplicationDetails(app.id);
+const ApplicationDetail: React.FC<DetailProps> = ({
+  app,
+  canDecide,
+  canVerifyPayments,
+  feeStructure,
+  feeDefaults,
+  actor,
+  requiredDocs,
+  onClose,
+  onNote,
+  toast,
+}) => {
+  const { requirements, history, payments, loading } = useApplicationDetails(app.id);
+  const [editingDetails, setEditingDetails] = useState(false);
+  const [details, setDetails] = useState<Record<string, string>>(() =>
+    Object.fromEntries(EDITABLE_APPLICANT_FIELDS.map((f) => [f.key, String((app as any)[f.key] ?? (f.key === 'programName' ? app.program ?? '' : ''))]))
+  );
+  const [newReq, setNewReq] = useState({ name: '', required: true, description: '' });
   const status = normalizeStatus(app.status);
   const summary = summarizeRequirements(requirements);
   const [busy, setBusy] = useState(false);
@@ -353,7 +419,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({ app, canDecide, actor, requi
   };
 
   const transitions = STAFF_TRANSITIONS[status].filter((t) => t !== 'Requirements Incomplete');
-  const finalizeBlocker = canFinalizeEnrollment(app.status, requirements);
+  const finalizeBlocker = canFinalizeEnrollment(app.status, requirements, { assessment: app.assessment, paymentStatus: app.paymentStatus });
   const noteRequired = pending && (pending.to === 'Rejected' || pending.to === 'Deferred');
 
   const field = (label: string, value?: React.ReactNode) =>
@@ -547,9 +613,88 @@ const ApplicationDetail: React.FC<DetailProps> = ({ app, canDecide, actor, requi
             )}
           </section>
 
+          {canDecide && status !== 'Enrolled' && requirements.length > 0 && (
+            <form
+              className="flex flex-col gap-2 rounded-2xl border border-dashed border-slate-300 bg-white p-3 sm:flex-row sm:items-center"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const ok = await run('Requirement added', () => addRequirement(db, actor(), app as any, requirements, newReq.name, newReq.required, newReq.description));
+                if (ok) setNewReq({ name: '', required: true, description: '' });
+              }}
+            >
+              <input
+                value={newReq.name}
+                onChange={(e) => setNewReq({ ...newReq, name: e.target.value })}
+                placeholder="Add a requirement for this applicant"
+                aria-label="New requirement name"
+                className="min-w-0 flex-1 rounded-lg border border-slate-300 px-2.5 py-1.5 text-xs"
+              />
+              <label className="flex items-center gap-1.5 text-xs text-slate-700">
+                <input type="checkbox" checked={newReq.required} onChange={(e) => setNewReq({ ...newReq, required: e.target.checked })} /> Required
+              </label>
+              <button type="submit" disabled={busy || !newReq.name.trim()} className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40">
+                Add
+              </button>
+            </form>
+          )}
+
+          {/* Assessment & payment (steps 5-6) */}
+          <StaffPaymentSection
+            status={app.status}
+            assessment={app.assessment}
+            paymentStatus={app.paymentStatus}
+            payments={payments}
+            canAssess={canDecide}
+            canVerify={canVerifyPayments}
+            feeStructure={feeStructure}
+            defaults={feeDefaults}
+            requirementsVerified={summary.allRequiredVerified}
+            onSaveAssessment={(input) => saveAssessment(db, actor(), app as any, requirements, input, payments)}
+            onWaive={(reason) => waivePayment(db, actor(), app as any, requirements, reason)}
+            onReviewPayment={(p, verdict, remarks) => reviewPayment(db, actor(), app as any, payments, p, verdict, remarks)}
+          />
+
           {/* Applicant details */}
           <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
-            <h4 className="text-sm font-bold text-[#18392B]">Applicant information</h4>
+            <div className="flex items-center justify-between gap-2">
+              <h4 className="text-sm font-bold text-[#18392B]">Applicant information</h4>
+              {canDecide && !editingDetails && (
+                <button type="button" onClick={() => setEditingDetails(true)} className="text-xs font-semibold text-[#18392B] underline">
+                  Correct details
+                </button>
+              )}
+            </div>
+            {editingDetails && (
+              <form
+                className="space-y-2 rounded-xl border border-slate-200 bg-slate-50 p-3"
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  const ok = await run('Details updated', () => updateApplicantDetails(db, actor(), app as any, details));
+                  if (ok) setEditingDetails(false);
+                }}
+              >
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {EDITABLE_APPLICANT_FIELDS.map((f) => (
+                    <label key={f.key} className="text-[11px] font-semibold text-slate-600">
+                      {f.label}
+                      <input
+                        value={details[f.key] || ''}
+                        onChange={(e) => setDetails({ ...details, [f.key]: e.target.value })}
+                        className="mt-0.5 w-full rounded-lg border border-slate-300 bg-white p-1.5 text-xs"
+                      />
+                    </label>
+                  ))}
+                </div>
+                <div className="flex justify-end gap-2">
+                  <button type="button" onClick={() => setEditingDetails(false)} className="rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-600">
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={busy} className="rounded-lg bg-[#18392B] px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50">
+                    Save corrections
+                  </button>
+                </div>
+              </form>
+            )}
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {field('Program', app.programName || app.program)}
               {field('Email', app.email)}
@@ -675,7 +820,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({ app, canDecide, actor, requi
               e.preventDefault();
               setBusy(true);
               try {
-                const result = await finalizeEnrollment(db, actor(), app as any, requirements, finalize);
+                const result = await finalizeEnrollment(db, actor(), app as any, requirements, finalize, payments);
                 toast(result.ok, result.ok ? 'Student enrolled' : 'Not enrolled', result.message);
                 if (result.ok) setShowFinalize(false);
               } catch (err: any) {

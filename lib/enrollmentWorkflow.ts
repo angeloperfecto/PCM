@@ -2,16 +2,84 @@
 // applicant-facing instructions. Pure functions only (no Firebase), so they can be shared by
 // the applicant tracker, the admin review screens and the tests.
 
+// 1. Application (Submitted) -> 2. Review (Under Review / Requirements Incomplete)
+// -> 3. Admission decision (For Admission Approval -> Admitted) -> 4. Requirements completion
+// (Admitted, until every required document is verified) -> 5. Assessment (For Assessment)
+// -> 6. Payment verification (For Payment) -> 7. Confirmation (For Enrollment -> Enrolled)
+// -> 8. Student Portal activation (on enrollment).
 export type WorkflowStatus =
   | 'Submitted'
   | 'Under Review'
   | 'Requirements Incomplete'
   | 'For Admission Approval'
   | 'Admitted'
+  | 'For Assessment'
+  | 'For Payment'
   | 'For Enrollment'
   | 'Enrolled'
   | 'Rejected'
   | 'Deferred';
+
+export type PaymentStatus = 'Awaiting Payment' | 'Submitted' | 'Partially Paid' | 'Verified' | 'Waived' | 'Rejected';
+
+export interface FeeLine {
+  name: string;
+  amount: number;
+}
+
+// Fee assessment recorded by staff on the application (applications/{id}.assessment).
+export interface EnrollmentAssessment {
+  units: number;
+  items: FeeLine[];
+  total: number;
+  minimumPayment: number; // amount that must be verified before enrollment can be confirmed
+  notes?: string;
+  assessedBy: string;
+  assessedAt: string;
+}
+
+// A payment the applicant reports (applications/{id}/payments/{paymentId}).
+export interface ApplicationPayment {
+  id: string;
+  applicantUid: string;
+  amount: number;
+  method: string;
+  referenceNo: string;
+  paidOn: string;
+  proofDataUrl?: string;
+  proofFileName?: string;
+  status: 'Submitted' | 'Verified' | 'Rejected';
+  submittedAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  remarks?: string;
+}
+
+export const PAYMENT_METHODS = ['GCash', 'Bank Transfer (BDO)', 'Bank Transfer (Metrobank)', 'Over-the-Counter Cashier', 'Scholarship Grant'];
+
+export function verifiedPaymentTotal(payments: ApplicationPayment[]): number {
+  return payments.filter((p) => p.status === 'Verified').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+}
+
+// Builds a draft assessment from the Registrar's fee structure (Enrollment & Records ->
+// Fees) and enrollment settings. Staff can edit every line before saving.
+export function draftAssessmentLines(
+  feeStructure: { name: string; amount: number; isPerUnit?: boolean; required?: boolean }[],
+  units: number,
+  defaults: { tuitionPerUnit?: number; registrationFee?: number }
+): FeeLine[] {
+  const required = feeStructure.filter((f) => f.required !== false);
+  if (required.length > 0) {
+    return required.map((f) => ({
+      name: f.isPerUnit ? `${f.name} (${units} units × ₱${Number(f.amount).toLocaleString()})` : f.name,
+      amount: Math.round((f.isPerUnit ? units * Number(f.amount) : Number(f.amount)) * 100) / 100,
+    }));
+  }
+  const lines: FeeLine[] = [];
+  if (defaults.tuitionPerUnit) lines.push({ name: `Tuition (${units} units × ₱${defaults.tuitionPerUnit.toLocaleString()})`, amount: units * defaults.tuitionPerUnit });
+  if (defaults.registrationFee) lines.push({ name: 'Registration Fee', amount: defaults.registrationFee });
+  return lines;
+}
 
 export type RequirementStatus = 'Missing' | 'Submitted' | 'Verified' | 'Rejected';
 
@@ -52,6 +120,8 @@ export const TRACKER_STAGES: { status: WorkflowStatus; label: string }[] = [
   { status: 'Requirements Incomplete', label: 'Requirements' },
   { status: 'For Admission Approval', label: 'For Admission Approval' },
   { status: 'Admitted', label: 'Admitted' },
+  { status: 'For Assessment', label: 'Assessment' },
+  { status: 'For Payment', label: 'Payment' },
   { status: 'For Enrollment', label: 'For Enrollment' },
   { status: 'Enrolled', label: 'Enrolled' },
 ];
@@ -85,15 +155,22 @@ export function stageIndex(status?: string | null): number {
   return TRACKER_STAGES.findIndex((stage) => stage.status === s);
 }
 
-// Transitions staff may make from each status. Moving to 'Enrolled' happens only through
-// finalizeEnrollment, which also creates the official student record.
+// Status moves staff may make with the decision buttons. Some steps happen only through
+// their own action so the required data is captured:
+//   For Assessment -> For Payment      saveAssessment (fees)
+//   For Assessment -> For Enrollment   waivePayment (no payment required, with reason)
+//   For Payment    -> For Enrollment   reviewPayment (verified total reaches the minimum)
+//   For Enrollment -> Enrolled         finalizeEnrollment (creates the student record)
+// firestore.rules enforces the same order (validStaffTransition).
 export const STAFF_TRANSITIONS: Record<WorkflowStatus, WorkflowStatus[]> = {
   Submitted: ['Under Review', 'Requirements Incomplete', 'Rejected', 'Deferred'],
   'Under Review': ['Requirements Incomplete', 'For Admission Approval', 'Rejected', 'Deferred'],
   'Requirements Incomplete': ['Under Review', 'For Admission Approval', 'Rejected', 'Deferred'],
   'For Admission Approval': ['Admitted', 'Requirements Incomplete', 'Rejected', 'Deferred'],
-  Admitted: ['For Enrollment', 'Requirements Incomplete', 'Deferred'],
-  'For Enrollment': ['Requirements Incomplete', 'Deferred'],
+  Admitted: ['For Assessment', 'Requirements Incomplete', 'Deferred'],
+  'For Assessment': ['Admitted', 'Deferred'],
+  'For Payment': ['For Assessment', 'Deferred'],
+  'For Enrollment': ['For Assessment', 'Deferred'],
   Enrolled: [],
   Rejected: ['Under Review'],
   Deferred: ['Under Review'],
@@ -138,18 +215,30 @@ export function transitionBlocker(
   if (to === 'For Admission Approval' && !summary.allRequiredSubmitted) {
     return 'All required documents must be submitted before the application goes for admission approval.';
   }
-  if (to === 'For Enrollment' && !summary.allRequiredVerified) {
-    return 'All required documents must be verified before the applicant can proceed to enrollment.';
+  if (to === 'For Assessment' && !summary.allRequiredVerified) {
+    return 'All required documents must be verified before the enrollment assessment.';
   }
   return null;
 }
 
-export function canFinalizeEnrollment(status: string | undefined, reqs: ApplicationRequirement[]): string | null {
+// Every mandatory condition for official enrollment: right stage, all required documents
+// verified, an assessment on file, and payment verified (or waived with a reason).
+export function canFinalizeEnrollment(
+  status: string | undefined,
+  reqs: ApplicationRequirement[],
+  app?: { assessment?: EnrollmentAssessment | null; paymentStatus?: string }
+): string | null {
   if (normalizeStatus(status) !== 'For Enrollment') {
     return 'Only applications marked "For Enrollment" can be finalized.';
   }
   if (!summarizeRequirements(reqs).allRequiredVerified) {
     return 'All required documents must be verified before enrollment is finalized.';
+  }
+  if (app) {
+    if (!app.assessment) return 'An enrollment assessment must be saved first.';
+    if (app.paymentStatus !== 'Verified' && app.paymentStatus !== 'Waived') {
+      return 'Payment must be verified (or waived) before enrollment is confirmed.';
+    }
   }
   return null;
 }
@@ -179,12 +268,20 @@ export function nextStepsFor(status: string | undefined, summary?: RequirementSu
     }
     case 'For Admission Approval':
       return 'Your documents are complete and your application is with the Admissions Committee for a decision.';
-    case 'Admitted':
-      return 'Congratulations, you have been admitted! The Registrar is verifying your documents before enrollment.';
+    case 'Admitted': {
+      const outstanding = summary ? summary.missing.length + summary.rejected.length : 0;
+      return outstanding > 0
+        ? `Congratulations, you have been admitted! Please complete your remaining enrollment requirements (${outstanding} outstanding) below.`
+        : 'Congratulations, you have been admitted! The Registrar is verifying your documents before your enrollment assessment.';
+    }
+    case 'For Assessment':
+      return 'Your requirements are verified. The Registrar is preparing your enrollment assessment (fees). You will be notified when it is ready.';
+    case 'For Payment':
+      return 'Your assessment is ready. Please pay at least the minimum amount shown below and submit your payment details for verification.';
     case 'For Enrollment':
-      return 'Your requirements are verified. The Registrar will confirm your enrollment and assign your official Student ID.';
+      return 'Your payment is verified. The Registrar will confirm your enrollment and assign your official Student ID.';
     case 'Enrolled':
-      return 'You are officially enrolled. Open the Student Portal to see your Student ID, program and enrollment details.';
+      return 'You are officially enrolled and your Student Portal is active. Open it to see your Student ID, classes and records.';
     case 'Deferred':
       return 'Your application has been deferred. Please read the note from the Admissions Office; we will contact you about the next intake.';
     case 'Rejected':
@@ -247,6 +344,9 @@ export const ENROLLMENT_STAFF_ROLES = ['Super Admin', 'Admin', 'Registrar'];
 export function isEnrollmentStaffRole(role?: string | null): boolean {
   return !!role && ENROLLMENT_STAFF_ROLES.includes(role);
 }
+
+// Payment verification is also open to the Finance office.
+export const PAYMENT_STAFF_ROLES = [...ENROLLMENT_STAFF_ROLES, 'Finance'];
 
 // Applications that still count as "open" for duplicate checks.
 export function isOpenApplication(status?: string | null): boolean {

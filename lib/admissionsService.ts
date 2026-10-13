@@ -16,8 +16,13 @@ import {
 } from 'firebase/firestore';
 import { blobToDataUrl, compressImageFile } from './firebase';
 import {
+  ApplicationPayment,
   ApplicationRequirement,
+  EnrollmentAssessment,
+  FeeLine,
+  PaymentStatus,
   RequirementTemplate,
+  verifiedPaymentTotal,
   WorkflowStatus,
   applicantResubmissionStatus,
   canFinalizeEnrollment,
@@ -443,6 +448,334 @@ export async function createRequirementChecklist(
   return { ok: true, message: 'Document checklist created.' };
 }
 
+// Staff may add a requirement for one applicant (e.g. an extra clearance).
+export async function addRequirement(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord,
+  existing: ApplicationRequirement[],
+  name: string,
+  required: boolean,
+  description: string
+): Promise<{ ok: boolean; message: string }> {
+  const clean = name.trim();
+  if (!clean) return { ok: false, message: 'Enter the name of the requirement.' };
+  if (existing.some((r) => r.name.toLowerCase() === clean.toLowerCase())) {
+    return { ok: false, message: `"${clean}" is already on this applicant's checklist.` };
+  }
+  const id = `custom-${Date.now()}`;
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'applications', app.id, 'requirements', id), {
+    id,
+    name: clean,
+    description: description.trim(),
+    required,
+    status: 'Missing',
+    applicantUid: app.applicantUid || '',
+    order: existing.length,
+  });
+  batch.update(doc(db, 'applications', app.id), { updatedAt: now() });
+  addHistory(batch, db, app.id, {
+    status: normalizeStatus(app.status),
+    previousStatus: app.status,
+    actor: 'staff',
+    byName: staff.name,
+    byRole: staff.role,
+    note: `Added ${required ? 'required' : 'optional'} requirement "${clean}".`,
+  });
+  notifyApplicant(batch, db, app, 'New requirement added', `The Admissions Office added "${clean}" to your checklist.`);
+  await batch.commit();
+  return { ok: true, message: `"${clean}" added to the checklist.` };
+}
+
+// Corrections to the applicant's details by staff, recorded in the history.
+export const EDITABLE_APPLICANT_FIELDS: { key: string; label: string }[] = [
+  { key: 'fullName', label: 'Full name' },
+  { key: 'phone', label: 'Mobile number' },
+  { key: 'dateOfBirth', label: 'Date of birth' },
+  { key: 'gender', label: 'Gender' },
+  { key: 'civilStatus', label: 'Civil status' },
+  { key: 'address', label: 'Address' },
+  { key: 'programName', label: 'Program' },
+  { key: 'churchName', label: 'Home church' },
+  { key: 'pastorName', label: 'Senior pastor' },
+  { key: 'previousSchool', label: 'Previous school' },
+];
+
+export async function updateApplicantDetails(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord,
+  changes: Record<string, string>
+): Promise<{ ok: boolean; message: string }> {
+  const allowed = new Set(EDITABLE_APPLICANT_FIELDS.map((f) => f.key));
+  const update: Record<string, string> = {};
+  const changedLabels: string[] = [];
+  Object.entries(changes).forEach(([k, v]) => {
+    if (!allowed.has(k)) return;
+    const value = String(v ?? '').trim();
+    if (value === String(app[k] ?? '').trim()) return;
+    update[k] = value;
+    if (k === 'programName') update.program = value;
+    changedLabels.push(EDITABLE_APPLICANT_FIELDS.find((f) => f.key === k)!.label);
+  });
+  if (changedLabels.length === 0) return { ok: false, message: 'No changes to save.' };
+  if ('fullName' in update && !update.fullName) return { ok: false, message: 'Full name cannot be empty.' };
+
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'applications', app.id), { ...update, updatedAt: now() });
+  addHistory(batch, db, app.id, {
+    status: normalizeStatus(app.status),
+    previousStatus: app.status,
+    actor: 'staff',
+    byName: staff.name,
+    byRole: staff.role,
+    note: `Corrected applicant details: ${changedLabels.join(', ')}.`,
+  });
+  await batch.commit();
+  return { ok: true, message: `Updated ${changedLabels.join(', ')}.` };
+}
+
+// Step 5: enrollment assessment. Saving it moves the application to "For Payment".
+export async function saveAssessment(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord,
+  requirements: ApplicationRequirement[],
+  input: { units: number; items: FeeLine[]; minimumPayment: number; notes: string },
+  payments: ApplicationPayment[] = []
+): Promise<{ ok: boolean; message: string }> {
+  const current = normalizeStatus(app.status);
+  if (current !== 'For Assessment' && current !== 'For Payment') {
+    return { ok: false, message: 'Assessments are made once the applicant is "For Assessment".' };
+  }
+  // Revising after money was verified would lose track of it; record adjustments instead.
+  if (payments.some((p) => p.status === 'Verified')) {
+    return { ok: false, message: 'A payment has already been verified, so the assessment can no longer be revised. Record any adjustment in the student’s ledger after enrollment.' };
+  }
+  if (!summarizeRequirements(requirements).allRequiredVerified) {
+    return { ok: false, message: 'All required documents must be verified before the assessment.' };
+  }
+  const items = input.items
+    .map((i) => ({ name: i.name.trim(), amount: Math.round(Number(i.amount) * 100) / 100 }))
+    .filter((i) => i.name);
+  if (items.length === 0) return { ok: false, message: 'Add at least one fee line, or use "No payment required".' };
+  if (items.some((i) => !Number.isFinite(i.amount) || i.amount < 0)) return { ok: false, message: 'Fee amounts must be zero or more.' };
+  const total = Math.round(items.reduce((s, i) => s + i.amount, 0) * 100) / 100;
+  const minimumPayment = Math.round(Number(input.minimumPayment) * 100) / 100;
+  if (!Number.isFinite(minimumPayment) || minimumPayment <= 0 || minimumPayment > total) {
+    return { ok: false, message: `The minimum payment must be more than ₱0 and no more than the total (₱${total.toLocaleString()}).` };
+  }
+
+  const timestamp = now();
+  const assessment: EnrollmentAssessment = {
+    units: Number(input.units) || 0,
+    items,
+    total,
+    minimumPayment,
+    notes: input.notes.trim(),
+    assessedBy: staff.name,
+    assessedAt: timestamp,
+  };
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'applications', app.id), {
+    status: 'For Payment',
+    assessment,
+    paymentStatus: 'Awaiting Payment',
+    amountPaidVerified: 0,
+    updatedAt: timestamp,
+    lastDecisionBy: staff.name,
+    lastDecisionAt: timestamp,
+  });
+  addHistory(batch, db, app.id, {
+    status: 'For Payment',
+    previousStatus: app.status,
+    actor: 'staff',
+    byName: staff.name,
+    byRole: staff.role,
+    note: `Assessment saved: total ₱${total.toLocaleString()}, minimum payment ₱${minimumPayment.toLocaleString()}.`,
+  });
+  notifyApplicant(
+    batch,
+    db,
+    app,
+    'Enrollment assessment ready',
+    `Your assessment totals ₱${total.toLocaleString()}. Please pay at least ₱${minimumPayment.toLocaleString()} and submit your payment details on your application page.`
+  );
+  await batch.commit();
+  return { ok: true, message: 'Assessment saved and the applicant was asked to pay.' };
+}
+
+// Step 6 alternative: no payment is required (e.g. full scholarship). A reason is recorded.
+export async function waivePayment(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord,
+  requirements: ApplicationRequirement[],
+  reason: string
+): Promise<{ ok: boolean; message: string }> {
+  const current = normalizeStatus(app.status);
+  if (current !== 'For Assessment' && current !== 'For Payment') {
+    return { ok: false, message: 'Payment can only be waived during assessment or payment.' };
+  }
+  if (!summarizeRequirements(requirements).allRequiredVerified) {
+    return { ok: false, message: 'All required documents must be verified first.' };
+  }
+  if (!reason.trim()) return { ok: false, message: 'Please record why no payment is required.' };
+  const timestamp = now();
+  const assessment: EnrollmentAssessment = app.assessment || {
+    units: 0,
+    items: [],
+    total: 0,
+    minimumPayment: 0,
+    notes: '',
+    assessedBy: staff.name,
+    assessedAt: timestamp,
+  };
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'applications', app.id), {
+    status: 'For Enrollment',
+    assessment: { ...assessment, notes: [assessment.notes, `Payment waived: ${reason.trim()}`].filter(Boolean).join(' ') },
+    paymentStatus: 'Waived',
+    paymentWaivedReason: reason.trim(),
+    paymentVerifiedBy: staff.name,
+    paymentVerifiedAt: timestamp,
+    updatedAt: timestamp,
+    lastDecisionBy: staff.name,
+    lastDecisionAt: timestamp,
+  });
+  addHistory(batch, db, app.id, {
+    status: 'For Enrollment',
+    previousStatus: app.status,
+    actor: 'staff',
+    byName: staff.name,
+    byRole: staff.role,
+    note: `No payment required: ${reason.trim()}`,
+  });
+  notifyApplicant(batch, db, app, 'No payment required', `No payment is required for your enrollment. ${nextStepsFor('For Enrollment')}`);
+  await batch.commit();
+  return { ok: true, message: 'Payment waived; the applicant is ready for enrollment confirmation.' };
+}
+
+// Step 6: the applicant reports a payment for verification.
+export async function submitPayment(
+  db: Firestore,
+  applicant: Actor,
+  app: ApplicationRecord,
+  input: { amount: number; method: string; referenceNo: string; paidOn: string; proof?: File | null }
+): Promise<{ ok: boolean; message: string }> {
+  if (normalizeStatus(app.status) !== 'For Payment') {
+    return { ok: false, message: 'Payments can be submitted once your assessment is ready.' };
+  }
+  const amount = Math.round(Number(input.amount) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, message: 'Enter the amount you paid.' };
+  if (!input.method) return { ok: false, message: 'Choose how you paid.' };
+  if (input.referenceNo.trim().length < 4) return { ok: false, message: 'Enter the reference or receipt number from your payment.' };
+  if (!input.paidOn) return { ok: false, message: 'Enter the date you paid.' };
+  if (input.paidOn > new Date().toISOString().slice(0, 10)) return { ok: false, message: 'The payment date cannot be in the future.' };
+
+  let proof: { dataUrl: string; name: string } | null = null;
+  if (input.proof) {
+    try {
+      const prepared = await prepareRequirementFile(input.proof);
+      proof = { dataUrl: prepared.dataUrl, name: prepared.name };
+    } catch (e: any) {
+      return { ok: false, message: e?.message || 'The proof of payment could not be read.' };
+    }
+  }
+
+  const id = newId('pay');
+  const timestamp = now();
+  const payment: ApplicationPayment = {
+    id,
+    applicantUid: applicant.uid,
+    amount,
+    method: input.method,
+    referenceNo: input.referenceNo.trim(),
+    paidOn: input.paidOn,
+    status: 'Submitted',
+    submittedAt: timestamp,
+    ...(proof ? { proofDataUrl: proof.dataUrl, proofFileName: proof.name } : {}),
+  };
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'applications', app.id, 'payments', id), payment);
+  batch.update(doc(db, 'applications', app.id), { paymentStatus: 'Submitted', updatedAt: timestamp });
+  notifyStaff(batch, db, app, applicant.uid, 'Payment submitted', `${app.fullName} reported a ₱${amount.toLocaleString()} payment via ${input.method} (ref ${payment.referenceNo}).`);
+  notifyApplicant(batch, db, app, 'Payment submitted', `We received your payment details (₱${amount.toLocaleString()}, ref ${payment.referenceNo}). The Finance Office will verify it.`);
+  await batch.commit();
+  return { ok: true, message: 'Payment details submitted for verification.' };
+}
+
+// Step 6: staff (Registrar, Admin, Super Admin or Finance) verify or reject a payment. Once
+// the verified total reaches the minimum, the application moves to "For Enrollment".
+export async function reviewPayment(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord,
+  payments: ApplicationPayment[],
+  payment: ApplicationPayment,
+  verdict: 'Verified' | 'Rejected',
+  remarks: string
+): Promise<{ ok: boolean; message: string }> {
+  if (normalizeStatus(app.status) !== 'For Payment') {
+    return { ok: false, message: 'Payments are verified while the application is "For Payment".' };
+  }
+  if (payment.status !== 'Submitted') return { ok: false, message: 'This payment has already been reviewed.' };
+  if (verdict === 'Rejected' && !remarks.trim()) return { ok: false, message: 'Please explain why the payment could not be verified.' };
+
+  const timestamp = now();
+  const updatedPayments = payments.map((p) => (p.id === payment.id ? { ...p, status: verdict } : p));
+  const verifiedTotal = verifiedPaymentTotal(updatedPayments as ApplicationPayment[]);
+  const minimum = Number(app.assessment?.minimumPayment) || 0;
+  const cleared = verdict === 'Verified' && minimum > 0 && verifiedTotal >= minimum;
+  const stillPending = updatedPayments.some((p) => p.status === 'Submitted');
+  const paymentStatus: PaymentStatus = cleared
+    ? 'Verified'
+    : verifiedTotal > 0
+    ? stillPending ? 'Submitted' : 'Partially Paid'
+    : stillPending ? 'Submitted' : verdict === 'Rejected' ? 'Rejected' : 'Awaiting Payment';
+
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'applications', app.id, 'payments', payment.id), {
+    status: verdict,
+    reviewedBy: staff.name,
+    reviewedAt: timestamp,
+    remarks: remarks.trim(),
+  });
+  batch.update(doc(db, 'applications', app.id), {
+    paymentStatus,
+    amountPaidVerified: verifiedTotal,
+    updatedAt: timestamp,
+    ...(cleared
+      ? { status: 'For Enrollment', paymentVerifiedBy: staff.name, paymentVerifiedAt: timestamp, lastDecisionBy: staff.name, lastDecisionAt: timestamp }
+      : {}),
+  });
+  addHistory(batch, db, app.id, {
+    status: cleared ? 'For Enrollment' : 'For Payment',
+    previousStatus: app.status,
+    actor: 'staff',
+    byName: staff.name,
+    byRole: staff.role,
+    note: `Payment ₱${Number(payment.amount).toLocaleString()} (ref ${payment.referenceNo}) ${verdict.toLowerCase()}${remarks.trim() ? `: ${remarks.trim()}` : ''}. Verified total ₱${verifiedTotal.toLocaleString()} of ₱${minimum.toLocaleString()} minimum.`,
+  });
+  notifyApplicant(
+    batch,
+    db,
+    app,
+    verdict === 'Verified' ? 'Payment verified' : 'Payment not verified',
+    verdict === 'Verified'
+      ? cleared
+        ? `Your payment was verified. ${nextStepsFor('For Enrollment')}`
+        : `Your payment of ₱${Number(payment.amount).toLocaleString()} was verified. ₱${Math.max(0, minimum - verifiedTotal).toLocaleString()} more is needed to reach the minimum payment.`
+      : `We could not verify your payment (ref ${payment.referenceNo}): ${remarks.trim()}`
+  );
+  await batch.commit();
+  return {
+    ok: true,
+    message: cleared ? 'Payment verified. The applicant is ready for enrollment confirmation.' : `Payment ${verdict.toLowerCase()}.`,
+  };
+}
+
 export interface FinalizeOptions {
   academicYear: string;
   semester: string;
@@ -497,9 +830,10 @@ export async function finalizeEnrollment(
   staff: Actor,
   app: ApplicationRecord,
   requirements: ApplicationRequirement[],
-  options: FinalizeOptions
+  options: FinalizeOptions,
+  payments: ApplicationPayment[] = []
 ): Promise<FinalizeResult> {
-  const blocker = canFinalizeEnrollment(app.status, requirements);
+  const blocker = canFinalizeEnrollment(app.status, requirements, { assessment: app.assessment, paymentStatus: app.paymentStatus });
   if (blocker) return { ok: false, message: blocker };
   if (!options.academicYear.trim() || !options.semester.trim() || !options.yearLevel.trim()) {
     return { ok: false, message: 'Academic year, semester and year level are required.' };
@@ -544,6 +878,31 @@ export async function finalizeEnrollment(
     academicStatus: existing?.data?.academicStatus || 'Regular',
     admissionRequirementsVerified: true,
     verifiedAdmissionDocuments: verifiedDocs,
+    // Fees and verified payments from the assessment and payment steps.
+    tuitionTotal: Number(app.assessment?.total) || 0,
+    tuitionPaid: verifiedPaymentTotal(payments),
+    tuitionBalance: Math.max(0, (Number(app.assessment?.total) || 0) - verifiedPaymentTotal(payments)),
+    paymentStatus:
+      app.paymentStatus === 'Waived' || (Number(app.assessment?.total) || 0) <= verifiedPaymentTotal(payments)
+        ? 'Paid'
+        : 'Partially Paid',
+    paymentRecords: payments
+      .filter((p) => p.status === 'Verified')
+      .map((p) => ({
+        id: p.id,
+        amount: Number(p.amount),
+        method: p.method,
+        referenceNo: p.referenceNo,
+        paymentDate: p.paidOn,
+        status: 'Verified',
+        verifiedBy: p.reviewedBy || '',
+        verifiedAt: p.reviewedAt || '',
+        description: 'Enrollment payment',
+      })),
+    // Step 8: Student Portal activation.
+    portalAccess: true,
+    accountStatus: 'Active',
+    portalActivatedAt: timestamp,
     enrolledAt: timestamp,
     enrolledBy: staff.name,
     updatedAt: timestamp,
@@ -574,7 +933,7 @@ export async function finalizeEnrollment(
     batch,
     db,
     appWithRecord,
-    'You are officially enrolled',
+    'You are officially enrolled — Student Portal activated',
     `Welcome to PCM! Your Student ID is ${studentId}. ${nextStepsFor('Enrolled')}`
   );
   await batch.commit();

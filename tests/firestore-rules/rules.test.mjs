@@ -1,4 +1,4 @@
-// Firestore rules tests for the PCM website. Runs against the local emulator only.
+﻿// Firestore rules tests for the PCM website. Runs against the local emulator only.
 // Run with `npm test` in this folder (needs Java 11+).
 import { readFileSync } from 'node:fs';
 import {
@@ -204,7 +204,8 @@ await check('directory Editor cannot change own role', false, () => updateDoc(do
 await check('directory Editor cannot change own email', false, () => updateDoc(doc(editor, 'adminUsers/adm-5'), { email: 'x@y.z' }));
 await check("directory Editor cannot edit another admin's entry", false, () => updateDoc(doc(editor, 'adminUsers/u10'), { avatarUrl: 'b.jpg' }));
 await check('directory Editor reads email index', true, () => getDoc(doc(editor, 'adminEmails/editor@pcm.edu.ph')));
-await check('admin updates application status', true, () => updateDoc(doc(admin, 'applications/a1'), { status: 'Accepted' }));
+await check('admin updates application status', true, () => updateDoc(doc(admin, 'applications/a1'), { status: 'Under Review' }));
+await check('admin cannot set a retired status', false, () => updateDoc(doc(admin, 'applications/a1'), { status: 'Accepted' }));
 await check('admin deletes student profile', true, () => deleteDoc(doc(admin, 'studentProfiles/sp1')));
 
 section('Admission workflow: applicants');
@@ -267,13 +268,49 @@ await check('applicant re-uploads and returns application to review', true, () =
 });
 await check('Registrar verifies a document', true, () => updateDoc(doc(registrar, 'applications/appA/requirements/id-photo'), { status: 'Verified', reviewedBy: 'Registrar', remarks: '' }));
 await check('applicant cannot replace a verified document', false, () => updateDoc(doc(applicant, 'applications/appA/requirements/id-photo'), { status: 'Submitted', fileName: 'other.jpg' }));
+await check('Registrar cannot skip from Under Review straight to Admitted', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'Admitted' }));
+await check('Registrar sends the application for admission approval', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Admission Approval' }));
 await check('Registrar admits the applicant', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'Admitted' }));
+await check('Registrar cannot enroll straight from Admitted', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'Enrolled', paymentStatus: 'Verified', assessment: { total: 1 } }));
+await check('Registrar moves the admitted applicant to assessment', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Assessment' }));
+await check('cannot request payment without an assessment', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Payment' }));
+await check('cannot mark For Enrollment before payment is verified', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Enrollment' }));
+await check('Finance cannot save assessments', false, () => updateDoc(doc(finance, 'applications/appA'), { status: 'For Payment', assessment: { total: 20000, minimumPayment: 5000 }, paymentStatus: 'Awaiting Payment' }));
+await check('Registrar saves the assessment and requests payment', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Payment', assessment: { total: 20000, minimumPayment: 5000 }, paymentStatus: 'Awaiting Payment' }));
+await check('applicant cannot change the assessment', false, () => updateDoc(doc(applicant, 'applications/appA'), { assessment: { total: 1, minimumPayment: 1 } }));
+await check('applicant cannot mark own payment verified', false, () => updateDoc(doc(applicant, 'applications/appA'), { paymentStatus: 'Verified' }));
+await check('applicant reports a payment', true, () => {
+  const b = writeBatch(applicant);
+  b.set(doc(applicant, 'applications/appA/payments/p1'), { applicantUid: 'appl1', amount: 5000, method: 'GCash', referenceNo: 'GC123456', paidOn: '2026-10-01', status: 'Submitted', submittedAt: 'now' });
+  b.update(doc(applicant, 'applications/appA'), { paymentStatus: 'Submitted', updatedAt: 'now' });
+  return b.commit();
+});
+await check('applicant cannot report a payment as already verified', false, () => setDoc(doc(applicant, 'applications/appA/payments/p2'), { applicantUid: 'appl1', amount: 5000, status: 'Verified' }));
+await check('applicant cannot report a zero payment', false, () => setDoc(doc(applicant, 'applications/appA/payments/p3'), { applicantUid: 'appl1', amount: 0, status: 'Submitted' }));
+await check('applicant cannot verify own payment', false, () => updateDoc(doc(applicant, 'applications/appA/payments/p1'), { status: 'Verified' }));
+await check('another applicant cannot see the payment', false, () => getDoc(doc(otherApplicant, 'applications/appA/payments/p1')));
+await check('Editor cannot verify payments', false, () => updateDoc(doc(approvedEditor, 'applications/appA/payments/p1'), { status: 'Verified', reviewedBy: 'Editor' }));
+await check('Finance cannot change other application fields', false, () => updateDoc(doc(finance, 'applications/appA'), { fullName: 'Changed' }));
+await check('Finance verifies the payment and clears the applicant for enrollment', true, () => {
+  const b = writeBatch(finance);
+  b.update(doc(finance, 'applications/appA/payments/p1'), { status: 'Verified', reviewedBy: 'Finance', reviewedAt: 'now', remarks: '' });
+  b.update(doc(finance, 'applications/appA'), { status: 'For Enrollment', paymentStatus: 'Verified', amountPaidVerified: 5000, paymentVerifiedBy: 'Finance', paymentVerifiedAt: 'now', updatedAt: 'now' });
+  b.set(doc(finance, 'applications/appA/history/hPay'), { status: 'For Enrollment', actor: 'staff', byName: 'Finance' });
+  return b.commit();
+});
+await check('Finance cannot confirm enrollment', false, () => updateDoc(doc(finance, 'applications/appA'), { status: 'Enrolled' }));
+await check('a reviewed payment cannot be changed again', false, () => updateDoc(doc(finance, 'applications/appA/payments/p1'), { status: 'Rejected', remarks: 'oops' }));
 await check('Registrar allocates the next Student ID', true, () => setDoc(doc(registrar, 'systemConfig/studentIdCounter'), { '2026': 1 }, { merge: true }));
-await check('Registrar creates the official student record', true, () => setDoc(doc(registrar, 'studentProfiles/std-2026-PCM-0002'), { studentId: '2026-PCM-0002', authUid: 'appl1', email: 'appl1@gmail.com', enrollmentStatus: 'Enrolled' }));
+await check('Registrar creates the official student record', true, () => setDoc(doc(registrar, 'studentProfiles/std-2026-PCM-0002'), { studentId: '2026-PCM-0002', authUid: 'appl1', email: 'appl1@gmail.com', enrollmentStatus: 'Enrolled', portalAccess: true }));
 await check('Editor cannot create official student records', false, () => setDoc(doc(approvedEditor, 'studentProfiles/std-x'), { studentId: 'X' }));
 await check('applicant cannot create their own student record', false, () => setDoc(doc(applicant, 'studentProfiles/std-y'), { studentId: 'Y', authUid: 'appl1' }));
 await check('Registrar marks the application Enrolled', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'Enrolled', studentId: '2026-PCM-0002', studentRecordId: 'std-2026-PCM-0002' }));
+await check('an enrolled application cannot be moved back', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'Under Review' }));
 await check('applicant sees their new student record', true, () => getDoc(doc(applicant, 'studentProfiles/std-2026-PCM-0002')));
+await check('staff can waive payment with an assessment on file', true, async () => {
+  await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'applications/appW'), { applicantUid: 'appl2', status: 'For Assessment', email: 'appl2@gmail.com' }));
+  return updateDoc(doc(registrar, 'applications/appW'), { status: 'For Enrollment', paymentStatus: 'Waived', assessment: { total: 0, minimumPayment: 0 }, paymentWaivedReason: 'Full scholarship' });
+});
 
 section('Students see and change only their own records');
 await check('student reads own record', true, () => getDoc(doc(studentUser, 'studentProfiles/std-linked')));
