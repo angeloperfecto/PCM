@@ -51,7 +51,9 @@ import {
 interface StudentRegistrationWizardProps {
   initialAppRef?: string;
   initialAppData?: Partial<any>;
-  onCompleted?: (student: StudentProfile) => void;
+  // Called with the application reference number once the registration is submitted (or
+  // with the existing reference if the applicant already has an open application).
+  onCompleted?: (referenceNumber: string) => void;
   onCancel?: () => void;
 }
 
@@ -65,9 +67,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     programs,
     students,
     applications,
-    createStudentProfile,
     submitApplication,
-    updateApplicationStatus,
     getApplicationByRef,
     fetchApplicationByRef,
     navigateTo,
@@ -81,7 +81,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [copiedAppNo, setCopiedAppNo] = useState<boolean>(false);
-  const [submittedProfile, setSubmittedProfile] = useState<StudentProfile | null>(null);
+  const [submittedReference, setSubmittedReference] = useState<string>('');
 
   // Resolve initial target application from props
   const getInitialTargetApp = (): AdmissionApplication | null => {
@@ -522,7 +522,10 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     }
   };
 
-  // Submit Final Registration (Step 8 -> 9)
+  // Submit Final Registration (Step 8 -> 9). The wizard collects a full profile, but like
+  // the short form it submits an *application*: the Admissions Office reviews it, and the
+  // official student record and Student ID are created only when the Registrar finalizes
+  // enrollment.
   const handleFinalSubmit = async () => {
     if (!validateCurrentStep(8)) {
       return;
@@ -531,225 +534,70 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     setIsSubmitting(true);
 
     try {
-      const permanentStudentId =
-        formData.applicantType === 'Returning Student' && formData.existingStudentId.trim()
-          ? formData.existingStudentId.trim()
-          : formData.studentIdNumber;
-
-      const permanentAppName = formData.applicationNumber;
       const fullName = [formData.firstName.trim(), formData.middleName.trim(), formData.lastName.trim(), formData.suffix.trim()]
         .filter(Boolean)
         .join(' ');
 
-      const newStudentPayload: Omit<StudentProfile, 'id'> = {
-        studentId: permanentStudentId,
-        applicationNumber: permanentAppName,
-        fullName,
-        name: fullName,
-        firstName: formData.firstName.trim(),
-        middleName: formData.middleName.trim(),
-        lastName: formData.lastName.trim(),
-        suffix: formData.suffix.trim(),
-        preferredName: formData.preferredName.trim() || formData.firstName.trim(),
-        email: formData.email.trim(),
-        portalPassword: 'pcmstudent',
-        avatarUrl:
-          formData.profilePhoto ||
-          'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=400&auto=format&fit=crop',
-        profilePhoto: formData.profilePhoto,
-
-        // Personal
-        dateOfBirth: formData.dateOfBirth,
-        birthDate: formData.dateOfBirth,
-        placeOfBirth: formData.placeOfBirth,
-        age: parseInt(formData.age, 10) || 20,
-        sex: formData.sex,
-        gender: formData.sex,
-        civilStatus: formData.civilStatus,
-        nationality: formData.nationality,
-        religion: formData.religion,
-
-        // Contact
-        mobileNumber: formData.mobileNumber,
-        contactNumber: formData.mobileNumber,
-        phone: formData.mobileNumber,
-        facebookAccount: formData.facebookAccount,
-        currentAddress: formData.currentAddress,
-        permanentAddress: formData.sameAsCurrentAddress ? formData.currentAddress : formData.permanentAddress,
-        address: formData.currentAddress,
-        city: formData.city,
-        province: formData.province,
-        zipCode: formData.zipCode,
-
-        // Family
-        fatherName: formData.fatherName,
-        motherName: formData.motherName,
-        guardianName: formData.guardianName || formData.fatherName,
-        guardianRelationship: formData.guardianRelationship,
-        guardianContactNumber: formData.guardianContactNumber || formData.emergencyContactNumber,
-        guardianPhone: formData.guardianContactNumber || formData.emergencyContactNumber,
-        guardianEmail: formData.guardianEmail,
-        guardianAddress: formData.guardianAddress || formData.currentAddress,
-        emergencyContactPerson: formData.emergencyContactPerson,
-        emergencyContactName: formData.emergencyContactPerson,
-        emergencyContactNumber: formData.emergencyContactNumber,
-        emergencyContactPhone: formData.emergencyContactNumber,
-        emergencyContactRelationship: formData.emergencyContactRelationship,
-        emergencyContactRelation: formData.emergencyContactRelationship,
-        emergencyContact: {
-          name: formData.emergencyContactPerson,
-          relationship: formData.emergencyContactRelationship,
-          phone: formData.emergencyContactNumber,
-        },
-
-        // Education
-        lastSchoolAttended: formData.lastSchoolAttended,
-        schoolAddress: formData.schoolAddress,
-        highestEducationalAttainment: formData.highestEducationalAttainment,
-        previousCourse: formData.previousCourse,
-        yearGraduated: formData.yearGraduated,
-        graduationDate: formData.graduationDate,
-        previousSchoolId: formData.previousSchoolId,
-        honorsAwards: formData.honorsAwards,
-
-        // Church & Ministry
-        homeChurch: formData.churchName,
-        churchName: formData.churchName,
-        churchAddress: formData.churchAddress,
-        churchContactNumber: formData.churchContactNumber,
-        pastorName: formData.pastorName,
-        pastorContactNumber: formData.pastorContactNumber,
-        pastorPhone: formData.pastorContactNumber,
-        ministryDepartment: formData.ministryDepartment,
-        ministryRole: formData.ministryRole,
-        yearsInMinistry: formData.yearsInMinistry,
-        dateStartedInMinistry: formData.dateStartedInMinistry,
-        ministryExperience: formData.ministryExperience,
-        churchRecommendationStatus: 'Pending',
-        pastorRecommendationStatus: 'Pending',
-        mentorName: 'Dr. Benjamin Villanueva',
-        spiritualMentor: 'Dr. Benjamin Villanueva',
-
-        // Enrollment
-        applicantType: formData.applicantType,
-        program: formData.programTitle,
-        programId: formData.programId,
-        degreeProgram: formData.programTitle,
-        major: formData.major,
-        specialization: formData.major,
-        yearLevel: formData.yearLevel,
-        section: formData.section,
-        academicStatus: 'Regular',
-        enrollmentStatus: 'Submitted' as EnrollmentStatus,
-        currentSemester: `${formData.semester}, AY ${formData.academicYear}`,
-        semester: formData.semester,
-        academicYear: formData.academicYear,
-        applicationDate: new Date().toISOString().split('T')[0],
-
-        // Requirements & Documents
-        requirements,
-        uploadedDocuments: requirements
-          .filter((r) => r.file && r.file.url)
-          .map((r) => ({
-            id: `doc-${Date.now()}-${r.id}`,
-            documentType: r.name,
-            fileName: r.file!.name,
-            fileUrl: r.file!.url,
-            fileSize: r.file!.size,
-            uploadDate: r.uploadDate || new Date().toISOString().split('T')[0],
-            verificationStatus: 'Pending Verification',
-            status: 'Pending Verification',
-          })),
-
-        // Account
-        authProvider: 'PCM Enrollment System',
-        accountStatus: 'Active',
-        verificationStatus: 'Unverified',
-        lastLogin: new Date().toISOString(),
-        portalAccess: true,
-
-        // Payments
-        enrollmentFee: 1500,
-        tuitionTotal: 18500,
-        tuitionPaid: 0,
-        tuitionBalance: 18500,
-        paymentStatus: 'Unpaid',
-        paymentRecords: [],
-        paymentHistory: [],
-
-        // Academic
-        gpa: 0,
-        totalUnitsEarned: 0,
-        courses: [],
-        subjectHistory: [],
-        practicumEntries: [],
-
-        adminNotes: `Online enrollment application received on ${new Date().toLocaleDateString()}. Program: ${formData.programTitle}.`,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+      // Documents uploaded in step 7 carry over to the admission checklist when they were
+      // stored inline (data URLs that fit in Firestore).
+      const templateKeywords: Record<string, RegExp> = {
+        'id-photo': /photo/i,
+        'birth-certificate': /birth/i,
+        'academic-records': /transcript|form 138|report card/i,
+        'good-moral': /moral/i,
+        'pastoral-recommendation': /pastoral/i,
       };
+      const initialFiles: Record<string, { dataUrl: string; size: number; type: string; name: string }> = {};
+      Object.entries(templateKeywords).forEach(([templateId, pattern]) => {
+        const item = requirements.find((r) => pattern.test(r.name) && r.file?.url?.startsWith('data:'));
+        const url = item?.file?.url || '';
+        if (item && url.length < 950000) {
+          const type = url.slice(5, url.indexOf(';')) || item.file?.type || '';
+          initialFiles[templateId] = { dataUrl: url, size: Math.round((url.length * 3) / 4), type, name: item.file?.name || item.name };
+        }
+      });
 
-      // 1. Create persistent student profile in Firestore
-      const createdStudent = await createStudentProfile(newStudentPayload);
+      // Keep the full registration answers on the application, minus large inline images.
+      const { profilePhoto: _photo, studentIdNumber: _id, ...registrationDetails } = formData as any;
 
-      // 2. Synchronize with Admissions Application
-      const matchedApp =
-        linkedApp ||
-        applications.find(
-          (a) =>
-            a.referenceNumber?.trim().toLowerCase() === formData.applicationNumber.trim().toLowerCase() ||
-            a.email?.trim().toLowerCase() === formData.email.trim().toLowerCase()
-        );
-
-      if (matchedApp) {
-        // Update existing application record so it marks applicant as Enrolled
-        await updateApplicationStatus(
-          matchedApp.id,
-          'Enrolled',
-          `Officially completed Online Student Registration & Enrollment. Assigned Student ID: ${permanentStudentId}`
-        );
-        setLinkedApp({
-          ...matchedApp,
-          status: 'Enrolled',
-          studentId: permanentStudentId,
-        });
-      } else {
-        // Record in applications collection for Admissions Committee review & tracking
-        await submitApplication({
-          referenceNumber: formData.applicationNumber,
-          applicationNumber: formData.applicationNumber,
-          studentId: permanentStudentId,
+      const ref = await submitApplication(
+        {
           fullName,
           email: formData.email.trim(),
           phone: formData.mobileNumber,
-          dob: formData.dateOfBirth,
+          birthDate: formData.dateOfBirth,
           gender: formData.sex,
-          address: formData.currentAddress,
-          program: formData.programTitle,
-          programTitle: formData.programTitle,
-          church: formData.churchName,
+          civilStatus: formData.civilStatus,
+          address: [formData.currentAddress, formData.city, formData.province].filter(Boolean).join(', '),
+          churchName: formData.churchName,
           pastorName: formData.pastorName,
-          pastorContact: formData.pastorContactNumber,
+          pastorPhone: formData.pastorContactNumber,
           testimony: formData.callingTestimony,
-          highSchool: formData.lastSchoolAttended,
-          previousCollege: formData.lastSchoolAttended,
-        });
-      }
-
-      setSubmittedProfile(createdStudent);
-      setCurrentStep(9);
-      addToast(
-        'success',
-        'Enrollment & Profile Registered',
-        `Student ID ${permanentStudentId} created and connected to Admissions Record.`
+          ministryCalling: formData.ministryExperience,
+          previousEducation: formData.highestEducationalAttainment,
+          highSchoolOrCollege: formData.lastSchoolAttended,
+          yearGraduated: formData.yearGraduated,
+          programId: formData.programId,
+          programName: formData.programTitle,
+          applicantType: formData.applicantType,
+          registrationDetails,
+        },
+        initialFiles
       );
 
-      if (onCompleted) {
-        onCompleted(createdStudent);
+      if (ref.startsWith('DUPLICATE:')) {
+        // An open application already exists; the toast explains, and we show the tracker.
+        if (onCompleted) onCompleted(ref.slice('DUPLICATE:'.length));
+        return;
       }
+      if (!ref) return;
+
+      setSubmittedReference(ref);
+      setCurrentStep(9);
+      if (onCompleted) onCompleted(ref);
     } catch (err: any) {
       console.error('Submission error:', err);
-      addToast('error', 'Submission Failed', err?.message || 'Could not record your application.');
+      addToast('error', 'Submission Failed', 'Your registration could not be submitted. Please check your connection and try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -2261,7 +2109,8 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                 Welcome to Philippine College of Ministry
               </h3>
               <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto mt-2 leading-relaxed">
-                Your admission and enrollment record has been securely submitted to the Registrar and Cloud Firestore database.
+                Your registration was submitted as an admission application. The Admissions Office will review it and your
+                documents; you can follow every step under "Track Application Status".
               </p>
             </div>
 
@@ -2273,12 +2122,12 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                     Official Application Number
                   </span>
                   <span className="text-lg font-mono font-bold text-[#18392B]">
-                    {formData.applicationNumber}
+                    {submittedReference || formData.applicationNumber}
                   </span>
                 </div>
                 <button
                   type="button"
-                  onClick={() => handleCopy(formData.applicationNumber)}
+                  onClick={() => handleCopy(submittedReference || formData.applicationNumber)}
                   className="p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-200 rounded-lg transition cursor-pointer"
                   title="Copy Application Number"
                 >
@@ -2288,8 +2137,8 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
 
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-slate-500">Assigned Student ID:</span>
-                  <strong className="font-mono text-slate-900">{formData.studentIdNumber}</strong>
+                  <span className="text-slate-500">Student ID:</span>
+                  <strong className="text-slate-900">Assigned by the Registrar when enrollment is confirmed</strong>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Student Name:</span>
@@ -2302,7 +2151,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                 <div className="flex justify-between">
                   <span className="text-slate-500">Enlistment Status:</span>
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800">
-                    Under Review / For Verification
+                    Application Submitted
                   </span>
                 </div>
                 {linkedApp && (

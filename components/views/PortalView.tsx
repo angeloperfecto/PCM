@@ -15,7 +15,7 @@ import { EnrollmentModule } from '@/components/portal/enrollment/EnrollmentModul
 import { AddDropModule } from '@/components/portal/enrollment/AddDropModule';
 import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModule';
 import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule';
-import { StudentRegistrationWizard } from '@/components/enrollment/StudentRegistrationWizard';
+import { MyApplicationPanel } from '@/components/enrollment/MyApplicationPanel';
 import {
   StudentPortalSidebar,
   StudentPortalTabType,
@@ -59,7 +59,9 @@ export const PortalView: React.FC = () => {
     isStudentLoggedIn,
     studentProfile,
     students,
-    studentLogin,
+    firebaseAuthUser,
+    signInWithGoogle,
+    signOutUser,
     studentLogout,
     addPracticumEntry,
     makeTuitionPayment,
@@ -78,10 +80,16 @@ export const PortalView: React.FC = () => {
     setEnrollmentActiveSubTab,
   } = usePCM();
 
-  // Authentication states
-  const [studentIdInput, setStudentIdInput] = useState('2024-PCM-0418');
-  const [passwordInput, setPasswordInput] = useState('pcmstudent');
-  const [showPasswordHelp, setShowPasswordHelp] = useState(false);
+  // Google sign-in for applicants and students
+  const [isPortalSigningIn, setIsPortalSigningIn] = useState(false);
+  const handlePortalSignIn = async () => {
+    setIsPortalSigningIn(true);
+    try {
+      await signInWithGoogle();
+    } finally {
+      setIsPortalSigningIn(false);
+    }
+  };
 
   // Active Main Navigation Tab
   const [activeTab, setActiveTab] = useState<StudentPortalTabType>('enrollment');
@@ -126,7 +134,6 @@ export const PortalView: React.FC = () => {
   const [wizardPaymentOption, setWizardPaymentOption] = useState('Installment (40% Downpayment)');
   const [wizardPaymentRef, setWizardPaymentRef] = useState('');
   const [wizardNotes, setWizardNotes] = useState('');
-  const [isPublicWizardOpen, setIsPublicWizardOpen] = useState(false);
 
   // Available subjects pool for enrollment selection
   const AVAILABLE_CATALOG_SUBJECTS: SelectedSubject[] = [
@@ -166,18 +173,12 @@ export const PortalView: React.FC = () => {
 
   // Unread notifications for current student
   const studentNotifs = studentNotifications.filter(
-    (n) => n.studentId === studentProfile.id || n.studentId === studentProfile.studentId
+    (n) =>
+      n.studentId === studentProfile.id ||
+      n.studentId === studentProfile.studentId ||
+      (!!firebaseAuthUser && n.recipientUid === firebaseAuthUser.uid)
   );
   const unreadNotifsCount = studentNotifs.filter((n) => !n.read).length;
-
-  // --- AUTH HANDLERS ---
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    const success = studentLogin(studentIdInput, passwordInput);
-    if (!success) {
-      addToast('error', 'Login Failed', 'Please verify your Student ID Number or password.');
-    }
-  };
 
   // Practicum submission
   const handlePracticumSubmit = (e: React.FormEvent) => {
@@ -270,8 +271,41 @@ export const PortalView: React.FC = () => {
     }
   };
 
-  // --- RENDER LOGIN VIEW IF NOT AUTHENTICATED ---
+  // --- NOT YET A LINKED STUDENT ---
+  // Signed out: Google sign-in. Signed in without a student record: the applicant's own
+  // application tracker (the Student Portal opens once the Registrar finalizes enrollment,
+  // or immediately for existing students whose record email matches their Google account).
   if (!isStudentLoggedIn) {
+    if (firebaseAuthUser) {
+      return (
+        <div className="w-full min-h-[85vh] bg-slate-50 py-10 px-4 font-sans">
+          <div className="max-w-4xl mx-auto space-y-5">
+            <div className="flex flex-col gap-3 rounded-2xl bg-[#18392B] p-5 text-white sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h2 className="font-serif text-xl font-bold">MyPCM Student Portal</h2>
+                <p className="text-xs text-slate-300">
+                  Signed in as <strong>{firebaseAuthUser.email}</strong>. No enrolled student record is linked to this account yet.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => signOutUser()}
+                className="self-start rounded-lg border border-white/30 px-3 py-1.5 text-xs font-semibold hover:bg-white/10 sm:self-auto"
+              >
+                Sign out
+              </button>
+            </div>
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-950">
+              <strong className="block text-[#18392B]">Already a PCM student?</strong>
+              Sign in with the Google account whose email address is on file with the Registrar and your record will open
+              automatically. If your email has changed, ask the Office of the Registrar to update it.
+            </div>
+            <MyApplicationPanel onStartApplication={() => navigateTo('apply')} />
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="w-full min-h-[85vh] bg-[#070e1c] py-16 px-4 flex items-center justify-center font-sans">
         <div className="max-w-md w-full bg-[#18392B] rounded-2xl border border-slate-700 shadow-2xl p-8 space-y-6 text-white">
@@ -281,178 +315,49 @@ export const PortalView: React.FC = () => {
             </div>
             <h2 className="font-serif text-2xl font-bold text-white">MyPCM Student Portal</h2>
             <p className="text-xs text-slate-300">
-              Institutional portal for Seminary & College student enrollment, academic records, and coursework.
+              Applicants and students sign in with their Google account to see their application, enrollment and records.
             </p>
           </div>
 
-          {/* Demo Access Credentials Badge */}
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3.5 text-xs text-amber-200 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-amber-300">Demo Student Credentials:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setStudentIdInput('2024-PCM-0418');
-                  setPasswordInput('pcmstudent');
-                }}
-                className="text-[10px] bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 px-2 py-0.5 rounded font-mono transition cursor-pointer"
-              >
-                Auto Fill
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
-              <div className="bg-black/30 p-1.5 rounded border border-white/5">
-                <span className="text-slate-400 block text-[10px]">Student ID</span>
-                <code className="text-white font-bold">2024-PCM-0418</code>
-              </div>
-              <div className="bg-black/30 p-1.5 rounded border border-white/5">
-                <span className="text-slate-400 block text-[10px]">Password</span>
-                <code className="text-white font-bold">pcmstudent</code>
-              </div>
-            </div>
+          <button
+            type="button"
+            onClick={handlePortalSignIn}
+            disabled={isPortalSigningIn}
+            className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-3.5 rounded-lg text-sm transition cursor-pointer shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            <Lock className="w-4 h-4 text-[#18392B]" />
+            <span>{isPortalSigningIn ? 'Opening Google sign-in…' : 'Sign in with Google'}</span>
+          </button>
+
+          <div className="bg-black/20 border border-white/10 rounded-xl p-3.5 text-[11px] text-slate-300 space-y-1.5">
+            <p className="flex items-start gap-1.5">
+              <HelpCircle className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
+              <span>
+                <strong className="text-white">Existing students:</strong> use the Google account with the email address on file at
+                the Registrar. Your Student ID and records open automatically.
+              </span>
+            </p>
+            <p className="flex items-start gap-1.5">
+              <HelpCircle className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
+              <span>
+                <strong className="text-white">Need help?</strong> Contact the Office of the Registrar at{' '}
+                <span className="text-emerald-400 font-mono">registrar@pcm.edu.ph</span>.
+              </span>
+            </p>
           </div>
 
-          {/* Standard Form */}
-          <form onSubmit={handleLogin} className="space-y-4 text-xs">
-            <div className="space-y-1">
-              <label className="text-slate-300 font-semibold flex items-center gap-1.5">
-                <User className="w-3.5 h-3.5 text-[#588B76]" />
-                <span>Student ID Number</span>
-              </label>
-              <input
-                type="text"
-                required
-                value={studentIdInput}
-                onChange={(e) => setStudentIdInput(e.target.value)}
-                placeholder="2024-PCM-0418"
-                className="w-full bg-[#070e1c] border border-slate-700 rounded-lg p-3 text-white font-mono focus:border-[#588B76] focus:outline-none"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <label className="text-slate-300 font-semibold flex items-center gap-1.5">
-                  <Lock className="w-3.5 h-3.5 text-[#588B76]" />
-                  <span>Student Portal Password</span>
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordHelp((prev) => !prev)}
-                  className="text-[11px] text-amber-300 hover:text-amber-200 underline flex items-center gap-1 cursor-pointer"
-                >
-                  <HelpCircle className="w-3 h-3" />
-                  <span>How to get password?</span>
-                </button>
-              </div>
-              <input
-                type="password"
-                required
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                placeholder="••••••••"
-                className="w-full bg-[#070e1c] border border-slate-700 rounded-lg p-3 text-white font-mono focus:border-[#588B76] focus:outline-none"
-              />
-            </div>
-
-            {showPasswordHelp && (
-              <div className="bg-slate-900/95 border border-amber-400/30 rounded-xl p-3.5 text-xs text-slate-200 space-y-2.5">
-                <div className="flex items-center gap-1.5 text-amber-300 font-bold">
-                  <HelpCircle className="w-4 h-4 text-amber-400 shrink-0" />
-                  <span>How to Retrieve or Set Your Student Password:</span>
-                </div>
-                <ul className="list-disc pl-4 space-y-1.5 text-[11px] text-slate-300">
-                  <li>
-                    <strong className="text-white">Default Institutional Password:</strong> For all enrolled and demo student accounts, use <code className="bg-black/60 text-amber-300 px-1.5 py-0.5 rounded font-mono font-bold">pcmstudent</code>.
-                  </li>
-                  <li>
-                    <strong className="text-white">Self-Registered Students:</strong> If you registered through the <em>Online Registration & Enrollment Wizard</em>, use the password you entered during registration.
-                  </li>
-                  <li>
-                    <strong className="text-white">Sign In with ID or Email:</strong> You can enter either your full Student ID (e.g., <code className="bg-black/60 text-amber-300 px-1 py-0.5 rounded font-mono">2024-PCM-0418</code>) or your registered email address.
-                  </li>
-                  <li>
-                    <strong className="text-white">Registrar Assistance:</strong> If you forgot your password or need an official reset, contact the Office of the Registrar at <span className="text-emerald-400 font-mono">registrar@pcm.edu.ph</span>.
-                  </li>
-                </ul>
-                <div className="pt-1">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setStudentIdInput('2024-PCM-0418');
-                      setPasswordInput('pcmstudent');
-                      setShowPasswordHelp(false);
-                    }}
-                    className="w-full text-center bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 py-1.5 rounded-lg text-[11px] font-semibold transition cursor-pointer"
-                  >
-                    Auto-Fill Demo Student Credentials (pcmstudent)
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <button
-              type="submit"
-              className="w-full bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] font-bold py-3.5 rounded-lg text-xs transition uppercase tracking-wider cursor-pointer shadow-lg mt-2"
-            >
-              Sign In to MyPCM Portal
-            </button>
-          </form>
-
-          {/* New Applicant & Online Enrollment Entry */}
           <div className="pt-4 border-t border-slate-700/60 text-center space-y-2">
-            <p className="text-[11px] text-slate-300">
-              New applicant, incoming freshman, or continuing student?
-            </p>
-            <button
-              type="button"
-              onClick={() => setIsPublicWizardOpen(true)}
-              className="w-full bg-white/10 hover:bg-white/20 text-white border border-[#588B76]/50 font-bold py-3 rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>Online Registration & Enrollment Wizard</span>
-            </button>
+            <p className="text-[11px] text-slate-300">New applicant or incoming freshman?</p>
             <button
               type="button"
               onClick={() => navigateTo('apply')}
-              className="w-full bg-[#18392B] hover:bg-[#23533e] text-slate-200 border border-slate-700 font-bold py-2.5 rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+              className="w-full bg-white/10 hover:bg-white/20 text-white border border-[#588B76]/50 font-bold py-3 rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
             >
               <ExternalLink className="w-3.5 h-3.5 text-amber-300" />
               <span>PCM Admissions & Application Portal</span>
             </button>
           </div>
         </div>
-
-        {/* Public 9-Step Registration Wizard Modal */}
-        {isPublicWizardOpen && (
-          <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto font-sans">
-            <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl border border-slate-200 overflow-hidden my-auto max-h-[94vh] flex flex-col text-slate-900">
-              <div className="bg-[#18392B] p-4 text-white flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-5 h-5 text-amber-300" />
-                  <span className="font-serif font-bold text-base">
-                    Philippine College of Ministry • Online Student Registration & Enrollment
-                  </span>
-                </div>
-                <button
-                  onClick={() => setIsPublicWizardOpen(false)}
-                  className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-              <div className="overflow-y-auto p-4 sm:p-6 flex-1">
-                <StudentRegistrationWizard
-                  onCompleted={(newStudent) => {
-                    setIsPublicWizardOpen(false);
-                    setStudentIdInput(newStudent.studentId);
-                    addToast('success', 'Profile Created & Saved', `Your record with Student ID ${newStudent.studentId} is registered in Firebase!`);
-                  }}
-                  onCancel={() => setIsPublicWizardOpen(false)}
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     );
   }

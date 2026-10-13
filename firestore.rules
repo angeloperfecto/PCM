@@ -43,10 +43,6 @@ service cloud.firestore {
       return role == 'Super Admin' ? 3 : role == 'Admin' ? 2 : role in adminRoles() ? 1 : 0;
     }
 
-    function maxOf(a, b) {
-      return a > b ? a : b;
-    }
-
     function docData(path) {
       return exists(path) ? get(path).data : {};
     }
@@ -83,24 +79,38 @@ service cloud.firestore {
           : '');
     }
 
+    // The signed-in user's admin role ('' if none).
     // u = users/{uid}, a = adminUsers/{uid}, idx = adminEmails/{verified email}.
     // A rejected, disabled or inactive profile blocks admin access entirely; the two
     // built-in Super Admin addresses always keep access.
-    function levelFrom(email, u, a, idx) {
+    function roleFrom(email, u, a, idx) {
+      let profileRole = u.get('role', '') in adminRoles() && isActiveStatus(u.get('status', ''))
+        ? effectiveRole(u)
+        : '';
+      let dirRole = directoryRoleFrom(a, idx);
       return email in ['angeloperfecto.epc@gmail.com', 'president@pcm.edu.ph']
-        ? 3
+        ? 'Super Admin'
         : isBlockedStatus(u.get('status', ''))
-          ? 0
-          : maxOf(
-              u.get('role', '') in adminRoles() && isActiveStatus(u.get('status', ''))
-                ? levelOfRole(effectiveRole(u))
-                : 0,
-              levelOfRole(directoryRoleFrom(a, idx))
-            );
+          ? ''
+          : (levelOfRole(profileRole) >= levelOfRole(dirRole) ? profileRole : dirRole);
+    }
+
+    function adminRole() {
+      return !isSignedIn() ? '' : roleFrom(verifiedEmail(), profileDoc(), adminUserDoc(), emailIndexDoc());
     }
 
     function adminLevel() {
-      return !isSignedIn() ? 0 : levelFrom(verifiedEmail(), profileDoc(), adminUserDoc(), emailIndexDoc());
+      return levelOfRole(adminRole());
+    }
+
+    // Admission decisions, document verification and creating official student records.
+    function isEnrollmentStaff() {
+      return adminRole() in ['Super Admin', 'Admin', 'Registrar'];
+    }
+
+    // Semester enrollment processing (approvals, assessments, payments, grades).
+    function isEnrollmentOffice() {
+      return adminRole() in ['Super Admin', 'Admin', 'Registrar', 'Academic Admin', 'Finance'];
     }
 
     function directoryRole() {
@@ -174,23 +184,164 @@ service cloud.firestore {
     // Public form submissions: anyone can submit, only admins can change or remove.
     // ---------------------------------------------------------------------------
 
-    match /applications/{id}            { allow read, create: if true; allow update, delete: if isAdmin(); }
     match /inquiries/{id}               { allow read, create: if true; allow update, delete: if isAdmin(); }
     match /newsletterSubscribers/{id}   { allow read, create: if true; allow update, delete: if isAdmin(); }
     match /donations/{id}               { allow read, create: if true; allow update, delete: if isAdmin(); }
     match /activityLogs/{id}            { allow read, create: if true; allow update, delete: if isAdmin(); }
 
     // ---------------------------------------------------------------------------
-    // Student portal records. The portal signs students in without Firebase Auth, so
-    // these stay writable; deleting records requires an admin.
+    // Admissions: applications, their documents and status history.
+    // Applicants sign in with Google and see only their own application (matched by uid,
+    // or by verified email for applications made before sign-in was required).
     // ---------------------------------------------------------------------------
 
-    match /studentProfiles/{id}         { allow read, create, update: if true; allow delete: if isAdmin(); }
-    match /enrollments/{id}             { allow read, create, update: if true; allow delete: if isAdmin(); }
-    match /preEnlistments/{id}          { allow read, create, update: if true; allow delete: if isAdmin(); }
-    match /addDropRequests/{id}         { allow read, create, update: if true; allow delete: if isAdmin(); }
-    match /studentNotifications/{id}    { allow read, create, update: if true; allow delete: if isAdmin(); }
-    match /uploadedDocuments/{id}       { allow read, create, update: if true; allow delete: if isAdmin(); }
+    function changedKeys() {
+      return request.resource.data.diff(resource.data).affectedKeys();
+    }
+
+    function ownsApplication(data) {
+      return isSignedIn()
+        && (data.get('applicantUid', '') == request.auth.uid
+          || (verifiedEmail() != '' && data.get('email', '') == verifiedEmail()));
+    }
+
+    function applicationPath(appId) {
+      return /databases/$(database)/documents/applications/$(appId);
+    }
+
+    match /applications/{appId} {
+      allow read: if isAdmin() || ownsApplication(resource.data);
+      // New applications start as 'Submitted' and carry no decision fields.
+      allow create: if isSignedIn()
+        && request.resource.data.get('applicantUid', '') == request.auth.uid
+        && request.resource.data.get('status', '') == 'Submitted'
+        && !request.resource.data.keys().hasAny(['studentId', 'studentRecordId', 'enrolledAt', 'lastDecisionBy', 'lastDecisionAt', 'applicantMessage']);
+      // Applicants may only send a "Requirements Incomplete" application back to review
+      // after re-submitting documents; every other change is a staff decision.
+      allow update: if isEnrollmentStaff()
+        || (ownsApplication(resource.data)
+          && changedKeys().hasOnly(['status', 'updatedAt'])
+          && resource.data.get('status', '') in ['Requirements Incomplete', 'Additional Documents Required']
+          && request.resource.data.get('status', '') == 'Under Review');
+      allow delete: if isEnrollmentStaff();
+
+      match /requirements/{reqId} {
+        allow read: if isAdmin() || ownsApplication(get(applicationPath(appId)).data);
+        allow create: if isEnrollmentStaff()
+          || (ownsApplication(getAfter(applicationPath(appId)).data)
+            && request.resource.data.get('applicantUid', '') == request.auth.uid
+            && request.resource.data.get('status', '') in ['Missing', 'Submitted']
+            && !request.resource.data.keys().hasAny(['reviewedBy', 'reviewedAt', 'remarks']));
+        // Applicants can upload or replace a document, but never mark it verified.
+        allow update: if isEnrollmentStaff()
+          || (ownsApplication(get(applicationPath(appId)).data)
+            && resource.data.get('status', '') != 'Verified'
+            && request.resource.data.get('status', '') == 'Submitted'
+            && changedKeys().hasOnly(['status', 'fileName', 'fileType', 'fileSize', 'fileDataUrl', 'uploadedAt']));
+        allow delete: if isEnrollmentStaff();
+      }
+
+      match /history/{entryId} {
+        allow read: if isAdmin() || ownsApplication(get(applicationPath(appId)).data);
+        allow create: if isEnrollmentStaff()
+          || (ownsApplication(getAfter(applicationPath(appId)).data)
+            && request.resource.data.get('actor', '') == 'applicant'
+            && request.resource.data.get('status', '') in ['Submitted', 'Under Review']);
+      }
+    }
+
+    // ---------------------------------------------------------------------------
+    // Official student records. Created only by enrollment staff when enrollment is
+    // finalized. Students see their own record (linked by uid, or by verified email
+    // until linked) and may edit personal details, but not official fields.
+    // ---------------------------------------------------------------------------
+
+    function officialStudentFields() {
+      return ['studentId', 'applicationNumber', 'referenceNumber', 'authUid', 'email', 'program', 'programId',
+        'degreeProgram', 'major', 'specialization', 'yearLevel', 'section', 'academicStatus', 'enrollmentStatus',
+        'academicYear', 'semester', 'currentSemester', 'gpa', 'totalUnitsEarned', 'courses', 'subjectHistory',
+        'tuitionTotal', 'tuitionPaid', 'tuitionBalance', 'paymentStatus', 'paymentRecords', 'paymentHistory',
+        'verificationStatus', 'accountStatus', 'portalAccess', 'admissionRequirementsVerified',
+        'verifiedAdmissionDocuments', 'enrolledAt', 'enrolledBy'];
+    }
+
+    function ownsStudentRecord(data) {
+      return isSignedIn() && data.get('authUid', '') == request.auth.uid;
+    }
+
+    match /studentProfiles/{id} {
+      allow read: if isAdmin()
+        || ownsStudentRecord(resource.data)
+        || (verifiedEmail() != '' && resource.data.get('email', '') == verifiedEmail());
+      allow create: if isEnrollmentStaff();
+      allow update: if isAdmin()
+        // Personal details; submitting a semester enrollment may set the status to Submitted.
+        || (ownsStudentRecord(resource.data)
+          && !changedKeys().difference(['enrollmentStatus', 'currentSemester'].toSet()).hasAny(officialStudentFields())
+          && (!changedKeys().hasAny(['enrollmentStatus', 'currentSemester'])
+            || request.resource.data.get('enrollmentStatus', '') in ['Submitted', 'Draft']))
+        // First Google sign-in links an existing record whose email matches.
+        || (resource.data.get('authUid', '') == ''
+          && verifiedEmail() != ''
+          && resource.data.get('email', '') == verifiedEmail()
+          && request.resource.data.get('authUid', '') == request.auth.uid
+          && changedKeys().hasOnly(['authUid', 'linkedAt', 'updatedAt']));
+      allow delete: if isAdmin();
+    }
+
+    // Semester enrollment requests made from the Student Portal.
+    function ownsRequest(data) {
+      return isSignedIn() && data.get('studentUid', '') == request.auth.uid;
+    }
+
+    match /enrollments/{id} {
+      allow read: if isAdmin() || ownsRequest(resource.data);
+      allow create: if isEnrollmentOffice()
+        || (ownsRequest(request.resource.data) && request.resource.data.get('status', '') in ['Draft', 'Submitted']);
+      allow update: if isEnrollmentOffice()
+        || (ownsRequest(resource.data) && ownsRequest(request.resource.data)
+          && resource.data.get('status', '') in ['Draft', 'Submitted', 'Returned for Correction']
+          && request.resource.data.get('status', '') in ['Draft', 'Submitted']);
+      allow delete: if isEnrollmentOffice();
+    }
+
+    match /preEnlistments/{id} {
+      allow read: if isAdmin() || ownsRequest(resource.data);
+      allow create: if isEnrollmentOffice()
+        || (ownsRequest(request.resource.data) && request.resource.data.get('status', '') in ['Draft', 'Submitted']);
+      allow update: if isEnrollmentOffice()
+        || (ownsRequest(resource.data) && ownsRequest(request.resource.data)
+          && resource.data.get('status', '') in ['Draft', 'Submitted', 'Returned for Revision']
+          && request.resource.data.get('status', '') in ['Draft', 'Submitted']);
+      allow delete: if isEnrollmentOffice();
+    }
+
+    match /addDropRequests/{id} {
+      allow read: if isAdmin() || ownsRequest(resource.data);
+      allow create: if isEnrollmentOffice()
+        || (ownsRequest(request.resource.data) && request.resource.data.get('status', '') == 'Pending');
+      allow update, delete: if isEnrollmentOffice();
+    }
+
+    // Notifications to an applicant or student (recipientUid). Students may mark them read.
+    match /studentNotifications/{id} {
+      allow read: if isAdmin() || (isSignedIn() && resource.data.get('recipientUid', '') == request.auth.uid);
+      allow create: if isAdmin() || (isSignedIn() && request.resource.data.get('recipientUid', '') == request.auth.uid);
+      allow update: if isAdmin()
+        || (isSignedIn() && resource.data.get('recipientUid', '') == request.auth.uid && changedKeys().hasOnly(['read']));
+      allow delete: if isAdmin();
+    }
+
+    // Alerts for admissions staff about applicant activity.
+    match /staffNotifications/{id} {
+      allow read, update, delete: if isAdmin();
+      allow create: if isSignedIn()
+        && request.resource.data.get('createdByUid', '') == request.auth.uid
+        && request.resource.data.keys().hasOnly(['id', 'applicationId', 'referenceNumber', 'title', 'message', 'createdByUid', 'read', 'createdAt']);
+    }
+
+    // Upload log for portal documents; contents are private to admins.
+    match /uploadedDocuments/{id}       { allow read, update, delete: if isAdmin(); allow create: if isSignedIn(); }
 
     // ---------------------------------------------------------------------------
     // Accounts, registration and approval

@@ -172,8 +172,13 @@ import {
   safeUpdateDoc,
   safeDeleteDoc,
   blobToDataUrl,
+  query,
+  where,
 } from './firebase';
 import { firebaseConfig } from './firebaseConfig';
+import { ENROLLMENT_STAFF_ROLES, normalizeStatus, requirementTemplates } from './enrollmentWorkflow';
+import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflow';
+import { submitAdmissionApplication, transitionApplication } from './admissionsService';
 
 export interface ToastNotification {
   id: string;
@@ -402,8 +407,14 @@ interface PCMContextType {
 
   // Admissions & Online Application System
   applications: AdmissionApplication[];
-  submitApplication: (appData: any) => Promise<string> | string;
-  updateApplicationStatus: (id: string, status: any, note?: string) => void;
+  submitApplication: (
+    appData: any,
+    initialFiles?: Record<string, { dataUrl: string; size: number; type: string; name: string }>
+  ) => Promise<string>;
+  updateApplicationStatus: (id: string, status: any, note?: string) => Promise<boolean>;
+  // Registrar, Admin or Super Admin: may make admission decisions and finalize enrollment.
+  canDecideAdmissions: boolean;
+  admissionsActor: () => { uid: string; name: string; email: string; role?: string };
   addApplicationNote: (id: string, note: string) => void;
   deleteApplication: (id: string) => void;
   getApplicationByRef: (ref: string) => AdmissionApplication | undefined;
@@ -689,16 +700,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const firestoreLoadedCollectionsRef = useRef<Set<string>>(new Set());
 
   // Navigation
-  const [currentSection, setCurrentSection] = useState<NavSection>(() => {
-    if (typeof window === 'undefined') return 'home';
-    try {
-      const hash = window.location.hash.replace('#', '').toLowerCase();
-      if (ALL_VALID_SECTIONS.includes(hash as NavSection)) {
-        return hash as NavSection;
-      }
-    } catch {}
-    return 'home';
-  });
+  // Starts at 'home' to match the server-rendered page; the URL hash is applied after mount
+  // (see "Synchronize section with browser hash"). Reading it here caused a hydration
+  // mismatch that left deep links like /#apply showing the home page.
+  const [currentSection, setCurrentSection] = useState<NavSection>('home');
   const [activeSubSection, setActiveSubSection] = useState<string | null>(null);
 
   // Search
@@ -1162,6 +1167,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrentSection('home');
       }
     };
+    // Apply the URL's section once mounted, so links like /#apply or /#portal open directly.
+    handleUrlChange();
     window.addEventListener('hashchange', handleUrlChange);
     window.addEventListener('popstate', handleUrlChange);
     return () => {
@@ -1320,29 +1327,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Admin sessions are never restored from localStorage: anyone can write to it from
       // devtools. Admin access is granted only by the Firebase Auth listener below,
       // which re-verifies the signed-in user's role against Firestore on every load.
+      // The same applies to Student Portal sessions: access comes from Firebase sign-in plus
+      // a linked student record, so stored sessions are discarded rather than trusted.
       localStorage.removeItem('pcm_admin_session');
-      const storedUser = localStorage.getItem('pcm_user_session');
-      if (storedUser) {
-        const parsed = JSON.parse(storedUser) as UserAccount;
-        if (
-          parsed &&
-          (parsed.uid || parsed.id) &&
-          (parsed.role === 'Student' || parsed.role === 'Student/User') &&
-          !isUserDeletedRef.current(parsed.uid || parsed.id) &&
-          !isUserDeletedRef.current(parsed.email)
-        ) {
-          setCurrentUserAccount(parsed);
-          setIsStudentLoggedIn(true);
-        }
-      }
-      const storedStudent = localStorage.getItem('pcm_student_session');
-      if (storedStudent) {
-        const parsed = JSON.parse(storedStudent) as StudentProfile;
-        if (parsed && parsed.id && !isUserDeletedRef.current(parsed.id) && !isUserDeletedRef.current(parsed.email)) {
-          setStudentProfile(parsed);
-          setIsStudentLoggedIn(true);
-        }
-      }
+      localStorage.removeItem('pcm_student_session');
     } catch (e) {
       console.warn('Session hydration notice:', e);
     }
@@ -2598,89 +2586,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         unsubs.push(uStudentLife);
 
-        // 20. Admissions Applications collection
-        logFirestoreOp('listen', 'applications', 'Admissions Applications Public Sync');
-        const uApps = onSnapshot(
-          collection(db, 'applications'),
-          async (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AdmissionApplication[];
-              setApplications((prev) => (areEntitiesEqual(prev, list) ? prev : list));
-              setCachedData('applications', list);
-            } else {
-              setApplications([]);
-              setCachedData('applications', []);
-            }
-          },
-          (err) => handleFirestoreError(err, OperationType.LIST, 'applications')
-        );
-        unsubs.push(uApps);
-
-        // 21. Student Profiles Directory
-        logFirestoreOp('listen', 'studentProfiles', 'Student Profiles Directory Public Sync');
-        const uStudents = onSnapshot(
-          collection(db, 'studentProfiles'),
-          async (snap) => {
-            if (!snap.empty) {
-              const list = (snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentProfile[]).filter(
-                (s) => !isUserDeletedRef.current(s)
-              );
-              setStudents((prev) => (areEntitiesEqual(prev, list) ? prev : list));
-              setCachedData('students', list);
-              if (list.length > 0) {
-                setStudentProfile((prev) => {
-                  const matched = list.find(
-                    (s) => s.id === prev?.id || s.studentId === prev?.studentId || s.email === prev?.email
-                  );
-                  const updated = matched ? { ...prev, ...matched } : prev;
-                  setCachedData('studentProfile', updated);
-                  return updated;
-                });
-              }
-              setUserAccounts((prev) => {
-                const next = syncWithAdminsAndStudents(prev, stateRef.current.adminUsers, list);
-                setCachedData('userAccounts', next);
-                return areUserAccountsEqual(prev, next) ? prev : next;
-              });
-            } else {
-              setStudents([]);
-              setCachedData('students', []);
-            }
-          },
-          (err) => handleFirestoreError(err, OperationType.LIST, 'studentProfiles')
-        );
-        unsubs.push(uStudents);
-
-        // 22. Online Enrollments collection
-        logFirestoreOp('listen', 'enrollments', 'Online Enrollments Public Sync');
-        const uEnrollments = onSnapshot(
-          collection(db, 'enrollments'),
-          async (snap) => {
-            if (!snap.empty) {
-              const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as OnlineEnrollment[];
-              setEnrollments((prev) => (areEntitiesEqual(prev, list) ? prev : list));
-              setCachedData('enrollments', list);
-            } else {
-              setEnrollments([]);
-              setCachedData('enrollments', []);
-            }
-          },
-          (err) => handleFirestoreError(err, OperationType.LIST, 'enrollments')
-        );
-        unsubs.push(uEnrollments);
-
-        // 23. Student Notifications collection
-        logFirestoreOp('listen', 'studentNotifications', 'Student Notifications Public Sync');
-        const uNotifs = onSnapshot(
-          collection(db, 'studentNotifications'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as StudentNotification[];
-            setStudentNotifications((prev) => (areEntitiesEqual(prev, list) ? prev : list));
-            setCachedData('studentNotifications', list);
-          },
-          (err) => handleFirestoreError(err, OperationType.LIST, 'studentNotifications')
-        );
-        unsubs.push(uNotifs);
+        // 20-23. Applications, student records, enrollments and notifications are private:
+        // they are loaded by the auth-scoped effect below (all records for admins, only the
+        // signed-in user's own records for applicants and students).
 
         // 24. Academic Subjects collection
         logFirestoreOp('listen', 'academicSubjects', 'Academic Subjects Public Sync');
@@ -2700,18 +2608,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         unsubs.push(uSubjects);
 
-        // 25. Pre-Enlistments collection
-        logFirestoreOp('listen', 'preEnlistments', 'Pre-Enlistments Public Sync');
-        const uPreEnlist = onSnapshot(
-          collection(db, 'preEnlistments'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as PreEnlistmentRecord[];
-            setPreEnlistments((prev) => (areEntitiesEqual(prev, list) ? prev : list));
-            setCachedData('preEnlistments', list);
-          },
-          (err) => handleFirestoreError(err, OperationType.LIST, 'preEnlistments')
-        );
-        unsubs.push(uPreEnlist);
+        // 25. Pre-enlistments are private; see the auth-scoped effect below.
 
         // 26. Fee Structure collection (Universal Real-Time Sync)
         logFirestoreOp('listen', 'feeStructure', 'Fee Structure Universal Sync');
@@ -2800,18 +2697,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         );
         unsubs.push(uEnrollSettings);
 
-        // 31. Add/Drop Requests collection (Universal Real-Time Sync)
-        logFirestoreOp('listen', 'addDropRequests', 'Add/Drop Requests Universal Sync');
-        const uAddDrop = onSnapshot(
-          collection(db, 'addDropRequests'),
-          (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as AddDropRequest[];
-            setAddDropRequests((prev) => (areEntitiesEqual(prev, list) ? prev : list));
-            setCachedData('addDropRequests', list);
-          },
-          (err) => handleFirestoreError(err, OperationType.LIST, 'addDropRequests')
-        );
-        unsubs.push(uAddDrop);
+        // 31. Add/drop requests are private; see the auth-scoped effect below.
 
         // 32. Donations collection (Universal Real-Time Sync)
         logFirestoreOp('listen', 'donations', 'Donations Review Universal Sync');
@@ -3058,14 +2944,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 avatarUrl: acc.photoURL || acc.avatarUrl,
               });
             } else {
+              // Not an admin. Student Portal access comes from a linked student record,
+              // which the auth-scoped data effect looks up (see "Private admissions and
+              // student data"); a signed-in user without one is treated as an applicant.
               setIsAdminLoggedIn(false);
-              setIsStudentLoggedIn(true);
-              setStudentProfile((prev) => ({
-                ...prev,
-                fullName: acc.name || acc.displayName || prev.fullName,
-                email: acc.email,
-                avatarUrl: acc.photoURL || acc.avatarUrl || prev.avatarUrl,
-              }));
             }
 
             // Real-time listener specifically for current user's profile document only
@@ -3126,23 +3008,17 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           } else {
             // No Firebase user: there is no admin session. Admin access always requires a
             // Firebase-authenticated account whose role is verified above.
+            // Student Portal sessions also require Firebase sign-in now, so nothing is
+            // restored from localStorage.
             setIsAdminLoggedIn(false);
-            setCurrentUserAccount((prev) =>
-              prev && (prev.role === 'Student' || prev.role === 'Student/User') ? prev : null
-            );
-            const storedStudent = typeof window !== 'undefined' ? localStorage.getItem('pcm_student_session') : null;
-            if (storedStudent) {
+            setIsStudentLoggedIn(false);
+            setCurrentUserAccount(null);
+            if (typeof window !== 'undefined') {
               try {
-                const parsed = JSON.parse(storedStudent) as StudentProfile;
-                if (parsed && parsed.id && !isUserDeletedRef.current(parsed.id) && !isUserDeletedRef.current(parsed.email)) {
-                  setIsStudentLoggedIn(true);
-                  setStudentProfile(parsed);
-                  return;
-                }
+                localStorage.removeItem('pcm_student_session');
+                localStorage.removeItem('pcm_user_session');
               } catch {}
             }
-            setCurrentUserAccount(null);
-            setIsAdminLoggedIn(false);
           }
         });
         unsubs.push(unsubAuth);
@@ -4696,83 +4572,123 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Admissions Application Workflow
-  const submitApplication = async (appData: any): Promise<string> => {
-    const year = new Date().getFullYear();
-    const randDigits = Math.floor(1000 + Math.random() * 9000);
-    const refNumber =
-      (appData.referenceNumber && String(appData.referenceNumber).trim()) ||
-      (appData.applicationNumber && String(appData.applicationNumber).trim()) ||
-      `PCM-${year}-${randDigits}`;
-
-    const studentId =
-      (appData.studentId && String(appData.studentId).trim()) ||
-      (refNumber.startsWith('PCM-') ? refNumber.replace(/^PCM-(\d{4})-(\d+)$/, '$1-PCM-$2') : refNumber);
-
-    const newApp: AdmissionApplication = {
-      id: appData.id || `app-${Date.now()}`,
-      referenceNumber: refNumber,
-      studentId,
-      fullName: appData.fullName || 'Applicant',
-      email: appData.email || '',
-      phone: appData.phone || appData.mobileNumber || appData.contactNumber || '',
-      dateOfBirth: appData.dob || appData.dateOfBirth || appData.birthDate || '',
-      gender: appData.gender || appData.sex || 'Prefer not to say',
-      address: appData.address || appData.currentAddress || '',
-      program: appData.program || appData.programTitle || 'Bachelor of Theology (B.Th.)',
-      programName: appData.program || appData.programTitle || 'Bachelor of Theology (B.Th.)',
-      programId: appData.programId || 'prog-bth',
-      status: appData.status || 'Submitted',
-      submissionDate: appData.submissionDate || new Date().toISOString().split('T')[0],
-      christianTestimony: appData.testimony || appData.callingTestimony || '',
-      churchAffiliation: appData.church || appData.churchName || '',
-      pastorName: appData.pastorName || '',
-      pastorContact: appData.pastorContact || appData.pastorContactNumber || '',
-      highSchool: appData.highSchool || appData.lastSchoolAttended || '',
-      previousCollege: appData.previousCollege || appData.lastSchoolAttended || '',
-      adminNotes: appData.adminNotes || 'Application received online. Queued for initial Admissions Committee review.',
-      createdAt: appData.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setApplications((prev) => {
-      const next = [newApp, ...prev.filter((a) => a.referenceNumber !== refNumber && a.id !== newApp.id)];
-      setCachedData('applications', next);
-      return next;
-    });
-    try {
-      await safeSetDoc(doc(db, 'applications', newApp.id), cleanFirestoreData(newApp), { merge: true });
-    } catch (e) {
-      console.warn('Firestore application save warning:', e);
+  // Submits an admission application for the signed-in applicant (Google sign-in required),
+  // creating its document checklist and status history. Returns the reference number, or ''
+  // if it could not be submitted (the reason is shown as a toast). An applicant with an open
+  // application is pointed to it instead of creating a duplicate.
+  const submitApplication = async (
+    appData: any,
+    initialFiles: Record<string, { dataUrl: string; size: number; type: string; name: string }> = {}
+  ): Promise<string> => {
+    const user = auth.currentUser;
+    if (!user) {
+      addToast('warning', 'Sign In Required', 'Please sign in with your Google account before submitting your application.');
+      return '';
+    }
+    const fullName = String(appData.fullName || '').trim();
+    const email = String(appData.email || user.email || '').trim();
+    if (!fullName || !email) {
+      addToast('error', 'Incomplete Application', 'Your full name and email address are required.');
+      return '';
     }
 
-    logActivity('CREATE', 'Admission Application', newApp.id, `${newApp.fullName} (${refNumber})`, `New online admission application submitted for ${newApp.program}.`);
-    addToast('success', 'Application Submitted', `Your application has been received. Reference: ${refNumber}`);
-    return refNumber;
+    const program = appData.programName || appData.program || appData.programTitle || '';
+    const data = cleanFirestoreData({
+      programId: appData.programId || '',
+      program,
+      programName: program,
+      programLevel: appData.programLevel || '',
+      fullName,
+      email,
+      phone: appData.phone || appData.mobileNumber || appData.contactNumber || '',
+      dateOfBirth: appData.birthDate || appData.dob || appData.dateOfBirth || '',
+      gender: appData.gender || appData.sex || '',
+      civilStatus: appData.civilStatus || '',
+      address: appData.address || appData.currentAddress || '',
+      churchName: appData.churchName || appData.church || '',
+      churchAffiliation: appData.churchName || appData.church || '',
+      pastorName: appData.pastorName || '',
+      pastorContact: appData.pastorPhone || appData.pastorContact || appData.pastorContactNumber || '',
+      christianTestimony: appData.testimony || appData.callingTestimony || '',
+      callingStatement: appData.ministryCalling || appData.callingStatement || '',
+      highestEducation: appData.previousEducation || appData.highestEducationalAttainment || '',
+      previousSchool: appData.highSchoolOrCollege || appData.lastSchoolAttended || appData.highSchool || '',
+      yearGraduated: appData.yearGraduated || '',
+      applicantType: appData.applicantType || 'New Student',
+      registrationDetails: appData.registrationDetails || null,
+    });
+
+    try {
+      const result = await submitAdmissionApplication(
+        db,
+        { uid: user.uid, name: fullName, email: user.emailVerified ? (user.email || '').toLowerCase() : null },
+        data,
+        requirementTemplates(enrollmentSystemConfig?.requiredDocumentsList),
+        initialFiles
+      );
+      if (!result.ok) {
+        addToast('warning', result.duplicateOf ? 'Application Already Open' : 'Application Not Submitted', result.message || 'Please try again.');
+        return result.duplicateOf?.referenceNumber ? `DUPLICATE:${result.duplicateOf.referenceNumber}` : '';
+      }
+      logActivity('CREATE', 'Admission Application', result.applicationId || '', `${fullName} (${result.referenceNumber})`, `New online admission application submitted for ${program}.`);
+      addToast('success', 'Application Submitted', `Your application has been received. Reference: ${result.referenceNumber}`);
+      return result.referenceNumber || '';
+    } catch (e: any) {
+      console.warn('Application submit notice:', e);
+      addToast('error', 'Application Not Submitted', 'We could not save your application. Please check your connection and try again; nothing was submitted.');
+      return '';
+    }
   };
 
-  const updateApplicationStatus = async (id: string, status: ApplicationStatus, note?: string) => {
-    const targetApp = applications.find((a) => a.id === id);
-    const updatedNote = note
-      ? `${targetApp?.adminNotes || ''}\n[${new Date().toLocaleDateString()} - ${currentAdminUser.name}]: ${note}`
-      : targetApp?.adminNotes;
+  // Admission decisions are limited to enrollment staff (Registrar, Admin, Super Admin).
+  const canDecideAdmissions = isAdminLoggedIn && ENROLLMENT_STAFF_ROLES.includes(currentAdminUser?.role || '');
 
-    setApplications((prev) => {
-      const next = prev.map((app) => (app.id === id ? { ...app, status, adminNotes: updatedNote } : app));
-      setCachedData('applications', next);
-      return next;
-    });
+  const admissionsActor = () => ({
+    uid: auth.currentUser?.uid || '',
+    name: currentAdminUser?.name || currentUserAccount?.name || 'Admissions Office',
+    email: auth.currentUser?.email || '',
+    role: currentAdminUser?.role,
+  });
 
-    try {
-      await safeSetDoc(doc(db, 'applications', id), cleanFirestoreData({ status, adminNotes: updatedNote }), { merge: true });
-    } catch (e) {
-      console.warn(e);
+  // Moves an application through the admission workflow (see lib/enrollmentWorkflow.ts).
+  // Enrollment itself is completed with Finalize Enrollment, which also creates the
+  // official student record.
+  const updateApplicationStatus = async (id: string, status: ApplicationStatus | WorkflowStatus, note?: string): Promise<boolean> => {
+    if (!canDecideAdmissions) {
+      addToast('error', 'Permission Denied', 'Only the Registrar, Admin or Super Admin can change an admission decision.');
+      return false;
     }
-
-    logActivity('UPDATE', 'Admission Application', id, targetApp?.fullName || 'Applicant', `Application status changed to "${status}".`);
-    addToast('success', 'Applicant Status Updated', `Status updated to ${status}.`);
+    const targetApp = applications.find((a) => a.id === id);
+    if (!targetApp) {
+      addToast('error', 'Application Not Found', 'This application could not be found.');
+      return false;
+    }
+    const to = normalizeStatus(status);
+    if (to === 'Enrolled') {
+      addToast('info', 'Use Finalize Enrollment', 'Open the application and use "Finalize Enrollment" to enroll the student and create their record.');
+      return false;
+    }
+    try {
+      const reqSnap = await getDocs(collection(db, 'applications', id, 'requirements'));
+      const reqs = reqSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as ApplicationRequirement[];
+      const result = await transitionApplication(db, admissionsActor(), targetApp as any, to, reqs, note || '');
+      addToast(result.ok ? 'success' : 'warning', result.ok ? 'Application Updated' : 'Not Updated', result.message);
+      if (result.ok) {
+        logActivity('UPDATE', 'Admission Application', id, targetApp.fullName || 'Applicant', `Application status changed to "${to}".`);
+      }
+      return result.ok;
+    } catch (e: any) {
+      console.warn('Application status notice:', e);
+      addToast('error', 'Not Updated', 'The change could not be saved. Please check your connection and try again.');
+      return false;
+    }
   };
 
   const addApplicationNote = async (id: string, note: string) => {
+    if (!canDecideAdmissions) {
+      addToast('error', 'Permission Denied', 'Only the Registrar, Admin or Super Admin can add review notes.');
+      return;
+    }
     const targetApp = applications.find((a) => a.id === id);
     const newNotes = `${targetApp?.adminNotes || ''}\n[${new Date().toLocaleDateString()} - ${currentAdminUser.name}]: ${note}`;
 
@@ -4792,6 +4708,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteApplication = async (id: string) => {
+    if (!canDecideAdmissions) {
+      addToast('error', 'Permission Denied', 'Only the Registrar, Admin or Super Admin can delete applications.');
+      return;
+    }
     const targetApp = applications.find((a) => a.id === id);
     setApplications((prev) => {
       const next = prev.filter((a) => a.id !== id);
@@ -5027,112 +4947,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Student Portal Actions & Multi-Student Directory
-  const studentLogin = (studentId: string, pass: string): boolean => {
-    const sId = studentId.trim().toUpperCase();
-    const p = pass.trim();
-    const inputEmail = studentId.trim().toLowerCase();
-    const norm = sId.replace(/[^A-Za-z0-9]/g, '');
-    const altFormat = sId.startsWith('PCM-')
-      ? sId.replace(/^PCM-(\d{4})-(\d+)$/, '$1-PCM-$2')
-      : sId.replace(/^(\d{4})-PCM-(\d+)$/, 'PCM-$1-$2');
-
-    // 1. Look for matching student in state
-    let matched = students.find((s) => {
-      const matchId =
-        (s.studentId || '').toUpperCase() === sId ||
-        (s.studentId || '').replace(/-/g, '').toUpperCase() === sId ||
-        (s.applicationNumber || '').toUpperCase() === sId ||
-        s.id.toUpperCase() === sId ||
-        (s.studentId || '').toUpperCase() === altFormat ||
-        (s.applicationNumber || '').toUpperCase() === altFormat ||
-        (norm && (s.studentId || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase() === norm);
-      const matchEmail = (s.email || '').toLowerCase() === inputEmail;
-      return matchId || matchEmail;
-    });
-
-    // 2. If not found in students, check in applications and auto-hydrate
-    if (!matched) {
-      const appMatch = applications.find((a) => {
-        const refN = (a.referenceNumber || '').toUpperCase();
-        const aStudentId = (a.studentId || '').toUpperCase();
-        const aEmail = (a.email || '').toLowerCase();
-        return (
-          refN === sId ||
-          aStudentId === sId ||
-          refN === altFormat ||
-          aStudentId === altFormat ||
-          aEmail === inputEmail ||
-          (norm && (refN.replace(/[^A-Za-z0-9]/g, '') === norm || aStudentId.replace(/[^A-Za-z0-9]/g, '') === norm))
-        );
-      });
-
-      if (appMatch) {
-        const generatedStudentId =
-          appMatch.studentId ||
-          (appMatch.referenceNumber.startsWith('PCM-')
-            ? appMatch.referenceNumber.replace(/^PCM-(\d{4})-(\d+)$/, '$1-PCM-$2')
-            : appMatch.referenceNumber);
-        const hydratedProfile: StudentProfile = {
-          ...studentProfile,
-          id: `std-${appMatch.id.replace('app-', '')}`,
-          studentId: generatedStudentId,
-          applicationNumber: appMatch.referenceNumber,
-          referenceNumber: appMatch.referenceNumber,
-          fullName: appMatch.fullName,
-          name: appMatch.fullName,
-          email: appMatch.email,
-          phone: appMatch.phone,
-          program: appMatch.program || 'Bachelor of Theology (B.Th.)',
-          programId: appMatch.programId || 'prog-bth',
-          enrollmentStatus: (appMatch.status === 'Accepted' || appMatch.status === 'Enrolled' ? 'Approved' : 'Enrolled') as EnrollmentStatus,
-          yearLevel: '1st Year',
-          academicStatus: 'Regular',
-          academicYear: '2026–2027',
-          currentSemester: 'First Semester 2026-2027',
-          registeredDate: appMatch.submissionDate || '2026-08-28',
-          homeChurch: appMatch.churchAffiliation || '',
-          pastorName: appMatch.pastorName || '',
-          mentorName: appMatch.pastorName || 'Faculty Mentor',
-          address: appMatch.address || '',
-          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&auto=format&fit=crop&q=80',
-          portalPassword: 'pcmstudent',
-        };
-        matched = hydratedProfile;
-        setStudents((prev) => [hydratedProfile, ...prev]);
-        setDoc(doc(db, 'studentProfiles', hydratedProfile.id), cleanFirestoreData(hydratedProfile), { merge: true }).catch((e) => console.warn(e));
-      }
-    }
-
-    // 3. Fallback check against active student profile
-    if (!matched) {
-      if (
-        (studentProfile.studentId || '').toUpperCase() === sId ||
-        (studentProfile.email || '').toLowerCase() === inputEmail ||
-        sId === 'STUDENT' ||
-        sId === '2024-PCM-0418' ||
-        sId === '2024PCM0418' ||
-        sId === '2026-PCM-9354' ||
-        sId === 'PCM-2026-9354'
-      ) {
-        matched = studentProfile;
-      }
-    }
-
-    // A student's own portal password always wins. The institutional default only applies
-    // to records that never had a password set; there are no universal override passwords.
-    const isPassMatch = matched?.portalPassword
-      ? matched.portalPassword === p
-      : p === 'pcmstudent';
-
-    if (matched && isPassMatch) {
-      setStudentProfile(matched);
-      setIsStudentLoggedIn(true);
-      logActivity('LOGIN', 'Student Portal', matched.id, matched.fullName || matched.name || 'Student', `Student logged into portal (ID: ${matched.studentId}).`);
-      addToast('success', 'Student Authenticated', `Welcome back, ${matched.fullName || matched.name}!`);
-      return true;
-    }
-
-    addToast('error', 'Authentication Failed', 'Invalid Student ID or Password.');
+  // The Student ID + shared password login has been retired: it was checked only in the
+  // browser and let anyone open any student's records. Students now sign in with Google;
+  // their record is linked by their verified email (see the auth-scoped data effect).
+  const studentLogin = (_studentId: string, _pass: string): boolean => {
+    addToast(
+      'info',
+      'Sign in with Google',
+      'The Student Portal now uses your Google account. Sign in with the email address you gave the Registrar.'
+    );
     return false;
   };
 
@@ -5245,15 +5068,26 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('success', 'Tuition Payment Processed', `Payment of ₱${amount.toLocaleString()} received via ${method}.`);
   };
 
+  // Firebase uid of the student who owns a record (studentUid / recipientUid), which
+  // firestore.rules uses to let students see only their own requests and notifications.
+  const studentUidFor = (studentKey?: string): string | undefined => {
+    if (!studentKey) return undefined;
+    const match = (s?: StudentProfile | null) => !!s && (s.id === studentKey || s.studentId === studentKey);
+    const fromList = (stateRef.current?.students || []).find((s: StudentProfile) => match(s));
+    return fromList?.authUid || (match(studentProfile) ? studentProfile.authUid : undefined) || undefined;
+  };
+
   // Online Enrollment Workflow Engine
   const saveEnrollmentDraft = async (draft: Partial<OnlineEnrollment>): Promise<OnlineEnrollment> => {
     const id = draft.id || `enr-draft-${studentProfile.id || Date.now()}`;
     const refNo = draft.referenceNumber || `ENR-DRAFT-${Math.floor(1000 + Math.random() * 9000)}`;
+    const draftStudentId = draft.studentId || studentProfile.studentId;
 
     const fullDraft: OnlineEnrollment = {
       id,
       referenceNumber: refNo,
-      studentId: draft.studentId || studentProfile.studentId || '2024-PCM-0418',
+      studentUid: studentUidFor(draftStudentId),
+      studentId: draftStudentId || '2024-PCM-0418',
       studentName: draft.studentName || studentProfile.fullName || studentProfile.name || 'Student',
       studentEmail: draft.studentEmail || studentProfile.email,
       studentContact: draft.studentContact || studentProfile.phone || '',
@@ -5305,6 +5139,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...notif,
         id: `notif-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
         studentId,
+        recipientUid: studentUidFor(studentId),
         createdAt: new Date().toISOString(),
         read: false,
       };
@@ -5396,6 +5231,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const submission: OnlineEnrollment = {
         id,
         referenceNumber: refNo,
+        studentUid: studentUidFor(data.studentId || studentProfile.studentId),
         studentId: data.studentId || studentProfile.studentId || '2024-PCM-0418',
         studentName: data.studentName || studentProfile.fullName || studentProfile.name || 'Student',
         studentEmail: data.studentEmail || studentProfile.email,
@@ -5680,6 +5516,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newRecord: PreEnlistmentRecord = {
       ...recordData,
       id,
+      studentUid: studentUidFor(recordData.studentId),
       createdAt: now,
       submittedAt: now,
       status: 'Submitted',
@@ -5762,6 +5599,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newReq: AddDropRequest = {
       ...reqData,
       id,
+      studentUid: studentUidFor(reqData.studentId),
       dateSubmitted: now.split('T')[0],
       status: 'Pending',
       createdAt: now,
@@ -6773,6 +6611,141 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     acc.verificationStatus = 'Approved';
   };
 
+  // Private admissions and student data, loaded according to who is signed in:
+  //   approved admins     -> every record (Admin Workspace)
+  //   applicant / student -> only their own application, student record, requests and
+  //                          notifications (firestore.rules enforces the same limits)
+  //   signed out          -> nothing
+  // An existing student record whose email matches the signed-in Google account is linked
+  // to that account on first sign-in, which opens the Student Portal.
+  const authUid = firebaseAuthUser?.uid || '';
+  const authEmail = firebaseAuthUser?.emailVerified ? (firebaseAuthUser.email || '').toLowerCase() : '';
+  useEffect(() => {
+    const unsubs: (() => void)[] = [];
+    const privateCacheKeys = ['applications', 'students', 'enrollments', 'studentNotifications', 'preEnlistments', 'addDropRequests', 'studentProfile'];
+    const listen = <T,>(label: string, source: any, apply: (rows: T[]) => void) => {
+      unsubs.push(
+        onSnapshot(
+          source,
+          (snap: any) => apply(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })) as T[]),
+          (err: any) => handleFirestoreError(err, OperationType.LIST, label)
+        )
+      );
+    };
+
+    if (isAdminLoggedIn && authUid) {
+      listen<AdmissionApplication>('applications', collection(db, 'applications'), (list) => {
+        setApplications((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+        setCachedData('applications', list);
+      });
+      listen<StudentProfile>('studentProfiles', collection(db, 'studentProfiles'), (rows) => {
+        const list = rows.filter((s) => !isUserDeletedRef.current(s));
+        setStudents((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+        setCachedData('students', list);
+        setUserAccounts((prev) => {
+          const next = syncWithAdminsAndStudents(prev, stateRef.current.adminUsers, list);
+          setCachedData('userAccounts', next);
+          return areUserAccountsEqual(prev, next) ? prev : next;
+        });
+      });
+      listen<OnlineEnrollment>('enrollments', collection(db, 'enrollments'), (list) => {
+        setEnrollments((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+        setCachedData('enrollments', list);
+      });
+      listen<StudentNotification>('studentNotifications', collection(db, 'studentNotifications'), (list) => {
+        setStudentNotifications((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+        setCachedData('studentNotifications', list);
+      });
+      listen<PreEnlistmentRecord>('preEnlistments', collection(db, 'preEnlistments'), (list) => {
+        setPreEnlistments((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+        setCachedData('preEnlistments', list);
+      });
+      listen<AddDropRequest>('addDropRequests', collection(db, 'addDropRequests'), (list) => {
+        setAddDropRequests((prev) => (areEntitiesEqual(prev, list) ? prev : list));
+        setCachedData('addDropRequests', list);
+      });
+      return () => unsubs.forEach((u) => u());
+    }
+
+    // Not an admin: never keep other people's records in this browser.
+    if (typeof window !== 'undefined') {
+      privateCacheKeys.forEach((k) => {
+        try {
+          localStorage.removeItem(`pcm_cache_${k}`);
+        } catch {}
+      });
+    }
+    setApplications([]);
+    setStudents([]);
+    setEnrollments([]);
+    setStudentNotifications([]);
+    setPreEnlistments([]);
+    setAddDropRequests([]);
+
+    if (!authUid) {
+      setIsStudentLoggedIn(false);
+      return;
+    }
+
+    // Applications: by uid, plus older ones made with the same verified email.
+    const appsByKey: Record<string, AdmissionApplication[]> = { uid: [], email: [] };
+    const publishApps = () => {
+      const merged = new Map<string, AdmissionApplication>();
+      [...appsByKey.uid, ...appsByKey.email].forEach((a) => merged.set(a.id, a));
+      setApplications(Array.from(merged.values()));
+    };
+    listen<AdmissionApplication>('applications', query(collection(db, 'applications'), where('applicantUid', '==', authUid)), (list) => {
+      appsByKey.uid = list;
+      publishApps();
+    });
+    if (authEmail) {
+      listen<AdmissionApplication>('applications', query(collection(db, 'applications'), where('email', '==', authEmail)), (list) => {
+        appsByKey.email = list;
+        publishApps();
+      });
+    }
+
+    // Student record: linked by uid, or found by verified email and linked now.
+    const profilesByKey: Record<string, StudentProfile[]> = { uid: [], email: [] };
+    const publishProfile = () => {
+      const linked = profilesByKey.uid[0];
+      const unlinked = profilesByKey.email.find((p) => !p.authUid);
+      if (!linked && unlinked) {
+        updateDoc(doc(db, 'studentProfiles', unlinked.id), {
+          authUid,
+          linkedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }).catch((e) => console.warn('Student record link notice:', e));
+      }
+      const mine = linked || unlinked;
+      if (mine) {
+        setStudents([mine]);
+        setStudentProfile(mine);
+        setIsStudentLoggedIn(true);
+      } else {
+        setIsStudentLoggedIn(false);
+      }
+    };
+    listen<StudentProfile>('studentProfiles', query(collection(db, 'studentProfiles'), where('authUid', '==', authUid)), (list) => {
+      profilesByKey.uid = list;
+      publishProfile();
+    });
+    if (authEmail) {
+      listen<StudentProfile>('studentProfiles', query(collection(db, 'studentProfiles'), where('email', '==', authEmail)), (list) => {
+        profilesByKey.email = list;
+        publishProfile();
+      });
+    }
+
+    listen<OnlineEnrollment>('enrollments', query(collection(db, 'enrollments'), where('studentUid', '==', authUid)), setEnrollments);
+    listen<PreEnlistmentRecord>('preEnlistments', query(collection(db, 'preEnlistments'), where('studentUid', '==', authUid)), setPreEnlistments);
+    listen<AddDropRequest>('addDropRequests', query(collection(db, 'addDropRequests'), where('studentUid', '==', authUid)), setAddDropRequests);
+    listen<StudentNotification>('studentNotifications', query(collection(db, 'studentNotifications'), where('recipientUid', '==', authUid)), setStudentNotifications);
+
+    return () => unsubs.forEach((u) => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAdminLoggedIn, authUid, authEmail]);
+
   // Keep the adminEmails/{email} index in step with the active adminUsers directory.
   // firestore.rules can't search adminUsers by email, so it checks this index to recognise
   // admins whose adminUsers entry isn't keyed by their Firebase uid. Super Admin and Admin
@@ -7245,22 +7218,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logActivity('LOGIN', 'Admin Session', accountData.uid, accountData.name, `Authenticated via Google (${accountData.role}).`);
         return { success: true, role: accountData.role, user: accountData };
       } else {
-        setIsStudentLoggedIn(true);
+        // Student Portal access follows from a linked student record (auth-scoped effect).
         setIsAdminLoggedIn(false);
-        setStudentProfile((prev) => {
-          const updated = {
-            ...prev,
-            fullName: accountData.name,
-            email: accountData.email,
-            avatarUrl: accountData.photoURL || accountData.avatarUrl || prev.avatarUrl,
-          };
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem('pcm_student_session', JSON.stringify(updated));
-            } catch {}
-          }
-          return updated;
-        });
         addToast({
           type: 'success',
           title: 'Sign-in Successful',
@@ -7432,23 +7391,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logActivity('LOGIN', 'Admin Session', userAcc.uid, userAcc.name, `Logged in via Email/Password.`);
         return { success: true, role: userAcc.role, user: userAcc };
       } else {
-        setIsStudentLoggedIn(true);
+        // Student Portal access follows from a linked student record (auth-scoped effect).
         setIsAdminLoggedIn(false);
-        setStudentProfile((prev) => {
-          const updated = {
-            ...prev,
-            fullName: userAcc.name,
-            email: userAcc.email,
-            avatarUrl: userAcc.photoURL || userAcc.avatarUrl || prev.avatarUrl,
-          };
-          if (typeof window !== 'undefined') {
-            try {
-              localStorage.setItem('pcm_student_session', JSON.stringify(updated));
-              localStorage.setItem('pcm_user_session', JSON.stringify(userAcc));
-            } catch {}
-          }
-          return updated;
-        });
         addToast({
           type: 'success',
           title: 'Login Successful',
@@ -9086,6 +9030,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         applications,
         submitApplication,
         updateApplicationStatus,
+        canDecideAdmissions,
+        admissionsActor,
         addApplicationNote,
         deleteApplication,
         getApplicationByRef,

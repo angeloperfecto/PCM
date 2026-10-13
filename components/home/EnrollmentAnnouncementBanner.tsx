@@ -16,7 +16,6 @@ export const EnrollmentAnnouncementBanner: React.FC = () => {
   const { navigateTo, setIsStudentLoggedIn } = usePCM();
 
   const handleOpenStudentHub = () => {
-    setIsStudentLoggedIn(true);
     navigateTo('portal');
   };
 

@@ -32,7 +32,6 @@ export const QuickViewSwitcher: React.FC = () => {
   };
 
   const handleGoToStudentPortal = () => {
-    setIsStudentLoggedIn(true);
     navigateTo('portal');
   };
 

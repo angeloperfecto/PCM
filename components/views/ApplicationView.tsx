@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { usePCM } from '@/lib/store';
 import { ProgramLevel } from '@/lib/types';
 import { StudentRegistrationWizard } from '@/components/enrollment/StudentRegistrationWizard';
+import { MyApplicationPanel } from '@/components/enrollment/MyApplicationPanel';
 import {
   FileEdit,
   CheckCircle2,
@@ -28,18 +29,29 @@ export const ApplicationView: React.FC = () => {
   const {
     programs,
     submitApplication,
-    getApplicationByRef,
-    fetchApplicationByRef,
     activeTrackerRef,
-    setActiveTrackerRef,
     navigateTo,
     addToast,
+    firebaseAuthUser,
+    signInWithGoogle,
   } = usePCM();
 
   // Mode: 'apply' | 'track' | 'wizard'
   const [mode, setMode] = useState<'apply' | 'track' | 'wizard'>(() => (activeTrackerRef ? 'track' : 'apply'));
   const [wizardInitialRef, setWizardInitialRef] = useState<string>('');
   const [wizardInitialData, setWizardInitialData] = useState<any>(null);
+  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [stepError, setStepError] = useState<string | null>(null);
+
+  const handleSignIn = async () => {
+    setIsSigningIn(true);
+    try {
+      await signInWithGoogle();
+    } finally {
+      setIsSigningIn(false);
+    }
+  };
 
   // Step 1 to 4
   const [step, setStep] = useState(1);
@@ -68,40 +80,41 @@ export const ApplicationView: React.FC = () => {
 
   const [submittedRef, setSubmittedRef] = useState<string | null>(null);
 
-  // Tracker State
-  const [trackRef, setTrackRef] = useState(() => (activeTrackerRef ? activeTrackerRef.trim() : ''));
-  const [trackedApp, setTrackedApp] = useState<any | null>(null);
-  const [searched, setSearched] = useState(false);
-  const [isSearching, setIsSearching] = useState(false);
-
-  // Synchronize with activeTrackerRef if navigated from another component
+  // Use the signed-in Google account's email by default.
   useEffect(() => {
-    if (!activeTrackerRef || !activeTrackerRef.trim()) return;
+    if (firebaseAuthUser?.email) {
+      setFormData((prev) => (prev.email ? prev : { ...prev, email: firebaseAuthUser.email || '', fullName: prev.fullName || firebaseAuthUser.displayName || '' }));
+    }
+  }, [firebaseAuthUser]);
 
-    let isMounted = true;
-    const ref = activeTrackerRef.trim();
+  // Opening the tracker from elsewhere on the site.
+  useEffect(() => {
+    if (activeTrackerRef && activeTrackerRef.trim()) setMode('track');
+  }, [activeTrackerRef]);
 
-    const performInitialLookup = async () => {
-      setIsSearching(true);
-      let found = getApplicationByRef(ref);
-      if (!found && fetchApplicationByRef) {
-        found = await fetchApplicationByRef(ref);
-      }
-      if (isMounted) {
-        setTrackRef(ref);
-        setMode('track');
-        setTrackedApp(found || null);
-        setSearched(true);
-        setIsSearching(false);
-      }
-    };
+  // Validation for each step of the short application form.
+  const validateStep = (s: number): string | null => {
+    if (s === 1) {
+      if (!formData.fullName.trim()) return 'Please enter your full legal name.';
+      if (!/^\S+@\S+\.\S+$/.test(formData.email.trim())) return 'Please enter a valid email address.';
+      if (formData.phone.replace(/\D/g, '').length < 10) return 'Please enter a valid mobile number (at least 10 digits).';
+    }
+    if (s === 2) {
+      if (!formData.churchName.trim()) return 'Please enter your home church.';
+      if (!formData.pastorName.trim()) return "Please enter your senior pastor's name.";
+    }
+    if (s === 3) {
+      if (formData.testimony.trim().length < 50) return 'Please write your salvation testimony (at least 50 characters).';
+      if (!formData.ministryCalling.trim()) return 'Please describe your ministry calling.';
+    }
+    return null;
+  };
 
-    performInitialLookup();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [activeTrackerRef, getApplicationByRef, fetchApplicationByRef]);
+  const goNext = () => {
+    const problem = validateStep(step);
+    setStepError(problem);
+    if (!problem) setStep(step + 1);
+  };
 
   // Handle Program select
   const handleProgramSelect = (progId: string) => {
@@ -116,36 +129,54 @@ export const ApplicationView: React.FC = () => {
     }
   };
 
-  // Submit Application
+  // Submit Application (once; duplicates are redirected to the existing application)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.fullName || !formData.email || !formData.testimony) {
-      addToast({
-        title: 'Incomplete Fields',
-        message: 'Please provide your full name, email, and spiritual testimony.',
-        type: 'error',
-      });
+    if (isSubmitting) return;
+    if (step < 4) {
+      goNext();
       return;
     }
-
-    const ref = await submitApplication(formData);
-    setSubmittedRef(ref);
-  };
-
-  // Track Application Lookup
-  const handleTrack = async (e?: React.FormEvent) => {
-    if (e) e.preventDefault();
-    const query = trackRef.trim();
-    if (!query) return;
-    setIsSearching(true);
-    let found = getApplicationByRef(query);
-    if (!found && fetchApplicationByRef) {
-      found = await fetchApplicationByRef(query);
+    for (const s of [1, 2, 3]) {
+      const problem = validateStep(s);
+      if (problem) {
+        setStep(s);
+        setStepError(problem);
+        return;
+      }
     }
-    setTrackedApp(found || null);
-    setSearched(true);
-    setIsSearching(false);
+    setIsSubmitting(true);
+    try {
+      const ref = await submitApplication(formData);
+      if (ref.startsWith('DUPLICATE:')) {
+        setMode('track');
+      } else if (ref) {
+        setSubmittedRef(ref);
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
   };
+
+  // Shown wherever an applicant needs to be signed in.
+  const signInCard = (purpose: string) => (
+    <div className="mx-auto max-w-lg space-y-4 rounded-2xl border border-slate-200 bg-white p-6 text-center shadow-xl sm:p-8">
+      <ShieldCheck className="mx-auto h-10 w-10 text-[#588B76]" />
+      <h3 className="font-serif text-xl font-bold text-[#18392B]">Sign in with Google to {purpose}</h3>
+      <p className="text-xs leading-relaxed text-slate-600">
+        Your application, documents and status updates are tied to your Google account, so only you and the PCM Admissions
+        Office can see them. Use the same account every time you check your application.
+      </p>
+      <button
+        type="button"
+        onClick={handleSignIn}
+        disabled={isSigningIn}
+        className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#18392B] px-5 py-3 text-sm font-bold text-white hover:bg-[#23533e] disabled:opacity-50"
+      >
+        {isSigningIn ? 'Opening Google sign-in…' : 'Continue with Google'}
+      </button>
+    </div>
+  );
 
   return (
     <div className="w-full bg-[#FFFFFF] font-sans pb-20">
@@ -204,167 +235,13 @@ export const ApplicationView: React.FC = () => {
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-10">
-        {/* MODE 1: TRACK APPLICATION */}
-        {mode === 'track' && (
-          <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-xl space-y-6">
-            <div className="text-center space-y-1">
-              <h3 className="font-serif text-2xl font-bold text-[#18392B]">
-                Track Your Admissions Application
-              </h3>
-              <p className="text-xs text-slate-500">
-                Enter the reference number assigned upon submitting your PCM application (e.g., <code>PCM-2026-4821</code>).
-              </p>
-            </div>
-
-            <form onSubmit={handleTrack} className="flex gap-2 max-w-lg mx-auto">
-              <input
-                type="text"
-                required
-                value={trackRef}
-                onChange={(e) => setTrackRef(e.target.value)}
-                placeholder="PCM-2026-XXXX"
-                className="w-full p-3 rounded-lg border border-slate-300 focus:border-[#588B76] font-mono text-sm uppercase focus:outline-none"
-              />
-              <button
-                type="submit"
-                disabled={isSearching}
-                className="bg-[#18392B] hover:bg-[#588B76] hover:text-[#18392B] text-white font-bold px-6 py-3 rounded-lg text-xs uppercase tracking-wider transition cursor-pointer shrink-0 disabled:opacity-50"
-              >
-                {isSearching ? 'Searching...' : 'Search'}
-              </button>
-            </form>
-
-            {searched && (
-              <div className="pt-6 border-t border-slate-200">
-                {trackedApp ? (
-                  <div className="bg-[#FFFFFF] p-6 rounded-xl border border-slate-200 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <span className="text-[10px] font-mono font-bold uppercase text-[#588B76]">
-                          Reference Code: {trackedApp.referenceNumber}
-                        </span>
-                        <h4 className="font-serif text-xl font-bold text-[#18392B]">
-                          {trackedApp.fullName}
-                        </h4>
-                        <p className="text-xs text-slate-600 font-medium">
-                          Program: {trackedApp.programName}
-                        </p>
-                      </div>
-
-                      <div className="self-start sm:self-auto">
-                        <span
-                          className={`text-xs font-mono font-bold uppercase px-3 py-1.5 rounded-full border shadow-sm ${
-                            trackedApp.status === 'approved'
-                              ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
-                              : trackedApp.status === 'interview_scheduled'
-                              ? 'bg-blue-100 text-blue-800 border-blue-300'
-                              : trackedApp.status === 'rejected'
-                              ? 'bg-rose-100 text-rose-800 border-rose-300'
-                              : 'bg-amber-100 text-amber-800 border-amber-300'
-                          }`}
-                        >
-                          Status: {trackedApp.status.replace('_', ' ')}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-slate-700 pt-2 border-t border-slate-200">
-                      <div>
-                        <span className="text-slate-400 block text-[10px]">Date Submitted:</span>
-                        <strong className="text-slate-800">{trackedApp.submittedAt}</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px]">Home Church:</span>
-                        <strong className="text-slate-800">{trackedApp.churchName}</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[10px]">Contact Email:</span>
-                        <strong className="text-slate-800">{trackedApp.email}</strong>
-                      </div>
-                    </div>
-
-                    <div className="bg-white p-4 rounded-lg border border-slate-200 text-xs space-y-1">
-                      <span className="font-bold text-[#18392B]">Admissions Committee Note:</span>
-                      <p className="text-slate-600 leading-relaxed">
-                        {(trackedApp.status?.toLowerCase() === 'approved' || trackedApp.status === 'Approved') &&
-                          'Congratulations! Your application has been approved for enrollment. Please proceed to the Registrar for official matriculation.'}
-                        {(trackedApp.status?.toLowerCase() === 'enrolled' || trackedApp.status === 'Enrolled') &&
-                          'Official Enrollment Confirmed! Your student profile is active in the PCM Academic Registrar database.'}
-                        {(trackedApp.status?.toLowerCase() === 'interview_scheduled' || trackedApp.status === 'Interview Scheduled') &&
-                          'Your admissions interview has been scheduled with the Faculty Panel. Check your email for Zoom link / room assignment.'}
-                        {(trackedApp.status?.toLowerCase() === 'submitted' || trackedApp.status === 'Submitted') &&
-                          'Your documents and spiritual testimony are currently undergoing evaluation by the Academic Dean.'}
-                        {(trackedApp.status?.toLowerCase() === 'under_review' || trackedApp.status === 'Under Review') &&
-                          'Your application is under formal committee review. Sponsoring pastor references are being verified.'}
-                        {(trackedApp.status?.toLowerCase() === 'rejected' || trackedApp.status === 'Rejected') &&
-                          'Thank you for your interest. Unfortunately, admission cannot be granted for this semester.'}
-                        {trackedApp.adminNotes && (
-                          <span className="block mt-2 font-mono text-[11px] bg-slate-50 p-2 rounded border border-slate-200 whitespace-pre-line text-slate-700">
-                            {trackedApp.adminNotes}
-                          </span>
-                        )}
-                      </p>
-                    </div>
-
-                    {/* Integrated Connection to Online Student Registration & Enrollment */}
-                    <div className="p-4 rounded-xl border border-[#588B76]/30 bg-gradient-to-r from-emerald-50/90 via-slate-50 to-amber-50/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono font-bold uppercase bg-[#18392B] text-white px-2 py-0.5 rounded">
-                            Connected Portal Bridge
-                          </span>
-                          <span className="text-xs font-serif font-bold text-[#18392B]">
-                            Online Student Registration & Enrollment
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-600">
-                          {trackedApp.status?.toLowerCase() === 'enrolled'
-                            ? 'Your student profile is already registered. You can directly log in to the Student Portal Hub.'
-                            : 'Transfer your admissions data into the 9-Step Online Student Registration Wizard to complete your profile, subject enlistment, and student ID generation.'}
-                        </p>
-                      </div>
-
-                      <div className="shrink-0 flex items-center gap-2 w-full sm:w-auto justify-end">
-                        {trackedApp.status?.toLowerCase() === 'enrolled' ? (
-                          <button
-                            type="button"
-                            onClick={() => navigateTo('portal')}
-                            className="bg-[#18392B] hover:bg-[#588B76] text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <BookOpen className="w-3.5 h-3.5" />
-                            <span>Access Student Portal</span>
-                          </button>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setWizardInitialRef(trackedApp.referenceNumber);
-                              setWizardInitialData(trackedApp);
-                              setMode('wizard');
-                            }}
-                            className="bg-[#18392B] hover:bg-[#255843] text-white text-xs font-bold px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-                          >
-                            <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-                            <span>Enroll With This Record</span>
-                            <ArrowRight className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-slate-500 space-y-2">
-                    <AlertCircle className="w-10 h-10 text-slate-400 mx-auto" />
-                    <p className="text-sm font-semibold">No Application Found</p>
-                    <p className="text-xs">
-                      We could not find any record with reference <strong>{trackRef}</strong>. Please check the code or submit a new application.
-                    </p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+        {/* MODE 1: TRACK APPLICATION (the signed-in applicant's own application) */}
+        {mode === 'track' &&
+          (firebaseAuthUser ? (
+            <MyApplicationPanel onStartApplication={() => setMode('apply')} />
+          ) : (
+            signInCard('track your application')
+          ))}
 
         {/* MODE 2: MULTI-STEP APPLICATION FORM */}
         {mode === 'apply' && (
@@ -397,68 +274,28 @@ export const ApplicationView: React.FC = () => {
                     {submittedRef}
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    Save this reference code to check your evaluation status anytime.
+                    Track it any time by signing in here with the same Google account.
                   </p>
                 </div>
 
-                <div className="pt-4 flex flex-wrap items-center justify-center gap-3">
+                <div className="mx-auto max-w-md rounded-xl border border-amber-200 bg-amber-50 p-4 text-left text-xs text-amber-950">
+                  <strong className="block text-[#18392B]">Next step: upload your admission documents</strong>
+                  ID photo, PSA birth certificate, report card or transcript, good moral certificate and your pastoral
+                  recommendation. The Admissions Office reviews your application once they are in.
+                </div>
+
+                <div className="pt-2 flex flex-wrap items-center justify-center gap-3">
                   <button
-                    onClick={() => {
-                      setWizardInitialRef(submittedRef);
-                      setWizardInitialData({
-                        ...formData,
-                        referenceNumber: submittedRef,
-                      });
-                      setMode('wizard');
-                    }}
-                    className="bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-bold px-6 py-3 rounded-lg uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 shadow-md"
+                    onClick={() => setMode('track')}
+                    className="bg-[#18392B] hover:bg-[#23533e] text-white text-xs font-bold px-6 py-3 rounded-lg uppercase tracking-wider transition cursor-pointer flex items-center gap-1.5 shadow-md"
                   >
-                    <Sparkles className="w-4 h-4 text-slate-900" />
-                    <span>Proceed to Online Enrollment (Pre-Filled)</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMode('track');
-                      setTrackRef(submittedRef);
-                      const app = getApplicationByRef(submittedRef);
-                      setTrackedApp(app);
-                      setSearched(true);
-                    }}
-                    className="bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] text-xs font-bold px-6 py-3 rounded-lg uppercase tracking-wider transition cursor-pointer"
-                  >
-                    Track Status Now
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSubmittedRef(null);
-                      setStep(1);
-                      setFormData({
-                        programId: programs[0]?.id || 'prog-bth',
-                        programName: programs[0]?.name || 'Bachelor of Arts in Theology',
-                        programLevel: 'undergraduate',
-                        fullName: '',
-                        email: '',
-                        phone: '',
-                        birthDate: '',
-                        gender: 'Male',
-                        civilStatus: 'Single',
-                        address: '',
-                        churchName: '',
-                        pastorName: '',
-                        pastorPhone: '',
-                        testimony: '',
-                        ministryCalling: '',
-                        previousEducation: '',
-                        highSchoolOrCollege: '',
-                        yearGraduated: '2024',
-                      });
-                    }}
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-semibold px-6 py-3 rounded-lg transition cursor-pointer"
-                  >
-                    Submit Another Application
+                    <FileText className="w-4 h-4" />
+                    <span>Upload documents & track my application</span>
                   </button>
                 </div>
               </div>
+            ) : !firebaseAuthUser ? (
+              signInCard('start your application')
             ) : (
               /* Step Form */
               <div className="bg-white rounded-2xl border border-slate-200 shadow-xl overflow-hidden">
@@ -752,12 +589,22 @@ export const ApplicationView: React.FC = () => {
                     </div>
                   )}
 
+                  {stepError && (
+                    <p role="alert" className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs font-semibold text-rose-800">
+                      <AlertCircle className="h-4 w-4 shrink-0" />
+                      {stepError}
+                    </p>
+                  )}
+
                   {/* Navigation Buttons */}
                   <div className="pt-6 border-t border-slate-200 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
                     {step > 1 ? (
                       <button
                         type="button"
-                        onClick={() => setStep(step - 1)}
+                        onClick={() => {
+                          setStepError(null);
+                          setStep(step - 1);
+                        }}
                         className="bg-slate-100 hover:bg-slate-200 text-slate-700 px-5 py-3 rounded text-xs font-semibold flex items-center justify-center gap-2 transition cursor-pointer order-2 sm:order-1"
                       >
                         <ArrowLeft className="w-3.5 h-3.5" />
@@ -767,17 +614,14 @@ export const ApplicationView: React.FC = () => {
 
                     {step < 4 ? (
                       <button
+                        key="next-step"
                         type="button"
-                        onClick={() => {
-                          if (step === 1 && (!formData.fullName || !formData.email)) {
-                            addToast({
-                              title: 'Required Fields',
-                              message: 'Please fill in your name and email to proceed.',
-                              type: 'warning',
-                            });
-                            return;
-                          }
-                          setStep(step + 1);
+                        onClick={(e) => {
+                          // Without preventDefault (and distinct keys), React swaps this
+                          // button for the submit button during the click and the browser
+                          // then submits the form, skipping the review step.
+                          e.preventDefault();
+                          goNext();
                         }}
                         className="bg-[#18392B] hover:bg-[#14234b] text-white px-6 py-3 rounded text-xs font-bold flex items-center justify-center gap-2 transition cursor-pointer order-1 sm:order-2"
                       >
@@ -786,10 +630,12 @@ export const ApplicationView: React.FC = () => {
                       </button>
                     ) : (
                       <button
+                        key="submit-application"
                         type="submit"
-                        className="bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] px-8 py-3.5 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-lg order-1 sm:order-2"
+                        disabled={isSubmitting}
+                        className="bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] px-8 py-3.5 rounded text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition cursor-pointer shadow-lg order-1 sm:order-2 disabled:opacity-50"
                       >
-                        <span>SUBMIT OFFICIAL APPLICATION</span>
+                        <span>{isSubmitting ? 'Submitting…' : 'SUBMIT OFFICIAL APPLICATION'}</span>
                         <Send className="w-3.5 h-3.5" />
                       </button>
                     )}
@@ -827,24 +673,16 @@ export const ApplicationView: React.FC = () => {
               </button>
             </div>
 
-            <StudentRegistrationWizard
-              initialAppRef={wizardInitialRef}
-              initialAppData={wizardInitialData}
-              onCancel={() => setMode('apply')}
-              onCompleted={async (student) => {
-                const targetRef = student.applicationNumber || student.studentId || '';
-                setTrackRef(targetRef);
-                setIsSearching(true);
-                let found = getApplicationByRef(targetRef);
-                if (!found && fetchApplicationByRef) {
-                  found = await fetchApplicationByRef(targetRef);
-                }
-                setTrackedApp(found || null);
-                setSearched(true);
-                setIsSearching(false);
-                setMode('track');
-              }}
-            />
+            {firebaseAuthUser ? (
+              <StudentRegistrationWizard
+                initialAppRef={wizardInitialRef}
+                initialAppData={wizardInitialData}
+                onCancel={() => setMode('apply')}
+                onCompleted={() => setMode('track')}
+              />
+            ) : (
+              signInCard('register online')
+            )}
           </div>
         )}
       </div>

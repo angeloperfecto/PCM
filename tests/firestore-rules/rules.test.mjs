@@ -6,7 +6,7 @@ import {
   assertSucceeds,
   assertFails,
 } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, writeBatch, collection, query, where } from 'firebase/firestore';
 
 const rulesPath = process.env.RULES_PATH || new URL('../../firestore.rules', import.meta.url);
 const env = await initializeTestEnvironment({
@@ -53,6 +53,19 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await seed('adminEmails/editor@pcm.edu.ph', { email: 'editor@pcm.edu.ph', role: 'Editor', active: true, adminId: 'adm-5' });
   await seed('adminEmails/old@pcm.edu.ph', { email: 'old@pcm.edu.ph', role: 'Admin', active: false });
   await seed('adminEmails/boss@pcm.edu.ph', { email: 'boss@pcm.edu.ph', role: 'Super Admin', active: true });
+
+  // Enrollment workflow
+  await seed('users/reg1', { role: 'Admin', adminRole: 'Registrar', status: 'Active' });
+  await seed('users/fin1', { role: 'Admin', adminRole: 'Finance', status: 'Active' });
+  await seed('applications/legacy1', { referenceNumber: 'PCM-2026-1111', status: 'Submitted', email: 'legacy@gmail.com', fullName: 'Legacy Applicant' });
+  await seed('applications/other1', { referenceNumber: 'PCM-2026-2222', status: 'Submitted', applicantUid: 'someoneElse', email: 'else@gmail.com' });
+  await seed('studentProfiles/std-linked', { studentId: '2026-PCM-0001', authUid: 'stu1', email: 'stu1@gmail.com', fullName: 'Linked Student', enrollmentStatus: 'Enrolled', phone: '1' });
+  await seed('studentProfiles/std-legacy', { studentId: '2024-PCM-0418', email: 'legacy@gmail.com', fullName: 'Legacy Student', enrollmentStatus: 'Enrolled' });
+  await seed('studentProfiles/std-taken', { studentId: '2025-PCM-0002', authUid: 'someoneElse', email: 'else@gmail.com' });
+  await seed('enrollments/enr-stu1', { studentUid: 'stu1', studentId: '2026-PCM-0001', status: 'Submitted' });
+  await seed('studentNotifications/n-stu1', { recipientUid: 'stu1', title: 'Hello', read: false });
+  await seed('studentNotifications/n-other', { recipientUid: 'someoneElse', title: 'Private', read: false });
+  await seed('uploadedDocuments/u1', { url: 'data:...' });
 });
 
 const anon = env.unauthenticatedContext().firestore();
@@ -99,13 +112,15 @@ await check('read site config', true, () => getDoc(doc(anon, 'siteConfig/global'
 await check('cannot edit site config', false, () => setDoc(doc(anon, 'siteConfig/global'), { title: 'hacked' }));
 await check('cannot add programs', false, () => setDoc(doc(anon, 'programs/p9'), { name: 'x' }));
 await check('cannot delete news', false, () => deleteDoc(doc(anon, 'news/n1')));
-await check('submit application', true, () => setDoc(doc(anon, 'applications/a2'), { status: 'Submitted' }));
+await check('cannot submit application without signing in', false, () => setDoc(doc(anon, 'applications/a2'), { status: 'Submitted' }));
+await check('cannot read applications', false, () => getDoc(doc(anon, 'applications/a1')));
 await check('cannot change application', false, () => updateDoc(doc(anon, 'applications/a1'), { status: 'Accepted' }));
 await check('cannot delete application', false, () => deleteDoc(doc(anon, 'applications/a1')));
 await check('submit inquiry', true, () => setDoc(doc(anon, 'inquiries/i1'), { message: 'hi' }));
 await check('write activity log', true, () => setDoc(doc(anon, 'activityLogs/l2'), { action: 'LOGIN' }));
 await check('cannot alter activity log', false, () => updateDoc(doc(anon, 'activityLogs/l1'), { action: 'X' }));
-await check('student portal updates profile', true, () => setDoc(doc(anon, 'studentProfiles/sp1'), { phone: '1' }, { merge: true }));
+await check('cannot read student records', false, () => getDoc(doc(anon, 'studentProfiles/sp1')));
+await check('cannot edit student records', false, () => setDoc(doc(anon, 'studentProfiles/sp1'), { phone: '1' }, { merge: true }));
 await check('cannot delete student profile', false, () => deleteDoc(doc(anon, 'studentProfiles/sp1')));
 await check('server route creates upload record', true, () => setDoc(doc(anon, 'uploadedMedia/m2'), { url: '/uploads/y.jpg' }));
 await check('cannot overwrite upload record', false, () => setDoc(doc(anon, 'uploadedMedia/m1'), { url: 'evil' }));
@@ -191,6 +206,102 @@ await check("directory Editor cannot edit another admin's entry", false, () => u
 await check('directory Editor reads email index', true, () => getDoc(doc(editor, 'adminEmails/editor@pcm.edu.ph')));
 await check('admin updates application status', true, () => updateDoc(doc(admin, 'applications/a1'), { status: 'Accepted' }));
 await check('admin deletes student profile', true, () => deleteDoc(doc(admin, 'studentProfiles/sp1')));
+
+section('Admission workflow: applicants');
+const applicant = as('appl1', 'appl1@gmail.com');
+const otherApplicant = as('appl2', 'appl2@gmail.com');
+const legacyOwner = as('leg1', 'legacy@gmail.com');
+const registrar = as('reg1', 'reg1@gmail.com');
+const finance = as('fin1', 'fin1@gmail.com');
+const studentUser = as('stu1', 'stu1@gmail.com');
+const newApp = { applicantUid: 'appl1', status: 'Submitted', fullName: 'Applicant One', email: 'appl1@gmail.com', referenceNumber: 'PCM-2026-AAAAAA' };
+
+await check('applicant submits application with documents in one batch', true, () => {
+  const b = writeBatch(applicant);
+  b.set(doc(applicant, 'applications/appA'), newApp);
+  b.set(doc(applicant, 'applications/appA/requirements/id-photo'), { applicantUid: 'appl1', status: 'Submitted', name: '2x2 ID Photo', required: true, fileDataUrl: 'data:image/jpeg;base64,AAA' });
+  b.set(doc(applicant, 'applications/appA/requirements/birth-certificate'), { applicantUid: 'appl1', status: 'Missing', name: 'PSA Birth Certificate', required: true });
+  b.set(doc(applicant, 'applications/appA/history/h1'), { status: 'Submitted', actor: 'applicant', byName: 'Applicant One' });
+  b.set(doc(applicant, 'studentNotifications/nA'), { recipientUid: 'appl1', title: 'Application received', read: false });
+  b.set(doc(applicant, 'staffNotifications/sA'), { id: 'sA', applicationId: 'appA', referenceNumber: 'PCM-2026-AAAAAA', title: 'New', message: 'x', createdByUid: 'appl1', read: false, createdAt: 'now' });
+  return b.commit();
+});
+await check('applicant cannot submit an already-admitted application', false, () => setDoc(doc(applicant, 'applications/appB'), { ...newApp, status: 'Admitted' }));
+await check('applicant cannot pre-assign a Student ID', false, () => setDoc(doc(applicant, 'applications/appC'), { ...newApp, studentId: '2026-PCM-9999' }));
+await check("applicant cannot submit under another user's account", false, () => setDoc(doc(applicant, 'applications/appD'), { ...newApp, applicantUid: 'appl2' }));
+await check('applicant reads own application', true, () => getDoc(doc(applicant, 'applications/appA')));
+await check("another applicant cannot read it", false, () => getDoc(doc(otherApplicant, 'applications/appA')));
+await check("another applicant cannot read its documents", false, () => getDoc(doc(otherApplicant, 'applications/appA/requirements/id-photo')));
+await check('applicant lists own applications by uid', true, () => getDocs(query(collection(applicant, 'applications'), where('applicantUid', '==', 'appl1'))));
+await check('applicant cannot list all applications', false, () => getDocs(collection(applicant, 'applications')));
+await check('legacy applicant reads application by verified email', true, () => getDoc(doc(legacyOwner, 'applications/legacy1')));
+await check('legacy applicant lists applications by email', true, () => getDocs(query(collection(legacyOwner, 'applications'), where('email', '==', 'legacy@gmail.com'))));
+await check('applicant uploads a document', true, () => updateDoc(doc(applicant, 'applications/appA/requirements/birth-certificate'), { status: 'Submitted', fileName: 'psa.pdf', fileType: 'application/pdf', fileSize: 1000, fileDataUrl: 'data:application/pdf;base64,AAA', uploadedAt: 'now' }));
+await check('applicant cannot mark own document Verified', false, () => updateDoc(doc(applicant, 'applications/appA/requirements/id-photo'), { status: 'Verified' }));
+await check('applicant cannot write reviewer remarks', false, () => updateDoc(doc(applicant, 'applications/appA/requirements/id-photo'), { status: 'Submitted', remarks: 'looks fine' }));
+await check('applicant cannot admit themselves', false, () => updateDoc(doc(applicant, 'applications/appA'), { status: 'Admitted' }));
+await check('applicant cannot move a Submitted application to Under Review', false, () => updateDoc(doc(applicant, 'applications/appA'), { status: 'Under Review' }));
+await check('applicant cannot change decision fields', false, () => updateDoc(doc(applicant, 'applications/appA'), { lastDecisionBy: 'me' }));
+await check('applicant cannot record a staff history entry', false, () => setDoc(doc(applicant, 'applications/appA/history/h2'), { status: 'Admitted', actor: 'staff', byName: 'x' }));
+await check('applicant cannot delete an application', false, () => deleteDoc(doc(applicant, 'applications/appA')));
+
+section('Admission workflow: staff decisions');
+await check('Editor can view applications', true, () => getDoc(doc(approvedEditor, 'applications/appA')));
+await check('Editor cannot make admission decisions', false, () => updateDoc(doc(approvedEditor, 'applications/appA'), { status: 'Under Review' }));
+await check('Finance cannot make admission decisions', false, () => updateDoc(doc(finance, 'applications/appA'), { status: 'Admitted' }));
+await check('Editor cannot verify documents', false, () => updateDoc(doc(approvedEditor, 'applications/appA/requirements/id-photo'), { status: 'Verified' }));
+await check('Registrar requests missing documents', true, () => {
+  const b = writeBatch(registrar);
+  b.update(doc(registrar, 'applications/appA'), { status: 'Requirements Incomplete', applicantMessage: 'Need PSA', lastDecisionBy: 'Registrar' });
+  b.update(doc(registrar, 'applications/appA/requirements/birth-certificate'), { status: 'Rejected', remarks: 'Blurry scan' });
+  b.set(doc(registrar, 'applications/appA/history/h3'), { status: 'Requirements Incomplete', actor: 'staff', byName: 'Registrar' });
+  b.set(doc(registrar, 'studentNotifications/nB'), { recipientUid: 'appl1', title: 'Action needed', read: false });
+  return b.commit();
+});
+await check('applicant re-uploads and returns application to review', true, () => {
+  const b = writeBatch(applicant);
+  b.update(doc(applicant, 'applications/appA/requirements/birth-certificate'), { status: 'Submitted', fileName: 'psa2.pdf', fileType: 'application/pdf', fileSize: 900, fileDataUrl: 'data:application/pdf;base64,BBB', uploadedAt: 'now' });
+  b.update(doc(applicant, 'applications/appA'), { status: 'Under Review', updatedAt: 'now' });
+  b.set(doc(applicant, 'applications/appA/history/h4'), { status: 'Under Review', actor: 'applicant', byName: 'Applicant One' });
+  return b.commit();
+});
+await check('Registrar verifies a document', true, () => updateDoc(doc(registrar, 'applications/appA/requirements/id-photo'), { status: 'Verified', reviewedBy: 'Registrar', remarks: '' }));
+await check('applicant cannot replace a verified document', false, () => updateDoc(doc(applicant, 'applications/appA/requirements/id-photo'), { status: 'Submitted', fileName: 'other.jpg' }));
+await check('Registrar admits the applicant', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'Admitted' }));
+await check('Registrar allocates the next Student ID', true, () => setDoc(doc(registrar, 'systemConfig/studentIdCounter'), { '2026': 1 }, { merge: true }));
+await check('Registrar creates the official student record', true, () => setDoc(doc(registrar, 'studentProfiles/std-2026-PCM-0002'), { studentId: '2026-PCM-0002', authUid: 'appl1', email: 'appl1@gmail.com', enrollmentStatus: 'Enrolled' }));
+await check('Editor cannot create official student records', false, () => setDoc(doc(approvedEditor, 'studentProfiles/std-x'), { studentId: 'X' }));
+await check('applicant cannot create their own student record', false, () => setDoc(doc(applicant, 'studentProfiles/std-y'), { studentId: 'Y', authUid: 'appl1' }));
+await check('Registrar marks the application Enrolled', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'Enrolled', studentId: '2026-PCM-0002', studentRecordId: 'std-2026-PCM-0002' }));
+await check('applicant sees their new student record', true, () => getDoc(doc(applicant, 'studentProfiles/std-2026-PCM-0002')));
+
+section('Students see and change only their own records');
+await check('student reads own record', true, () => getDoc(doc(studentUser, 'studentProfiles/std-linked')));
+await check('student lists own record by uid', true, () => getDocs(query(collection(studentUser, 'studentProfiles'), where('authUid', '==', 'stu1'))));
+await check("student cannot read another student's record", false, () => getDoc(doc(studentUser, 'studentProfiles/std-taken')));
+await check('student cannot list all student records', false, () => getDocs(collection(studentUser, 'studentProfiles')));
+await check('student updates own phone number', true, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { phone: '0917' }));
+await check('student cannot change own Student ID', false, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { studentId: '9999' }));
+await check('student cannot change own program', false, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { program: 'MDiv' }));
+await check('student cannot mark self Enrolled', false, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { enrollmentStatus: 'Approved' }));
+await check('student submits a semester enrollment (status Submitted)', true, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { enrollmentStatus: 'Submitted', currentSemester: '2nd Semester, AY 2026-2027' }));
+await check('legacy student links record by verified email', true, () => updateDoc(doc(legacyOwner, 'studentProfiles/std-legacy'), { authUid: 'leg1', linkedAt: 'now' }));
+await check('cannot link a record with a different email', false, () => updateDoc(doc(applicant, 'studentProfiles/std-taken'), { authUid: 'appl1' }));
+await check("cannot take over an already-linked record", false, () => updateDoc(doc(as('x9', 'stu1@gmail.com'), 'studentProfiles/std-linked'), { authUid: 'x9' }));
+await check('student reads own enrollment request', true, () => getDoc(doc(studentUser, 'enrollments/enr-stu1')));
+await check('student submits a semester enrollment request', true, () => setDoc(doc(studentUser, 'enrollments/enr-new'), { studentUid: 'stu1', status: 'Submitted' }));
+await check('student cannot self-approve an enrollment', false, () => updateDoc(doc(studentUser, 'enrollments/enr-stu1'), { status: 'Approved' }));
+await check("student cannot file a request for someone else", false, () => setDoc(doc(studentUser, 'enrollments/enr-x'), { studentUid: 'someoneElse', status: 'Submitted' }));
+await check('Editor cannot approve enrollments', false, () => updateDoc(doc(approvedEditor, 'enrollments/enr-stu1'), { status: 'Approved' }));
+await check('Registrar approves enrollments', true, () => updateDoc(doc(registrar, 'enrollments/enr-stu1'), { status: 'Approved' }));
+await check('student reads own notification', true, () => getDoc(doc(studentUser, 'studentNotifications/n-stu1')));
+await check('student marks notification read', true, () => updateDoc(doc(studentUser, 'studentNotifications/n-stu1'), { read: true }));
+await check('student cannot edit notification text', false, () => updateDoc(doc(studentUser, 'studentNotifications/n-stu1'), { title: 'Changed' }));
+await check("student cannot read someone else's notification", false, () => getDoc(doc(studentUser, 'studentNotifications/n-other')));
+await check('student cannot send notifications to others', false, () => setDoc(doc(studentUser, 'studentNotifications/n-x'), { recipientUid: 'someoneElse', title: 'spam' }));
+await check('applicant cannot read staff notifications', false, () => getDocs(collection(applicant, 'staffNotifications')));
+await check('staff read staff notifications', true, () => getDocs(collection(approvedEditor, 'staffNotifications')));
+await check('anonymous cannot read uploaded document log', false, () => getDoc(doc(anon, 'uploadedDocuments/u1')));
 
 section('Batch writes stay within Firestore limits');
 await check('Editor commits a 40-document batch', true, () => {
