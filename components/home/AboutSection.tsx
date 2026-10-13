@@ -68,7 +68,8 @@ export const AboutSection: React.FC = () => {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#18392B]/95 via-[#18392B]/40 to-transparent" />
               
-              <div className="absolute bottom-5 left-5 right-5 text-white space-y-1">
+              {/* bottom-16 keeps the caption above the floating "34+" badge */}
+              <div className="absolute bottom-16 left-5 right-5 text-white space-y-1">
                 <span className="text-[10px] font-mono uppercase tracking-widest text-[#85AA9B] font-bold">
                   Philippine Theological Heritage
                 </span>

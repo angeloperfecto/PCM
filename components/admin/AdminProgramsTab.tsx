@@ -197,7 +197,7 @@ export const AdminProgramsTab: React.FC = () => {
           />
         </div>
 
-        <div className="flex items-center gap-1.5 text-xs">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs">
           {['all', 'Undergraduate', 'Graduate', 'Associate', 'SHS', 'Certificate'].map((lvl) => (
             <button
               key={lvl}

@@ -18,7 +18,7 @@ export const AnnouncementTicker: React.FC = () => {
     <div className="w-full bg-[#588B76] text-white py-2 px-4 sm:px-8 shadow-sm font-sans border-b border-[#18392B]/20">
       <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 text-[12px] font-bold uppercase tracking-wider">
         {/* Left Badge */}
-        <div className="flex items-center gap-2.5 w-full sm:w-auto">
+        <div className="flex items-center gap-2.5 w-full sm:w-auto sm:flex-1 min-w-0">
           <div className="flex items-center gap-1.5 bg-[#18392B] text-white px-2.5 py-0.5 rounded-sm font-bold text-[10px] tracking-widest shrink-0 shadow-sm border border-[#85AA9B]/30">
             <Megaphone className="w-3 h-3 text-[#D0DED8]" />
             <span>ANNOUNCEMENTS</span>
@@ -29,7 +29,7 @@ export const AnnouncementTicker: React.FC = () => {
           </span>
 
           {/* Headline Message */}
-          <div className="flex-1 truncate">
+          <div className="flex-1 min-w-0 truncate">
             <button
               onClick={() => {
                 if (current.linkUrl) {

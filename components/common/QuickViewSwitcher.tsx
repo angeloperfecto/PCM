@@ -41,7 +41,7 @@ export const QuickViewSwitcher: React.FC = () => {
   };
 
   return (
-    <aside aria-label="Portal Quick Navigator" className="fixed bottom-4 right-4 z-50 font-sans shadow-2xl rounded-2xl border border-slate-700/60 bg-[#10261D]/95 backdrop-blur-md text-white p-2.5 transition-all max-w-[92vw] sm:max-w-xs">
+    <aside aria-label="Portal Quick Navigator" className="fixed bottom-4 right-4 z-40 font-sans shadow-2xl rounded-2xl border border-slate-700/60 bg-[#10261D]/95 backdrop-blur-md text-white p-2.5 transition-all max-w-[92vw] sm:max-w-xs">
       <div className="flex items-center justify-between gap-3 px-1 pb-1">
         <div className="flex items-center gap-1.5 text-xs font-bold text-[#A3D9C9]">
           <Sparkles className="w-3.5 h-3.5 text-amber-300" />

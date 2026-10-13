@@ -744,7 +744,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
               </div>
 
               {/* Subjects Table */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+              <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-xs">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
                     <tr>
@@ -918,7 +918,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
               </div>
 
               {/* Payments History Table */}
-              <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs">
+              <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto shadow-xs">
                 <table className="w-full text-left text-xs text-slate-700">
                   <thead className="bg-slate-50 border-b border-slate-200 font-semibold text-slate-600">
                     <tr>

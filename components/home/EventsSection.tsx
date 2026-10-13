@@ -61,13 +61,13 @@ export const EventsSection: React.FC = () => {
                 </div>
 
                 {/* Event Details */}
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0 w-full space-y-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <span className="text-[10px] font-bold uppercase tracking-wider bg-[#D0DED8]/30 text-[#18392B] px-2 py-0.5 rounded-sm border border-[#588B76]/40">
                       {evt.category}
                     </span>
                     {evt.speaker && (
-                      <span className="text-[11px] text-[#18392B]/70 italic truncate max-w-xs">
+                      <span className="text-[11px] text-[#18392B]/70 italic truncate min-w-0 max-w-xs">
                         By {evt.speaker}
                       </span>
                     )}
