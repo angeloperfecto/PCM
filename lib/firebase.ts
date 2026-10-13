@@ -139,6 +139,7 @@ export {
 };
 export type { FirebaseUser };
 
+
 export enum OperationType {
   CREATE = 'create',
   UPDATE = 'update',
@@ -227,7 +228,23 @@ export function handleFirestoreError(
   } else {
     console.warn('Firestore Operation Notice: ', JSON.stringify(errInfo));
   }
+
+  // A failed save must not look like a successful one: tell the app so it can show a
+  // "Not saved" message (the store listens for this). Firestore rolls the local change back.
+  const isWrite = [OperationType.CREATE, OperationType.UPDATE, OperationType.DELETE, OperationType.WRITE].includes(operationType);
+  if (isWrite && typeof window !== 'undefined') {
+    window.dispatchEvent(
+      new CustomEvent(WRITE_FAILED_EVENT, {
+        detail: { path, operationType, code: (error as any)?.code || '', quota: isQuota, message: errInfo.error },
+      })
+    );
+  }
 }
+
+// Fired on window when a Firestore save fails (see handleFirestoreError), and when data had
+// to be dropped before saving (see cleanFirestoreData).
+export const WRITE_FAILED_EVENT = 'pcm:write-failed';
+export const DATA_DROPPED_EVENT = 'pcm:data-dropped';
 
 // Resilient safe write wrappers to prevent silent failures and ensure permanent Firestore persistence
 export async function safeSetDoc(
@@ -397,6 +414,9 @@ export function cleanFirestoreData<T>(data: T, seen = new WeakSet()): T {
     // Images up to 850KB are fully preserved. Only truly oversized base64 strings (>850KB) are blocked.
     if (data.startsWith('data:image/') && data.length > 850000) {
       console.warn('Blocked oversized Base64 image (>850KB) from Firestore payload to protect 1MB document limit.');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(DATA_DROPPED_EVENT, { detail: { reason: 'image-too-large', size: data.length } }));
+      }
       return '' as unknown as T;
     }
     return data;
