@@ -52,4 +52,28 @@ await put('studentProfiles/std-legacy', {
   mentorName: 'Test Mentor',
   avatarUrl: '',
 });
+// One record in each Enrollment & Records list, for the delete buttons.
+await put('preEnlistments/pre-test', {
+  id: 'pre-test', studentId: '2024-PCM-0418', studentName: 'Legacy Student', program: 'Bachelor of Theology',
+  yearLevel: '3rd Year', semester: '1st Semester', totalUnits: 9, status: 'Submitted', createdAt: '2026-09-01T00:00:00Z',
+});
+await put('enrollments/enr-test', {
+  id: 'enr-test', referenceNumber: 'ENR-2026-0001', studentId: '2024-PCM-0418', studentName: 'Legacy Student',
+  programTitle: 'Bachelor of Theology', yearLevel: '3rd Year', totalUnits: 9, estimatedTuition: 9000, status: 'Submitted',
+  createdAt: '2026-09-01T00:00:00Z',
+});
+await put('addDropRequests/ad-test', {
+  id: 'ad-test', action: 'Add', studentId: '2024-PCM-0418', studentName: 'Legacy Student', subjectCode: 'THE-301',
+  subjectTitle: 'Systematic Theology II', units: 3, reason: 'Overload', dateSubmitted: '2026-09-03', status: 'Pending',
+});
+await put('academicPeriods/period-test-1', {
+  id: 'period-test-1', academicYear: '2026–2027', semester: '1st Semester', isCurrent: true, status: 'Active',
+  enrollmentStatus: 'Open', enrollmentStartDate: '2026-08-01', enrollmentEndDate: '2026-09-15',
+  preEnlistmentStatus: 'Open', addDropStatus: 'Open', addDropEndDate: '2026-09-30',
+});
+await put('academicPeriods/period-test-2', {
+  id: 'period-test-2', academicYear: '2026–2027', semester: '2nd Semester', isCurrent: false, status: 'Upcoming',
+  enrollmentStatus: 'Closed', enrollmentStartDate: '2027-01-05', enrollmentEndDate: '2027-01-25',
+  preEnlistmentStatus: 'Closed', addDropStatus: 'Closed', addDropEndDate: '2027-01-29',
+});
 console.log('Emulator seeded.');

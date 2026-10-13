@@ -556,12 +556,14 @@ interface PCMContextType {
   setPreEnlistments: React.Dispatch<React.SetStateAction<PreEnlistmentRecord[]>>;
   submitPreEnlistment: (record: Omit<PreEnlistmentRecord, 'id' | 'createdAt'>) => Promise<PreEnlistmentRecord>;
   updatePreEnlistmentStatus: (id: string, status: PreEnlistmentRecord['status'], remarks?: string) => Promise<boolean>;
+  deletePreEnlistment: (id: string) => Promise<boolean>;
 
   // Adding & Dropping Module
   addDropRequests: AddDropRequest[];
   setAddDropRequests: React.Dispatch<React.SetStateAction<AddDropRequest[]>>;
   submitAddDropRequest: (req: Omit<AddDropRequest, 'id' | 'createdAt' | 'status' | 'dateSubmitted'>) => Promise<AddDropRequest>;
   reviewAddDropRequest: (id: string, status: AddDropStatus, adminRemarks?: string) => Promise<boolean>;
+  deleteAddDropRequest: (id: string) => Promise<boolean>;
 
   // Assessment & Fee Structure Module
   feeStructure: FeeStructureItem[];
@@ -5481,12 +5483,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteEnrollment = async (enrollmentId: string): Promise<boolean> => {
     const target = enrollments.find((e) => e.id === enrollmentId);
+    if (!(await safeDeleteDoc(doc(db, 'enrollments', enrollmentId)))) return false;
     setEnrollments((prev) => prev.filter((e) => e.id !== enrollmentId));
-    try {
-      await safeDeleteDoc(doc(db, 'enrollments', enrollmentId));
-    } catch (e) {
-      console.warn(e);
-    }
     logActivity('DELETE', 'Online Enrollment', enrollmentId, target?.studentName || 'Enrollment', 'Deleted enrollment record.');
     addToast('info', 'Enrollment Deleted', 'Application record removed.');
     return true;
@@ -5664,6 +5662,33 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     logActivity('CREATE', 'Adding & Dropping', id, `${reqData.action} ${reqData.subjectCode}`, `Student filed request to ${reqData.action} course`);
     addToast('success', 'Request Filed', `Your request to ${reqData.action} ${reqData.subjectCode} has been logged.`);
     return newReq;
+  };
+
+  // Removes the row only after Firestore confirms the delete, so a denied delete never looks successful.
+  const deletePreEnlistment = async (id: string): Promise<boolean> => {
+    const target = preEnlistments.find((p) => p.id === id);
+    if (!(await safeDeleteDoc(doc(db, 'preEnlistments', id)))) return false;
+    setPreEnlistments((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      setCachedData('preEnlistments', next);
+      return next;
+    });
+    logActivity('DELETE', 'Pre-Enlistment', id, target?.studentName || 'Pre-enlistment', `Deleted pre-enlistment (${target?.semester || ''} ${target?.totalUnits ?? ''} units).`);
+    addToast('info', 'Pre-Enlistment Deleted', 'The pre-enlistment record was removed.');
+    return true;
+  };
+
+  const deleteAddDropRequest = async (id: string): Promise<boolean> => {
+    const target = addDropRequests.find((r) => r.id === id);
+    if (!(await safeDeleteDoc(doc(db, 'addDropRequests', id)))) return false;
+    setAddDropRequests((prev) => {
+      const next = prev.filter((r) => r.id !== id);
+      setCachedData('addDropRequests', next);
+      return next;
+    });
+    logActivity('DELETE', 'Adding & Dropping', id, target ? `${target.action} ${target.subjectCode}` : 'Add/Drop request', `Deleted add/drop request of ${target?.studentName || 'student'}.`);
+    addToast('info', 'Request Deleted', 'The add/drop request was removed. Approved course changes already applied to the student record are kept.');
+    return true;
   };
 
   const reviewAddDropRequest = async (id: string, status: AddDropStatus, adminRemarks?: string): Promise<boolean> => {
@@ -6068,21 +6093,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const deleteStudentProfile = async (studentId: string): Promise<boolean> => {
     const target = students.find((s) => s.id === studentId || s.studentId === studentId);
+    const docId = target?.id || studentId;
+    if (!docId || !(await safeDeleteDoc(doc(db, 'studentProfiles', docId)))) return false;
     setStudents((prev) => {
       const next = prev.filter((s) => s.id !== studentId && s.studentId !== studentId);
       setCachedData('students', next);
       return next;
     });
-    try {
-      if (target?.id) {
-        await safeDeleteDoc(doc(db, 'studentProfiles', target.id));
-      }
-      if (studentId && studentId !== target?.id) {
-        await safeDeleteDoc(doc(db, 'studentProfiles', studentId));
-      }
-    } catch (e) {
-      console.warn(e);
-    }
     logActivity('DELETE', 'Student Profile', studentId, target?.fullName || target?.name || 'Student', 'Deleted student record.');
     addToast('info', 'Student Record Deleted', 'Student profile has been removed.');
     return true;
@@ -6408,17 +6425,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('error', 'Cannot Delete', 'At least one academic period must remain configured.');
       return false;
     }
+    const target = academicPeriods.find((p) => p.id === id);
+    if (target?.isCurrent) {
+      addToast('error', 'Cannot Delete', 'Set another term as active before deleting the current term.');
+      return false;
+    }
+    if (!(await safeDeleteDoc(doc(db, 'academicPeriods', id)))) return false;
     setAcademicPeriods((prev) => {
       const next = prev.filter((p) => p.id !== id);
       setCachedData('academicPeriods', next);
       return next;
     });
-    try {
-      await safeDeleteDoc(doc(db, 'academicPeriods', id));
-    } catch (e) {
-      console.warn(e);
-    }
-    logActivity('DELETE', 'Academic Period', id, 'Academic Period', 'Removed academic term from calendar.');
+    logActivity('DELETE', 'Academic Period', id, target ? `${target.academicYear} ${target.semester}` : 'Academic Period', 'Removed academic term from calendar.');
     addToast('info', 'Period Deleted', 'Academic period removed.');
     return true;
   };
@@ -9200,12 +9218,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setPreEnlistments,
         submitPreEnlistment,
         updatePreEnlistmentStatus,
+        deletePreEnlistment,
 
         // Adding & Dropping Module
         addDropRequests,
         setAddDropRequests,
         submitAddDropRequest,
         reviewAddDropRequest,
+        deleteAddDropRequest,
 
         // Assessment & Fee Structure Module
         feeStructure,

@@ -14,6 +14,7 @@ import {
   EnrollmentStatus,
 } from '@/lib/types';
 import { AdminStudentDetailModal } from './AdminStudentDetailModal';
+import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   GraduationCap,
   FileCheck,
@@ -78,8 +79,13 @@ export const AdminEnrollmentsTab: React.FC = () => {
     preEnlistments,
     submitPreEnlistment,
     updatePreEnlistmentStatus,
+    deletePreEnlistment,
     addDropRequests,
     reviewAddDropRequest,
+    deleteAddDropRequest,
+    academicPeriods,
+    setCurrentAcademicPeriod,
+    deleteAcademicPeriod,
     feeStructure,
     addFeeStructureItem,
     updateFeeStructureItem,
@@ -167,39 +173,36 @@ export const AdminEnrollmentsTab: React.FC = () => {
     emergencySuspensionLock: false,
   });
 
-  // Academic Periods State
-  const [academicPeriods, setAcademicPeriods] = useState([
-    {
-      id: 'term-1',
-      code: 'AY 2026–2027 (1st Sem)',
-      name: '1st Semester, Academic Year 2026–2027',
-      status: 'Active',
-      registrationOpen: true,
-      startDate: 'August 10, 2026',
-      endDate: 'December 18, 2026',
-      addDropCutoff: 'August 28, 2026',
-    },
-    {
-      id: 'term-2',
-      code: 'AY 2026–2027 (2nd Sem)',
-      name: '2nd Semester, Academic Year 2026–2027',
-      status: 'Scheduled',
-      registrationOpen: false,
-      startDate: 'January 11, 2027',
-      endDate: 'May 28, 2027',
-      addDropCutoff: 'January 29, 2027',
-    },
-    {
-      id: 'term-3',
-      code: 'Summer 2027',
-      name: 'Summer Intensive Ministry Term 2027',
-      status: 'Scheduled',
-      registrationOpen: false,
-      startDate: 'June 7, 2027',
-      endDate: 'July 16, 2027',
-      addDropCutoff: 'June 11, 2027',
-    },
-  ]);
+  // Pending delete confirmation (shared by every list in this tab)
+  type DeleteKind = 'student' | 'preEnlistment' | 'enrollment' | 'addDrop' | 'term';
+  const [pendingDelete, setPendingDelete] = useState<{ kind: DeleteKind; id: string; label: string; message: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const confirmPendingDelete = async () => {
+    if (!pendingDelete) return;
+    setIsDeleting(true);
+    try {
+      const { kind, id } = pendingDelete;
+      const ok =
+        kind === 'student'
+          ? await deleteStudentProfile(id)
+          : kind === 'preEnlistment'
+          ? await deletePreEnlistment(id)
+          : kind === 'enrollment'
+          ? await deleteEnrollment(id)
+          : kind === 'addDrop'
+          ? await deleteAddDropRequest(id)
+          : await deleteAcademicPeriod(id);
+      if (ok) {
+        if (kind === 'enrollment' && selectedEnrollment?.id === id) setSelectedEnrollment(null);
+        if (kind === 'preEnlistment' && selectedPreEnlistment?.id === id) setSelectedPreEnlistment(null);
+        if (kind === 'student' && selectedStudentDossier?.id === id) setSelectedStudentDossier(null);
+      }
+      setPendingDelete(null);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   // KPIs
   const totalEnrollments = enrollments.length;
@@ -671,6 +674,24 @@ export const AdminEnrollmentsTab: React.FC = () => {
                         >
                           <Printer className="w-4 h-4" />
                         </button>
+                        {students.some((s) => s.id === student.id) && (
+                          <button
+                            onClick={() =>
+                              setPendingDelete({
+                                kind: 'student',
+                                id: student.id,
+                                label: `${student.fullName || student.name} (${student.studentId})`,
+                                message:
+                                  'This permanently removes the student profile, including its grades, courses and payment records. Their admission application, enrollment requests and portal sign-in are not deleted.',
+                              })
+                            }
+                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                            title="Delete student record"
+                            aria-label={`Delete student record of ${student.fullName || student.name}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -735,15 +756,32 @@ export const AdminEnrollmentsTab: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3.5 text-right">
-                      <button
-                        onClick={() => {
-                          setSelectedPreEnlistment(record);
-                          setPreEnlistmentRemarks(record.adminRemarks || '');
-                        }}
-                        className="bg-[#18392B] hover:bg-[#588B76] text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition cursor-pointer"
-                      >
-                        Inspect & Advise
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        <button
+                          onClick={() => {
+                            setSelectedPreEnlistment(record);
+                            setPreEnlistmentRemarks(record.adminRemarks || '');
+                          }}
+                          className="bg-[#18392B] hover:bg-[#588B76] text-white text-[11px] font-semibold px-3 py-1.5 rounded-lg transition cursor-pointer"
+                        >
+                          Inspect & Advise
+                        </button>
+                        <button
+                          onClick={() =>
+                            setPendingDelete({
+                              kind: 'preEnlistment',
+                              id: record.id,
+                              label: `${record.studentName} · ${record.semester} · ${record.totalUnits} units`,
+                              message: 'This permanently removes this pre-enlistment submission. The student record and official enrollments are not affected.',
+                            })
+                          }
+                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          title="Delete pre-enlistment"
+                          aria-label={`Delete pre-enlistment of ${record.studentName}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -866,6 +904,24 @@ export const AdminEnrollmentsTab: React.FC = () => {
                             <Printer className="w-4 h-4" />
                           </button>
                         )}
+                        <button
+                          onClick={() =>
+                            setPendingDelete({
+                              kind: 'enrollment',
+                              id: enr.id,
+                              label: `${enr.referenceNumber} · ${enr.studentName}`,
+                              message:
+                                enr.status === 'Approved'
+                                  ? 'This enrollment is already approved. Deleting it removes the enrollment application only; courses and balances already posted to the student record are kept.'
+                                  : 'This permanently removes this enrollment application. The student record is not affected.',
+                            })
+                          }
+                          className="p-1 text-rose-600 hover:bg-rose-50 rounded transition cursor-pointer"
+                          title="Delete enrollment application"
+                          aria-label={`Delete enrollment ${enr.referenceNumber}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -942,6 +998,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3.5 text-right">
+                      <div className="flex items-center justify-end gap-1.5">
                       {req.status === 'Pending' ? (
                         <div className="flex items-center justify-end gap-1.5">
                           <button
@@ -960,6 +1017,25 @@ export const AdminEnrollmentsTab: React.FC = () => {
                       ) : (
                         <span className="text-[11px] text-slate-400 font-mono">Resolved</span>
                       )}
+                        <button
+                          onClick={() =>
+                            setPendingDelete({
+                              kind: 'addDrop',
+                              id: req.id,
+                              label: `${req.action} ${req.subjectCode} · ${req.studentName}`,
+                              message:
+                                req.status === 'Approved'
+                                  ? 'This removes the request from the list. The course change it already applied to the student record is kept.'
+                                  : 'This permanently removes this add/drop request.',
+                            })
+                          }
+                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          title="Delete add/drop request"
+                          aria-label={`Delete ${req.action} ${req.subjectCode} request of ${req.studentName}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -984,67 +1060,96 @@ export const AdminEnrollmentsTab: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {academicPeriods.map((period) => (
-              <div
-                key={period.id}
-                className={`p-5 rounded-2xl border ${
-                  period.status === 'Active'
-                    ? 'border-[#588B76] bg-emerald-50/20 ring-2 ring-[#588B76]/20'
-                    : 'border-slate-200 bg-white'
-                } shadow-xs space-y-3`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-mono font-bold text-slate-500 uppercase">{period.code}</span>
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                      period.status === 'Active' ? 'bg-[#18392B] text-white' : 'bg-slate-100 text-slate-600'
+            {academicPeriods.length === 0 && (
+              <p className="md:col-span-3 text-xs text-slate-500 bg-white p-4 rounded-xl border border-slate-200">
+                No academic terms are configured.
+              </p>
+            )}
+            {academicPeriods.map((period) => {
+              const formatDate = (value?: string) =>
+                value && !Number.isNaN(Date.parse(value))
+                  ? new Date(value).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                  : value || '—';
+              const statusLabel = period.isCurrent ? 'Active' : period.status === 'Active' ? 'Scheduled' : period.status;
+              return (
+                <div
+                  key={period.id}
+                  className={`p-5 rounded-2xl border ${
+                    period.isCurrent
+                      ? 'border-[#588B76] bg-emerald-50/20 ring-2 ring-[#588B76]/20'
+                      : 'border-slate-200 bg-white'
+                  } shadow-xs space-y-3`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[11px] font-mono font-bold text-slate-500 uppercase">
+                      AY {period.academicYear} ({period.semester})
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                          period.isCurrent ? 'bg-[#18392B] text-white' : 'bg-slate-100 text-slate-600'
+                        }`}
+                      >
+                        {statusLabel}
+                      </span>
+                      {!period.isCurrent && (
+                        <button
+                          onClick={() =>
+                            setPendingDelete({
+                              kind: 'term',
+                              id: period.id,
+                              label: `${period.semester}, Academic Year ${period.academicYear}`,
+                              message:
+                                'This permanently removes this academic term from the calendar. Enrollments, pre-enlistments and student records that mention it are not changed.',
+                            })
+                          }
+                          className="p-1 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          title="Delete academic term"
+                          aria-label={`Delete ${period.semester} ${period.academicYear}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <h5 className="font-serif text-base font-bold text-[#18392B]">
+                    {period.semester}, Academic Year {period.academicYear}
+                  </h5>
+
+                  <div className="text-xs space-y-1 text-slate-600">
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-400">Enrollment Period:</span>
+                      <span className="font-medium text-right">
+                        {formatDate(period.enrollmentStartDate)} – {formatDate(period.enrollmentEndDate)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-400">Add/Drop Deadline:</span>
+                      <span className="font-medium text-amber-700">{formatDate(period.addDropEndDate)}</span>
+                    </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-400">Enrollment Portal:</span>
+                      <span className={`font-bold ${period.enrollmentStatus === 'Open' ? 'text-emerald-700' : 'text-slate-400'}`}>
+                        {period.enrollmentStatus === 'Open' ? 'Accepting Applications' : 'Closed'}
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => setCurrentAcademicPeriod(period.id)}
+                    disabled={period.isCurrent}
+                    className={`w-full text-xs font-semibold py-2 rounded-xl transition cursor-pointer ${
+                      period.isCurrent
+                        ? 'bg-emerald-100 text-emerald-800 cursor-default'
+                        : 'bg-slate-100 hover:bg-[#18392B] hover:text-white text-slate-700'
                     }`}
                   >
-                    {period.status}
-                  </span>
+                    {period.isCurrent ? 'Currently Active Term' : 'Set as Active Term'}
+                  </button>
                 </div>
-
-                <h5 className="font-serif text-base font-bold text-[#18392B]">{period.name}</h5>
-
-                <div className="text-xs space-y-1 text-slate-600">
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Class Dates:</span>
-                    <span className="font-medium">{period.startDate} – {period.endDate}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Add/Drop Deadline:</span>
-                    <span className="font-medium text-amber-700">{period.addDropCutoff}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-400">Enrollment Portal:</span>
-                    <span className={`font-bold ${period.registrationOpen ? 'text-emerald-700' : 'text-slate-400'}`}>
-                      {period.registrationOpen ? 'Accepting Applications' : 'Closed'}
-                    </span>
-                  </div>
-                </div>
-
-                <button
-                  onClick={() => {
-                    setAcademicPeriods((prev) =>
-                      prev.map((p) => ({
-                        ...p,
-                        status: p.id === period.id ? 'Active' : 'Scheduled',
-                        registrationOpen: p.id === period.id,
-                      }))
-                    );
-                    addToast('success', 'Active Period Updated', `${period.name} is now the primary enrollment term.`);
-                  }}
-                  disabled={period.status === 'Active'}
-                  className={`w-full text-xs font-semibold py-2 rounded-xl transition cursor-pointer ${
-                    period.status === 'Active'
-                      ? 'bg-emerald-100 text-emerald-800 cursor-default'
-                      : 'bg-slate-100 hover:bg-[#18392B] hover:text-white text-slate-700'
-                  }`}
-                >
-                  {period.status === 'Active' ? 'Currently Active Term' : 'Set as Active Term'}
-                </button>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -1878,6 +1983,15 @@ export const AdminEnrollmentsTab: React.FC = () => {
           </div>
         </div>
       )}
+      <ConfirmDeleteModal
+        isOpen={!!pendingDelete}
+        title="Delete this record?"
+        itemName={pendingDelete?.label}
+        message={pendingDelete?.message}
+        isLoading={isDeleting}
+        onConfirm={confirmPendingDelete}
+        onCancel={() => !isDeleting && setPendingDelete(null)}
+      />
     </div>
   );
 };
