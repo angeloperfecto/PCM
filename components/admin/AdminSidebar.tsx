@@ -32,6 +32,7 @@ import {
   Camera,
   Compass,
   Flame,
+  Quote,
 } from 'lucide-react';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 import { isValidImageSrc } from '@/lib/utils';
@@ -46,6 +47,7 @@ export type AdminTabType =
   | 'news'
   | 'events'
   | 'announcements'
+  | 'testimonials'
   | 'studentLife'
   | 'scrapbook'
   | 'media'
@@ -108,6 +110,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     enrollments,
     videos,
     scrapbook,
+    testimonials,
     firebaseSyncStatus,
     updateAdminAvatar,
   } = usePCM();
@@ -177,6 +180,12 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           label: 'Ticker Notices',
           icon: Bell,
           count: announcements.filter((a) => a.active).length,
+        },
+        {
+          id: 'testimonials',
+          label: 'Testimonials',
+          icon: Quote,
+          count: testimonials.length,
         },
         {
           id: 'studentLife',

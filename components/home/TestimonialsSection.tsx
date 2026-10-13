@@ -4,10 +4,13 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { isValidImageSrc } from '@/lib/utils';
+import { publicTestimonials } from '@/lib/testimonials';
 import { Quote, ChevronLeft, ChevronRight, Sparkles, GraduationCap } from 'lucide-react';
 
 export const TestimonialsSection: React.FC = () => {
-  const { testimonials } = usePCM();
+  const { testimonials: allTestimonials } = usePCM();
+  // Only published testimonials, in the order set in the Admin Workspace.
+  const testimonials = publicTestimonials(allTestimonials);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   if (testimonials.length === 0) return null;
@@ -89,7 +92,7 @@ export const TestimonialsSection: React.FC = () => {
                   <ChevronLeft className="w-5 h-5" />
                 </button>
                 <span className="text-xs font-mono font-semibold text-[#18392B]/70 px-1">
-                  {currentIndex + 1} / {testimonials.length}
+                  {(currentIndex % testimonials.length) + 1} / {testimonials.length}
                 </span>
                 <button
                   onClick={() => setCurrentIndex((prev) => (prev + 1) % testimonials.length)}

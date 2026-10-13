@@ -13,6 +13,7 @@ import { AdminFacultyTab } from '@/components/admin/AdminFacultyTab';
 import { AdminNewsTab } from '@/components/admin/AdminNewsTab';
 import { AdminEventsTab } from '@/components/admin/AdminEventsTab';
 import { AdminAnnouncementsTab } from '@/components/admin/AdminAnnouncementsTab';
+import { AdminTestimonialsTab } from '@/components/admin/AdminTestimonialsTab';
 import { AdminMediaTab } from '@/components/admin/AdminMediaTab';
 import { AdminDownloadsTab } from '@/components/admin/AdminDownloadsTab';
 import { AdminYouTubeTab } from '@/components/admin/AdminYouTubeTab';
@@ -73,6 +74,7 @@ export const AdminView: React.FC = () => {
     'news',
     'events',
     'announcements',
+    'testimonials',
     'studentLife',
     'scrapbook',
     'media',
@@ -371,6 +373,7 @@ export const AdminView: React.FC = () => {
             {activeTab === 'news' && <AdminNewsTab />}
             {activeTab === 'events' && <AdminEventsTab />}
             {activeTab === 'announcements' && <AdminAnnouncementsTab />}
+            {activeTab === 'testimonials' && <AdminTestimonialsTab />}
             {activeTab === 'media' && <AdminMediaTab />}
             {activeTab === 'downloads' && <AdminDownloadsTab />}
             {activeTab === 'youtube' && <AdminYouTubeTab />}
