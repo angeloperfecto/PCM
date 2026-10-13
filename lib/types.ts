@@ -959,6 +959,8 @@ export interface DeletedUserRecord {
   deletedBy: string;
   reason?: string;
   originalAccount?: UserAccount;
+  /** Firestore document id of this registry entry (set when read from the registry). */
+  docId?: string;
 }
 
 export interface AdminUser {

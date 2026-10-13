@@ -451,6 +451,7 @@ interface PCMContextType {
   addUserAccount: (user: NewUserAccountInput) => Promise<UserAccount> | UserAccount;
   deleteUserAccount: (userId: string) => Promise<void> | void;
   restoreUserAccount: (userIdOrEmail: string) => Promise<boolean>;
+  removeDeletedUserRecord: (userIdOrEmail: string) => Promise<boolean>;
   isUserDeleted: (identifierOrAccount: string | { id?: string; uid?: string; email?: string; studentId?: string } | null | undefined) => boolean;
   deletedUsers: DeletedUserRecord[];
   updateUserAccountRole: (userId: string, role: UserRole, adminRole?: AdminRole) => Promise<void>;
@@ -3066,7 +3067,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const unsubDeleted = onSnapshot(
           collection(db, 'deletedUsers'),
           (snap) => {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as DeletedUserRecord[];
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data(), docId: d.id })) as DeletedUserRecord[];
             const map = new Map<string, DeletedUserRecord>();
             list.forEach((item) => {
               const key = (item.email || item.id || item.uid || '').toLowerCase().trim();
@@ -7904,7 +7905,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const adminActor = currentAdminUser?.name || currentUserAccount?.name || 'Administrator';
 
     // 1. Remove from deletedUsers tombstone in Firestore
-    const docId = (record.email || record.uid || record.id).replace(/[/\\?%*:|"<>]/g, '_').toLowerCase();
+    const docId = record.docId || (record.email || record.uid || record.id).replace(/[/\\?%*:|"<>]/g, '_').toLowerCase();
     try {
       await safeDeleteDoc(doc(db, 'deletedUsers', docId));
     } catch (e) {
@@ -8009,6 +8010,39 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     logActivity('RESTORE', 'User Account', restoredAccount.id, restoredAccount.name, `Manually restored user account (${restoredAccount.email}) by ${adminActor}.`);
     addToast('success', 'User Account Restored', `"${restoredAccount.name}" (${restoredAccount.email}) has been restored as an Active user.`);
+    return true;
+  };
+
+  // Erases a registry entry without restoring the old account. The person is no longer blocked:
+  // a later sign-in starts as a brand-new user with no previous role or records.
+  const removeDeletedUserRecord = async (userIdOrEmail: string): Promise<boolean> => {
+    const cleanTarget = userIdOrEmail.trim().toLowerCase();
+    const record = deletedUsers.find(
+      (d) => d.id.toLowerCase() === cleanTarget || d.uid?.toLowerCase() === cleanTarget || d.email.toLowerCase() === cleanTarget
+    );
+    if (!record) {
+      addToast('error', 'Not Found', 'No deletion registry entry matches this account.');
+      return false;
+    }
+    const wasSuper = record.role === 'Super Admin' || record.adminRole === 'Super Admin';
+    if (!canManageAdminRole(undefined, wasSuper ? 'Super Admin' : undefined)) {
+      denyAdminManagement(wasSuper ? 'Super Admin' : undefined);
+      return false;
+    }
+    const docId = record.docId || (record.email || record.uid || record.id).replace(/[/\\?%*:|"<>]/g, '_').toLowerCase();
+    if (!(await safeDeleteDoc(doc(db, 'deletedUsers', docId)))) return false;
+    setDeletedUsers((prev) => {
+      const next = prev.filter((d) => d !== record && d.email.toLowerCase() !== record.email.toLowerCase());
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('pcm_deleted_users', JSON.stringify(next));
+        } catch {}
+      }
+      return next;
+    });
+    const adminActor = currentAdminUser?.name || currentUserAccount?.name || 'Administrator';
+    logActivity('DELETE', 'Deletion Registry', record.id, record.name, `Removed ${record.email} from the deletion registry (not restored) by ${adminActor}.`);
+    addToast('info', 'Registry Entry Removed', `${record.name} (${record.email}) is no longer blocked. Their old account was not restored.`);
     return true;
   };
 
@@ -9143,6 +9177,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addUserAccount,
         deleteUserAccount,
         restoreUserAccount,
+        removeDeletedUserRecord,
         isUserDeleted,
         deletedUsers,
         updateUserAccountRole,
