@@ -18,7 +18,6 @@ export const QuickViewSwitcher: React.FC = () => {
     isStudentLoggedIn,
     setIsStudentLoggedIn,
     isAdminLoggedIn,
-    setIsAdminLoggedIn,
   } = usePCM();
 
   const [isOpen, setIsOpen] = useState(true);
@@ -32,8 +31,8 @@ export const QuickViewSwitcher: React.FC = () => {
     navigateTo('portal');
   };
 
+  // Opens the Admin page; AdminView shows the sign-in gate unless the user is a verified admin.
   const handleGoToAdminCMS = () => {
-    setIsAdminLoggedIn(true);
     navigateTo('admin');
   };
 

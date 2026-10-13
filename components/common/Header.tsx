@@ -37,7 +37,6 @@ export const Header: React.FC = () => {
     setSearchModalOpen,
     isAdminLoggedIn,
     isStudentLoggedIn,
-    setIsAdminLoggedIn,
     setIsStudentLoggedIn,
     setStatementOfFaithModalOpen,
     setTuitionCalculatorModalOpen,
@@ -180,7 +179,7 @@ export const Header: React.FC = () => {
         {
           label: 'Registrar Admin Enrollment CMS',
           action: () => {
-            setIsAdminLoggedIn(true);
+            // AdminView shows the sign-in gate unless the user is a verified admin.
             navigateTo('admin');
           },
           icon: ShieldCheck,

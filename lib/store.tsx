@@ -140,6 +140,8 @@ import {
   auth,
   googleProvider,
   signInWithPopup,
+  signInWithRedirect,
+  sendEmailVerification,
   signOut,
   onAuthStateChanged,
   updateProfile,
@@ -570,7 +572,7 @@ interface PCMContextType {
   isAdminLoggedIn: boolean;
   isAdminAuthenticated: boolean;
   setIsAdminLoggedIn: (loggedIn: boolean) => void;
-  adminLogin: (user: string, pass: string) => boolean;
+  adminLogin: (user: string, pass: string) => Promise<boolean>;
   adminLogout: () => void;
   currentAdminUser: AdminUser;
   setCurrentAdminUser: (user: AdminUser) => void;
@@ -660,6 +662,21 @@ function areUserAccountsEqual(a: UserAccount[] | undefined, b: UserAccount[] | u
   }
   return true;
 }
+
+// Accounts that always hold Super Admin, matching isSuperAdmin() in firestore.rules.
+// Only honoured when Firebase Auth reports the email as verified.
+const SUPER_ADMIN_EMAILS = ['angeloperfecto.epc@gmail.com', 'president@pcm.edu.ph'];
+
+const ADMIN_ROLE_NAMES: string[] = [
+  'Super Admin',
+  'Admin',
+  'Staff/Editor',
+  'Editor',
+  'Content Admin',
+  'Academic Admin',
+  'Registrar',
+  'Finance',
+];
 
 const PCMContext = createContext<PCMContextType | undefined>(undefined);
 
@@ -1300,43 +1317,22 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     try {
-      const storedAdmin = localStorage.getItem('pcm_admin_session');
-      if (storedAdmin) {
-        const parsed = JSON.parse(storedAdmin) as AdminUser;
-        if (parsed && parsed.id && !isUserDeletedRef.current(parsed.id) && !isUserDeletedRef.current(parsed.email)) {
-          setCurrentAdminUser(parsed);
-          setIsAdminLoggedIn(true);
-          const adminAccount: UserAccount = {
-            id: parsed.id,
-            uid: parsed.id,
-            email: parsed.email || 'president@pcm.edu.ph',
-            name: parsed.name,
-            displayName: parsed.name,
-            role: parsed.role === 'Super Admin' ? 'Super Admin' : 'Admin',
-            adminRole: parsed.role,
-            department: parsed.department || 'Administration & Executive Leadership',
-            status: 'Active',
-            verificationStatus: 'Approved',
-            photoURL: parsed.avatarUrl || '',
-            avatarUrl: parsed.avatarUrl || '',
-            authMethod: 'credentials',
-            provider: 'credentials',
-            createdAt: parsed.createdAt || new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
-          };
-          setCurrentUserAccount((prev) => prev || adminAccount);
-        }
-      }
+      // Admin sessions are never restored from localStorage: anyone can write to it from
+      // devtools. Admin access is granted only by the Firebase Auth listener below,
+      // which re-verifies the signed-in user's role against Firestore on every load.
+      localStorage.removeItem('pcm_admin_session');
       const storedUser = localStorage.getItem('pcm_user_session');
       if (storedUser) {
         const parsed = JSON.parse(storedUser) as UserAccount;
-        if (parsed && (parsed.uid || parsed.id) && !isUserDeletedRef.current(parsed.uid || parsed.id) && !isUserDeletedRef.current(parsed.email)) {
+        if (
+          parsed &&
+          (parsed.uid || parsed.id) &&
+          (parsed.role === 'Student' || parsed.role === 'Student/User') &&
+          !isUserDeletedRef.current(parsed.uid || parsed.id) &&
+          !isUserDeletedRef.current(parsed.email)
+        ) {
           setCurrentUserAccount(parsed);
-          if (['Super Admin', 'Admin', 'Staff/Editor', 'Editor'].includes(parsed.role)) {
-            setIsAdminLoggedIn(true);
-          } else if (parsed.role === 'Student' || parsed.role === 'Student/User') {
-            setIsStudentLoggedIn(true);
-          }
+          setIsStudentLoggedIn(true);
         }
       }
       const storedStudent = localStorage.getItem('pcm_student_session');
@@ -2915,11 +2911,17 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               signOut(auth).catch(() => {});
               return;
             }
-            const isSuperAdminEmail =
-              emailLower === 'angeloperfecto.epc@gmail.com' || emailLower === 'president@pcm.edu.ph';
-            const isInitialConfigAdmin = INITIAL_ADMIN_USERS.find((u) => u.email.toLowerCase() === emailLower);
+            // Email-based admin matching only counts once Firebase has verified the user owns
+            // that address; otherwise anyone could register an unverified account with an admin email.
+            const isEmailVerified = fbUser.emailVerified === true;
+            const isSuperAdminEmail = isEmailVerified && SUPER_ADMIN_EMAILS.includes(emailLower);
+            const isInitialConfigAdmin = isEmailVerified
+              ? INITIAL_ADMIN_USERS.find((u) => u.email.toLowerCase() === emailLower)
+              : undefined;
             const isKnownAdmin = (stateRef.current?.adminUsers || []).find(
-              (a) => a.email.toLowerCase() === emailLower || a.id === fbUser.uid
+              (a) =>
+                (a.id === fbUser.uid || (isEmailVerified && a.email.toLowerCase() === emailLower)) &&
+                (!a.status || a.status === 'Active')
             );
 
             let initialRole: UserRole = isSuperAdminEmail
@@ -2966,6 +2968,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               lastLogin: new Date().toISOString(),
             };
 
+            // Role granted by the adminUsers directory (by uid, or by verified email). Kept so the
+            // live users/{uid} listener below doesn't demote an admin whose profile doc still
+            // carries an older non-admin role.
+            let directoryAdminRole: AdminRole | undefined = isKnownAdmin?.role;
+
             // Targeted check of active authenticated user profile and admin collection
             try {
               const [userSnap, adminSnap] = await Promise.all([
@@ -2973,8 +2980,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 getDoc(doc(db, 'adminUsers', fbUser.uid)).catch(() => null),
               ]);
 
-              if (adminSnap && adminSnap.exists()) {
-                const adminData = adminSnap.data() as AdminUser;
+              const adminDocData = adminSnap && adminSnap.exists() ? (adminSnap.data() as AdminUser) : null;
+              if (adminDocData && (!adminDocData.status || adminDocData.status === 'Active')) {
+                const adminData = adminDocData;
+                directoryAdminRole = adminData.role || 'Admin';
                 acc.role = (adminData.role as UserRole) || 'Admin';
                 acc.adminRole = adminData.role || 'Admin';
                 acc.name = adminData.name || acc.name;
@@ -3060,11 +3069,19 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               (userSnap) => {
                 if (userSnap.exists()) {
                   const updatedProfile = userSnap.data() as UserAccount;
-                  if (emailLower === 'angeloperfecto.epc@gmail.com') {
+                  if (isSuperAdminEmail) {
                     updatedProfile.role = 'Super Admin';
                     updatedProfile.adminRole = 'Super Admin';
                     updatedProfile.status = 'Active';
                     updatedProfile.verificationStatus = 'Approved';
+                  } else if (
+                    directoryAdminRole &&
+                    (updatedProfile.role === 'Student/User' || !updatedProfile.role) &&
+                    !['Pending', 'Pending Verification', 'Rejected', 'Disabled', 'Inactive'].includes(updatedProfile.status as string)
+                  ) {
+                    updatedProfile.role = directoryAdminRole as UserRole;
+                    updatedProfile.adminRole = directoryAdminRole;
+                    updatedProfile.status = 'Active';
                   }
                   setCurrentUserAccount((prev) => (prev ? { ...prev, ...updatedProfile } : updatedProfile));
 
@@ -3101,37 +3118,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               (err) => handleFirestoreError(err, OperationType.GET, `users/${fbUser.uid}`)
             );
           } else {
-            // When fbUser is null (admin did not sign in with Google or signed in via username/password)
-            const storedAdmin = typeof window !== 'undefined' ? localStorage.getItem('pcm_admin_session') : null;
-            if (storedAdmin) {
-              try {
-                const parsed = JSON.parse(storedAdmin) as AdminUser;
-                if (parsed && parsed.id && !isUserDeletedRef.current(parsed.id) && !isUserDeletedRef.current(parsed.email)) {
-                  setIsAdminLoggedIn(true);
-                  setCurrentAdminUser(parsed);
-                  const adminAcc: UserAccount = {
-                    id: parsed.id,
-                    uid: parsed.id,
-                    email: parsed.email || 'president@pcm.edu.ph',
-                    name: parsed.name,
-                    displayName: parsed.name,
-                    role: parsed.role === 'Super Admin' ? 'Super Admin' : 'Admin',
-                    adminRole: parsed.role,
-                    department: parsed.department || 'Administration & Executive Leadership',
-                    status: 'Active',
-                    verificationStatus: 'Approved',
-                    photoURL: parsed.avatarUrl || '',
-                    avatarUrl: parsed.avatarUrl || '',
-                    authMethod: 'credentials',
-                    provider: 'credentials',
-                    createdAt: parsed.createdAt || new Date().toISOString(),
-                    lastLogin: new Date().toISOString(),
-                  };
-                  setCurrentUserAccount((prev) => prev || adminAcc);
-                  return;
-                }
-              } catch {}
-            }
+            // No Firebase user: there is no admin session. Admin access always requires a
+            // Firebase-authenticated account whose role is verified above.
+            setIsAdminLoggedIn(false);
+            setCurrentUserAccount((prev) =>
+              prev && (prev.role === 'Student' || prev.role === 'Student/User') ? prev : null
+            );
             const storedStudent = typeof window !== 'undefined' ? localStorage.getItem('pcm_student_session') : null;
             if (storedStudent) {
               try {
@@ -5118,13 +5110,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    const isPassMatch =
-      (matched?.portalPassword && matched.portalPassword === p) ||
-      p === 'pcmstudent' ||
-      p === 'pcm1966' ||
-      p === 'pcm1992' ||
-      p === 'student' ||
-      p === 'password';
+    // A student's own portal password always wins. The institutional default only applies
+    // to records that never had a password set; there are no universal override passwords.
+    const isPassMatch = matched?.portalPassword
+      ? matched.portalPassword === p
+      : p === 'pcmstudent';
 
     if (matched && isPassMatch) {
       setStudentProfile(matched);
@@ -5134,7 +5124,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return true;
     }
 
-    addToast('error', 'Authentication Failed', 'Invalid Student ID or Password. Try ID: 2024-PCM-0418 / Password: pcmstudent');
+    addToast('error', 'Authentication Failed', 'Invalid Student ID or Password.');
     return false;
   };
 
@@ -6753,173 +6743,61 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return await updateEnrollmentStatus(enrollmentId, 'Submitted', 'Reopened by Admin for review');
   };
 
+  // Grants the role recorded for this user in the adminUsers directory (matched by uid, or by
+  // email once Firebase has verified it). Rejected and disabled accounts are left untouched.
+  const applyDirectoryAdminRole = (
+    acc: UserAccount,
+    uid: string,
+    emailLower: string,
+    isEmailVerified: boolean
+  ) => {
+    if (ADMIN_ROLE_NAMES.includes(acc.role as string)) return;
+    if (['Rejected', 'Disabled', 'Inactive'].includes(acc.status as string)) return;
+    const match = adminUsers.find(
+      (a) =>
+        (a.id === uid || (isEmailVerified && a.email?.toLowerCase() === emailLower)) &&
+        (!a.status || a.status === 'Active')
+    );
+    if (!match) return;
+    acc.role = match.role as UserRole;
+    acc.adminRole = match.role;
+    acc.status = 'Active';
+    acc.verificationStatus = 'Approved';
+  };
+
   // Admin CMS Auth & Management
-  const adminLogin = (user: string, pass: string): boolean => {
-    // If the active user profile is a student or pending, deny access to the administrator interface
-    if (currentUserAccount?.role === 'Student' || currentUserAccount?.role === 'Student/User' || (isStudentLoggedIn && !isAdminLoggedIn && currentUserAccount?.role !== 'Admin')) {
+  // Admin sign-in goes through Firebase Auth (email + password). The admin's role is then
+  // verified by signInWithEmail / the auth listener against Firestore; no passwords are
+  // compared in the browser.
+  const adminLogin = async (user: string, pass: string): Promise<boolean> => {
+    const trimmedUser = user.trim().toLowerCase();
+
+    // Allow signing in with an admin username by mapping it to that admin's email.
+    const email = trimmedUser.includes('@')
+      ? trimmedUser
+      : adminUsers.find((u) => u.username?.toLowerCase() === trimmedUser)?.email?.toLowerCase() || '';
+
+    if (!email) {
       addToast({
-        title: 'Access Restricted',
-        message: 'Student and regular accounts are not authorized to authenticate into the Administrator CMS.',
+        title: 'Login Failed',
+        message: 'Enter the email address of your administrator account.',
         type: 'error',
       });
       return false;
     }
 
-    if (currentUserAccount?.status === 'Pending' || currentUserAccount?.verificationStatus === 'Pending' || currentUserAccount?.role === 'Pending User') {
+    const res = await signInWithEmail(email, pass);
+    if (!res.success || res.isPending) return false;
+
+    if (!ADMIN_ROLE_NAMES.includes(res.role || '')) {
       addToast({
-        title: 'Account Pending Approval',
-        message: 'Your registration is awaiting approval by the Super Admin or an Admin User. Access to the Admin Workspace is restricted until approved.',
-        type: 'warning',
+        title: 'Access Restricted',
+        message: 'This account is not authorized to access the Admin Workspace.',
+        type: 'error',
       });
       return false;
     }
-
-    const trimmedUser = user.trim().toLowerCase();
-    const trimmedPass = pass.trim();
-
-    // Check if matching account is in userAccounts
-    const targetUserAcc = userAccounts.find(
-      (u) => u.email.toLowerCase() === trimmedUser || u.username?.toLowerCase() === trimmedUser
-    );
-
-    if (targetUserAcc) {
-      if (targetUserAcc.status === 'Pending' || targetUserAcc.verificationStatus === 'Pending' || targetUserAcc.role === 'Pending User') {
-        addToast({
-          title: 'Account Pending Approval',
-          message: 'Your admin registration is awaiting approval by the Super Admin or an authorized Admin User. Access to the Admin Workspace is restricted.',
-          type: 'warning',
-        });
-        return false;
-      }
-      if (targetUserAcc.status === 'Rejected') {
-        addToast({
-          title: 'Registration Rejected',
-          message: 'Your admin account request was rejected. Access to the Admin Workspace is denied.',
-          type: 'error',
-        });
-        return false;
-      }
-      if (targetUserAcc.status === 'Disabled' || targetUserAcc.status === 'Inactive') {
-        addToast({
-          title: 'Account Inactive',
-          message: 'This administrator account is currently inactive or disabled.',
-          type: 'error',
-        });
-        return false;
-      }
-      if (['Student', 'Student/User'].includes(targetUserAcc.role)) {
-        addToast({
-          title: 'Access Restricted',
-          message: 'Student accounts are not authorized to access the Admin Workspace.',
-          type: 'error',
-        });
-        return false;
-      }
-    }
-
-    // Check against configured adminUsers
-    const found = adminUsers.find((u) => {
-      const matchUsername = u.username.toLowerCase() === trimmedUser;
-      const matchEmail = u.email.toLowerCase() === trimmedUser;
-      const matchAdminGeneric = trimmedUser === 'admin' && (u.username.toLowerCase() === 'admin' || u.role === 'Super Admin');
-      const matchPassword =
-        u.password === trimmedPass ||
-        trimmedPass === 'pcm2026' ||
-        trimmedPass === 'password' ||
-        trimmedPass === 'admin123' ||
-        trimmedPass === 'pcm1992';
-
-      return (matchUsername || matchEmail || matchAdminGeneric) && matchPassword && (!u.status || u.status === 'Active');
-    });
-
-    if (found) {
-      setCurrentAdminUser(found);
-      setIsAdminLoggedIn(true);
-      const adminAcc: UserAccount = {
-        id: found.id,
-        uid: found.id,
-        email: found.email || 'president@pcm.edu.ph',
-        name: found.name,
-        displayName: found.name,
-        role: found.role === 'Super Admin' ? 'Super Admin' : 'Admin',
-        adminRole: found.role,
-        department: found.department || 'Administration & Executive Leadership',
-        status: 'Active',
-        verificationStatus: 'Approved',
-        photoURL: found.avatarUrl || '',
-        avatarUrl: found.avatarUrl || '',
-        authMethod: 'credentials',
-        provider: 'credentials',
-        createdAt: found.createdAt || new Date().toISOString(),
-        lastLogin: new Date().toISOString(),
-      };
-      setCurrentUserAccount(adminAcc);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('pcm_admin_session', JSON.stringify(found));
-          localStorage.setItem('pcm_user_session', JSON.stringify(adminAcc));
-        } catch {}
-      }
-      logActivity('LOGIN', 'Admin Session', found.id, found.name, `Logged into CMS Workspace (${found.role}).`);
-      addToast('success', 'Admin Session Active', `Welcome, ${found.name} (${found.role})`);
-      return true;
-    }
-
-    // Direct fallback for default master administrator
-    if (
-      (trimmedUser === 'admin' ||
-        trimmedUser === 'president@pcm.edu.ph' ||
-        trimmedUser === 'admin@pcm.ph') &&
-      (trimmedPass === 'pcm2026' ||
-        trimmedPass === 'password' ||
-        trimmedPass === 'admin123' ||
-        trimmedPass === 'pcm1992')
-    ) {
-      const fallbackUser: AdminUser = adminUsers[0] || {
-        id: 'adm-1',
-        name: 'Dr. Benjamin Villanueva',
-        email: 'president@pcm.edu.ph',
-        username: 'admin',
-        password: 'pcm2026',
-        role: 'Super Admin',
-        department: 'Office of the President & Chancellor',
-        status: 'Active',
-        createdAt: '2024-01-15',
-      };
-      setCurrentAdminUser(fallbackUser);
-      setIsAdminLoggedIn(true);
-      const fallbackAcc: UserAccount = {
-        id: fallbackUser.id,
-        uid: fallbackUser.id,
-        email: fallbackUser.email,
-        name: fallbackUser.name,
-        displayName: fallbackUser.name,
-        role: 'Super Admin',
-        adminRole: 'Super Admin',
-        department: fallbackUser.department,
-        status: 'Active',
-        verificationStatus: 'Approved',
-        photoURL: fallbackUser.avatarUrl || '',
-        avatarUrl: fallbackUser.avatarUrl || '',
-        authMethod: 'credentials',
-        provider: 'credentials',
-        createdAt: fallbackUser.createdAt,
-        lastLogin: new Date().toISOString(),
-      };
-      setCurrentUserAccount(fallbackAcc);
-      if (typeof window !== 'undefined') {
-        try {
-          localStorage.setItem('pcm_admin_session', JSON.stringify(fallbackUser));
-          localStorage.setItem('pcm_user_session', JSON.stringify(fallbackAcc));
-        } catch {}
-      }
-      logActivity('LOGIN', 'Admin Session', fallbackUser.id, fallbackUser.name, `Logged into CMS Workspace (${fallbackUser.role}).`);
-      addToast('success', 'Admin Session Active', `Welcome, ${fallbackUser.name} (${fallbackUser.role})`);
-      return true;
-    }
-
-    addToast('error', 'Login Failed', 'Invalid admin credentials. Try Username: admin / Password: pcm2026');
-    return false;
+    return true;
   };
 
   const adminLogout = () => {
@@ -7046,56 +6924,35 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       requestedRole === 'Super Admin' ||
       requestedRole === 'Staff/Editor' ||
       requestedRole === 'Editor' ||
-      requestedRole === 'Pending User' ||
-      customEmail?.toLowerCase() === 'angeloperfecto.epc@gmail.com' ||
-      customEmail?.toLowerCase() === 'president@pcm.edu.ph';
+      requestedRole === 'Pending User';
 
     try {
-      let fbUser: { uid: string; email: string | null; displayName: string | null; photoURL: string | null; emailVerified: boolean } | null = null;
-
-      if (customEmail && customEmail.trim()) {
-        const cleanEmail = customEmail.trim();
-        const emailLower = cleanEmail.toLowerCase();
-        const isSuperAdminEmail = emailLower === 'angeloperfecto.epc@gmail.com' || emailLower === 'president@pcm.edu.ph';
-        fbUser = {
-          uid: isSuperAdminEmail ? 'super-admin-angelo' : `google-${emailLower.replace(/[^a-z0-9]/g, '-')}`,
-          email: cleanEmail,
-          displayName: customName?.trim() || (isSuperAdminEmail ? 'Angelo Perfecto' : cleanEmail.split('@')[0]),
-          photoURL: isSuperAdminEmail ? 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150' : '',
-          emailVerified: true,
-        };
-      } else {
-        try {
-          const popupPromise = signInWithPopup(auth, googleProvider);
-          const timeoutPromise = new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('auth/popup-timeout')), 2500)
-          );
-          const result = await Promise.race([popupPromise, timeoutPromise]);
-          fbUser = result.user;
-        } catch {
-          // In iframe or restricted sandbox previews where popup blockers or COOP/opener policies interfere,
-          // gracefully resolve with authorized institutional Google identity without throwing popup errors
-          const isRequestingAdmin =
-            wantsAdmin ||
-            (requestedRole as string) === 'Admin' ||
-            (requestedRole as string) === 'Super Admin' ||
-            requestedRole === 'Academic Admin' ||
-            requestedRole === 'Content Admin';
-          const fallbackEmail = isRequestingAdmin ? 'angeloperfecto.epc@gmail.com' : 'angeloperfecto.epc@gmail.com';
-          const fallbackName = isRequestingAdmin ? 'Angelo Perfecto' : 'Angelo Perfecto';
-          fbUser = {
-            uid: 'super-admin-angelo',
-            email: fallbackEmail,
-            displayName: fallbackName,
-            photoURL: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
-            emailVerified: true,
-          };
+      // Always authenticate with Google. customEmail is only a hint for the account picker;
+      // it never creates an identity by itself.
+      let fbUser: FirebaseUser;
+      try {
+        if (customEmail && customEmail.trim()) {
+          googleProvider.setCustomParameters({ prompt: 'select_account', login_hint: customEmail.trim() });
+        } else {
+          googleProvider.setCustomParameters({ prompt: 'select_account' });
         }
+        const result = await signInWithPopup(auth, googleProvider);
+        fbUser = result.user;
+      } catch (popupErr: any) {
+        if (popupErr?.code === 'auth/popup-blocked' || popupErr?.code === 'auth/operation-not-supported-in-this-environment') {
+          // Fall back to a full-page redirect; the auth listener finishes sign-in on return.
+          await signInWithRedirect(auth, googleProvider);
+          return { success: false, message: 'Redirecting to Google sign-in…' };
+        }
+        throw popupErr;
       }
 
       const emailLower = fbUser.email?.toLowerCase() || '';
-      const isSuperAdminEmail = emailLower === 'angeloperfecto.epc@gmail.com';
-      const initialAdminMatch = INITIAL_ADMIN_USERS.find((u) => u.email.toLowerCase() === emailLower);
+      const isEmailVerified = fbUser.emailVerified === true;
+      const isSuperAdminEmail = isEmailVerified && SUPER_ADMIN_EMAILS.includes(emailLower);
+      const initialAdminMatch = isEmailVerified
+        ? INITIAL_ADMIN_USERS.find((u) => u.email.toLowerCase() === emailLower)
+        : undefined;
 
       // Check Firestore doc first with memory fallback
       let existingAccount: UserAccount | null = null;
@@ -7226,6 +7083,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         accountData.adminRole = 'Super Admin';
         accountData.status = 'Active';
         accountData.verificationStatus = 'Approved';
+      } else {
+        applyDirectoryAdminRole(accountData, fbUser.uid, emailLower, isEmailVerified);
       }
 
       // Persist to Firestore
@@ -7304,11 +7163,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAdminLoggedIn(true);
         setIsStudentLoggedIn(false);
         setCurrentAdminUser(adminObj);
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('pcm_admin_session', JSON.stringify(adminObj));
-          } catch {}
-        }
         addToast({
           type: 'success',
           title: 'Administrator Verified',
@@ -7360,65 +7214,23 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const trimmedEmailLower = trimmedEmail.toLowerCase();
     const trimmedPass = pass.trim();
 
-    // Check legacy / hardcoded admin accounts first
-    const legacyAdminMatch = adminUsers.find((u) => {
-      const matchUsername = u.username.toLowerCase() === trimmedEmailLower;
-      const matchEmail = u.email.toLowerCase() === trimmedEmailLower;
-      const matchPassword =
-        u.password === trimmedPass ||
-        trimmedPass === 'pcm2026' ||
-        trimmedPass === 'password' ||
-        trimmedPass === 'admin123' ||
-        trimmedPass === 'pcm1992';
-      return (matchUsername || matchEmail) && matchPassword;
-    });
-
-    if (legacyAdminMatch && (!legacyAdminMatch.status || legacyAdminMatch.status === 'Active')) {
-      setCurrentAdminUser(legacyAdminMatch);
-      setIsAdminLoggedIn(true);
-      logActivity('LOGIN', 'Admin Session', legacyAdminMatch.id, legacyAdminMatch.name, `Logged in via CMS credentials (${legacyAdminMatch.role}).`);
-      addToast({
-        type: 'success',
-        title: 'Admin Session Active',
-        message: `Welcome, ${legacyAdminMatch.name} (${legacyAdminMatch.role})`,
-      });
-      return { success: true, role: legacyAdminMatch.role };
-    }
-
-    // Authenticate with Firebase Auth or fallback to verified database records
+    // Authenticate with Firebase Auth only. There is no fallback: if Firebase can't verify
+    // the password, sign-in fails.
     try {
-      let fbUser: any = null;
+      let fbUser: FirebaseUser;
       try {
         const userCredential = await signInWithEmailAndPassword(auth, trimmedEmail, trimmedPass);
         fbUser = userCredential.user;
       } catch (authErr: any) {
-        const isApiKeyOrProviderIssue =
-          authErr?.code === 'auth/api-key-not-valid' ||
-          authErr?.code === 'auth/operation-not-allowed' ||
-          authErr?.code === 'auth/invalid-api-key' ||
-          String(authErr?.message || '').includes('api-key-not-valid') ||
-          String(authErr?.message || '').includes('operation-not-allowed');
-
-        if (isApiKeyOrProviderIssue) {
-          // Check if account matches existing users in state or Firestore
-          const matchedUser = userAccounts.find((u) => u.email?.toLowerCase() === trimmedEmailLower);
-          const matchedStudent = students.find((s) => s.email?.toLowerCase() === trimmedEmailLower);
-          const userUid = matchedUser?.uid || matchedUser?.id || matchedStudent?.id || `usr-${trimmedEmailLower.replace(/[^a-z0-9]/g, '-')}`;
-
-          fbUser = {
-            uid: userUid,
-            email: trimmedEmail,
-            displayName: matchedUser?.name || matchedStudent?.fullName || trimmedEmail.split('@')[0],
-            photoURL: matchedUser?.photoURL || matchedStudent?.avatarUrl || '',
-            emailVerified: true,
-          };
-        } else {
-          throw authErr;
+        if (authErr?.code === 'auth/operation-not-allowed') {
+          throw new Error('Email/password sign-in is not enabled for this site. Please sign in with Google.');
         }
+        throw authErr;
       }
 
       const emailLower = fbUser.email?.toLowerCase() || trimmedEmailLower;
-      const isSuperAdminEmail = emailLower === 'angeloperfecto.epc@gmail.com';
+      const isEmailVerified = fbUser.emailVerified === true;
+      const isSuperAdminEmail = isEmailVerified && SUPER_ADMIN_EMAILS.includes(emailLower);
 
       // Read profile from Firestore
       let userAcc: UserAccount | null = null;
@@ -7457,6 +7269,21 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         userAcc.adminRole = 'Super Admin';
         userAcc.status = 'Active';
         userAcc.verificationStatus = 'Approved';
+      } else {
+        applyDirectoryAdminRole(userAcc, fbUser.uid, emailLower, isEmailVerified);
+      }
+
+      // Admin access tied to an email address requires proof of ownership first.
+      const isAdminEmail =
+        SUPER_ADMIN_EMAILS.includes(emailLower) ||
+        adminUsers.some((a) => a.email?.toLowerCase() === emailLower);
+      if (isAdminEmail && !isEmailVerified) {
+        sendEmailVerification(fbUser).catch((e) => console.warn('Verification email notice:', e));
+        addToast({
+          type: 'info',
+          title: 'Verify Your Email',
+          message: `We sent a verification link to ${fbUser.email}. Open it, then sign in again to access the Admin Workspace.`,
+        });
       }
 
       userAcc.lastLogin = new Date().toISOString();
@@ -7523,12 +7350,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setIsAdminLoggedIn(true);
         setIsStudentLoggedIn(false);
         setCurrentAdminUser(adminObj);
-        if (typeof window !== 'undefined') {
-          try {
-            localStorage.setItem('pcm_admin_session', JSON.stringify(adminObj));
-            localStorage.setItem('pcm_user_session', JSON.stringify(userAcc));
-          } catch {}
-        }
         addToast({
           type: 'success',
           title: 'Login Successful',
@@ -7592,34 +7413,27 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   ): Promise<{ success: boolean; isPending?: boolean; user?: UserAccount; message?: string }> => {
     const trimmedEmail = email.trim();
     const trimmedEmailLower = trimmedEmail.toLowerCase();
-    const isSuperAdminEmail = trimmedEmailLower === 'angeloperfecto.epc@gmail.com';
     const isRequestingAdmin = requestedRole === 'Admin' || requestedRole === 'Super Admin' || requestedRole === 'Staff/Editor' || requestedRole === 'Editor' || requestedRole === 'Pending User';
 
     try {
-      let fbUser: any = null;
+      let fbUser: FirebaseUser;
       try {
         const userCredential = await createUserWithEmailAndPassword(auth, trimmedEmail, pass.trim());
         fbUser = userCredential.user;
         await updateProfile(fbUser, { displayName: name.trim() }).catch(() => {});
       } catch (authErr: any) {
-        const isApiKeyOrProviderIssue =
-          authErr?.code === 'auth/api-key-not-valid' ||
-          authErr?.code === 'auth/operation-not-allowed' ||
-          authErr?.code === 'auth/invalid-api-key' ||
-          String(authErr?.message || '').includes('api-key-not-valid') ||
-          String(authErr?.message || '').includes('operation-not-allowed');
-
-        if (isApiKeyOrProviderIssue) {
-          fbUser = {
-            uid: isSuperAdminEmail ? 'super-admin-angelo' : `usr-${Date.now().toString(36)}-${Math.random().toString(36).substr(2, 4)}`,
-            email: trimmedEmail,
-            displayName: name.trim(),
-            photoURL: '',
-            emailVerified: true,
-          };
-        } else {
-          throw authErr;
+        if (authErr?.code === 'auth/operation-not-allowed') {
+          throw new Error('Email/password registration is not enabled for this site. Please sign in with Google.');
         }
+        throw authErr;
+      }
+
+      // A brand-new password account is unverified, so it never receives Super Admin here.
+      // The owner of a Super Admin email gets a verification link; once verified, the auth
+      // listener grants the role on their next sign-in.
+      const isSuperAdminEmail = fbUser.emailVerified === true && SUPER_ADMIN_EMAILS.includes(trimmedEmailLower);
+      if (!fbUser.emailVerified && SUPER_ADMIN_EMAILS.includes(trimmedEmailLower)) {
+        sendEmailVerification(fbUser).catch((e) => console.warn('Verification email notice:', e));
       }
 
       let newAccount: UserAccount;
@@ -8445,7 +8259,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return JSON.stringify(fullDb, null, 2);
   };
 
+  // Import and reset overwrite live Firestore data, so only a signed-in Super Admin may run them.
+  const isSuperAdminSession = () => isAdminLoggedIn && currentAdminUser?.role === 'Super Admin';
+
   const importDatabaseJson = async (jsonString: string): Promise<boolean> => {
+    if (!isSuperAdminSession()) {
+      addToast('error', 'Permission Denied', 'Only a Super Admin can restore a database backup.');
+      return false;
+    }
     try {
       const data = JSON.parse(jsonString);
       if (data.programs && Array.isArray(data.programs)) setPrograms(data.programs);
@@ -8503,6 +8324,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resetToInitialData = async () => {
+    if (!isSuperAdminSession()) {
+      addToast('error', 'Permission Denied', 'Only a Super Admin can reset the database.');
+      return;
+    }
     setSiteConfig(INITIAL_SITE_CONFIG);
     setPrograms(INITIAL_PROGRAMS);
     setFaculty(INITIAL_FACULTY);

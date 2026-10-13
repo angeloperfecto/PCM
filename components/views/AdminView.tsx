@@ -58,8 +58,9 @@ export const AdminView: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [loginUser, setLoginUser] = useState('admin');
-  const [loginPass, setLoginPass] = useState('pcm2026');
+  const [loginUser, setLoginUser] = useState('');
+  const [loginPass, setLoginPass] = useState('');
+  const [isPasswordSigningIn, setIsPasswordSigningIn] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
 
   const VALID_ADMIN_TABS: AdminTabType[] = [
@@ -138,35 +139,23 @@ export const AdminView: React.FC = () => {
     setShowResetConfirm(true);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = adminLogin(loginUser, loginPass);
-    if (!success) {
-      addToast({
-        title: 'Authentication Failed',
-        message: 'Invalid administrator username or password.',
-        type: 'error',
-      });
+    setIsPasswordSigningIn(true);
+    try {
+      // adminLogin reports its own errors (wrong password, pending, not an admin).
+      const success = await adminLogin(loginUser, loginPass);
+      if (success) setLoginPass('');
+    } finally {
+      setIsPasswordSigningIn(false);
     }
   };
 
   const handleGoogleAdminLogin = async () => {
     setIsGoogleSigningIn(true);
     try {
-      const res = await signInWithGoogle('Super Admin', 'angeloperfecto.epc@gmail.com', 'Angelo Perfecto');
-      if (res.success) {
-        addToast({
-          title: 'Super Administrator Verified',
-          message: 'Welcome Angelo Perfecto to Philippine College of Ministry CMS Workspace.',
-          type: 'success',
-        });
-      } else {
-        addToast({
-          title: 'Google Login',
-          message: res.message || 'Unable to authenticate with Google.',
-          type: 'error',
-        });
-      }
+      // signInWithGoogle shows its own success / pending / error messages.
+      await signInWithGoogle('Admin');
     } finally {
       setIsGoogleSigningIn(false);
     }
@@ -206,7 +195,7 @@ export const AdminView: React.FC = () => {
               disabled={isGoogleSigningIn}
               className="w-full bg-gradient-to-r from-emerald-500 to-[#588B76] hover:from-emerald-400 hover:to-[#46705F] text-white font-bold py-2.5 px-4 rounded-xl transition cursor-pointer text-xs shadow-md flex items-center justify-center gap-2"
             >
-              <span>{isGoogleSigningIn ? 'Authenticating...' : 'Sign in as Angelo Perfecto (Super Admin)'}</span>
+              <span>{isGoogleSigningIn ? 'Authenticating...' : 'Sign in with an Administrator Google Account'}</span>
             </button>
             <button
               onClick={() => navigateTo('portal')}
@@ -246,20 +235,8 @@ export const AdminView: React.FC = () => {
             </p>
           </div>
 
-          {/* 1-Click Google Admin Sign In */}
+          {/* Google Admin Sign In */}
           <div className="space-y-3">
-            <button
-              id="btn-admin-instant-enrollment-access"
-              type="button"
-              onClick={() => {
-                adminLogin('admin', 'pcm2026');
-                setActiveTab('enrollments');
-              }}
-              className="w-full bg-gradient-to-r from-amber-400 to-amber-500 hover:from-amber-300 hover:to-amber-400 text-slate-950 font-extrabold py-3 px-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2 text-xs uppercase tracking-wider cursor-pointer"
-            >
-              <span>⚡ 1-Click Enter: Enrollment & Registrar Hub</span>
-            </button>
-
             <button
               id="btn-admin-google-login"
               type="button"
@@ -298,14 +275,15 @@ export const AdminView: React.FC = () => {
           <form onSubmit={handleLogin} className="space-y-4 text-xs">
             <div>
               <label className="block text-slate-300 font-bold mb-1">
-                Admin Username
+                Admin Email or Username
               </label>
               <input
                 type="text"
                 required
+                autoComplete="username"
                 value={loginUser}
                 onChange={(e) => setLoginUser(e.target.value)}
-                placeholder="Username (e.g. admin)"
+                placeholder="name@pcm.edu.ph"
                 className="w-full p-3 rounded-lg border border-slate-700 bg-[#070e1c] text-white focus:border-[#588B76] text-sm focus:outline-none"
               />
             </div>
@@ -317,6 +295,7 @@ export const AdminView: React.FC = () => {
               <input
                 type="password"
                 required
+                autoComplete="current-password"
                 value={loginPass}
                 onChange={(e) => setLoginPass(e.target.value)}
                 placeholder="••••••••"
@@ -326,40 +305,13 @@ export const AdminView: React.FC = () => {
 
             <button
               type="submit"
-              className="w-full bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition cursor-pointer shadow-lg flex items-center justify-center gap-2"
+              disabled={isPasswordSigningIn}
+              className="w-full bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition cursor-pointer shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
             >
               <Lock className="w-4 h-4" />
-              <span>Authenticate & Access CMS</span>
+              <span>{isPasswordSigningIn ? 'Verifying...' : 'Authenticate & Access CMS'}</span>
             </button>
           </form>
-
-          <div className="bg-slate-900/90 p-3.5 rounded-xl border border-slate-800 text-[11px] text-slate-300 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-mono font-bold text-[#85AA9B]">Authorized Demo Accounts:</span>
-              <button
-                type="button"
-                onClick={() => {
-                  setLoginUser('admin');
-                  setLoginPass('pcm2026');
-                }}
-                className="text-[10px] bg-[#588B76]/20 hover:bg-[#588B76]/30 text-[#85AA9B] px-2 py-0.5 rounded font-mono transition cursor-pointer"
-              >
-                Auto Fill
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
-              <div className="bg-black/40 p-2 rounded border border-white/5">
-                <span className="text-slate-400 block text-[10px]">Super Admin</span>
-                <div>User: <code className="text-white font-bold">admin</code></div>
-                <div>Pass: <code className="text-white font-bold">pcm2026</code></div>
-              </div>
-              <div className="bg-black/40 p-2 rounded border border-white/5">
-                <span className="text-slate-400 block text-[10px]">Content Admin</span>
-                <div>User: <code className="text-white font-bold">esantos</code></div>
-                <div>Pass: <code className="text-white font-bold">pcm2026</code></div>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     );

@@ -13,15 +13,15 @@ import {
 } from 'lucide-react';
 
 export const EnrollmentAnnouncementBanner: React.FC = () => {
-  const { navigateTo, setIsStudentLoggedIn, setIsAdminLoggedIn } = usePCM();
+  const { navigateTo, setIsStudentLoggedIn } = usePCM();
 
   const handleOpenStudentHub = () => {
     setIsStudentLoggedIn(true);
     navigateTo('portal');
   };
 
+  // AdminView shows the sign-in gate unless the user is a verified admin.
   const handleOpenRegistrarCMS = () => {
-    setIsAdminLoggedIn(true);
     navigateTo('admin');
   };
 
