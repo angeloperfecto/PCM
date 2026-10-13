@@ -375,9 +375,9 @@ interface PCMContextType {
   // Testimonials CRUD
   testimonials: Testimonial[];
   setTestimonials: React.Dispatch<React.SetStateAction<Testimonial[]>>;
-  addTestimonial: (item: Omit<Testimonial, 'id'>) => void;
-  updateTestimonial: (id: string, updates: Partial<Testimonial>) => void;
-  deleteTestimonial: (id: string) => void;
+  addTestimonial: (item: Omit<Testimonial, 'id'>) => Promise<Testimonial | null>;
+  updateTestimonial: (id: string, updates: Partial<Testimonial>, options?: { silent?: boolean }) => Promise<boolean>;
+  deleteTestimonial: (id: string) => Promise<boolean>;
 
   // Stats & FAQs
   stats: ImpactStat[];
@@ -4448,41 +4448,48 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('info', 'Resource Removed', 'Document removed from downloads.');
   };
 
-  // Testimonials CRUD
-  const addTestimonial = (item: Omit<Testimonial, 'id'>) => {
+  // Testimonials CRUD: the list changes only after Firestore confirms the write.
+  const addTestimonial = async (item: Omit<Testimonial, 'id'>): Promise<Testimonial | null> => {
     const newItem: Testimonial = cleanFirestoreData({ ...item, id: `test-${Date.now()}` });
+    if (!(await safeSetDoc(doc(db, 'testimonials', newItem.id), newItem, { merge: false }))) return null;
     setTestimonials((prev) => {
-      const next = [newItem, ...prev];
+      const next = [...prev.filter((t) => t.id !== newItem.id), newItem];
       setCachedData('testimonials', next);
       return next;
     });
-    safeSetDoc(doc(db, 'testimonials', newItem.id), newItem, { merge: true }).catch((e) => console.warn(e));
     logActivity('CREATE', 'Testimonial', newItem.id, newItem.name, `Added testimony quote from ${newItem.name} (${newItem.role}).`);
     addToast('success', 'Testimonial Added', `Added testimonial from ${newItem.name}.`);
+    return newItem;
   };
 
-  const updateTestimonial = (id: string, updates: Partial<Testimonial>) => {
+  const updateTestimonial = async (id: string, updates: Partial<Testimonial>, options?: { silent?: boolean }): Promise<boolean> => {
+    const target = testimonials.find((t) => t.id === id);
     const sanitized = cleanFirestoreData(updates);
+    if (!(await safeSetDoc(doc(db, 'testimonials', id), sanitized, { merge: true }))) return false;
     setTestimonials((prev) => {
-      const next = prev.map((t) => (t.id === id ? { ...t, ...updates } : t));
+      const next = prev.map((t) => (t.id === id ? { ...t, ...sanitized } : t));
       setCachedData('testimonials', next);
       return next;
     });
-    safeSetDoc(doc(db, 'testimonials', id), sanitized, { merge: true }).catch((e) => console.warn(e));
-    logActivity('UPDATE', 'Testimonial', id, updates.name || 'Testimonial', 'Updated testimonial quote and role.');
-    addToast('success', 'Testimonial Updated', 'Testimonial saved.');
+    if (!options?.silent) {
+      const name = updates.name || target?.name || 'Testimonial';
+      logActivity('UPDATE', 'Testimonial', id, name, 'Updated testimonial.');
+      addToast('success', 'Testimonial Updated', `Saved testimonial from ${name}.`);
+    }
+    return true;
   };
 
-  const deleteTestimonial = (id: string) => {
+  const deleteTestimonial = async (id: string): Promise<boolean> => {
     const t = testimonials.find((item) => item.id === id);
+    if (!(await safeDeleteDoc(doc(db, 'testimonials', id)))) return false;
     setTestimonials((prev) => {
       const next = prev.filter((item) => item.id !== id);
       setCachedData('testimonials', next);
       return next;
     });
-    safeDeleteDoc(doc(db, 'testimonials', id)).catch((e) => console.warn(e));
     logActivity('DELETE', 'Testimonial', id, t?.name || 'Testimonial', 'Deleted testimonial quote.');
-    addToast('info', 'Testimonial Removed', 'Testimonial deleted.');
+    addToast('info', 'Testimonial Removed', `${t?.name ? `Testimonial from ${t.name}` : 'Testimonial'} deleted.`);
+    return true;
   };
 
   // Stats CRUD

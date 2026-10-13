@@ -110,6 +110,10 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       title: 'Calendar & Campus Events',
       subtitle: 'Institutional calendar, chapel schedules, conferences, and semester timelines.',
     },
+    testimonials: {
+      title: 'Testimonials',
+      subtitle: 'Quotes from students, alumni, faculty and ministry partners shown in “Hear From Our Community”.',
+    },
     announcements: {
       title: 'Urgent Ticker & Header Notices',
       subtitle: 'High-priority banner alerts, weather disruptions, and registration deadlines.',
