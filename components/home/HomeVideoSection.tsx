@@ -126,7 +126,7 @@ export const HomeVideoSection: React.FC = () => {
 
         {/* Category Filter Pills */}
         {categories.length > 2 && (
-          <div className="flex items-center gap-2 overflow-x-auto pb-4 mb-8 scrollbar-thin">
+          <div className="flex flex-wrap items-center gap-2 pb-4 mb-8">
             <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider flex items-center gap-1 shrink-0 mr-1">
               <SlidersHorizontal className="w-3.5 h-3.5" />
               Filter:

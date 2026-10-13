@@ -359,7 +359,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
       </div>
 
       {/* 2. SUB-NAVIGATION MODULE TABS */}
-      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-1.5 overflow-x-auto text-xs font-bold scrollbar-none">
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-1.5 text-xs font-bold">
         {[
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'students', label: 'Student Directory', icon: Users, count: allStudents.length },

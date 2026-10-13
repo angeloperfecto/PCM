@@ -118,8 +118,8 @@ export const ScrapbookView: React.FC = () => {
 
       {/* 2. CATEGORY PILLS BAR */}
       <section className="bg-white border-b border-slate-200 sticky top-[73px] z-20 shadow-xs px-4 lg:px-8 py-3">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4 overflow-x-auto no-scrollbar">
-          <div className="flex items-center gap-2 shrink-0">
+        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2">
             {categories.map((cat) => (
               <button
                 key={cat.id}

@@ -658,7 +658,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
 
         {/* Step Progress Bar */}
         <div className="mt-6 pt-4 border-t border-white/10">
-          <div className="flex items-center justify-between gap-1 overflow-x-auto pb-2 scrollbar-none">
+          <div className="flex flex-wrap items-start justify-center sm:justify-between gap-1 gap-y-2 pb-2">
             {stepLabels.map((label, idx) => {
               const stepNumber = idx + 1;
               const isPassed = stepNumber < currentStep;
@@ -667,7 +667,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
               return (
                 <div
                   key={label}
-                  className={`flex flex-col items-center min-w-[68px] sm:min-w-[80px] text-center transition-all ${
+                  className={`flex flex-col items-center w-[60px] sm:w-auto sm:min-w-[80px] text-center transition-all ${
                     isCurrent
                       ? 'text-white font-bold'
                       : isPassed

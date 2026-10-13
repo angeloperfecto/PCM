@@ -375,7 +375,7 @@ export const AdminStudentLifeTab: React.FC = () => {
       </div>
 
       {/* Sub-Navigation Tabs */}
-      <div className="flex border-b border-slate-200 bg-white rounded-t-sm px-2 gap-1 overflow-x-auto">
+      <div className="flex flex-wrap border-b border-slate-200 bg-white rounded-t-sm px-2 gap-1">
         {subTabs.map((tab) => {
           const Icon = tab.icon;
           const isActive = activeSubTab === tab.id;
