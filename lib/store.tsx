@@ -2975,10 +2975,23 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
             // Targeted check of active authenticated user profile and admin collection
             try {
-              const [userSnap, adminSnap] = await Promise.all([
+              const [userSnap, adminSnap, adminEmailSnap] = await Promise.all([
                 getDoc(doc(db, 'users', fbUser.uid)).catch(() => null),
                 getDoc(doc(db, 'adminUsers', fbUser.uid)).catch(() => null),
+                isEmailVerified && emailLower
+                  ? getDoc(doc(db, 'adminEmails', emailLower)).catch(() => null)
+                  : Promise.resolve(null),
               ]);
+
+              // The adminUsers list may not have loaded yet when auth resolves; the email index
+              // covers that gap for admins matched by verified email.
+              const indexed = adminEmailSnap && adminEmailSnap.exists() ? adminEmailSnap.data() : null;
+              if (!directoryAdminRole && indexed?.active === true && indexed.role && !isSuperAdminEmail) {
+                directoryAdminRole = indexed.role as AdminRole;
+                acc.role = indexed.role as UserRole;
+                acc.adminRole = indexed.role as AdminRole;
+                acc.verificationStatus = 'Approved';
+              }
 
               const adminDocData = adminSnap && adminSnap.exists() ? (adminSnap.data() as AdminUser) : null;
               if (adminDocData && (!adminDocData.status || adminDocData.status === 'Active')) {
@@ -3002,6 +3015,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 if (isSuperAdminEmail) {
                   acc.role = 'Super Admin';
                   acc.adminRole = 'Super Admin';
+                  acc.status = 'Active';
+                  acc.verificationStatus = 'Approved';
+                } else if (
+                  directoryAdminRole &&
+                  ['Pending', 'Pending Verification'].includes(acc.status as string)
+                ) {
+                  // Listed in the admin directory by an administrator: an old pending
+                  // request on the profile shouldn't block access.
                   acc.status = 'Active';
                   acc.verificationStatus = 'Approved';
                 }
@@ -3076,8 +3097,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                     updatedProfile.verificationStatus = 'Approved';
                   } else if (
                     directoryAdminRole &&
-                    (updatedProfile.role === 'Student/User' || !updatedProfile.role) &&
-                    !['Pending', 'Pending Verification', 'Rejected', 'Disabled', 'Inactive'].includes(updatedProfile.status as string)
+                    (updatedProfile.role === 'Student/User' || updatedProfile.role === 'Pending User' || !updatedProfile.role) &&
+                    !['Rejected', 'Disabled', 'Inactive'].includes(updatedProfile.status as string)
                   ) {
                     updatedProfile.role = directoryAdminRole as UserRole;
                     updatedProfile.adminRole = directoryAdminRole;
@@ -6764,6 +6785,51 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     acc.status = 'Active';
     acc.verificationStatus = 'Approved';
   };
+
+  // Keep the adminEmails/{email} index in step with the active adminUsers directory.
+  // firestore.rules can't search adminUsers by email, so it checks this index to recognise
+  // admins whose adminUsers entry isn't keyed by their Firebase uid. Only a Super Admin
+  // session may write it; documents are only added, updated or removed here.
+  useEffect(() => {
+    if (!isAdminLoggedIn || currentAdminUser?.role !== 'Super Admin' || !firebaseAuthUser) return;
+    if (adminUsers.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const desired = new Map<string, { email: string; role: string; adminId: string }>();
+        adminUsers.forEach((a) => {
+          const email = a.email?.trim().toLowerCase();
+          if (email && (!a.status || a.status === 'Active')) {
+            desired.set(email, { email, role: a.role, adminId: a.id });
+          }
+        });
+        const snap = await getDocs(collection(db, 'adminEmails'));
+        if (cancelled) return;
+        const existing = new Map(snap.docs.map((d) => [d.id, d.data()]));
+        const batch = writeBatch(db);
+        let changes = 0;
+        desired.forEach((entry, email) => {
+          const cur = existing.get(email);
+          if (!cur || cur.role !== entry.role || cur.active !== true || cur.adminId !== entry.adminId) {
+            batch.set(doc(db, 'adminEmails', email), { ...entry, active: true, updatedAt: new Date().toISOString() });
+            changes++;
+          }
+        });
+        existing.forEach((_, email) => {
+          if (!desired.has(email)) {
+            batch.delete(doc(db, 'adminEmails', email));
+            changes++;
+          }
+        });
+        if (changes > 0 && !cancelled) await batch.commit();
+      } catch (e) {
+        console.warn('adminEmails index sync notice:', e);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdminLoggedIn, currentAdminUser?.role, firebaseAuthUser, adminUsers]);
 
   // Admin CMS Auth & Management
   // Admin sign-in goes through Firebase Auth (email + password). The admin's role is then

@@ -2,263 +2,230 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ---------------------------------------------------------------------------
+    // Identity helpers
+    //
+    // adminLevel() is the single place a user's admin standing is worked out:
+    //   2 = Super Admin, 1 = approved admin (any admin role), 0 = everyone else.
+    // Each rule calls it once so the role documents are read once per request.
+    // ---------------------------------------------------------------------------
+
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function isSuperAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == "angeloperfecto.epc@gmail.com" ||
-        request.auth.token.email == "president@pcm.edu.ph" ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "Super Admin" &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status in ["Active", "Approved"]) ||
-        (exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.role == "Super Admin" &&
-         get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.status in ["Active", "Approved"])
-      );
+    // The signed-in user's email, lower-cased, only once Firebase has verified it.
+    function verifiedEmail() {
+      return isSignedIn()
+        && request.auth.token.get('email_verified', false) == true
+        && request.auth.token.get('email', null) != null
+        ? request.auth.token.email.lower()
+        : '';
     }
 
-    function isApprovedAdmin() {
-      return isSignedIn() && (
-        request.auth.token.email == "angeloperfecto.epc@gmail.com" ||
-        request.auth.token.email == "president@pcm.edu.ph" ||
-        request.auth.token.email == "admin@pcm.ph" ||
-        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ["Super Admin", "Admin", "Staff/Editor", "Editor", "Content Admin", "Academic Admin", "Registrar", "Finance"] &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status in ["Active", "Approved"]) ||
-        (exists(/databases/$(database)/documents/adminUsers/$(request.auth.uid)) && 
-         get(/databases/$(database)/documents/adminUsers/$(request.auth.uid)).data.status in ["Active", "Approved"])
+    function isActiveStatus(s) {
+      return s in ['Active', 'Approved'];
+    }
+
+    function adminRoles() {
+      return ['Super Admin', 'Admin', 'Staff/Editor', 'Editor', 'Content Admin', 'Academic Admin', 'Registrar', 'Finance'];
+    }
+
+    function docData(path) {
+      return exists(path) ? get(path).data : {};
+    }
+
+    // u = users/{uid}, a = adminUsers/{uid}, idx = adminEmails/{verified email}.
+    // adminEmails is the index the site keeps of active adminUsers entries, so admins
+    // listed by email (not by uid) are recognised here.
+    function levelFrom(email, u, a, idx) {
+      return (
+        email in ['angeloperfecto.epc@gmail.com', 'president@pcm.edu.ph'] ||
+        (u.get('role', '') == 'Super Admin' && isActiveStatus(u.get('status', ''))) ||
+        (a.get('role', '') == 'Super Admin' && isActiveStatus(a.get('status', 'Active'))) ||
+        (idx.get('active', false) == true && idx.get('role', '') == 'Super Admin')
+      ) ? 2 : (
+        (u.get('role', '') in adminRoles() && isActiveStatus(u.get('status', ''))) ||
+        (a.size() > 0 && isActiveStatus(a.get('status', 'Active'))) ||
+        idx.get('active', false) == true
+      ) ? 1 : 0;
+    }
+
+    function adminLevel() {
+      return !isSignedIn() ? 0 : levelFrom(
+        verifiedEmail(),
+        docData(/databases/$(database)/documents/users/$(request.auth.uid)),
+        docData(/databases/$(database)/documents/adminUsers/$(request.auth.uid)),
+        verifiedEmail() == ''
+          ? {}
+          : docData(/databases/$(database)/documents/adminEmails/$(verifiedEmail()))
       );
     }
 
     function isAdmin() {
-      return isApprovedAdmin();
+      return adminLevel() >= 1;
     }
 
-    // Public readable content collections (Website CMS)
-    match /systemConfig/{configId} {
-      allow read, write: if true;
+    function isSuperAdmin() {
+      return adminLevel() == 2;
     }
 
-    match /siteConfig/{configId} {
-      allow read, write: if true;
-    }
+    // ---------------------------------------------------------------------------
+    // Website CMS content: anyone can read, only approved admins can change.
+    // ---------------------------------------------------------------------------
 
-    match /siteContent/{contentId} {
-      allow read, write: if true;
-    }
+    match /systemConfig/{id}            { allow read: if true; allow write: if isAdmin(); }
+    match /siteConfig/{id}              { allow read: if true; allow write: if isAdmin(); }
+    match /siteContent/{id}             { allow read: if true; allow write: if isAdmin(); }
+    match /slideshowImages/{id}         { allow read: if true; allow write: if isAdmin(); }
+    match /programs/{id}                { allow read: if true; allow write: if isAdmin(); }
+    match /faculty/{id}                 { allow read: if true; allow write: if isAdmin(); }
+    match /announcements/{id}           { allow read: if true; allow write: if isAdmin(); }
+    match /news/{id}                    { allow read: if true; allow write: if isAdmin(); }
+    match /events/{id}                  { allow read: if true; allow write: if isAdmin(); }
+    match /downloads/{id}               { allow read: if true; allow write: if isAdmin(); }
+    match /testimonials/{id}            { allow read: if true; allow write: if isAdmin(); }
+    match /stats/{id}                   { allow read: if true; allow write: if isAdmin(); }
+    match /faqs/{id}                    { allow read: if true; allow write: if isAdmin(); }
+    match /sermons/{id}                 { allow read: if true; allow write: if isAdmin(); }
+    match /scrapbook/{id}               { allow read: if true; allow write: if isAdmin(); }
+    match /mediaLibrary/{id}            { allow read: if true; allow write: if isAdmin(); }
+    match /mediaItems/{id}              { allow read: if true; allow write: if isAdmin(); }
+    match /galleryAlbums/{id}           { allow read: if true; allow write: if isAdmin(); }
+    match /studentLifePhotos/{id}       { allow read: if true; allow write: if isAdmin(); }
+    match /videos/{id}                  { allow read: if true; allow write: if isAdmin(); }
+    match /homepageVideoConfig/{id}     { allow read: if true; allow write: if isAdmin(); }
+    match /academicPeriods/{id}         { allow read: if true; allow write: if isAdmin(); }
+    match /academicSubjects/{id}        { allow read: if true; allow write: if isAdmin(); }
+    match /subjects/{id}                { allow read: if true; allow write: if isAdmin(); }
+    match /classSections/{id}           { allow read: if true; allow write: if isAdmin(); }
+    match /sections/{id}                { allow read: if true; allow write: if isAdmin(); }
+    match /instructors/{id}             { allow read: if true; allow write: if isAdmin(); }
+    match /feeStructure/{id}            { allow read: if true; allow write: if isAdmin(); }
+    match /feeSchedules/{id}            { allow read: if true; allow write: if isAdmin(); }
+    match /enrollmentSettings/{id}      { allow read: if true; allow write: if isAdmin(); }
+    match /enrollmentSystemConfig/{id}  { allow read: if true; allow write: if isAdmin(); }
+    match /donationPaymentMethods/{id}  { allow read: if true; allow write: if isAdmin(); }
+    match /donationSettings/{id}        { allow read: if true; allow write: if isAdmin(); }
+    match /deletedUsers/{id}            { allow read: if true; allow write: if isAdmin(); }
 
-    match /slideshowImages/{imageId} {
-      allow read, write: if true;
-    }
-
-    match /programs/{programId} {
-      allow read, write: if true;
-    }
-
-    match /faculty/{facultyId} {
-      allow read, write: if true;
-    }
-
-    match /announcements/{announcementId} {
-      allow read, write: if true;
-    }
-
-    match /news/{newsId} {
-      allow read, write: if true;
-    }
-
-    match /events/{eventId} {
-      allow read, write: if true;
-    }
-
-    match /downloads/{downloadId} {
-      allow read, write: if true;
-    }
-
-    match /testimonials/{testimonialId} {
-      allow read, write: if true;
-    }
-
-    match /stats/{statId} {
-      allow read, write: if true;
-    }
-
-    match /faqs/{faqId} {
-      allow read, write: if true;
-    }
-
-    match /sermons/{sermonId} {
-      allow read, write: if true;
-    }
-
-    match /scrapbook/{scrapbookId} {
-      allow read, write: if true;
-    }
-
-    match /mediaLibrary/{mediaId} {
-      allow read, write: if true;
-    }
-
-    match /mediaItems/{mediaId} {
-      allow read, write: if true;
-    }
-
-    match /galleryAlbums/{albumId} {
-      allow read, write: if true;
-    }
-
-    match /uploadedMedia/{mediaId} {
-      allow read, write: if true;
-    }
-
-    // Student Life in Pictures - Multi-Image Facebook-inspired Photo Albums
     match /studentLifeAlbums/{albumId} {
       allow read: if true;
-      allow write: if isAdmin() || true;
+      allow write: if isAdmin();
       match /photos/{photoId} {
         allow read: if true;
-        allow write: if isAdmin() || true;
+        allow write: if isAdmin();
       }
     }
 
-    match /studentLifePhotos/{photoId} {
-      allow read: if true;
-      allow write: if isAdmin() || true;
+    // Upload metadata written by the /api/media/upload server route (which has no user
+    // session). New records only; changing or removing them needs an admin.
+    match /uploadedMedia/{id} {
+      allow read, create: if true;
+      allow update, delete: if isAdmin();
     }
 
-    // YouTube Video Management & Homepage Video Settings
-    match /videos/{videoId} {
-      allow read, write: if true;
+    // ---------------------------------------------------------------------------
+    // Public form submissions: anyone can submit, only admins can change or remove.
+    // ---------------------------------------------------------------------------
+
+    match /applications/{id}            { allow read, create: if true; allow update, delete: if isAdmin(); }
+    match /inquiries/{id}               { allow read, create: if true; allow update, delete: if isAdmin(); }
+    match /newsletterSubscribers/{id}   { allow read, create: if true; allow update, delete: if isAdmin(); }
+    match /donations/{id}               { allow read, create: if true; allow update, delete: if isAdmin(); }
+    match /activityLogs/{id}            { allow read, create: if true; allow update, delete: if isAdmin(); }
+
+    // ---------------------------------------------------------------------------
+    // Student portal records. The portal signs students in without Firebase Auth, so
+    // these stay writable; deleting records requires an admin.
+    // ---------------------------------------------------------------------------
+
+    match /studentProfiles/{id}         { allow read, create, update: if true; allow delete: if isAdmin(); }
+    match /enrollments/{id}             { allow read, create, update: if true; allow delete: if isAdmin(); }
+    match /preEnlistments/{id}          { allow read, create, update: if true; allow delete: if isAdmin(); }
+    match /addDropRequests/{id}         { allow read, create, update: if true; allow delete: if isAdmin(); }
+    match /studentNotifications/{id}    { allow read, create, update: if true; allow delete: if isAdmin(); }
+    match /uploadedDocuments/{id}       { allow read, create, update: if true; allow delete: if isAdmin(); }
+
+    // ---------------------------------------------------------------------------
+    // Accounts and roles
+    // ---------------------------------------------------------------------------
+
+    // Roles and statuses a user may give their own profile.
+    function selfRoles() {
+      return ['Student/User', 'Student', 'Pending User'];
     }
 
-    match /homepageVideoConfig/{configId} {
-      allow read, write: if true;
+    function selfStatuses() {
+      return ['Active', 'Approved', 'Pending', 'Pending Verification'];
     }
 
-    // Authenticated Users and Profiles
+    function isSelfSafeProfile(data) {
+      return data.get('role', 'Student/User') in selfRoles()
+        && data.get('status', 'Active') in selfStatuses()
+        && data.get('adminRole', null) == null;
+    }
+
+    function roleFieldsUnchanged() {
+      return request.resource.data.get('role', null) == resource.data.get('role', null)
+        && request.resource.data.get('adminRole', null) == resource.data.get('adminRole', null)
+        && request.resource.data.get('status', null) == resource.data.get('status', null)
+        && request.resource.data.get('verificationStatus', null) == resource.data.get('verificationStatus', null);
+    }
+
+    // A non-admin may move between the self roles (e.g. link a Student ID, or request
+    // admin access as a Pending User) but never into an admin role, and a disabled or
+    // rejected account can't reactivate itself.
+    function isSelfSafeRoleChange() {
+      return !(resource.data.get('role', '') in adminRoles())
+        && resource.data.get('status', 'Active') in selfStatuses()
+        && request.resource.data.get('role', '') in selfRoles()
+        && request.resource.data.get('status', 'Active') in selfStatuses()
+        && request.resource.data.get('adminRole', null) == resource.data.get('adminRole', null);
+    }
+
+    function isSuperAdminData(data) {
+      return data.get('role', '') == 'Super Admin' || data.get('adminRole', '') == 'Super Admin';
+    }
+
+    // Admins may manage accounts, but only a Super Admin can grant, change or remove
+    // the Super Admin role.
+    function canManageUser(level, isCreate) {
+      return level == 2
+        || (level == 1
+          && !isSuperAdminData(request.resource.data)
+          && (isCreate || !isSuperAdminData(resource.data)));
+    }
+
     match /users/{userId} {
       allow read: if true;
-      allow create: if true;
-      allow update: if isApprovedAdmin() || (
-        request.auth != null && request.auth.uid == userId &&
-        (!('role' in request.resource.data) || request.resource.data.role == resource.data.role) &&
-        (!('status' in request.resource.data) || request.resource.data.status == resource.data.status)
-      ) || true;
-      allow delete: if isApprovedAdmin() || true;
+      allow create: if canManageUser(adminLevel(), true)
+        || (isSignedIn() && request.auth.uid == userId && isSelfSafeProfile(request.resource.data));
+      allow update: if canManageUser(adminLevel(), false)
+        || (isSignedIn() && request.auth.uid == userId && (roleFieldsUnchanged() || isSelfSafeRoleChange()));
+      allow delete: if adminLevel() == 2
+        || (adminLevel() == 1 && !isSuperAdminData(resource.data));
     }
 
-    // Inquiries from Contact Form and Info Requests
-    match /inquiries/{inquiryId} {
-      allow read, write: if true;
-    }
-
-    // Newsletter Subscribers
-    match /newsletterSubscribers/{subscriberId} {
-      allow read, write: if true;
-    }
-
-    // Uploaded Student Documents & Files Metadata
-    match /uploadedDocuments/{docId} {
-      allow read, write: if true;
-    }
-
-    // Deleted Users Archive & Restoration Audit
-    match /deletedUsers/{deletedId} {
-      allow read: if true;
-      allow write: if true;
-    }
-
-    match /studentProfiles/{studentId} {
-      allow read, write: if true;
-    }
-
-    match /enrollments/{enrollmentId} {
-      allow read, write: if true;
-    }
-
-    match /preEnlistments/{preEnlistmentId} {
-      allow read, write: if true;
-    }
-
-    match /addDropRequests/{requestId} {
-      allow read, write: if true;
-    }
-
-    match /academicPeriods/{periodId} {
-      allow read, write: if true;
-    }
-
-    match /academicSubjects/{subjectId} {
-      allow read, write: if true;
-    }
-
-    match /subjects/{subjectId} {
-      allow read, write: if true;
-    }
-
-    match /classSections/{sectionId} {
-      allow read, write: if true;
-    }
-
-    match /sections/{sectionId} {
-      allow read, write: if true;
-    }
-
-    match /instructors/{instructorId} {
-      allow read, write: if true;
-    }
-
-    match /feeStructure/{feeId} {
-      allow read, write: if true;
-    }
-
-    match /feeSchedules/{feeId} {
-      allow read, write: if true;
-    }
-
-    match /enrollmentSettings/{configId} {
-      allow read, write: if true;
-    }
-
-    match /enrollmentSystemConfig/{configId} {
-      allow read, write: if true;
-    }
-
-    match /studentNotifications/{notifId} {
-      allow read, write: if true;
-    }
-
+    // Admin directory. Admins may update their own profile details (e.g. avatar); only a
+    // Super Admin may add or remove admins or change anyone's role, status or email.
     match /adminUsers/{adminId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create, delete: if isSuperAdmin();
+      allow update: if isSuperAdmin()
+        || (isAdmin()
+          && request.resource.data.get('role', null) == resource.data.get('role', null)
+          && request.resource.data.get('status', null) == resource.data.get('status', null)
+          && request.resource.data.get('email', null) == resource.data.get('email', null));
     }
 
-    match /applications/{applicationId} {
-      allow read, write: if true;
+    // Email index of active admins, maintained by a Super Admin session (see store.tsx).
+    match /adminEmails/{email} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
     }
 
-    // Donation Management
-    match /donationPaymentMethods/{methodId} {
-      allow read, write: if true;
-    }
-
-    match /donations/{donationId} {
-      allow read, write: if true;
-    }
-
-    match /donationSettings/{settingsId} {
-      allow read, write: if true;
-    }
-
-    match /activityLogs/{logId} {
-      allow read, write: if true;
-    }
-
-    // Default fallback
-    match /{document=**} {
-      allow read, write: if true;
-    }
+    // No catch-all: rules from every matching block are OR-ed, so a wildcard here would
+    // override the checks above. Collections not listed are denied by default.
   }
 }
-

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { usePCM } from '@/lib/store';
 import {
   GraduationCap,
@@ -21,6 +21,11 @@ export const QuickViewSwitcher: React.FC = () => {
   } = usePCM();
 
   const [isOpen, setIsOpen] = useState(true);
+
+  // Start collapsed on phones so the floating panel doesn't cover page content and buttons.
+  useEffect(() => {
+    if (window.matchMedia('(max-width: 767px)').matches) setIsOpen(false);
+  }, []);
 
   const handleGoToPublic = () => {
     navigateTo('home');

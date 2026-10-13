@@ -1,0 +1,8 @@
+{
+  "firestore": [
+    {
+      "database": "ai-studio-pcmphilippinesco-1fe1b957-9c70-415b-a11f-b6fce7a98c4f",
+      "rules": "firestore.rules"
+    }
+  ]
+}
