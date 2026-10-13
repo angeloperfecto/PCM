@@ -16,6 +16,7 @@ import {
 import { AdminStudentDetailModal } from './AdminStudentDetailModal';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import { AcademicTermModal } from './AcademicTermModal';
+import { AcademicCourseModal } from './AcademicCourseModal';
 import {
   GraduationCap,
   FileCheck,
@@ -131,20 +132,8 @@ export const AdminEnrollmentsTab: React.FC = () => {
   const [selectedPreEnlistment, setSelectedPreEnlistment] = useState<PreEnlistmentRecord | null>(null);
   const [preEnlistmentRemarks, setPreEnlistmentRemarks] = useState('');
 
-  // Add / Edit Subject modal
-  const [isSubjectModalOpen, setIsSubjectModalOpen] = useState(false);
-  const [subjectForm, setSubjectForm] = useState({
-    code: '',
-    title: '',
-    units: 3,
-    schedule: 'Mon/Wed 8:00–9:30 AM',
-    room: 'Room 201',
-    instructor: 'Dr. Benjamin Villanueva',
-    section: 'BTH-1A',
-    capacity: 35,
-    semester: '1st Semester',
-    academicYear: '2026–2027',
-  });
+  // Add / Edit course window (course null = new course)
+  const [courseModal, setCourseModal] = useState<{ course: (typeof academicSubjects)[number] | null } | null>(null);
 
   // Add Student Profile modal
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
@@ -184,7 +173,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
   );
 
   // Pending delete confirmation (shared by every list in this tab)
-  type DeleteKind = 'student' | 'preEnlistment' | 'enrollment' | 'addDrop' | 'term';
+  type DeleteKind = 'student' | 'preEnlistment' | 'enrollment' | 'addDrop' | 'term' | 'course';
   const [pendingDelete, setPendingDelete] = useState<{ kind: DeleteKind; id: string; label: string; message: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -202,6 +191,8 @@ export const AdminEnrollmentsTab: React.FC = () => {
           ? await deleteEnrollment(id)
           : kind === 'addDrop'
           ? await deleteAddDropRequest(id)
+          : kind === 'course'
+          ? await deleteAcademicSubject(id)
           : await deleteAcademicPeriod(id);
       if (ok) {
         if (kind === 'enrollment' && selectedEnrollment?.id === id) setSelectedEnrollment(null);
@@ -274,39 +265,6 @@ export const AdminEnrollmentsTab: React.FC = () => {
   const handleReturnPreEnlistment = async (id: string) => {
     await updatePreEnlistmentStatus(id, 'Returned for Revision', preEnlistmentRemarks || 'Please review elective units with advisor.');
     setSelectedPreEnlistment(null);
-  };
-
-  const handleAddSubjectSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!subjectForm.code || !subjectForm.title) return;
-    await addAcademicSubject({
-      code: subjectForm.code.trim().toUpperCase(),
-      title: subjectForm.title.trim(),
-      units: Number(subjectForm.units),
-      schedule: subjectForm.schedule,
-      room: subjectForm.room,
-      instructor: subjectForm.instructor,
-      section: subjectForm.section,
-      capacity: Number(subjectForm.capacity),
-      enrolledCount: 0,
-      status: 'Open',
-      semester: subjectForm.semester,
-      academicYear: subjectForm.academicYear,
-      prerequisites: [],
-    });
-    setIsSubjectModalOpen(false);
-    setSubjectForm({
-      code: '',
-      title: '',
-      units: 3,
-      schedule: 'Mon/Wed 8:00–9:30 AM',
-      room: 'Room 201',
-      instructor: 'Dr. Benjamin Villanueva',
-      section: 'BTH-1A',
-      capacity: 35,
-      semester: '1st Semester',
-      academicYear: '2026–2027',
-    });
   };
 
   const handleNewStudentSubmit = async (e: React.FormEvent) => {
@@ -391,7 +349,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
             <span>Add Student Profile</span>
           </button>
           <button
-            onClick={() => setIsSubjectModalOpen(true)}
+            onClick={() => setCourseModal({ course: null })}
             className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
           >
             <Plus className="w-4 h-4 text-[#588B76]" />
@@ -1205,7 +1163,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
               </p>
             </div>
             <button
-              onClick={() => setIsSubjectModalOpen(true)}
+              onClick={() => setCourseModal({ course: null })}
               className="bg-[#18392B] hover:bg-[#588B76] text-white text-xs font-bold px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 cursor-pointer shrink-0"
             >
               <Plus className="w-4 h-4" />
@@ -1242,13 +1200,34 @@ export const AdminEnrollmentsTab: React.FC = () => {
                       </span>
                     </td>
                     <td className="p-3.5 text-right">
-                      <button
-                        onClick={() => deleteAcademicSubject(subj.id)}
-                        className="p-1 text-slate-400 hover:text-rose-600 transition"
-                        title="Remove Subject"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => setCourseModal({ course: subj })}
+                          className="p-1.5 text-[#588B76] hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                          title="Edit course"
+                          aria-label={`Edit course ${subj.code}`}
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() =>
+                            setPendingDelete({
+                              kind: 'course',
+                              id: subj.id,
+                              label: `${subj.code} · ${subj.title}`,
+                              message:
+                                (subj.enrolledCount || 0) > 0
+                                  ? `${subj.enrolledCount} student(s) are enrolled in this course. Deleting it removes it from the catalog only; their records and enrollments keep the course as it was.`
+                                  : 'This permanently removes the course from the catalog. Student records and enrollments that already list it are not changed.',
+                            })
+                          }
+                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          title="Delete course"
+                          aria-label={`Delete course ${subj.code}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1798,91 +1777,25 @@ export const AdminEnrollmentsTab: React.FC = () => {
       {/* ========================================================================= */}
       {/* MODAL 5: ADD SUBJECT MODAL */}
       {/* ========================================================================= */}
-      {isSubjectModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
-            <h4 className="font-serif text-lg font-bold text-[#18392B]">Add Academic Course</h4>
-            <form onSubmit={handleAddSubjectSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Course Code</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. BIB-305"
-                  value={subjectForm.code}
-                  onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg uppercase"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Descriptive Title</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Hermeneutics & Biblical Interpretation"
-                  value={subjectForm.title}
-                  onChange={(e) => setSubjectForm({ ...subjectForm, title: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Units</label>
-                  <input
-                    type="number"
-                    min={1}
-                    max={6}
-                    value={subjectForm.units}
-                    onChange={(e) => setSubjectForm({ ...subjectForm, units: Number(e.target.value) })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg"
-                  />
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Section</label>
-                  <input
-                    type="text"
-                    value={subjectForm.section}
-                    onChange={(e) => setSubjectForm({ ...subjectForm, section: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Schedule</label>
-                <input
-                  type="text"
-                  value={subjectForm.schedule}
-                  onChange={(e) => setSubjectForm({ ...subjectForm, schedule: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Instructor</label>
-                <input
-                  type="text"
-                  value={subjectForm.instructor}
-                  onChange={(e) => setSubjectForm({ ...subjectForm, instructor: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg"
-                />
-              </div>
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsSubjectModalOpen(false)}
-                  className="px-4 py-2 text-slate-600 hover:text-slate-900"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-2 rounded-xl"
-                >
-                  Save Subject
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {courseModal && (
+        <AcademicCourseModal
+          course={courseModal.course}
+          existing={academicSubjects}
+          instructorOptions={[...new Set([...faculty.map((m) => m.name), ...academicSubjects.map((s) => s.instructor)].filter(Boolean))].sort()}
+          semesterOptions={[...new Set(['1st Semester', '2nd Semester', 'Summer Term', ...academicPeriods.map((p) => p.semester)])]}
+          academicYearOptions={[...new Set(academicPeriods.map((p) => p.academicYear))].sort()}
+          programOptions={[...new Set(programs.map((p) => p.title || p.name).filter(Boolean))] as string[]}
+          defaultSemester={academicPeriods.find((p) => p.isCurrent)?.semester || '1st Semester'}
+          defaultAcademicYear={academicPeriods.find((p) => p.isCurrent)?.academicYear || ''}
+          onCancel={() => setCourseModal(null)}
+          onSave={async (draft) => {
+            const ok = courseModal.course
+              ? await updateAcademicSubject(courseModal.course.id, draft)
+              : !!(await addAcademicSubject({ ...draft, enrolledCount: 0 }));
+            if (ok) setCourseModal(null);
+            return ok;
+          }}
+        />
       )}
 
       {/* ========================================================================= */}
