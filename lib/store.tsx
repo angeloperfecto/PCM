@@ -2915,9 +2915,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             // that address; otherwise anyone could register an unverified account with an admin email.
             const isEmailVerified = fbUser.emailVerified === true;
             const isSuperAdminEmail = isEmailVerified && SUPER_ADMIN_EMAILS.includes(emailLower);
-            const isInitialConfigAdmin = isEmailVerified
-              ? INITIAL_ADMIN_USERS.find((u) => u.email.toLowerCase() === emailLower)
-              : undefined;
+            // Admin access comes only from the live adminUsers directory (entries an approver
+            // created), never from the built-in sample list in initialData.ts.
             const isKnownAdmin = (stateRef.current?.adminUsers || []).find(
               (a) =>
                 (a.id === fbUser.uid || (isEmailVerified && a.email.toLowerCase() === emailLower)) &&
@@ -2928,43 +2927,29 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               ? 'Super Admin'
               : isKnownAdmin
               ? (isKnownAdmin.role as UserRole)
-              : isInitialConfigAdmin
-              ? (isInitialConfigAdmin.role as UserRole)
               : 'Student/User';
             let initialAdminRole: AdminRole | undefined = isSuperAdminEmail
               ? 'Super Admin'
               : isKnownAdmin
               ? isKnownAdmin.role
-              : isInitialConfigAdmin
-              ? isInitialConfigAdmin.role
               : undefined;
 
             let acc: UserAccount = {
               id: fbUser.uid,
               uid: fbUser.uid,
               email: fbUser.email || '',
-              name:
-                isKnownAdmin?.name ||
-                isInitialConfigAdmin?.name ||
-                fbUser.displayName ||
-                fbUser.email?.split('@')[0] ||
-                'PCM User',
-              displayName:
-                isKnownAdmin?.name ||
-                isInitialConfigAdmin?.name ||
-                fbUser.displayName ||
-                fbUser.email?.split('@')[0] ||
-                'PCM User',
+              name: isKnownAdmin?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM User',
+              displayName: isKnownAdmin?.name || fbUser.displayName || fbUser.email?.split('@')[0] || 'PCM User',
               photoURL: fbUser.photoURL || '',
               avatarUrl: fbUser.photoURL || '',
               role: initialRole,
               adminRole: initialAdminRole,
               status: 'Active',
-              verificationStatus: isSuperAdminEmail || isKnownAdmin || isInitialConfigAdmin ? 'Approved' : 'Approved',
+              verificationStatus: 'Approved',
               authMethod: fbUser.providerData?.[0]?.providerId === 'password' ? 'password' : 'google.com',
               provider: fbUser.providerData?.[0]?.providerId || 'google.com',
               emailVerified: fbUser.emailVerified,
-              createdAt: isKnownAdmin?.createdAt || isInitialConfigAdmin?.createdAt || new Date().toISOString(),
+              createdAt: isKnownAdmin?.createdAt || new Date().toISOString(),
               lastLogin: new Date().toISOString(),
             };
 
@@ -3385,8 +3370,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const canPerformEnrollmentAction = (action: string, role?: AdminRole): boolean => {
-    const userRole = role || currentAdminUser?.role || (currentUserAccount?.adminRole as AdminRole) || 'Super Admin';
-    if (!isAdminLoggedIn && currentUserAccount?.role !== 'Admin') return false;
+    // Requires a verified admin session; there is no default role.
+    if (!isAdminLoggedIn) return false;
+    const userRole = role || currentAdminUser?.role || (currentUserAccount?.adminRole as AdminRole);
+    if (!userRole) return false;
     if (userRole === 'Super Admin') return true;
 
     if (userRole === 'Registrar') {
@@ -6788,11 +6775,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Keep the adminEmails/{email} index in step with the active adminUsers directory.
   // firestore.rules can't search adminUsers by email, so it checks this index to recognise
-  // admins whose adminUsers entry isn't keyed by their Firebase uid. Only a Super Admin
-  // session may write it; documents are only added, updated or removed here.
+  // admins whose adminUsers entry isn't keyed by their Firebase uid. Super Admin and Admin
+  // sessions maintain it (an Admin session leaves Super Admin entries alone, as the rules
+  // require); documents are only added, updated or removed here.
   useEffect(() => {
-    if (!isAdminLoggedIn || currentAdminUser?.role !== 'Super Admin' || !firebaseAuthUser) return;
+    const sessionRole = currentAdminUser?.role;
+    if (!isAdminLoggedIn || !firebaseAuthUser || (sessionRole !== 'Super Admin' && sessionRole !== 'Admin')) return;
     if (adminUsers.length === 0) return;
+    const mayTouch = (role?: string) => sessionRole === 'Super Admin' || role !== 'Super Admin';
     let cancelled = false;
     (async () => {
       try {
@@ -6811,12 +6801,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         desired.forEach((entry, email) => {
           const cur = existing.get(email);
           if (!cur || cur.role !== entry.role || cur.active !== true || cur.adminId !== entry.adminId) {
+            if (!mayTouch(entry.role) || !mayTouch(cur?.role)) return;
             batch.set(doc(db, 'adminEmails', email), { ...entry, active: true, updatedAt: new Date().toISOString() });
             changes++;
           }
         });
-        existing.forEach((_, email) => {
-          if (!desired.has(email)) {
+        existing.forEach((cur, email) => {
+          if (!desired.has(email) && mayTouch(cur?.role)) {
             batch.delete(doc(db, 'adminEmails', email));
             changes++;
           }
@@ -6880,9 +6871,28 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     addToast('info', 'Session Terminated', 'You have been signed out of the Admin CMS.');
   };
 
+  // Adding, approving or changing admin accounts is limited to the Super Admin and Admin
+  // roles, and only a Super Admin may grant or alter the Super Admin role. firestore.rules
+  // enforces the same limits on the database.
+  const canManageAdminRole = (role?: string, previousRole?: string): boolean => {
+    if (!canPerformAction('Admin')) return false;
+    if ((role === 'Super Admin' || previousRole === 'Super Admin') && !isSuperAdminSession()) return false;
+    return true;
+  };
+
+  const denyAdminManagement = (role?: string) => {
+    addToast(
+      'error',
+      'Permission Denied',
+      role === 'Super Admin'
+        ? 'Only a Super Admin can grant or change the Super Admin role.'
+        : 'Only the Super Admin and Admin users can add, approve or change administrator accounts.'
+    );
+  };
+
   const addAdminUser = (user: Omit<AdminUser, 'id' | 'createdAt'>): AdminUser => {
-    if (currentUserAccount?.role === 'Student' || isStudentLoggedIn || !isAdminLoggedIn) {
-      addToast('error', 'Permission Denied', 'Student accounts cannot create admin users.');
+    if (!canManageAdminRole(user.role)) {
+      denyAdminManagement(user.role);
       throw new Error('Unauthorized');
     }
 
@@ -6913,6 +6923,20 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateAdminUser = (id: string, updates: Partial<AdminUser>) => {
     if (currentUserAccount?.role === 'Student' || isStudentLoggedIn || !isAdminLoggedIn) {
       addToast('error', 'Permission Denied', 'Student accounts cannot modify admin users.');
+      return;
+    }
+    // Any admin may edit their own profile details; role, status and email changes (or
+    // edits to other admins) need an approver.
+    const existingAdmin = adminUsers.find((u) => u.id === id);
+    const isOwnRecord =
+      id === currentAdminUser?.id ||
+      (!!existingAdmin?.email && existingAdmin.email.toLowerCase() === currentUserAccount?.email?.toLowerCase());
+    const changesAccess =
+      (updates.role !== undefined && updates.role !== existingAdmin?.role) ||
+      (updates.status !== undefined && updates.status !== existingAdmin?.status) ||
+      (updates.email !== undefined && updates.email !== existingAdmin?.email);
+    if ((changesAccess || !isOwnRecord) && !canManageAdminRole(updates.role, existingAdmin?.role)) {
+      denyAdminManagement(updates.role || existingAdmin?.role);
       return;
     }
     const sanitized = cleanFirestoreData(updates);
@@ -6968,8 +6992,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteAdminUser = (id: string) => {
-    if (currentUserAccount?.role === 'Student' || isStudentLoggedIn || !isAdminLoggedIn) {
-      addToast('error', 'Permission Denied', 'Student accounts cannot delete admin users.');
+    const existingAdmin = adminUsers.find((u) => u.id === id);
+    if (!canManageAdminRole(undefined, existingAdmin?.role)) {
+      denyAdminManagement(existingAdmin?.role);
       return;
     }
     if (adminUsers.length <= 1) {
@@ -7016,9 +7041,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const emailLower = fbUser.email?.toLowerCase() || '';
       const isEmailVerified = fbUser.emailVerified === true;
       const isSuperAdminEmail = isEmailVerified && SUPER_ADMIN_EMAILS.includes(emailLower);
-      const initialAdminMatch = isEmailVerified
-        ? INITIAL_ADMIN_USERS.find((u) => u.email.toLowerCase() === emailLower)
-        : undefined;
 
       // Check Firestore doc first with memory fallback
       let existingAccount: UserAccount | null = null;
@@ -7050,8 +7072,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           emailVerified: fbUser.emailVerified,
         };
 
-        // If user is attempting admin access from admin login, but has no admin privileges yet:
-        if (wantsAdmin && !['Admin', 'Super Admin', 'Staff/Editor', 'Editor'].includes(existingAccount.role) && existingAccount.status !== 'Approved') {
+        // A signed-in user without an admin role asking for admin access becomes a Pending
+        // request. Existing admins of any role keep their access, and rejected or disabled
+        // accounts are left as they are (only an approver can change them).
+        if (
+          wantsAdmin &&
+          !ADMIN_ROLE_NAMES.includes(existingAccount.role as string) &&
+          !['Approved', 'Rejected', 'Disabled', 'Inactive'].includes(existingAccount.status as string)
+        ) {
           accountData.status = 'Pending';
           accountData.verificationStatus = 'Pending';
           accountData.requestedRole = (requestedRole as AdminRole) || 'Admin';
@@ -7071,26 +7099,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             role: 'Super Admin',
             adminRole: 'Super Admin',
             department: 'Administration & Executive Leadership',
-            status: 'Active',
-            verificationStatus: 'Approved',
-            authMethod: 'google.com',
-            provider: 'google.com',
-            emailVerified: fbUser.emailVerified,
-            createdAt: new Date().toISOString(),
-            lastLogin: new Date().toISOString(),
-          };
-        } else if (initialAdminMatch) {
-          accountData = {
-            id: fbUser.uid,
-            uid: fbUser.uid,
-            email: fbUser.email || '',
-            name: fbUser.displayName || initialAdminMatch.name,
-            displayName: fbUser.displayName || initialAdminMatch.name,
-            photoURL: fbUser.photoURL || initialAdminMatch.avatarUrl || '',
-            avatarUrl: fbUser.photoURL || initialAdminMatch.avatarUrl || '',
-            role: initialAdminMatch.role === 'Super Admin' ? 'Super Admin' : 'Admin',
-            adminRole: initialAdminMatch.role,
-            department: initialAdminMatch.department,
             status: 'Active',
             verificationStatus: 'Approved',
             authMethod: 'google.com',
@@ -7763,6 +7771,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const targetEmail = (target?.email || (userId.includes('@') ? userId : '')).toLowerCase().trim();
 
+    const targetIsSuper = target?.role === 'Super Admin' || target?.adminRole === 'Super Admin';
+    if (!canManageAdminRole(undefined, targetIsSuper ? 'Super Admin' : undefined)) {
+      denyAdminManagement(targetIsSuper ? 'Super Admin' : undefined);
+      return;
+    }
+
     if (targetEmail === 'angeloperfecto.epc@gmail.com') {
       addToast({
         title: 'Action Protected',
@@ -7968,15 +7982,13 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateUserAccountRole = async (userId: string, role: UserRole, adminRole?: AdminRole) => {
-    if (currentUserAccount?.role === 'Student' || !isAdminLoggedIn) {
-      addToast({
-        title: 'Permission Denied',
-        message: 'Student accounts are not authorized to modify user roles.',
-        type: 'error',
-      });
+    const targetUser = userAccounts.find((u) => u.id === userId || u.uid === userId);
+    const grantsSuper = role === 'Super Admin' || adminRole === 'Super Admin';
+    const hadSuper = targetUser?.role === 'Super Admin' || targetUser?.adminRole === 'Super Admin';
+    if (!canManageAdminRole(grantsSuper ? 'Super Admin' : role, hadSuper ? 'Super Admin' : undefined)) {
+      denyAdminManagement(grantsSuper || hadSuper ? 'Super Admin' : role);
       return;
     }
-    const targetUser = userAccounts.find((u) => u.id === userId || u.uid === userId);
     if (targetUser?.email?.toLowerCase() === 'angeloperfecto.epc@gmail.com') {
       addToast({
         title: 'Action Protected',
@@ -8042,6 +8054,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast({ type: 'error', title: 'Admin Privileges Required', message: 'Only the Super Admin and authorized Admin Users can approve administrative user access.' });
       return false;
     }
+    if (assignedAdminRole === 'Super Admin' && !isSuperAdminSession()) {
+      denyAdminManagement('Super Admin');
+      return false;
+    }
 
     const target = userAccounts.find((u) => u.id === userId || u.uid === userId);
     if (!target) {
@@ -8103,6 +8119,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = userAccounts.find((u) => u.id === userId || u.uid === userId);
     if (target?.email?.toLowerCase() === 'angeloperfecto.epc@gmail.com' || target?.email?.toLowerCase() === 'president@pcm.edu.ph') {
       addToast({ type: 'error', title: 'Protected Account', message: 'The primary Super Administrator accounts cannot be rejected.' });
+      return false;
+    }
+    if ((target?.role === 'Super Admin' || target?.adminRole === 'Super Admin') && !isSuperAdminSession()) {
+      denyAdminManagement('Super Admin');
       return false;
     }
 

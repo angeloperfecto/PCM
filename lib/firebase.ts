@@ -65,6 +65,13 @@ export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
 
+// Authorization header carrying the signed-in user's Firebase ID token, for API routes
+// that only approved admins may call (they verify it with lib/serverAuth.ts).
+export async function authHeaders(): Promise<Record<string, string>> {
+  const token = await auth.currentUser?.getIdToken().catch(() => null);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 // Initialize Storage with low retry limits to avoid hanging if bucket is unprovisioned
 export const storage = getStorage(app);
 try {
@@ -567,11 +574,15 @@ export async function deleteFileFromFirebaseStorage(storagePath: string): Promis
     let relPath = storagePath.replace(/^\//, '');
     if (relPath.startsWith('uploads/')) {
       if (typeof window !== 'undefined') {
-        fetch('/api/media/delete', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ storagePath: relPath }),
-        }).catch(() => {});
+        authHeaders()
+          .then((headers) =>
+            fetch('/api/media/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', ...headers },
+              body: JSON.stringify({ storagePath: relPath }),
+            })
+          )
+          .catch(() => {});
       }
       return true;
     }

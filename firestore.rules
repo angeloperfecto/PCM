@@ -3,11 +3,15 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ---------------------------------------------------------------------------
-    // Identity helpers
+    // Identity and admin levels
     //
     // adminLevel() is the single place a user's admin standing is worked out:
-    //   2 = Super Admin, 1 = approved admin (any admin role), 0 = everyone else.
-    // Each rule calls it once so the role documents are read once per request.
+    //   3 = Super Admin
+    //   2 = Admin (may approve, reject and manage admin accounts, except Super Admin)
+    //   1 = other approved admin roles (Editor, Content Admin, Registrar, Finance, ...):
+    //       may manage website content, but not accounts or roles
+    //   0 = everyone else, including pending, rejected and disabled accounts
+    // lib/serverAuth.ts mirrors this logic for the server API routes.
     // ---------------------------------------------------------------------------
 
     function isSignedIn() {
@@ -27,39 +31,80 @@ service cloud.firestore {
       return s in ['Active', 'Approved'];
     }
 
+    function isBlockedStatus(s) {
+      return s in ['Rejected', 'Disabled', 'Inactive'];
+    }
+
     function adminRoles() {
       return ['Super Admin', 'Admin', 'Staff/Editor', 'Editor', 'Content Admin', 'Academic Admin', 'Registrar', 'Finance'];
+    }
+
+    function levelOfRole(role) {
+      return role == 'Super Admin' ? 3 : role == 'Admin' ? 2 : role in adminRoles() ? 1 : 0;
+    }
+
+    function maxOf(a, b) {
+      return a > b ? a : b;
     }
 
     function docData(path) {
       return exists(path) ? get(path).data : {};
     }
 
+    function profileDoc() {
+      return docData(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function adminUserDoc() {
+      return docData(/databases/$(database)/documents/adminUsers/$(request.auth.uid));
+    }
+
+    // adminEmails/{email} is the index the site keeps of active adminUsers entries, so
+    // admins listed by email (not by uid) are recognised here.
+    function emailIndexDoc() {
+      return verifiedEmail() == ''
+        ? {}
+        : docData(/databases/$(database)/documents/adminEmails/$(verifiedEmail()));
+    }
+
+    // Approved accounts store role 'Admin' with the assigned role in adminRole.
+    function effectiveRole(data) {
+      return data.get('adminRole', '') in adminRoles() ? data.get('adminRole', '') : data.get('role', '');
+    }
+
+    // Admin role granted by the directory: the email index, or adminUsers/{uid}.
+    function directoryRoleFrom(a, idx) {
+      return idx.get('active', false) == true
+        ? idx.get('role', '')
+        : (a.size() > 0
+            && isActiveStatus(a.get('status', 'Active'))
+            && a.get('role', '') in adminRoles()
+          ? a.get('role', '')
+          : '');
+    }
+
     // u = users/{uid}, a = adminUsers/{uid}, idx = adminEmails/{verified email}.
-    // adminEmails is the index the site keeps of active adminUsers entries, so admins
-    // listed by email (not by uid) are recognised here.
+    // A rejected, disabled or inactive profile blocks admin access entirely; the two
+    // built-in Super Admin addresses always keep access.
     function levelFrom(email, u, a, idx) {
-      return (
-        email in ['angeloperfecto.epc@gmail.com', 'president@pcm.edu.ph'] ||
-        (u.get('role', '') == 'Super Admin' && isActiveStatus(u.get('status', ''))) ||
-        (a.get('role', '') == 'Super Admin' && isActiveStatus(a.get('status', 'Active'))) ||
-        (idx.get('active', false) == true && idx.get('role', '') == 'Super Admin')
-      ) ? 2 : (
-        (u.get('role', '') in adminRoles() && isActiveStatus(u.get('status', ''))) ||
-        (a.size() > 0 && isActiveStatus(a.get('status', 'Active'))) ||
-        idx.get('active', false) == true
-      ) ? 1 : 0;
+      return email in ['angeloperfecto.epc@gmail.com', 'president@pcm.edu.ph']
+        ? 3
+        : isBlockedStatus(u.get('status', ''))
+          ? 0
+          : maxOf(
+              u.get('role', '') in adminRoles() && isActiveStatus(u.get('status', ''))
+                ? levelOfRole(effectiveRole(u))
+                : 0,
+              levelOfRole(directoryRoleFrom(a, idx))
+            );
     }
 
     function adminLevel() {
-      return !isSignedIn() ? 0 : levelFrom(
-        verifiedEmail(),
-        docData(/databases/$(database)/documents/users/$(request.auth.uid)),
-        docData(/databases/$(database)/documents/adminUsers/$(request.auth.uid)),
-        verifiedEmail() == ''
-          ? {}
-          : docData(/databases/$(database)/documents/adminEmails/$(verifiedEmail()))
-      );
+      return !isSignedIn() ? 0 : levelFrom(verifiedEmail(), profileDoc(), adminUserDoc(), emailIndexDoc());
+    }
+
+    function directoryRole() {
+      return !isSignedIn() ? '' : directoryRoleFrom(adminUserDoc(), emailIndexDoc());
     }
 
     function isAdmin() {
@@ -67,7 +112,7 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return adminLevel() == 2;
+      return adminLevel() == 3;
     }
 
     // ---------------------------------------------------------------------------
@@ -148,10 +193,11 @@ service cloud.firestore {
     match /uploadedDocuments/{id}       { allow read, create, update: if true; allow delete: if isAdmin(); }
 
     // ---------------------------------------------------------------------------
-    // Accounts and roles
+    // Accounts, registration and approval
     // ---------------------------------------------------------------------------
 
-    // Roles and statuses a user may give their own profile.
+    // Roles and statuses a user may give their own profile. New admin registrations
+    // are 'Pending User' / 'Pending' and stay that way until an approver changes them.
     function selfRoles() {
       return ['Student/User', 'Student', 'Pending User'];
     }
@@ -174,8 +220,8 @@ service cloud.firestore {
     }
 
     // A non-admin may move between the self roles (e.g. link a Student ID, or request
-    // admin access as a Pending User) but never into an admin role, and a disabled or
-    // rejected account can't reactivate itself.
+    // admin access as a Pending User) but never into an admin role, and a rejected or
+    // disabled account can't reactivate itself.
     function isSelfSafeRoleChange() {
       return !(resource.data.get('role', '') in adminRoles())
         && resource.data.get('status', 'Active') in selfStatuses()
@@ -184,45 +230,92 @@ service cloud.firestore {
         && request.resource.data.get('adminRole', null) == resource.data.get('adminRole', null);
     }
 
+    // A user listed in the admin directory by an approver may record exactly that role
+    // on their own profile (the site does this on their first sign-in).
+    function claimsDirectoryRole(data, dirRole) {
+      return dirRole != ''
+        && data.get('role', '') in adminRoles()
+        && effectiveRole(data) == dirRole
+        && isActiveStatus(data.get('status', ''));
+    }
+
     function isSuperAdminData(data) {
       return data.get('role', '') == 'Super Admin' || data.get('adminRole', '') == 'Super Admin';
     }
 
-    // Admins may manage accounts, but only a Super Admin can grant, change or remove
-    // the Super Admin role.
+    // Approving, rejecting and changing accounts: Super Admin, or an Admin for anything
+    // that doesn't involve the Super Admin role.
     function canManageUser(level, isCreate) {
-      return level == 2
-        || (level == 1
+      return level == 3
+        || (level == 2
           && !isSuperAdminData(request.resource.data)
           && (isCreate || !isSuperAdminData(resource.data)));
     }
 
-    match /users/{userId} {
-      allow read: if true;
-      allow create: if canManageUser(adminLevel(), true)
-        || (isSignedIn() && request.auth.uid == userId && isSelfSafeProfile(request.resource.data));
-      allow update: if canManageUser(adminLevel(), false)
-        || (isSignedIn() && request.auth.uid == userId && (roleFieldsUnchanged() || isSelfSafeRoleChange()));
-      allow delete: if adminLevel() == 2
-        || (adminLevel() == 1 && !isSuperAdminData(resource.data));
+    function userCreateAllowed(userId, level, dirRole) {
+      return canManageUser(level, true)
+        || (isSignedIn() && request.auth.uid == userId
+          && (isSelfSafeProfile(request.resource.data)
+            || claimsDirectoryRole(request.resource.data, dirRole)));
     }
 
-    // Admin directory. Admins may update their own profile details (e.g. avatar); only a
-    // Super Admin may add or remove admins or change anyone's role, status or email.
+    function userUpdateAllowed(userId, level, dirRole) {
+      return canManageUser(level, false)
+        || (isSignedIn() && request.auth.uid == userId
+          && (roleFieldsUnchanged()
+            || isSelfSafeRoleChange()
+            || (!isBlockedStatus(resource.data.get('status', ''))
+              && claimsDirectoryRole(request.resource.data, dirRole))));
+    }
+
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if userCreateAllowed(userId, adminLevel(), directoryRole());
+      allow update: if userUpdateAllowed(userId, adminLevel(), directoryRole());
+      allow delete: if canDeleteAccount(adminLevel(), resource.data);
+    }
+
+    function canDeleteAccount(level, data) {
+      return level == 3 || (level == 2 && !isSuperAdminData(data));
+    }
+
+    // Admin directory. Super Admin and Admin may add, change or remove entries (only a
+    // Super Admin for Super Admin entries). Any admin may edit their own entry's details,
+    // but not its role, status or email.
+    function adminEntryChangeAllowed(level) {
+      return level == 3
+        || (level == 2
+          && request.resource.data.get('role', '') != 'Super Admin'
+          && resource.data.get('role', '') != 'Super Admin');
+    }
+
+    function isOwnAdminEntry(adminId) {
+      return adminId == request.auth.uid
+        || (verifiedEmail() != '' && resource.data.get('email', '').lower() == verifiedEmail());
+    }
+
     match /adminUsers/{adminId} {
       allow read: if true;
-      allow create, delete: if isSuperAdmin();
-      allow update: if isSuperAdmin()
+      allow create: if adminLevel() == 3
+        || (adminLevel() == 2 && request.resource.data.get('role', '') != 'Super Admin');
+      allow delete: if canDeleteAccount(adminLevel(), resource.data);
+      allow update: if adminEntryChangeAllowed(adminLevel())
         || (isAdmin()
+          && isOwnAdminEntry(adminId)
           && request.resource.data.get('role', null) == resource.data.get('role', null)
           && request.resource.data.get('status', null) == resource.data.get('status', null)
           && request.resource.data.get('email', null) == resource.data.get('email', null));
     }
 
-    // Email index of active admins, maintained by a Super Admin session (see store.tsx).
+    // Email index of active admins, maintained by Super Admin and Admin sessions (see
+    // store.tsx). Only a Super Admin may write Super Admin entries.
     match /adminEmails/{email} {
       allow read: if isSignedIn();
-      allow write: if isSuperAdmin();
+      allow create: if adminLevel() == 3
+        || (adminLevel() == 2 && request.resource.data.get('role', '') != 'Super Admin');
+      allow update: if adminEntryChangeAllowed(adminLevel());
+      allow delete: if adminLevel() == 3
+        || (adminLevel() == 2 && resource.data.get('role', '') != 'Super Admin');
     }
 
     // No catch-all: rules from every matching block are OR-ed, so a wildcard here would

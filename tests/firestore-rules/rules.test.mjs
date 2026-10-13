@@ -1,4 +1,5 @@
 // Firestore rules tests for the PCM website. Runs against the local emulator only.
+// Run with `npm test` in this folder (needs Java 11+).
 import { readFileSync } from 'node:fs';
 import {
   initializeTestEnvironment,
@@ -16,22 +17,42 @@ const env = await initializeTestEnvironment({
 // Seed data with rules disabled.
 await env.withSecurityRulesDisabled(async (ctx) => {
   const db = ctx.firestore();
-  await setDoc(doc(db, 'siteConfig/global'), { title: 'PCM' });
-  await setDoc(doc(db, 'news/n1'), { title: 'News' });
-  await setDoc(doc(db, 'applications/a1'), { status: 'Submitted' });
-  await setDoc(doc(db, 'activityLogs/l1'), { action: 'LOGIN' });
-  await setDoc(doc(db, 'studentProfiles/sp1'), { fullName: 'Student' });
-  await setDoc(doc(db, 'uploadedMedia/m1'), { url: '/uploads/x.jpg' });
-  await setDoc(doc(db, 'users/s1'), { role: 'Student/User', status: 'Active' });
-  await setDoc(doc(db, 'users/dis'), { role: 'Student/User', status: 'Disabled' });
-  await setDoc(doc(db, 'users/other'), { role: 'Student/User', status: 'Active' });
-  await setDoc(doc(db, 'users/super2'), { role: 'Super Admin', adminRole: 'Super Admin', status: 'Active' });
-  await setDoc(doc(db, 'users/u9'), { role: 'Admin', status: 'Active' });
-  await setDoc(doc(db, 'users/u9p'), { role: 'Admin', status: 'Pending' });
-  await setDoc(doc(db, 'adminUsers/u10'), { role: 'Content Admin', status: 'Active', email: 'u10@pcm.edu.ph' });
-  await setDoc(doc(db, 'adminUsers/adm-5'), { role: 'Editor', status: 'Active', email: 'editor@pcm.edu.ph', avatarUrl: '' });
-  await setDoc(doc(db, 'adminEmails/editor@pcm.edu.ph'), { email: 'editor@pcm.edu.ph', role: 'Editor', active: true, adminId: 'adm-5' });
-  await setDoc(doc(db, 'adminEmails/old@pcm.edu.ph'), { email: 'old@pcm.edu.ph', role: 'Admin', active: false });
+  const seed = (path, data) => setDoc(doc(db, path), data);
+  await seed('siteConfig/global', { title: 'PCM' });
+  await seed('news/n1', { title: 'News' });
+  await seed('applications/a1', { status: 'Submitted' });
+  await seed('activityLogs/l1', { action: 'LOGIN' });
+  await seed('studentProfiles/sp1', { fullName: 'Student' });
+  await seed('uploadedMedia/m1', { url: '/uploads/x.jpg' });
+
+  // Regular accounts
+  await seed('users/s1', { role: 'Student/User', status: 'Active' });
+  await seed('users/dis', { role: 'Student/User', status: 'Disabled' });
+  await seed('users/other', { role: 'Student/User', status: 'Active' });
+
+  // Pending admin registrations
+  await seed('users/pend1', { role: 'Pending User', status: 'Pending', verificationStatus: 'Pending', requestedRole: 'Admin' });
+  await seed('users/pend2', { role: 'Pending User', status: 'Pending', verificationStatus: 'Pending', requestedRole: 'Admin' });
+  await seed('users/pend3', { role: 'Pending User', status: 'Pending', verificationStatus: 'Pending', requestedRole: 'Super Admin' });
+
+  // Rejected registration that still has a stale admin directory entry
+  await seed('users/rej1', { role: 'Pending User', status: 'Rejected', verificationStatus: 'Rejected' });
+  await seed('adminEmails/rej@pcm.edu.ph', { email: 'rej@pcm.edu.ph', role: 'Editor', active: true });
+
+  // Approved admins, as the site stores them
+  await seed('users/super2', { role: 'Super Admin', adminRole: 'Super Admin', status: 'Active' });
+  await seed('users/sa2', { role: 'Admin', adminRole: 'Super Admin', status: 'Active' });
+  await seed('users/u9', { role: 'Admin', status: 'Active' });
+  await seed('users/u9p', { role: 'Admin', status: 'Pending' });
+  await seed('users/admEd', { role: 'Admin', adminRole: 'Editor', status: 'Active' });
+  await seed('users/pres', { role: 'Super Admin', status: 'Disabled' });
+  await seed('adminUsers/u10', { role: 'Content Admin', status: 'Active', email: 'u10@pcm.edu.ph' });
+  await seed('adminUsers/adm-5', { role: 'Editor', status: 'Active', email: 'editor@pcm.edu.ph', avatarUrl: '' });
+  await seed('adminUsers/adm-6', { role: 'Registrar', status: 'Active', email: 'reg@pcm.edu.ph', avatarUrl: '' });
+  await seed('adminUsers/adm-super', { role: 'Super Admin', status: 'Active', email: 'boss@pcm.edu.ph' });
+  await seed('adminEmails/editor@pcm.edu.ph', { email: 'editor@pcm.edu.ph', role: 'Editor', active: true, adminId: 'adm-5' });
+  await seed('adminEmails/old@pcm.edu.ph', { email: 'old@pcm.edu.ph', role: 'Admin', active: false });
+  await seed('adminEmails/boss@pcm.edu.ph', { email: 'boss@pcm.edu.ph', role: 'Super Admin', active: true });
 });
 
 const anon = env.unauthenticatedContext().firestore();
@@ -42,12 +63,17 @@ const student = as('s1', 'student@gmail.com');
 const disabled = as('dis', 'dis@gmail.com');
 const fakeSuper = as('fs', 'angeloperfecto.epc@gmail.com', false);
 const superAdmin = as('angelo', 'AngeloPerfecto.EPC@gmail.com');
+const president = as('pres', 'president@pcm.edu.ph');
+const super2 = as('sa2', 'sa2@gmail.com');
 const editor = as('ed1', 'editor@pcm.edu.ph');
 const editorUnverified = as('ed2', 'editor@pcm.edu.ph', false);
 const oldAdmin = as('old1', 'old@pcm.edu.ph');
-const usersDocAdmin = as('u9', 'u9@gmail.com');
-const pendingAdmin = as('u9p', 'u9p@gmail.com');
+const admin = as('u9', 'u9@gmail.com');
+const pendingAdminRole = as('u9p', 'u9p@gmail.com');
+const approvedEditor = as('admEd', 'admed@gmail.com');
 const uidAdmin = as('u10', 'u10@pcm.edu.ph');
+const pending1 = as('pend1', 'pend1@gmail.com');
+const rejected = as('rej1', 'rej@pcm.edu.ph');
 
 const results = [];
 async function check(name, expectAllowed, fn) {
@@ -58,92 +84,129 @@ async function check(name, expectAllowed, fn) {
     results.push(['FAIL', name + ' -> ' + (e?.message || e).toString().split('\n')[0]]);
   }
 }
+const section = (title) => results.push(['----', title]);
 
-// Anonymous visitors
-await check('anon reads site config', true, () => getDoc(doc(anon, 'siteConfig/global')));
-await check('anon cannot edit site config', false, () => setDoc(doc(anon, 'siteConfig/global'), { title: 'hacked' }));
-await check('anon cannot add programs', false, () => setDoc(doc(anon, 'programs/p9'), { name: 'x' }));
-await check('anon cannot delete news', false, () => deleteDoc(doc(anon, 'news/n1')));
-await check('anon submits application', true, () => setDoc(doc(anon, 'applications/a2'), { status: 'Submitted' }));
-await check('anon cannot change application', false, () => updateDoc(doc(anon, 'applications/a1'), { status: 'Accepted' }));
-await check('anon cannot delete application', false, () => deleteDoc(doc(anon, 'applications/a1')));
-await check('anon submits inquiry', true, () => setDoc(doc(anon, 'inquiries/i1'), { message: 'hi' }));
-await check('anon writes activity log', true, () => setDoc(doc(anon, 'activityLogs/l2'), { action: 'LOGIN' }));
-await check('anon cannot alter activity log', false, () => updateDoc(doc(anon, 'activityLogs/l1'), { action: 'X' }));
-await check('anon student portal updates profile', true, () => setDoc(doc(anon, 'studentProfiles/sp1'), { phone: '1' }, { merge: true }));
-await check('anon cannot delete student profile', false, () => deleteDoc(doc(anon, 'studentProfiles/sp1')));
+const approval = (role) => ({
+  role: 'Admin',
+  adminRole: role,
+  status: 'Active',
+  verificationStatus: 'Approved',
+  approvedBy: 'tester',
+});
+
+section('Anonymous visitors');
+await check('read site config', true, () => getDoc(doc(anon, 'siteConfig/global')));
+await check('cannot edit site config', false, () => setDoc(doc(anon, 'siteConfig/global'), { title: 'hacked' }));
+await check('cannot add programs', false, () => setDoc(doc(anon, 'programs/p9'), { name: 'x' }));
+await check('cannot delete news', false, () => deleteDoc(doc(anon, 'news/n1')));
+await check('submit application', true, () => setDoc(doc(anon, 'applications/a2'), { status: 'Submitted' }));
+await check('cannot change application', false, () => updateDoc(doc(anon, 'applications/a1'), { status: 'Accepted' }));
+await check('cannot delete application', false, () => deleteDoc(doc(anon, 'applications/a1')));
+await check('submit inquiry', true, () => setDoc(doc(anon, 'inquiries/i1'), { message: 'hi' }));
+await check('write activity log', true, () => setDoc(doc(anon, 'activityLogs/l2'), { action: 'LOGIN' }));
+await check('cannot alter activity log', false, () => updateDoc(doc(anon, 'activityLogs/l1'), { action: 'X' }));
+await check('student portal updates profile', true, () => setDoc(doc(anon, 'studentProfiles/sp1'), { phone: '1' }, { merge: true }));
+await check('cannot delete student profile', false, () => deleteDoc(doc(anon, 'studentProfiles/sp1')));
 await check('server route creates upload record', true, () => setDoc(doc(anon, 'uploadedMedia/m2'), { url: '/uploads/y.jpg' }));
-await check('anon cannot overwrite upload record', false, () => setDoc(doc(anon, 'uploadedMedia/m1'), { url: 'evil' }));
-await check('anon cannot create user', false, () => setDoc(doc(anon, 'users/zz'), { role: 'Student/User' }));
-await check('anon cannot write adminUsers', false, () => setDoc(doc(anon, 'adminUsers/x'), { role: 'Super Admin' }));
-await check('anon cannot read admin email index', false, () => getDoc(doc(anon, 'adminEmails/editor@pcm.edu.ph')));
-await check('anon cannot write unknown collection', false, () => setDoc(doc(anon, 'mystery/x'), { a: 1 }));
+await check('cannot overwrite upload record', false, () => setDoc(doc(anon, 'uploadedMedia/m1'), { url: 'evil' }));
+await check('cannot create user', false, () => setDoc(doc(anon, 'users/zz'), { role: 'Student/User' }));
+await check('cannot write adminUsers', false, () => setDoc(doc(anon, 'adminUsers/x'), { role: 'Super Admin' }));
+await check('cannot read admin email index', false, () => getDoc(doc(anon, 'adminEmails/editor@pcm.edu.ph')));
+await check('cannot write unknown collection', false, () => setDoc(doc(anon, 'mystery/x'), { a: 1 }));
 await check('unlisted collections are denied', false, () => getDoc(doc(anon, 'mystery/x')));
 
-// Signed-in student
-await check('student creates own profile', true, () => setDoc(doc(as('new1', 'n@gmail.com'), 'users/new1'), { role: 'Student/User', status: 'Active' }));
-await check('student cannot self-create as Super Admin', false, () => setDoc(doc(as('new2', 'n2@gmail.com'), 'users/new2'), { role: 'Super Admin', status: 'Active' }));
-await check('student cannot self-create as Admin', false, () => setDoc(doc(as('new3', 'n3@gmail.com'), 'users/new3'), { role: 'Admin', status: 'Active' }));
-await check('student cannot self-create with adminRole', false, () => setDoc(doc(as('new4', 'n4@gmail.com'), 'users/new4'), { role: 'Student/User', adminRole: 'Super Admin' }));
+section('Registration: new admin requests stay Pending');
+const newbie = as('new1', 'n@gmail.com');
+await check('register as regular user', true, () => setDoc(doc(newbie, 'users/new1'), { role: 'Student/User', status: 'Active' }));
+await check('register an admin request (Pending User / Pending)', true, () =>
+  setDoc(doc(as('new5', 'n5@gmail.com'), 'users/new5'), { role: 'Pending User', status: 'Pending', verificationStatus: 'Pending', requestedRole: 'Admin' }));
+await check('cannot register directly as Super Admin', false, () => setDoc(doc(as('new2', 'n2@gmail.com'), 'users/new2'), { role: 'Super Admin', status: 'Active' }));
+await check('cannot register directly as Admin', false, () => setDoc(doc(as('new3', 'n3@gmail.com'), 'users/new3'), { role: 'Admin', status: 'Active' }));
+await check('cannot register as pending Admin role', false, () => setDoc(doc(as('new6', 'n6@gmail.com'), 'users/new6'), { role: 'Admin', status: 'Pending' }));
+await check('cannot register with an adminRole', false, () => setDoc(doc(as('new4', 'n4@gmail.com'), 'users/new4'), { role: 'Pending User', status: 'Pending', adminRole: 'Admin' }));
+await check('unverified Super Admin email cannot self-create Super Admin', false, () => setDoc(doc(fakeSuper, 'users/fs'), { role: 'Super Admin', status: 'Active' }));
+
+section('Pending, rejected, disabled and regular accounts are blocked');
+await check('pending user cannot edit content', false, () => setDoc(doc(pending1, 'programs/p1'), { name: 'x' }));
+await check('pending user cannot self-approve', false, () => updateDoc(doc(pending1, 'users/pend1'), approval('Admin')));
+await check('pending user cannot give self an adminRole', false, () => updateDoc(doc(pending1, 'users/pend1'), { adminRole: 'Admin' }));
+await check('pending user cannot write admin directory', false, () => setDoc(doc(pending1, 'adminUsers/pend1'), { role: 'Admin', status: 'Active', email: 'pend1@gmail.com' }));
+await check('pending user cannot write email index', false, () => setDoc(doc(pending1, 'adminEmails/pend1@gmail.com'), { role: 'Admin', active: true }));
+await check('pending Admin-role profile cannot edit content', false, () => setDoc(doc(pendingAdminRole, 'news/n3'), { title: 'x' }));
+await check('rejected user with stale directory entry cannot edit content', false, () => setDoc(doc(rejected, 'news/n5'), { title: 'x' }));
+await check('rejected user cannot reactivate self', false, () => updateDoc(doc(rejected, 'users/rej1'), { status: 'Pending' }));
+await check('rejected user cannot claim directory role', false, () => updateDoc(doc(rejected, 'users/rej1'), { role: 'Editor', adminRole: 'Editor', status: 'Active' }));
+await check('disabled user cannot reactivate self', false, () => updateDoc(doc(disabled, 'users/dis'), { status: 'Active' }));
 await check('student cannot promote self to Admin', false, () => updateDoc(doc(student, 'users/s1'), { role: 'Admin' }));
-await check('student cannot activate admin role via status', false, () => updateDoc(doc(student, 'users/s1'), { role: 'Super Admin', status: 'Active' }));
+await check('student cannot edit site content', false, () => setDoc(doc(student, 'siteConfig/global'), { title: 'x' }));
+await check('student cannot edit another user', false, () => updateDoc(doc(student, 'users/other'), { name: 'x' }));
 await check('student updates own lastLogin', true, () => updateDoc(doc(student, 'users/s1'), { lastLogin: 'now' }));
 await check('student requests admin access (Pending)', true, () => updateDoc(doc(student, 'users/s1'), { status: 'Pending', verificationStatus: 'Pending', requestedRole: 'Admin' }));
 await check('student links Student ID (role Student)', true, () => updateDoc(doc(student, 'users/s1'), { role: 'Student', status: 'Active' }));
-await check('student cannot edit another user', false, () => updateDoc(doc(student, 'users/other'), { name: 'x' }));
-await check('student cannot edit site content', false, () => setDoc(doc(student, 'siteConfig/global'), { title: 'x' }));
-await check('disabled user cannot reactivate self', false, () => updateDoc(doc(disabled, 'users/dis'), { status: 'Active' }));
+await check('unverified Super Admin email cannot edit content', false, () => setDoc(doc(fakeSuper, 'siteConfig/global'), { title: 'x' }));
+await check('same directory email but unverified cannot edit', false, () => setDoc(doc(editorUnverified, 'programs/p1'), { name: 'x' }));
+await check('inactive directory entry cannot edit', false, () => setDoc(doc(oldAdmin, 'programs/p1'), { name: 'x' }));
 
-// Unverified account using the Super Admin email
-await check('unverified super email cannot edit content', false, () => setDoc(doc(fakeSuper, 'siteConfig/global'), { title: 'x' }));
-await check('unverified super email cannot self-create Super Admin', false, () => setDoc(doc(fakeSuper, 'users/fs'), { role: 'Super Admin', status: 'Active' }));
+section('Only Super Admin and Admin can approve');
+await check('Editor (directory) cannot approve a pending user', false, () => updateDoc(doc(editor, 'users/pend1'), approval('Editor')));
+await check('Editor (approved profile) cannot approve a pending user', false, () => updateDoc(doc(approvedEditor, 'users/pend1'), approval('Editor')));
+await check('Content Admin (adminUsers/uid) cannot approve', false, () => updateDoc(doc(uidAdmin, 'users/pend1'), approval('Editor')));
+await check('Editor cannot add admin directory entries', false, () => setDoc(doc(editor, 'adminUsers/adm-x'), { role: 'Editor', status: 'Active', email: 'x@pcm.edu.ph' }));
+await check('Editor cannot write email index', false, () => setDoc(doc(editor, 'adminEmails/x@pcm.edu.ph'), { role: 'Editor', active: true }));
+await check('Admin cannot approve someone as Super Admin', false, () => updateDoc(doc(admin, 'users/pend2'), approval('Super Admin')));
+await check('Admin approves pending user as Editor', true, () => updateDoc(doc(admin, 'users/pend1'), approval('Editor')));
+await check('Admin adds approved user to admin directory', true, () => setDoc(doc(admin, 'adminUsers/pend1'), { role: 'Editor', status: 'Active', email: 'pend1@gmail.com' }));
+await check('newly approved user can now edit content', true, () => setDoc(doc(pending1, 'programs/p2'), { name: 'Approved edit' }));
+await check('newly approved Editor still cannot approve others', false, () => updateDoc(doc(pending1, 'users/pend2'), approval('Editor')));
+await check('Admin rejects a pending user', true, () => updateDoc(doc(admin, 'users/pend2'), { status: 'Rejected', verificationStatus: 'Rejected' }));
+await check('Admin writes non-Super email index entry', true, () => setDoc(doc(admin, 'adminEmails/new@pcm.edu.ph'), { role: 'Editor', active: true }));
+await check('Admin cannot write Super Admin email index entry', false, () => setDoc(doc(admin, 'adminEmails/new2@pcm.edu.ph'), { role: 'Super Admin', active: true }));
+await check('Admin cannot change Super Admin index entry', false, () => updateDoc(doc(admin, 'adminEmails/boss@pcm.edu.ph'), { active: false }));
+await check('Admin cannot add a Super Admin directory entry', false, () => setDoc(doc(admin, 'adminUsers/adm-y'), { role: 'Super Admin', status: 'Active', email: 'y@pcm.edu.ph' }));
+await check('Admin cannot demote a Super Admin', false, () => updateDoc(doc(admin, 'users/super2'), { role: 'Admin' }));
+await check('Admin cannot delete a Super Admin account', false, () => deleteDoc(doc(admin, 'users/super2')));
+await check('Admin cannot delete a Super Admin directory entry', false, () => deleteDoc(doc(admin, 'adminUsers/adm-super')));
+await check('Admin removes a non-Super directory entry', true, () => deleteDoc(doc(admin, 'adminUsers/adm-6')));
+await check('Admin deletes a regular account', true, () => deleteDoc(doc(admin, 'users/other')));
+await check('Super Admin approves pending user as Super Admin', true, () => updateDoc(doc(superAdmin, 'users/pend3'), approval('Super Admin')));
+await check('approved-as-Super-Admin profile (role Admin, adminRole Super Admin) adds Super Admin entry', true, () =>
+  setDoc(doc(super2, 'adminUsers/adm-z'), { role: 'Super Admin', status: 'Active', email: 'z@pcm.edu.ph' }));
+await check('Super Admin writes Super Admin index entry', true, () => setDoc(doc(superAdmin, 'adminEmails/z@pcm.edu.ph'), { role: 'Super Admin', active: true }));
+await check('Super Admin promotes user to Super Admin', true, () => updateDoc(doc(superAdmin, 'users/s1'), { role: 'Super Admin' }));
 
-// Verified Super Admin (email match is case-insensitive)
-await check('super admin edits site config', true, () => setDoc(doc(superAdmin, 'siteConfig/global'), { title: 'PCM 2' }));
-await check('super admin creates own Super Admin profile', true, () => setDoc(doc(superAdmin, 'users/angelo'), { role: 'Super Admin', adminRole: 'Super Admin', status: 'Active' }));
-await check('super admin adds admin', true, () => setDoc(doc(superAdmin, 'adminUsers/adm-9'), { role: 'Admin', status: 'Active', email: 'a9@pcm.edu.ph' }));
-await check('super admin writes email index', true, () => setDoc(doc(superAdmin, 'adminEmails/a9@pcm.edu.ph'), { role: 'Admin', active: true }));
-await check('super admin promotes user to Super Admin', true, () => updateDoc(doc(superAdmin, 'users/other'), { role: 'Super Admin' }));
-await check('super admin deletes news', true, () => deleteDoc(doc(superAdmin, 'news/n1')));
+section('Existing approved admins keep their access');
+await check('built-in Super Admin edits site config', true, () => setDoc(doc(superAdmin, 'siteConfig/global'), { title: 'PCM 2' }));
+await check('built-in Super Admin keeps access even if profile says Disabled', true, () => setDoc(doc(president, 'news/n6'), { title: 'x' }));
+await check('built-in Super Admin creates own profile', true, () => setDoc(doc(superAdmin, 'users/angelo'), { role: 'Super Admin', adminRole: 'Super Admin', status: 'Active' }));
+await check('Admin edits news', true, () => setDoc(doc(admin, 'news/n2'), { title: 'x' }));
+await check('approved Editor profile edits content', true, () => setDoc(doc(approvedEditor, 'news/n7'), { title: 'x' }));
+await check('adminUsers/{uid} Content Admin edits news', true, () => setDoc(doc(uidAdmin, 'news/n4'), { title: 'x' }));
+await check('directory Editor edits programs', true, () => setDoc(doc(editor, 'programs/p1'), { name: 'BTh' }));
+await check('directory Editor records own Editor role on first sign-in', true, () => setDoc(doc(editor, 'users/ed1'), { role: 'Editor', adminRole: 'Editor', status: 'Active' }));
+await check('directory Editor cannot claim a higher role', false, () => setDoc(doc(as('ed3', 'editor@pcm.edu.ph'), 'users/ed3'), { role: 'Admin', status: 'Active' }));
+await check('directory Editor updates own avatar', true, () => updateDoc(doc(editor, 'adminUsers/adm-5'), { avatarUrl: 'a.jpg' }));
+await check('directory Editor cannot change own role', false, () => updateDoc(doc(editor, 'adminUsers/adm-5'), { role: 'Super Admin' }));
+await check('directory Editor cannot change own email', false, () => updateDoc(doc(editor, 'adminUsers/adm-5'), { email: 'x@y.z' }));
+await check("directory Editor cannot edit another admin's entry", false, () => updateDoc(doc(editor, 'adminUsers/u10'), { avatarUrl: 'b.jpg' }));
+await check('directory Editor reads email index', true, () => getDoc(doc(editor, 'adminEmails/editor@pcm.edu.ph')));
+await check('admin updates application status', true, () => updateDoc(doc(admin, 'applications/a1'), { status: 'Accepted' }));
+await check('admin deletes student profile', true, () => deleteDoc(doc(admin, 'studentProfiles/sp1')));
 
-// Admin recognised through the email index (verified Google account)
-await check('indexed editor edits programs', true, () => setDoc(doc(editor, 'programs/p1'), { name: 'BTh' }));
-await check('indexed editor creates own profile with Editor role', true, () => setDoc(doc(editor, 'users/ed1'), { role: 'Editor', adminRole: 'Editor', status: 'Active' }));
-await check('indexed editor cannot grant Super Admin', false, () => updateDoc(doc(editor, 'users/s1'), { role: 'Super Admin' }));
-await check('indexed editor cannot demote a Super Admin', false, () => updateDoc(doc(editor, 'users/super2'), { role: 'Admin' }));
-await check('indexed editor cannot delete a Super Admin', false, () => deleteDoc(doc(editor, 'users/super2')));
-await check('indexed editor approves a regular user', true, () => updateDoc(doc(editor, 'users/s1'), { status: 'Active' }));
-await check('indexed editor cannot add admins', false, () => setDoc(doc(editor, 'adminUsers/adm-x'), { role: 'Admin', status: 'Active' }));
-await check('indexed editor updates own avatar', true, () => updateDoc(doc(editor, 'adminUsers/adm-5'), { avatarUrl: 'a.jpg' }));
-await check('indexed editor cannot change own role', false, () => updateDoc(doc(editor, 'adminUsers/adm-5'), { role: 'Super Admin' }));
-await check('indexed editor cannot change own email', false, () => updateDoc(doc(editor, 'adminUsers/adm-5'), { email: 'x@y.z' }));
-await check('indexed editor cannot write email index', false, () => setDoc(doc(editor, 'adminEmails/me@x.com'), { role: 'Super Admin', active: true }));
-await check('indexed editor reads email index', true, () => getDoc(doc(editor, 'adminEmails/editor@pcm.edu.ph')));
-await check('same email unverified cannot edit', false, () => setDoc(doc(editorUnverified, 'programs/p1'), { name: 'x' }));
-await check('inactive index entry cannot edit', false, () => setDoc(doc(oldAdmin, 'programs/p1'), { name: 'x' }));
-
-// Admins recognised by users/{uid} or adminUsers/{uid}
-await check('users-doc admin edits news', true, () => setDoc(doc(usersDocAdmin, 'news/n2'), { title: 'x' }));
-await check('pending admin cannot edit news', false, () => setDoc(doc(pendingAdmin, 'news/n3'), { title: 'x' }));
-await check('adminUsers/{uid} admin edits news', true, () => setDoc(doc(uidAdmin, 'news/n4'), { title: 'x' }));
-await check('admin updates application status', true, () => updateDoc(doc(usersDocAdmin, 'applications/a1'), { status: 'Accepted' }));
-await check('admin deletes student profile', true, () => deleteDoc(doc(usersDocAdmin, 'studentProfiles/sp1')));
-
-// The CMS saves collections in batches (syncAllDataToFirestore); role lookups must stay
-// within Firestore's per-request document-access limit.
-await check('indexed editor commits a 40-document batch', true, () => {
+section('Batch writes stay within Firestore limits');
+await check('Editor commits a 40-document batch', true, () => {
   const b = writeBatch(editor);
   for (let i = 0; i < 40; i++) b.set(doc(editor, `programs/batch-${i}`), { order: i });
   return b.commit();
 });
-await check('anon batch is rejected', false, () => {
+await check('anonymous batch is rejected', false, () => {
   const b = writeBatch(anon);
   for (let i = 0; i < 5; i++) b.set(doc(anon, `programs/anon-${i}`), { order: i });
   return b.commit();
 });
 
 await env.cleanup();
-const failed = results.filter((r) => r[0] === 'FAIL');
-for (const r of results) console.log(r[0], r[1]);
-console.log(`\n${results.length - failed.length}/${results.length} passed`);
+const tests = results.filter((r) => r[0] !== '----');
+const failed = tests.filter((r) => r[0] === 'FAIL');
+for (const r of results) console.log(r[0] === '----' ? `\n## ${r[1]}` : `${r[0]} ${r[1]}`);
+console.log(`\n${tests.length - failed.length}/${tests.length} passed`);
 process.exit(failed.length ? 1 : 0);
