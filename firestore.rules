@@ -314,6 +314,8 @@ service cloud.firestore {
 
       match /history/{entryId} {
         allow read: if isAdmin() || ownsApplication(get(applicationPath(appId)).data);
+        // Removed only together with its application (deleteApplicationCompletely).
+        allow delete: if isEnrollmentStaff();
         allow create: if isPaymentStaff()
           || (ownsApplication(getAfter(applicationPath(appId)).data)
             && request.resource.data.get('actor', '') == 'applicant'

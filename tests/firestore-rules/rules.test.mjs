@@ -312,6 +312,28 @@ await check('staff can waive payment with an assessment on file', true, async ()
   return updateDoc(doc(registrar, 'applications/appW'), { status: 'For Enrollment', paymentStatus: 'Waived', assessment: { total: 0, minimumPayment: 0 }, paymentWaivedReason: 'Full scholarship' });
 });
 
+section('Deleting applications');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'applications/appDel'), { applicantUid: 'appl2', status: 'Rejected', email: 'appl2@gmail.com' });
+  await setDoc(doc(db, 'applications/appDel/requirements/r1'), { applicantUid: 'appl2', status: 'Submitted', fileDataUrl: 'data:x' });
+  await setDoc(doc(db, 'applications/appDel/payments/p1'), { applicantUid: 'appl2', status: 'Submitted', amount: 10 });
+  await setDoc(doc(db, 'applications/appDel/history/h1'), { status: 'Rejected', actor: 'staff' });
+});
+await check('applicant cannot delete own application history', false, () => deleteDoc(doc(otherApplicant, 'applications/appDel/history/h1')));
+await check('applicant cannot delete own application', false, () => deleteDoc(doc(otherApplicant, 'applications/appDel')));
+await check('Editor cannot delete an application', false, () => deleteDoc(doc(approvedEditor, 'applications/appDel')));
+await check('Finance cannot delete an application', false, () => deleteDoc(doc(finance, 'applications/appDel')));
+await check('Registrar deletes an application with its documents, payments and history', true, () => {
+  const b = writeBatch(registrar);
+  b.delete(doc(registrar, 'applications/appDel/requirements/r1'));
+  b.delete(doc(registrar, 'applications/appDel/payments/p1'));
+  b.delete(doc(registrar, 'applications/appDel/history/h1'));
+  b.delete(doc(registrar, 'applications/appDel'));
+  b.set(doc(registrar, 'activityLogs/logDel'), { action: 'DELETE', entityType: 'Admission Application', entityId: 'appDel' });
+  return b.commit();
+});
+
 section('Students see and change only their own records');
 await check('student reads own record', true, () => getDoc(doc(studentUser, 'studentProfiles/std-linked')));
 await check('student lists own record by uid', true, () => getDocs(query(collection(studentUser, 'studentProfiles'), where('authUid', '==', 'stu1'))));
