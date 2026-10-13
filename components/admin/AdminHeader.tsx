@@ -220,9 +220,9 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         accept=".json"
         className="hidden"
       />
-      <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 sm:gap-4 w-full min-w-0">
+      <div className="flex flex-col 2xl:flex-row items-start 2xl:items-center justify-between gap-3 sm:gap-4 w-full min-w-0">
         {/* Left: Mobile Toggle & Tab Info */}
-        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 w-full lg:w-auto">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 w-full 2xl:w-auto 2xl:flex-1">
           {/* Mobile Menu Toggle Button */}
           <button
             type="button"
@@ -259,7 +259,7 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
         </div>
 
         {/* Right: Quick Controls & Status */}
-        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs w-full lg:w-auto justify-start sm:justify-end shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 text-xs w-full 2xl:w-auto justify-start sm:justify-end 2xl:shrink-0">
           {/* Live Cloud Sync Indicator & Trigger */}
           <div className="flex items-center gap-1">
             <div

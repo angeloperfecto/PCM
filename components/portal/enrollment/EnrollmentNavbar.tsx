@@ -90,7 +90,7 @@ export const EnrollmentNavbar: React.FC<EnrollmentNavbarProps> = ({
       aria-label="Enrollment Submenu Navigation"
       className="bg-white rounded-2xl border border-slate-200 shadow-xs p-2 sm:p-2.5 overflow-hidden"
     >
-      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+      <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
         {menuItems.map((item) => {
           const isActive = activeTab === item.id;
           return (

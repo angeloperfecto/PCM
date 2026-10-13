@@ -300,7 +300,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
         </div>
 
         {/* Tab Navigation */}
-        <div className="bg-slate-100 px-6 py-2 border-b border-slate-200 flex items-center gap-2 overflow-x-auto text-xs font-bold scrollbar-none">
+        <div className="bg-slate-100 px-6 py-2 border-b border-slate-200 flex flex-wrap items-center gap-2 text-xs font-bold">
           {[
             { id: 'profile', label: 'Student Profile', icon: User },
             { id: 'requirements', label: 'Requirements Checklist', icon: FileCheck, count: requirementsList.filter((r) => r.status === 'Submitted' || r.status === 'Pending').length },

@@ -669,7 +669,7 @@ export const AdminUsersTab: React.FC = () => {
         <div className="space-y-3">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
             {/* Status Filter Pills */}
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs overflow-x-auto max-w-full">
+            <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs max-w-full">
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2">Status:</span>
               <button
                 onClick={() => setSelectedStatusFilter('All')}
@@ -764,7 +764,7 @@ export const AdminUsersTab: React.FC = () => {
           </div>
 
           {/* Role Filter Tabs */}
-          <div className="flex items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs overflow-x-auto max-w-full">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-50 p-1 rounded-xl border border-slate-200 text-xs max-w-full">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2">Role:</span>
             <button
               onClick={() => setSelectedRoleFilter('All')}

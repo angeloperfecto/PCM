@@ -289,7 +289,7 @@ export const PreEnlistmentModule: React.FC = () => {
             />
           </div>
 
-          <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto no-scrollbar pb-1 sm:pb-0">
+          <div className="flex flex-wrap items-center gap-1 w-full sm:w-auto">
             {categories.map((cat) => (
               <button
                 key={cat}

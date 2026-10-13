@@ -442,7 +442,7 @@ export const StudentProfileModule: React.FC = () => {
       )}
 
       {/* 2. SUB-VIEW TABS */}
-      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex items-center gap-2 overflow-x-auto text-xs font-bold scrollbar-none">
+      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-2 text-xs font-bold">
         {[
           { id: 'dossier', label: '1. Complete Profile Dossier', icon: User },
           { id: 'requirements', label: '2. Document Requirements Vault', icon: FileCheck, count: requirementsList.filter((r) => r.status !== 'Verified').length },

@@ -654,7 +654,7 @@ export const AdminLifeAtPCMManager: React.FC = () => {
                     </div>
 
                     {/* Toolbar Actions */}
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-1 pt-2 border-t border-slate-100 text-xs">
                       {/* Move Up / Down */}
                       <div className="flex items-center gap-1">
                         <button
