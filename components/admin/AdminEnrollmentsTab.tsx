@@ -214,8 +214,8 @@ export const AdminEnrollmentsTab: React.FC = () => {
   const pendingPreEnlistments = preEnlistments.filter((p) => p.status === 'Submitted').length;
   const pendingAddDrop = addDropRequests.filter((a) => a.status === 'Pending').length;
 
-  // Student list resolution
-  const allStudents = students.length > 0 ? students : [studentProfile];
+  // Student list resolution: only saved records, never the built-in sample profile
+  const allStudents = students;
   const filteredStudents = allStudents.filter((s) => {
     const matchesSearch =
       (s.fullName || s.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -636,6 +636,13 @@ export const AdminEnrollmentsTab: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {filteredStudents.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-6 text-center text-slate-500">
+                      {allStudents.length === 0 ? 'No student records yet.' : 'No students match your search.'}
+                    </td>
+                  </tr>
+                )}
                 {filteredStudents.map((student) => (
                   <tr key={student.id} className="hover:bg-slate-50 transition">
                     <td className="p-3.5">
@@ -674,24 +681,22 @@ export const AdminEnrollmentsTab: React.FC = () => {
                         >
                           <Printer className="w-4 h-4" />
                         </button>
-                        {students.some((s) => s.id === student.id) && (
-                          <button
-                            onClick={() =>
-                              setPendingDelete({
-                                kind: 'student',
-                                id: student.id,
-                                label: `${student.fullName || student.name} (${student.studentId})`,
-                                message:
-                                  'This permanently removes the student profile, including its grades, courses and payment records. Their admission application, enrollment requests and portal sign-in are not deleted.',
-                              })
-                            }
-                            className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                            title="Delete student record"
-                            aria-label={`Delete student record of ${student.fullName || student.name}`}
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        )}
+                        <button
+                          onClick={() =>
+                            setPendingDelete({
+                              kind: 'student',
+                              id: student.id,
+                              label: `${student.fullName || student.name} (${student.studentId})`,
+                              message:
+                                'This permanently removes the student profile, including its grades, courses and payment records. Their admission application, enrollment requests and portal sign-in are not deleted.',
+                            })
+                          }
+                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
+                          title="Delete student record"
+                          aria-label={`Delete student record of ${student.fullName || student.name}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>
