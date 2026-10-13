@@ -834,7 +834,7 @@ export const AdminUsersTab: React.FC = () => {
               </div>
             </div>
 
-            <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto bg-white shadow-2xs">
+            <div className="border border-slate-200 rounded-xl overflow-x-auto overflow-x-auto bg-white shadow-2xs">
               <table className="w-full text-left text-xs border-collapse">
                 <thead>
                   <tr className="bg-slate-50 text-slate-600 font-serif border-b border-slate-200">
@@ -927,7 +927,7 @@ export const AdminUsersTab: React.FC = () => {
             </div>
           </div>
         ) : (
-          <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto bg-white">
+          <div className="border border-slate-200 rounded-xl overflow-x-auto overflow-x-auto bg-white">
             <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-600 font-serif border-b border-slate-200">
@@ -1199,7 +1199,7 @@ export const AdminUsersTab: React.FC = () => {
         </div>
 
         {/* Staff Table */}
-        <div className="border border-slate-200 rounded-xl overflow-hidden overflow-x-auto bg-white">
+        <div className="border border-slate-200 rounded-xl overflow-x-auto overflow-x-auto bg-white">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-50 text-slate-600 font-serif border-b border-slate-200">

@@ -461,7 +461,7 @@ export const AdminHeroTab: React.FC = () => {
             }`}
           >
             {/* Slide Preview & Details */}
-            <div className="flex items-start gap-4 flex-1 min-w-0">
+            <div className="flex items-start gap-4 flex-1 min-w-0 w-full md:w-auto">
               {/* Order Number badge & Thumbnail */}
               <div className="relative group shrink-0">
                 <div

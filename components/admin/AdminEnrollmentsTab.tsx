@@ -623,7 +623,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
           </div>
 
           {/* Students Table */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-700 border-collapse">
               <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                 <tr>
@@ -724,7 +724,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
             </span>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                 <tr>
@@ -803,7 +803,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
         <div className="space-y-4">
           {/* Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {['all', 'Submitted', 'Under Review', 'Approved', 'Returned for Correction', 'Rejected'].map((status) => (
                 <button
                   key={status}
@@ -832,7 +832,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
           </div>
 
           {/* Enrollments Table */}
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                 <tr>
@@ -954,7 +954,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
             </span>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                 <tr>
@@ -1180,7 +1180,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
             </button>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                 <tr>
@@ -1383,7 +1383,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                 <tr>

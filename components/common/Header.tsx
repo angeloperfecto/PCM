@@ -62,6 +62,13 @@ export const Header: React.FC = () => {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Close menus whenever the page changes by any route (back button, quick navigator, links in content)
+  useEffect(() => {
+    setMobileMenuOpen(false);
+    setMobileExpandedSection(null);
+    setActiveDropdown(null);
+  }, [currentSection]);
+
   // Close dropdown on Escape key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -288,7 +295,7 @@ export const Header: React.FC = () => {
       {/* 1. TOP UTILITY BAR (Institutional Standard) */}
       <div className="bg-[#10261D] text-[#D0DED8] text-[10.5px] sm:text-[11px] px-3 sm:px-4 lg:px-6 xl:px-8 py-1 flex items-center justify-between border-b border-[#588B76]/25 tracking-wider min-h-[30px] w-full overflow-x-auto no-scrollbar">
         {/* Left Institutional Portals & Giving */}
-        <div className="flex items-center gap-2 sm:gap-3 md:gap-4 font-medium uppercase text-[10.5px] sm:text-[11px] shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 md:gap-4 font-medium uppercase text-[10.5px] sm:text-[11px] shrink-0">
           <button
             id="btn-top-student-portal"
             onClick={() => navigateTo('portal')}
@@ -307,23 +314,23 @@ export const Header: React.FC = () => {
           >
             Faculty
           </button>
-          <span className="text-[#588B76]/40 hidden sm:inline select-none">|</span>
+          <span className="text-[#588B76]/40 hidden md:inline select-none">|</span>
           <button
             id="nav-utility-alumni"
             onClick={() => navigateTo('about', 'faculty')}
-            className="hover:text-white transition-colors cursor-pointer text-[#D0DED8] hidden sm:inline whitespace-nowrap"
+            className="hover:text-white transition-colors cursor-pointer text-[#D0DED8] hidden md:inline whitespace-nowrap"
           >
             Alumni
           </button>
-          <span className="text-[#588B76]/40 hidden md:inline select-none">|</span>
+          <span className="text-[#588B76]/40 hidden lg:inline select-none">|</span>
           <button
             id="nav-utility-library"
             onClick={() => navigateTo('resources', 'library')}
-            className="hover:text-white transition-colors cursor-pointer text-[#D0DED8] hidden md:inline whitespace-nowrap"
+            className="hover:text-white transition-colors cursor-pointer text-[#D0DED8] hidden lg:inline whitespace-nowrap"
           >
             Library
           </button>
-          <span className="text-[#588B76]/40 select-none">|</span>
+          <span className="text-[#588B76]/40 hidden sm:inline select-none">|</span>
           <button
             id="nav-utility-give"
             onClick={() => navigateTo('donation')}
@@ -336,7 +343,7 @@ export const Header: React.FC = () => {
         </div>
 
         {/* Right Tools, Account & CMS Actions */}
-        <div className="flex items-center gap-2 sm:gap-2.5 text-[10.5px] sm:text-[11px] shrink-0 pl-2">
+        <div className="flex items-center gap-1.5 sm:gap-2.5 text-[10.5px] sm:text-[11px] shrink-0 pl-2">
           <span className="hidden 2xl:inline italic text-[#D0DED8]/85 text-[11px] whitespace-nowrap tracking-normal">
             Equipping Servants. Transforming Lives.
           </span>
@@ -350,12 +357,12 @@ export const Header: React.FC = () => {
           >
             <Search className="w-3 h-3 text-[#85AA9B] group-hover:text-white group-hover:scale-110 transition-transform duration-150 shrink-0" />
             <span className="hidden xs:inline font-medium">Search</span>
-            <kbd className="hidden sm:inline-flex items-center bg-[#10261D] group-hover:bg-[#18392B] px-1 py-0.2 rounded text-[9px] text-[#85AA9B] group-hover:text-white font-mono border border-[#588B76]/40 transition-colors">
+            <kbd className="hidden lg:inline-flex items-center bg-[#10261D] group-hover:bg-[#18392B] px-1 py-0.2 rounded text-[9px] text-[#85AA9B] group-hover:text-white font-mono border border-[#588B76]/40 transition-colors">
               ⌘K
             </kbd>
           </button>
 
-          <span className="text-[#588B76]/40 select-none">|</span>
+          <span className="text-[#588B76]/40 hidden sm:inline select-none">|</span>
 
           {/* Google Auth & User Account Trigger */}
           <button
@@ -407,7 +414,7 @@ export const Header: React.FC = () => {
                 : 'Sign In'}
             </span>
             {currentUserAccount && (
-              <span className={`text-[8.5px] sm:text-[9px] px-1 sm:px-1.5 py-0.2 rounded font-bold shadow-xs ${
+              <span className={`hidden lg:inline text-[8.5px] sm:text-[9px] px-1 sm:px-1.5 py-0.2 rounded font-bold shadow-xs ${
                 currentUserAccount.role === 'Admin' ? 'bg-amber-400 text-slate-950' : 'bg-emerald-400 text-slate-950'
               }`}>
                 {currentUserAccount.role}
@@ -417,7 +424,7 @@ export const Header: React.FC = () => {
 
           {currentUserAccount?.role !== 'Student' && (
             <>
-              <span className="text-[#588B76]/40 select-none">|</span>
+              <span className="text-[#588B76]/40 hidden sm:inline select-none">|</span>
 
               {/* Admin CMS Trigger */}
               <button
@@ -429,9 +436,10 @@ export const Header: React.FC = () => {
                     : 'text-[#D0DED8] hover:text-white hover:bg-white/5'
                 }`}
                 title="Institutional CMS & Admissions Administration"
+                aria-label={isAdminLoggedIn ? "Admin (signed in)" : "Admin"}
               >
                 <Lock className="w-3 h-3 text-[#85AA9B] shrink-0" />
-                <span className="whitespace-nowrap">{isAdminLoggedIn ? 'Admin (In)' : 'Admin'}</span>
+                <span className="hidden sm:inline whitespace-nowrap">{isAdminLoggedIn ? 'Admin (In)' : 'Admin'}</span>
               </button>
             </>
           )}
@@ -450,8 +458,8 @@ export const Header: React.FC = () => {
             title="Source-to-Target Migration Audit & URL Inventory"
           >
             <ShieldCheck className="w-3 h-3 text-[#85AA9B] shrink-0" />
-            <span className="hidden md:inline whitespace-nowrap">Migration Report</span>
-            <span className="md:hidden whitespace-nowrap">Audit</span>
+            <span className="hidden lg:inline whitespace-nowrap">Migration Report</span>
+            <span className="lg:hidden whitespace-nowrap">Audit</span>
           </button>
         </div>
       </div>
