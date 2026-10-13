@@ -19,6 +19,7 @@ import {
   EDITABLE_APPLICANT_FIELDS,
   addRequirement,
   createRequirementChecklist,
+  deleteApplicationCompletely,
   finalizeEnrollment,
   requestMissingRequirements,
   reviewPayment,
@@ -43,6 +44,7 @@ import {
   MessageSquare,
   Search,
   ShieldAlert,
+  Trash2,
   X,
 } from 'lucide-react';
 
@@ -103,6 +105,7 @@ export const AdminApplicationsTab: React.FC = () => {
   const [programFilter, setProgramFilter] = useState('all');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [staffNotes, setStaffNotes] = useState<StaffNotification[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<Application | null>(null);
 
   // Latest staff alerts (new applications, uploaded documents).
   useEffect(() => {
@@ -281,16 +284,16 @@ export const AdminApplicationsTab: React.FC = () => {
           ) : (
             <ul className="space-y-2">
               {filtered.map((a) => (
-                <li key={a.id}>
+                <li key={a.id} className="flex items-stretch gap-2">
                   <button
                     type="button"
                     onClick={() => setSelectedId(a.id)}
-                    className="flex w-full flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-[#588B76] sm:flex-row sm:items-center sm:justify-between"
+                    className="flex min-w-0 flex-1 flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-[#588B76] sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-bold text-slate-900">{a.fullName}</p>
+                      <p className={`truncate text-sm font-bold ${a.fullName ? 'text-slate-900' : 'italic text-slate-400'}`}>{a.fullName || 'Unnamed application'}</p>
                       <p className="truncate text-[11px] text-slate-500">
-                        {a.referenceNumber} · {a.programName || a.program || 'No program'} · {a.email}
+                        {[a.referenceNumber || `ID ${a.id}`, a.programName || a.program || 'No program', a.email || 'No email'].join(' · ')}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -300,6 +303,17 @@ export const AdminApplicationsTab: React.FC = () => {
                       <StatusBadge status={a.status} />
                     </div>
                   </button>
+                  {canDecideAdmissions && (
+                    <button
+                      type="button"
+                      onClick={() => setDeleteTarget(a)}
+                      aria-label={`Delete application ${a.referenceNumber || a.id}`}
+                      title="Delete application"
+                      className="flex shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-white px-3 text-slate-400 shadow-sm transition hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -351,15 +365,104 @@ export const AdminApplicationsTab: React.FC = () => {
           programs={programs}
           requiredDocs={enrollmentSystemConfig?.requiredDocumentsList}
           onClose={() => setSelectedId(null)}
+          onDelete={canDecideAdmissions ? () => setDeleteTarget(selected) : undefined}
           onNote={(note) => addApplicationNote(selected.id, note)}
           toast={(ok, title, message) => addToast(ok ? 'success' : 'error', title, message)}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteApplicationDialog
+          app={deleteTarget}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={async () => {
+            try {
+              const result = await deleteApplicationCompletely(db, admissionsActor(), deleteTarget as any);
+              addToast(result.ok ? 'success' : 'error', result.ok ? 'Application deleted' : 'Not deleted', result.message);
+              if (result.ok) {
+                if (selectedId === deleteTarget.id) setSelectedId(null);
+                setDeleteTarget(null);
+              }
+            } catch (e: any) {
+              console.warn('Delete application notice:', e);
+              addToast(
+                'error',
+                'Not deleted',
+                e?.code === 'permission-denied'
+                  ? 'You do not have permission to delete applications.'
+                  : 'The application could not be deleted. Please check your connection and try again.'
+              );
+            }
+          }}
         />
       )}
     </div>
   );
 };
 
+// Permanent deletion needs the admin to type DELETE.
+const DeleteApplicationDialog: React.FC<{ app: Application; onCancel: () => void; onConfirm: () => Promise<void> }> = ({ app, onCancel, onConfirm }) => {
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const enrolled = normalizeStatus(app.status) === 'Enrolled';
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/60 p-4" role="alertdialog" aria-modal="true" aria-label="Delete application">
+      <form
+        className="w-full max-w-md space-y-3 rounded-2xl bg-white p-5 shadow-2xl"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (typed !== 'DELETE') return;
+          setBusy(true);
+          try {
+            await onConfirm();
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <h4 className="flex items-center gap-2 font-serif text-lg font-bold text-rose-700">
+          <Trash2 className="h-5 w-5" /> Delete this application?
+        </h4>
+        <div className="rounded-lg bg-slate-50 p-3 text-xs text-slate-700">
+          <p className="font-bold text-slate-900">{app.fullName || 'Unnamed application'}</p>
+          <p>{[app.referenceNumber || `ID ${app.id}`, app.programName || app.program, app.email].filter(Boolean).join(' · ')}</p>
+          <p className="mt-1">Status: {normalizeStatus(app.status)}</p>
+        </div>
+        <p className="text-xs text-slate-600">
+          This permanently removes the application, its uploaded documents, payments and status history. It cannot be undone. The deletion
+          is recorded in the activity log.
+        </p>
+        {enrolled && (
+          <p className="rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+            This applicant is enrolled. Their official student record{app.studentId ? ` (${app.studentId})` : ''} will <strong>not</strong> be deleted; manage it
+            under Enrollment &amp; Records.
+          </p>
+        )}
+        <label className="block text-xs font-semibold text-slate-700">
+          Type <span className="font-mono text-rose-700">DELETE</span> to confirm
+          <input
+            autoFocus
+            value={typed}
+            onChange={(e) => setTyped(e.target.value)}
+            aria-label="Type DELETE to confirm"
+            className="mt-1 w-full rounded-lg border border-slate-300 p-2 font-mono text-sm"
+          />
+        </label>
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={onCancel} className="rounded-lg px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-100">
+            Cancel
+          </button>
+          <button type="submit" disabled={busy || typed !== 'DELETE'} className="rounded-lg bg-rose-600 px-4 py-2 text-xs font-bold text-white hover:bg-rose-700 disabled:opacity-40">
+            {busy ? 'Deleting…' : 'Delete permanently'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 interface DetailProps {
+  onDelete?: () => void;
   app: Application;
   canDecide: boolean;
   canVerifyPayments: boolean;
@@ -382,6 +485,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   actor,
   requiredDocs,
   onClose,
+  onDelete,
   onNote,
   toast,
 }) => {
@@ -436,15 +540,26 @@ const ApplicationDetail: React.FC<DetailProps> = ({
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white p-4">
           <div className="min-w-0">
             <p className="font-mono text-[11px] font-bold text-[#588B76]">{app.referenceNumber}</p>
-            <h3 className="truncate font-serif text-xl font-bold text-[#18392B]">{app.fullName}</h3>
+            <h3 className="truncate font-serif text-xl font-bold text-[#18392B]">{app.fullName || 'Unnamed application'}</h3>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <StatusBadge status={app.status} />
               {status === 'Enrolled' && app.studentId && <span className="font-mono text-xs font-bold">{app.studentId}</span>}
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="inline-flex items-center gap-1 rounded-lg border border-rose-200 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-50"
+              >
+                <Trash2 className="h-3.5 w-3.5" /> Delete
+              </button>
+            )}
+            <button type="button" onClick={onClose} aria-label="Close" className="rounded-lg p-2 text-slate-500 hover:bg-slate-100">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </div>
 
         <div className="space-y-5 p-4 sm:p-6">

@@ -776,6 +776,50 @@ export async function reviewPayment(
   };
 }
 
+// Permanently deletes an application with its documents, payments and status history
+// (Firestore does not delete subcollections automatically, and uploaded documents are
+// private data). A linked official student record is NOT deleted. The deletion itself is
+// recorded in activityLogs.
+export async function deleteApplicationCompletely(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord
+): Promise<{ ok: boolean; message: string }> {
+  const refs = [] as ReturnType<typeof doc>[];
+  for (const sub of ['requirements', 'payments', 'history']) {
+    const snap = await getDocs(collection(db, 'applications', app.id, sub));
+    snap.forEach((d) => refs.push(d.ref));
+  }
+  // Batches hold up to 500 writes; delete subcollection documents first, the application last.
+  for (let i = 0; i < refs.length; i += 450) {
+    const batch = writeBatch(db);
+    refs.slice(i, i + 450).forEach((r) => batch.delete(r));
+    await batch.commit();
+  }
+  const finalBatch = writeBatch(db);
+  finalBatch.delete(doc(db, 'applications', app.id));
+  const logId = newId('log');
+  // Same shape as store.logActivity entries, so it appears in the admin activity log.
+  finalBatch.set(doc(db, 'activityLogs', logId), {
+    id: logId,
+    timestamp: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: 'numeric', hour12: true }),
+    adminName: staff.name,
+    adminRole: staff.role || '',
+    action: 'DELETE',
+    entityType: 'Admission Application',
+    entityId: app.id,
+    entityName: `${app.fullName || 'Unnamed application'}${app.referenceNumber ? ` (${app.referenceNumber})` : ''}`,
+    description: `Deleted application${app.referenceNumber ? ` ${app.referenceNumber}` : ''} with ${refs.length} related record(s).${
+      app.studentRecordId ? ` Student record ${app.studentId || app.studentRecordId} was kept.` : ''
+    }`,
+  });
+  await finalBatch.commit();
+  return {
+    ok: true,
+    message: `Application ${app.referenceNumber || app.id} deleted.${app.studentRecordId ? ` The student record ${app.studentId || ''} was kept.` : ''}`,
+  };
+}
+
 export interface FinalizeOptions {
   academicYear: string;
   semester: string;
