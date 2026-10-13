@@ -546,7 +546,7 @@ interface PCMContextType {
   // Academic Subjects Catalog & Sections
   academicSubjects: AcademicSubject[];
   setAcademicSubjects: React.Dispatch<React.SetStateAction<AcademicSubject[]>>;
-  addAcademicSubject: (subject: Omit<AcademicSubject, 'id'>) => Promise<AcademicSubject>;
+  addAcademicSubject: (subject: Omit<AcademicSubject, 'id'>) => Promise<AcademicSubject | null>;
   updateAcademicSubject: (id: string, updates: Partial<AcademicSubject>) => Promise<boolean>;
   deleteAcademicSubject: (id: string) => Promise<boolean>;
   duplicateAcademicSubject: (subjectId: string, newAcademicYear: string, newSemester: string) => Promise<AcademicSubject>;
@@ -5491,57 +5491,46 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Academic Subjects Catalog & Sections Management
-  const addAcademicSubject = async (subjectData: Omit<AcademicSubject, 'id'>): Promise<AcademicSubject> => {
+  // Catalog changes update the list only after Firestore confirms them.
+  const addAcademicSubject = async (subjectData: Omit<AcademicSubject, 'id'>): Promise<AcademicSubject | null> => {
     const id = `subj-${subjectData.code.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${Date.now()}`;
-    const newSubject: AcademicSubject = {
-      ...subjectData,
-      id,
-    };
-
+    const newSubject: AcademicSubject = cleanFirestoreData({ ...subjectData, id });
+    if (!(await safeSetDoc(doc(db, 'academicSubjects', id), newSubject, { merge: false }))) return null;
     setAcademicSubjects((prev) => {
-      const next = [...prev, newSubject];
+      const next = [...prev.filter((s) => s.id !== id), newSubject];
       setCachedData('academicSubjects', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'academicSubjects', id), cleanFirestoreData(newSubject));
-    } catch (e) {
-      console.warn('Academic subject firestore save notice:', e);
-    }
-
     logActivity('CREATE', 'Subject Catalog', id, newSubject.code, `Added academic course ${newSubject.code}: ${newSubject.title}`);
-    addToast('success', 'Subject Added', `${newSubject.code} has been added to the course catalog.`);
+    addToast('success', 'Course Added', `${newSubject.code} has been added to the course catalog.`);
     return newSubject;
   };
 
   const updateAcademicSubject = async (id: string, updates: Partial<AcademicSubject>): Promise<boolean> => {
+    const target = academicSubjects.find((s) => s.id === id);
+    const sanitized = cleanFirestoreData(updates);
+    if (!(await safeSetDoc(doc(db, 'academicSubjects', id), sanitized, { merge: true }))) return false;
     setAcademicSubjects((prev) => {
-      const next = prev.map((s) => (s.id === id ? { ...s, ...updates } : s));
+      const next = prev.map((s) => (s.id === id ? { ...s, ...sanitized } : s));
       setCachedData('academicSubjects', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'academicSubjects', id), cleanFirestoreData(updates), { merge: true });
-    } catch (e) {
-      console.warn('Update academic subject notice:', e);
-    }
+    const code = updates.code || target?.code || id;
+    logActivity('UPDATE', 'Subject Catalog', id, code, `Updated academic course ${code}.`);
+    addToast('success', 'Course Updated', `${code} was saved.`);
     return true;
   };
 
   const deleteAcademicSubject = async (id: string): Promise<boolean> => {
     const target = academicSubjects.find((s) => s.id === id);
+    if (!(await safeDeleteDoc(doc(db, 'academicSubjects', id)))) return false;
     setAcademicSubjects((prev) => {
       const next = prev.filter((s) => s.id !== id);
       setCachedData('academicSubjects', next);
       return next;
     });
-    try {
-      await safeDeleteDoc(doc(db, 'academicSubjects', id));
-    } catch (e) {
-      console.warn('Delete academic subject notice:', e);
-    }
     logActivity('DELETE', 'Subject Catalog', id, target?.code || id, `Removed course from catalog.`);
-    addToast('info', 'Subject Removed', 'Course removed from catalog.');
+    addToast('info', 'Course Removed', `${target?.code || 'The course'} was removed from the catalog.`);
     return true;
   };
 
