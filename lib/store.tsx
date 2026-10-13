@@ -174,6 +174,8 @@ import {
   blobToDataUrl,
   query,
   where,
+  WRITE_FAILED_EVENT,
+  DATA_DROPPED_EVENT,
 } from './firebase';
 import { firebaseConfig } from './firebaseConfig';
 import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, requirementTemplates } from './enrollmentWorkflow';
@@ -1320,6 +1322,38 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Failed saves and dropped data must be visible: many save helpers report success
+  // optimistically, so lib/firebase.ts announces failures and we show them here.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let lastShown = 0;
+    const onWriteFailed = (e: Event) => {
+      const { code, quota } = (e as CustomEvent).detail || {};
+      const now = Date.now();
+      if (now - lastShown < 3000) return; // one message per burst (e.g. a failed batch)
+      lastShown = now;
+      addToast(
+        'error',
+        'Not saved',
+        code === 'permission-denied'
+          ? 'Your account does not have permission to make this change, so it was not saved.'
+          : quota
+          ? 'The database is over its daily limit, so this change was not saved. Please try again later.'
+          : 'This change could not be saved. Please check your connection, refresh, and try again.'
+      );
+    };
+    const onDataDropped = () => {
+      addToast('warning', 'Image not saved', 'An image was larger than about 850 KB and could not be stored. Please upload a smaller image.');
+    };
+    window.addEventListener(WRITE_FAILED_EVENT, onWriteFailed);
+    window.addEventListener(DATA_DROPPED_EVENT, onDataDropped);
+    return () => {
+      window.removeEventListener(WRITE_FAILED_EVENT, onWriteFailed);
+      window.removeEventListener(DATA_DROPPED_EVENT, onDataDropped);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Restore active user/admin session across browser refresh
@@ -5968,10 +6002,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     setStudents((prev) => [newStudent, ...prev]);
-    try {
-      await safeSetDoc(doc(db, 'studentProfiles', id), newStudent);
-    } catch (e) {
-      console.warn(e);
+    const saved = await safeSetDoc(doc(db, 'studentProfiles', id), newStudent);
+    if (!saved) {
+      // Not persisted (the "Not saved" alert explains why): don't leave a phantom record.
+      setStudents((prev) => prev.filter((s) => s.id !== id));
+      return newStudent;
     }
 
     logActivity('CREATE', 'Student Profile', id, newStudent.fullName || newStudent.name || 'Student', `Created student account (${newStudent.studentId}).`);
