@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { usePCM } from '@/lib/store';
+import { PaymentGuide } from '@/components/enrollment/PaymentInstructions';
 import {
   FileText,
   DollarSign,
@@ -312,6 +313,7 @@ export const AdmissionsView: React.FC = () => {
               </table>
             </div>
           </div>
+          <PaymentGuide />
         </section>
 
         {/* Sub-section 3: Scholarships & Grants */}

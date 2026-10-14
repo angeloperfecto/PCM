@@ -10,7 +10,7 @@ export function hasPaymentInstructions(p?: Instructions | null): boolean {
 }
 
 // Where and how to pay, from Enrollment & Records → Tuition & Fee Policy → Payment instructions.
-export const PaymentInstructions: React.FC<{ compact?: boolean }> = ({ compact }) => {
+export const PaymentInstructions: React.FC<{ compact?: boolean; reportHint?: boolean }> = ({ compact, reportHint = true }) => {
   const { enrollmentSystemConfig } = usePCM();
   const p = enrollmentSystemConfig?.paymentInstructions;
   const [copied, setCopied] = useState<string | null>(null);
@@ -74,7 +74,27 @@ export const PaymentInstructions: React.FC<{ compact?: boolean }> = ({ compact }
         )}
       </ul>
       {p!.notes && <p className="whitespace-pre-line text-slate-600">{p!.notes}</p>}
-      <p className="text-[11px] text-slate-500">After paying, report the payment below with the reference or receipt number so the Finance Office can verify it.</p>
+      {reportHint && <p className="text-[11px] text-slate-500">After paying, report the payment below with the reference or receipt number so the Finance Office can verify it.</p>}
     </div>
+  );
+};
+
+// Payment methods and the downpayment rule, for applicants who have not been assessed yet and
+// for the public Admissions page.
+export const PaymentGuide: React.FC<{ beforeAssessment?: boolean }> = ({ beforeAssessment }) => {
+  const { enrollmentSystemConfig } = usePCM();
+  const percent = enrollmentSystemConfig?.downpaymentPercent ?? 40;
+  return (
+    <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm sm:p-6" data-testid="payment-guide">
+      <h4 className="font-serif text-lg font-bold text-[#18392B]">Payment methods &amp; downpayment</h4>
+      <p className="text-xs text-slate-700">
+        A downpayment of about <strong>{percent}%</strong> of your assessed fees is required before you are officially enrolled. The rest
+        becomes your balance, which you can pay after enrollment from the Student Portal.
+        {beforeAssessment
+          ? ' Do not pay yet: the Registrar will send your assessment with the exact amount, and the payment form will appear here.'
+          : ' Your exact amount is shown in your application once the Registrar prepares your assessment.'}
+      </p>
+      <PaymentInstructions compact reportHint={false} />
+    </section>
   );
 };

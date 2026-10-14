@@ -2,7 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, Clock, Plus, Receipt, Trash2, XCircle } from 'lucide-react';
-import { PaymentInstructions } from './PaymentInstructions';
+import { PaymentGuide, PaymentInstructions } from './PaymentInstructions';
 import {
   ApplicationPayment,
   EnrollmentAssessment,
@@ -181,7 +181,10 @@ export const ApplicantPaymentSection: React.FC<{
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
 
-  if (!assessment) return null;
+  if (!assessment) {
+    // Not assessed yet: show how payment will work so the applicant can prepare.
+    return ['Withdrawn', 'Rejected', 'Enrolled', 'Deferred'].includes(s) ? null : <PaymentGuide beforeAssessment />;
+  }
   const canPay = s === 'For Payment' && paymentStatus !== 'Verified';
 
   return (
