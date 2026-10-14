@@ -15,6 +15,7 @@ import { EnrollmentModule } from '@/components/portal/enrollment/EnrollmentModul
 import { AddDropModule } from '@/components/portal/enrollment/AddDropModule';
 import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModule';
 import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule';
+import { CurriculumModule } from '@/components/portal/enrollment/CurriculumModule';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { PaymentInstructions } from '@/components/enrollment/PaymentInstructions';
 import { termFees } from '@/lib/studentLedger';
@@ -592,6 +593,9 @@ export const PortalView: React.FC = () => {
 
             {/* Submenu Item 6: Amount Due */}
             {enrollmentActiveSubTab === 'amount-due' && <AmountDueModule />}
+
+            {/* Curriculum: subjects per year level */}
+            {enrollmentActiveSubTab === 'curriculum' && <CurriculumModule />}
           </div>
         )}
 

@@ -434,6 +434,26 @@ service cloud.firestore {
 
     // Balance payments reported by enrolled students. Reports never change the balance; payment
     // staff verify them, which updates the student record (see lib/studentPaymentsService.ts).
+    // Subjects per year level. Everyone signed in (students included) may read; only the Registrar,
+    // Academic Admin, Admin and Super Admin may change them.
+    function isCurriculumManager() {
+      return adminRole() in ['Super Admin', 'Admin', 'Registrar', 'Academic Admin'];
+    }
+    function validCurriculumSubject() {
+      let d = request.resource.data;
+      return d.get('programId', '') is string && d.get('programId', '') != ''
+        && d.get('code', '') is string && d.get('code', '') != ''
+        && d.get('title', '') is string && d.get('title', '') != ''
+        && d.get('yearLevel', '') is string && d.get('yearLevel', '') != ''
+        && d.get('units', -1) is number && d.get('units', -1) >= 0
+        && d.get('status', '') in ['Active', 'Inactive'];
+    }
+    match /curriculumSubjects/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if isCurriculumManager() && validCurriculumSubject();
+      allow delete: if isCurriculumManager();
+    }
+
     match /studentPayments/{id} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.get('studentUid', '') == request.auth.uid);
       allow create: if isSignedIn()

@@ -443,6 +443,21 @@ await check('a reviewed payment cannot be reviewed again', false, () => updateDo
 await check('Registrar rejects a payment with remarks', true, () => updateDoc(doc(registrar, 'studentPayments/sp-2'), { status: 'Rejected', reviewedBy: 'Registrar', reviewedAt: 'now', remarks: 'Reference not found' }));
 await check('Finance lists all payment reports', true, () => getDocs(collection(finance, 'studentPayments')));
 
+section('Subjects per year level (curriculum)');
+const curSubj = (over = {}) => ({ id: 'cur-1', programId: 'prog-bth', programName: 'Bachelor of Theology', yearLevel: '1st Year', semester: '1st Semester', code: 'BIB-101', title: 'Old Testament Survey', units: 3, status: 'Active', ...over });
+await check('Registrar adds a curriculum subject', true, () => setDoc(doc(registrar, 'curriculumSubjects/cur-1'), curSubj()));
+await check('Registrar cannot save a subject without a code', false, () => setDoc(doc(registrar, 'curriculumSubjects/cur-bad'), curSubj({ id: 'cur-bad', code: '' })));
+await check('Registrar cannot save negative units', false, () => setDoc(doc(registrar, 'curriculumSubjects/cur-bad2'), curSubj({ id: 'cur-bad2', units: -1 })));
+await check('student reads the curriculum', true, () => getDoc(doc(studentUser, 'curriculumSubjects/cur-1')));
+await check('anonymous cannot read the curriculum', false, () => getDoc(doc(anon, 'curriculumSubjects/cur-1')));
+await check('student cannot add a subject', false, () => setDoc(doc(studentUser, 'curriculumSubjects/cur-x'), curSubj({ id: 'cur-x' })));
+await check('student cannot edit a subject', false, () => updateDoc(doc(studentUser, 'curriculumSubjects/cur-1'), { units: 6 }));
+await check('student cannot delete a subject', false, () => deleteDoc(doc(studentUser, 'curriculumSubjects/cur-1')));
+await check('Editor cannot change the curriculum', false, () => updateDoc(doc(approvedEditor, 'curriculumSubjects/cur-1'), { units: 6 }));
+await check('Finance cannot change the curriculum', false, () => updateDoc(doc(finance, 'curriculumSubjects/cur-1'), { units: 6 }));
+await check('Registrar updates a subject', true, () => updateDoc(doc(registrar, 'curriculumSubjects/cur-1'), { units: 2, title: 'OT Survey' }));
+await check('Registrar deletes a subject', true, () => deleteDoc(doc(registrar, 'curriculumSubjects/cur-1')));
+
 section('Batch writes stay within Firestore limits');
 await check('Editor commits a 40-document batch', true, () => {
   const b = writeBatch(editor);
