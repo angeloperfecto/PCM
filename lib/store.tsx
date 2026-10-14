@@ -421,7 +421,7 @@ interface PCMContextType {
   canDecideAdmissions: boolean;
   /** Approve/return enrollments, pre-enlistments and add/drop requests (isEnrollmentOffice in firestore.rules). */
   canManageEnrollment: boolean;
-  /** Subjects per year level (curriculumSubjects), live for every signed-in user. */
+  /** Subjects per year level (curriculumSubjects), live for everyone. */
   curriculumSubjects: CurriculumSubject[];
   /** Registrar, Academic Admin, Admin and Super Admin may edit the curriculum (firestore.rules). */
   canManageCurriculum: boolean;
@@ -4709,20 +4709,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const canManageEnrollment = isAdminLoggedIn && ['Super Admin', 'Admin', 'Registrar', 'Academic Admin', 'Finance'].includes(currentAdminUser?.role || '');
   const canManageCurriculum = isAdminLoggedIn && ['Super Admin', 'Admin', 'Registrar', 'Academic Admin'].includes(currentAdminUser?.role || '');
 
-  // Subjects per year level: one real-time listener for any signed-in user (students read only).
-  const curriculumUid = firebaseAuthUser?.uid || '';
+  // Subjects per year level: one real-time listener for everyone (public program pages, Student
+  // Portal and admin); only curriculum managers can change it.
   useEffect(() => {
-    if (!curriculumUid) {
-      setCurriculumSubjects([]);
-      return;
-    }
     const unsub = onSnapshot(
       collection(db, 'curriculumSubjects'),
       (snap) => setCurriculumSubjects(snap.docs.map((d) => ({ ...(d.data() as CurriculumSubject), id: d.id }))),
       (err) => handleFirestoreError(err, OperationType.LIST, 'curriculumSubjects')
     );
     return () => unsub();
-  }, [curriculumUid]);
+  }, []);
 
   const curriculumSlug = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
 

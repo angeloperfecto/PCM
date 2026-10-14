@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { usePCM } from '@/lib/store';
+import { groupByYearAndSemester, subjectsForProgram } from '@/lib/curriculum';
 import {
   X,
   GraduationCap,
@@ -15,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export const ProgramDetailModal: React.FC = () => {
-  const { selectedProgram, setSelectedProgram, navigateTo } = usePCM();
+  const { selectedProgram, setSelectedProgram, navigateTo, curriculumSubjects } = usePCM();
 
   if (!selectedProgram) return null;
 
@@ -25,7 +26,10 @@ export const ProgramDetailModal: React.FC = () => {
 
   const creditsDisplay = selectedProgram.credits || selectedProgram.totalUnits || selectedProgram.units || 0;
   const descriptionDisplay = selectedProgram.fullDescription || selectedProgram.description || selectedProgram.shortDescription || '';
-  const curriculumList = selectedProgram.curriculum || [];
+  // The program's curriculum from Enrollment & Records → Subjects per Year Level (live). The list
+  // stored on the program is only shown until that curriculum has been set up.
+  const curriculumGroups = groupByYearAndSemester(subjectsForProgram(curriculumSubjects, selectedProgram).filter((s) => s.status !== 'Inactive'));
+  const curriculumList = curriculumGroups.length > 0 ? [] : selectedProgram.curriculum || [];
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200">
@@ -93,7 +97,51 @@ export const ProgramDetailModal: React.FC = () => {
             </div>
           )}
 
-          {/* Core Curriculum Modules */}
+          {/* Core curriculum: Subjects per Year Level */}
+          {curriculumGroups.length > 0 && (
+            <div className="space-y-3" data-testid="program-curriculum">
+              <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
+                <GraduationCap className="w-4 h-4 text-[#588B76]" />
+                <span>Core Curriculum & Course Highlights</span>
+              </h4>
+              <div className="space-y-3 text-xs">
+                {curriculumGroups.map((g) => (
+                  <div key={g.yearLevel} className="bg-slate-50 p-3 rounded-lg border border-slate-200 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-[#588B76]">{g.yearLevel || 'Curriculum'}</span>
+                      <span className="text-[10px] font-mono text-slate-500">{g.units} units</span>
+                    </div>
+                    {g.semesters.map((sem) => (
+                      <div key={sem.semester} className="space-y-1.5">
+                        {(g.semesters.length > 1 || sem.semester) && (
+                          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                            {sem.semester || 'Whole year'} · {sem.units} units
+                          </span>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          {sem.subjects.map((c) => (
+                            <div key={c.id} className="flex items-start gap-2 bg-white p-2 rounded border border-slate-200/80">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-[#588B76] shrink-0 mt-0.5" />
+                              <div>
+                                <strong className="text-[#18392B] block">
+                                  {c.code}: {c.title}
+                                </strong>
+                                <span className="text-[10px] text-slate-500 font-mono">
+                                  {c.units} Units{c.prerequisites ? ` · Prerequisite: ${c.prerequisites}` : ''}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Curriculum stored on the program (until Subjects per Year Level is set up) */}
           {curriculumList.length > 0 && (
             <div className="space-y-3">
               <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
