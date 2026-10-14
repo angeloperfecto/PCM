@@ -15,7 +15,7 @@ import {
 } from '@/lib/types';
 import {
   calculateGPAFromGrades,
-  getDefaultStudentRequirements,
+  studentRequirementsView,
 } from '@/lib/studentDefaults';
 import {
   X,
@@ -239,10 +239,8 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
     }
   };
 
-  // Requirements list with fallback
-  const requirementsList = student.requirements && student.requirements.length > 0
-    ? student.requirements
-    : getDefaultStudentRequirements();
+  // Admission documents verified in Admissions, then the student's own requirement items.
+  const requirementsList = studentRequirementsView(student);
 
   // Subject history list
   const subjectsList = student.subjectHistory || [];

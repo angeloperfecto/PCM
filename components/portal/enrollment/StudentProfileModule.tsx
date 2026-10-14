@@ -38,7 +38,7 @@ import { EditStudentInfoForm } from './EditStudentInfoForm';
 import { accountSummary, ledgerPayments, parseTerm } from '@/lib/studentLedger';
 import { StudentProfile, StudentRequirementItem } from '@/lib/types';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
-import { getDefaultStudentRequirements, calculateGPAFromGrades } from '@/lib/studentDefaults';
+import { studentRequirementsView, calculateGPAFromGrades } from '@/lib/studentDefaults';
 import { uploadStudentFile } from '@/lib/storageService';
 import { isValidImageSrc } from '@/lib/utils';
 
@@ -66,11 +66,8 @@ export const StudentProfileModule: React.FC = () => {
     setTimeout(() => setCopiedId(false), 2000);
   };
 
-  // Requirements list with defaults fallback
-  const requirementsList: StudentRequirementItem[] =
-    studentProfile.requirements && studentProfile.requirements.length > 0
-      ? studentProfile.requirements
-      : getDefaultStudentRequirements();
+  // Admission documents verified in Admissions, then the student's own requirement items.
+  const requirementsList: StudentRequirementItem[] = studentRequirementsView(studentProfile);
 
   // Document upload handler
   const handleFileUpload = async (reqId: string, file: File) => {
@@ -96,7 +93,8 @@ export const StudentProfileModule: React.FC = () => {
             }
           : r
       );
-      await updateStudentProfile(studentProfile.id, { requirements: updatedReqs });
+      // Admission documents are kept on the record separately; save only the student's own items.
+      await updateStudentProfile(studentProfile.id, { requirements: updatedReqs.filter((r) => !r.id.startsWith('adm-')) });
       addToast('success', 'Document Uploaded', `${file.name} successfully submitted for review.`);
     } catch (err: any) {
       addToast('error', 'Upload Failed', err.message || 'Could not upload file.');
