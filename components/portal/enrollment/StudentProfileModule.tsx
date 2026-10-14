@@ -34,6 +34,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { StudentProfile, StudentRequirementItem } from '@/lib/types';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 import { StudentRegistrationWizard } from '@/components/enrollment/StudentRegistrationWizard';
@@ -1030,108 +1031,19 @@ export const StudentProfileModule: React.FC = () => {
       {/* ========================================================================= */}
       {activeSubView === 'cor' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="font-serif text-lg font-bold text-[#18392B]">
-              Official Certificate of Registration (COR)
-            </h3>
-            <button
-              onClick={() => window.print()}
-              className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition cursor-pointer shadow-md"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Print Official COR</span>
-            </button>
-          </div>
-
-          <div className="bg-white border-2 border-slate-300 rounded-2xl p-8 max-w-3xl mx-auto shadow-md space-y-6 font-serif">
-            <div className="text-center border-b-2 border-slate-900 pb-4">
-              <h2 className="text-xl font-bold tracking-tight text-slate-900 uppercase">
-                Philippine College of Ministry
-              </h2>
-              <p className="text-xs font-sans text-slate-600">
-                Seminary Hill, Baguio City, Benguet, Philippines • Office of the Registrar
-              </p>
-              <h3 className="text-sm font-sans font-bold uppercase tracking-widest text-[#18392B] mt-2">
-                Official Certificate of Registration (COR)
-              </h3>
-              <p className="text-[11px] font-sans font-mono text-slate-500">
-                Academic Year 2026–2027 • 1st Semester
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 text-xs font-sans border-b border-slate-200 pb-4">
-              <div>
-                <span className="text-slate-500 block text-[10px]">Student Name:</span>
-                <strong className="text-slate-900 text-sm">{studentProfile.fullName}</strong>
-                <span className="text-slate-500 block text-[10px] mt-2">Degree Program:</span>
-                <strong className="text-slate-800">{studentProfile.degreeProgram || studentProfile.program}</strong>
-              </div>
-              <div className="text-right">
-                <span className="text-slate-500 block text-[10px]">Permanent Student ID:</span>
-                <strong className="font-mono text-slate-900 text-sm">{studentProfile.studentId}</strong>
-                <span className="text-slate-500 block text-[10px] mt-2">Year Level & Section:</span>
-                <strong className="text-slate-800">{studentProfile.yearLevel} • {studentProfile.section || 'Section A'}</strong>
-              </div>
-            </div>
-
-            <div className="space-y-2 font-sans">
-              <strong className="text-xs text-slate-900 uppercase tracking-wider block">
-                Officially Enrolled Courses
-              </strong>
-              <table className="w-full text-left text-xs border border-slate-300">
-                <thead className="bg-slate-100 border-b border-slate-300 font-bold">
-                  <tr>
-                    <th className="p-2">Course Code</th>
-                    <th className="p-2">Course Title</th>
-                    <th className="p-2 text-center">Units</th>
-                    <th className="p-2">Schedule</th>
-                    <th className="p-2">Room</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200">
-                  {(studentProfile.courses || []).map((c, i) => (
-                    <tr key={i}>
-                      <td className="p-2 font-mono font-bold">{c.code}</td>
-                      <td className="p-2">{c.title}</td>
-                      <td className="p-2 text-center font-mono">{c.units}u</td>
-                      <td className="p-2 text-slate-600">{c.schedule || 'TBA'}</td>
-                      <td className="p-2 text-slate-600">{c.room || 'Room 201'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="border border-slate-300 rounded-lg p-3 font-sans text-xs flex justify-between">
-              <div>
-                <span className="text-slate-500 block text-[10px]">Tuition Assessment</span>
-                <strong className="text-slate-900 font-mono">₱{totalTuition.toLocaleString()}</strong>
-              </div>
-              <div>
-                <span className="text-slate-500 block text-[10px]">Payments Credited</span>
-                <strong className="text-emerald-700 font-mono">₱{paidTuition.toLocaleString()}</strong>
-              </div>
-              <div className="text-right">
-                <span className="text-slate-500 block text-[10px]">Net Balance Due</span>
-                <strong className="text-amber-800 font-mono">₱{balanceTuition.toLocaleString()}</strong>
-              </div>
-            </div>
-
-            <div className="pt-10 grid grid-cols-2 gap-8 text-center font-sans text-xs">
-              <div>
-                <div className="border-b border-slate-900 w-48 mx-auto pb-1 font-bold">
-                  {studentProfile.assignedAdviser || 'Dr. Benjamin Villanueva'}
-                </div>
-                <span className="text-slate-500 text-[10px] block mt-1">Dean of Academic Affairs</span>
-              </div>
-              <div>
-                <div className="border-b border-slate-900 w-48 mx-auto pb-1 font-bold">
-                  Office of the Registrar
-                </div>
-                <span className="text-slate-500 text-[10px] block mt-1">College Registrar & Institutional Seal</span>
-              </div>
+          <div className="flex items-center justify-between gap-2">
+            <h3 className="font-serif text-lg font-bold text-[#18392B]">Official Certificate of Registration (COR)</h3>
+            <div className="flex justify-end gap-2 print:hidden">
+              <button
+                onClick={() => printCertificate()}
+                className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print COR</span>
+              </button>
             </div>
           </div>
+          <CertificateOfRegistration student={studentProfile} />
         </div>
       )}
 

@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { getSafeImageSrc } from '@/lib/utils';
 import {
   OnlineEnrollment,
@@ -1651,109 +1652,23 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       {/* MODAL 2: CERTIFICATE OF REGISTRATION (COR) */}
       {/* ========================================================================= */}
       {isCORModalOpen && corStudent && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-300 overflow-hidden max-h-[92vh] flex flex-col font-serif">
-            {/* COR Header */}
-            <div className="bg-slate-100 p-4 flex items-center justify-between border-b border-slate-200 font-sans">
-              <div className="flex items-center gap-2 text-xs font-bold text-slate-700">
-                <Printer className="w-4 h-4 text-[#588B76]" />
-                <span>Certificate of Registration (COR) • Official Document Viewer</span>
-              </div>
+        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4">
+          <div className="bg-slate-100 w-full max-w-[880px] rounded-2xl shadow-2xl border border-slate-300 max-h-[94vh] overflow-y-auto overflow-x-hidden p-3 sm:p-5 space-y-4">
+            <CertificateOfRegistration student={corStudent} />
+            <div className="flex justify-end gap-2 print:hidden">
               <button
                 onClick={() => setIsCORModalOpen(false)}
-                className="text-slate-500 hover:text-slate-800 cursor-pointer"
+                className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-100"
               >
-                <X className="w-5 h-5" />
+                Close
               </button>
-            </div>
-
-            {/* Printable Document Body */}
-            <div className="p-8 overflow-y-auto space-y-6 text-slate-900 bg-[#FAF9F6] flex-1">
-              <div className="text-center space-y-1 border-b-2 border-slate-900 pb-4">
-                <h3 className="font-serif text-xl font-bold uppercase tracking-widest text-[#18392B]">
-                  Philippine College of Ministry
-                </h3>
-                <p className="text-xs text-slate-600 font-sans">
-                  Office of the Academic Registrar • Baguio City, Philippines
-                </p>
-                <div className="text-xs font-sans font-bold uppercase tracking-widest text-slate-800 pt-1">
-                  OFFICIAL CERTIFICATE OF REGISTRATION (C.O.R.)
-                </div>
-                <div className="text-[11px] font-mono text-slate-600">
-                  Academic Year 2026–2027 • 1st Semester
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 text-xs font-sans border-b border-slate-300 pb-4">
-                <div>
-                  <span className="text-slate-500 block">Student Name:</span>
-                  <strong className="text-sm font-serif">{corStudent.fullName || corStudent.name}</strong>
-                  <span className="text-slate-500 block mt-2">Degree Program:</span>
-                  <strong className="text-slate-800">{corStudent.degreeProgram || corStudent.program}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-500 block">Student ID Number:</span>
-                  <strong className="font-mono text-sm">{corStudent.studentId}</strong>
-                  <span className="text-slate-500 block mt-2">Year Level / Classification:</span>
-                  <strong className="text-slate-800">{corStudent.yearLevel} • {corStudent.academicStatus || 'Regular'}</strong>
-                </div>
-              </div>
-
-              {/* Course Matrix */}
-              <div className="space-y-2 font-sans">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-700">
-                  Officially Matriculated Courses
-                </span>
-                <table className="w-full text-left text-xs border border-slate-300">
-                  <thead className="bg-slate-200 font-bold text-slate-800">
-                    <tr>
-                      <th className="p-2 border-b border-slate-300">Course</th>
-                      <th className="p-2 border-b border-slate-300">Description</th>
-                      <th className="p-2 border-b border-slate-300 text-center">Units</th>
-                      <th className="p-2 border-b border-slate-300">Schedule</th>
-                      <th className="p-2 border-b border-slate-300">Room</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200">
-                    {((corStudent.courses && corStudent.courses.length > 0)
-                      ? corStudent.courses
-                      : academicSubjects.slice(0, 5)
-                    ).map((c, idx) => (
-                      <tr key={idx}>
-                        <td className="p-2 font-mono font-bold">{c.code}</td>
-                        <td className="p-2">{c.title}</td>
-                        <td className="p-2 font-mono font-bold text-center">{c.units}</td>
-                        <td className="p-2 text-slate-600">{c.schedule || 'MWF 8:00–9:30 AM'}</td>
-                        <td className="p-2 text-slate-600">{c.room || 'Room 201'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-
-              <div className="pt-8 grid grid-cols-2 gap-8 text-center text-xs font-sans">
-                <div className="border-t border-slate-400 pt-2">
-                  <strong>Dr. Jonathan Reyes</strong>
-                  <span className="block text-[10px] text-slate-500">Dean of Academics</span>
-                </div>
-                <div className="border-t border-slate-400 pt-2">
-                  <strong>Rev. Emmanuel Santos</strong>
-                  <span className="block text-[10px] text-slate-500">College Registrar</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="p-4 bg-slate-100 border-t border-slate-200 flex items-center justify-between font-sans text-xs">
-              <span className="text-slate-500 italic">Authentic institutional record with digital seal verification.</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => window.print()}
-                  className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Document</span>
-                </button>
-              </div>
+              <button
+                onClick={() => printCertificate()}
+                className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print COR</span>
+              </button>
             </div>
           </div>
         </div>
