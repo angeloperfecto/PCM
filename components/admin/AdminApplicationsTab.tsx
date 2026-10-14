@@ -880,7 +880,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({
               <RequirementsChecklist
                 mode="staff"
                 requirements={requirements}
-                readOnly={!canDecide || status === 'Enrolled'}
+                readOnly={!canDecide}
                 onReview={(req, verdict, remarks) => reviewRequirement(db, actor(), app as any, req, verdict, remarks)}
               />
             )}

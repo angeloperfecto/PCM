@@ -18,6 +18,7 @@ import {
   QrCode,
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { AdmissionDocumentsPanel, toStudentRequirementItems, useStudentAdmissionDocuments } from '@/components/enrollment/AdmissionDocumentsPanel';
 import { studentRequirementsView } from '@/lib/studentDefaults';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { OnlineEnrollment } from '@/lib/types';
@@ -54,7 +55,11 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
   );
 
   // The student's real checklist (admission requirements list), not sample documents.
-  const requiredDocuments = studentRequirementsView(studentProfile, admissionRequirementTemplates(enrollmentSystemConfig)).map((r) => ({
+  const admissionDocs = useStudentAdmissionDocuments(studentProfile);
+  const requiredDocuments = (admissionDocs.app
+    ? toStudentRequirementItems(admissionDocs.requirements)
+    : studentRequirementsView(studentProfile, admissionRequirementTemplates(enrollmentSystemConfig))
+  ).map((r) => ({
     name: r.name,
     desc: r.remarks || r.description || '',
     status: r.status,

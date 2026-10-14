@@ -237,7 +237,8 @@ export async function uploadRequirementFile(
   allRequirements: ApplicationRequirement[],
   file: File
 ): Promise<{ ok: boolean; message: string; newStatus?: WorkflowStatus }> {
-  if (!isOpenApplication(app.status)) {
+  // Enrolled students may still send missing or returned admission documents.
+  if (!isOpenApplication(app.status) && normalizeStatus(app.status) !== 'Enrolled') {
     return { ok: false, message: 'This application is closed, so documents can no longer be changed.' };
   }
   if (requirement.status === 'Verified') {
