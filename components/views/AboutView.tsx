@@ -120,12 +120,11 @@ export const AboutView: React.FC = () => {
               <div className="rounded-sm overflow-hidden shadow-md border border-slate-200 bg-white">
                 <div className="relative h-72 w-full bg-slate-800">
                   <Image
-                    src="https://images.unsplash.com/photo-1541829070764-84a7d30dd3f3?q=80&w=1000&auto=format&fit=crop"
-                    alt="PCM Lamtang Campus, Benguet"
+                    src="/images/pcm-lamtang-campus.jpg"
+                    alt="Aerial view of the PCM Lamtang Campus buildings in Puguis, La Trinidad, Benguet"
                     fill
                     className="object-cover"
                     sizes="(max-width: 1024px) 100vw, 50vw"
-                    referrerPolicy="no-referrer"
                   />
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60" />
                   <div className="absolute bottom-3 left-3 text-white">
