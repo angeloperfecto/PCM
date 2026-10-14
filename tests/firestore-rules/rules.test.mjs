@@ -409,6 +409,36 @@ await check('applicant cannot read staff notifications', false, () => getDocs(co
 await check('staff read staff notifications', true, () => getDocs(collection(approvedEditor, 'staffNotifications')));
 await check('anonymous cannot read uploaded document log', false, () => getDoc(doc(anon, 'uploadedDocuments/u1')));
 
+section('Balance payments are verified by payment staff');
+const report = (over = {}) => ({ id: 'x', studentRecordId: 'std-linked', studentId: '2026-PCM-0001', studentUid: 'stu1', studentName: 'Linked Student', amount: 1000, method: 'GCash', referenceNo: 'REF12345', paidOn: '2026-10-01', status: 'Submitted', submittedAt: 'now', ...over });
+await check('student reports a balance payment for own record', true, () => setDoc(doc(studentUser, 'studentPayments/sp-1'), report({ id: 'sp-1' })));
+await check('student reports a payment and notifies staff in one batch', true, () => {
+  const b = writeBatch(studentUser);
+  b.set(doc(studentUser, 'studentPayments/sp-2'), report({ id: 'sp-2', amount: 500 }));
+  b.set(doc(studentUser, 'staffNotifications/sp-2n'), { id: 'sp-2n', applicationId: 'std-linked', referenceNumber: '2026-PCM-0001', title: 'Balance payment submitted', message: 'x', createdByUid: 'stu1', read: false, createdAt: 'now' });
+  return b.commit();
+});
+await check('student reads own payment reports', true, () => getDocs(query(collection(studentUser, 'studentPayments'), where('studentUid', '==', 'stu1'))));
+await check('student cannot report a payment as Verified', false, () => setDoc(doc(studentUser, 'studentPayments/sp-v'), report({ id: 'sp-v', status: 'Verified' })));
+await check('student cannot report a payment with reviewer fields', false, () => setDoc(doc(studentUser, 'studentPayments/sp-r'), report({ id: 'sp-r', reviewedBy: 'me' })));
+await check('student cannot report a zero amount', false, () => setDoc(doc(studentUser, 'studentPayments/sp-0'), report({ id: 'sp-0', amount: 0 })));
+await check("student cannot report against someone else's record", false, () => setDoc(doc(studentUser, 'studentPayments/sp-o'), report({ id: 'sp-o', studentRecordId: 'std-taken' })));
+await check('student cannot report in another uid', false, () => setDoc(doc(studentUser, 'studentPayments/sp-u'), report({ id: 'sp-u', studentUid: 'someoneElse' })));
+await check('student cannot verify own payment', false, () => updateDoc(doc(studentUser, 'studentPayments/sp-1'), { status: 'Verified', reviewedBy: 'me', reviewedAt: 'now', remarks: '' }));
+await check("other student cannot read someone's payment", false, () => getDoc(doc(as('other', 'other@gmail.com'), 'studentPayments/sp-1')));
+await check('Editor cannot verify payments', false, () => updateDoc(doc(approvedEditor, 'studentPayments/sp-1'), { status: 'Verified', reviewedBy: 'ed', reviewedAt: 'now', remarks: '' }));
+await check('payment staff cannot change the amount when verifying', false, () => updateDoc(doc(finance, 'studentPayments/sp-1'), { status: 'Verified', amount: 5, reviewedBy: 'fin', reviewedAt: 'now', remarks: '' }));
+await check('Finance verifies a payment and posts it to the student record', true, () => {
+  const b = writeBatch(finance);
+  b.update(doc(finance, 'studentPayments/sp-1'), { status: 'Verified', reviewedBy: 'Finance', reviewedAt: 'now', remarks: '' });
+  b.update(doc(finance, 'studentProfiles/std-linked'), { tuitionPaid: 1000, tuitionBalance: 9000, paymentStatus: 'Partially Paid', updatedAt: 'now' });
+  b.set(doc(finance, 'studentNotifications/sp-1n'), { id: 'sp-1n', recipientUid: 'stu1', title: 'Payment verified', read: false });
+  return b.commit();
+});
+await check('a reviewed payment cannot be reviewed again', false, () => updateDoc(doc(finance, 'studentPayments/sp-1'), { status: 'Rejected', reviewedBy: 'Finance', reviewedAt: 'now', remarks: 'x' }));
+await check('Registrar rejects a payment with remarks', true, () => updateDoc(doc(registrar, 'studentPayments/sp-2'), { status: 'Rejected', reviewedBy: 'Registrar', reviewedAt: 'now', remarks: 'Reference not found' }));
+await check('Finance lists all payment reports', true, () => getDocs(collection(finance, 'studentPayments')));
+
 section('Batch writes stay within Firestore limits');
 await check('Editor commits a 40-document batch', true, () => {
   const b = writeBatch(editor);

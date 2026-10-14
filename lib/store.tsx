@@ -46,6 +46,7 @@ import {
   AcademicSubject,
   PreEnlistmentRecord,
   AddDropRequest,
+  StudentBalancePayment,
   AddDropAction,
   AddDropStatus,
   FeeStructureItem,
@@ -563,6 +564,8 @@ interface PCMContextType {
 
   // Adding & Dropping Module
   addDropRequests: AddDropRequest[];
+  /** Balance payments reported by students (admins: all; students: their own). */
+  studentPayments: StudentBalancePayment[];
   setAddDropRequests: React.Dispatch<React.SetStateAction<AddDropRequest[]>>;
   submitAddDropRequest: (req: Omit<AddDropRequest, 'id' | 'createdAt' | 'status' | 'dateSubmitted'>) => Promise<AddDropRequest>;
   reviewAddDropRequest: (id: string, status: AddDropStatus, adminRemarks?: string) => Promise<boolean>;
@@ -950,6 +953,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [academicSubjects, setAcademicSubjects] = useState<AcademicSubject[]>([]);
   const [preEnlistments, setPreEnlistments] = useState<PreEnlistmentRecord[]>([]);
   const [addDropRequests, setAddDropRequests] = useState<AddDropRequest[]>([]);
+  const [studentPayments, setStudentPayments] = useState<StudentBalancePayment[]>([]);
   const [feeStructure, setFeeStructure] = useState<FeeStructureItem[]>([]);
 
   // Academic Periods, Class Sections, Instructors, and Enrollment Policy Config
@@ -6583,13 +6587,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
       updatedBy: currentAdminUser?.name || 'Administrator',
     });
+    if (!(await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), sanitized, { merge: true }))) return false;
     setEnrollmentSystemConfig(sanitized);
     setCachedData('enrollmentSystemConfig', sanitized);
-    try {
-      await safeSetDoc(doc(db, 'enrollmentSettings', 'global-enrollment-settings'), sanitized, { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
     logActivity('SETTINGS', 'Enrollment Policy', 'global-settings', 'Enrollment Policies', 'Updated institutional enrollment policies and thresholds.');
     addToast('success', 'Settings Saved', 'Enrollment policies updated.');
     return true;
@@ -6713,6 +6713,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAddDropRequests((prev) => (areEntitiesEqual(prev, list) ? prev : list));
         setCachedData('addDropRequests', list);
       });
+      listen<StudentBalancePayment>('studentPayments', collection(db, 'studentPayments'), setStudentPayments);
       return () => unsubs.forEach((u) => u());
     }
 
@@ -6730,6 +6731,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setStudentNotifications([]);
     setPreEnlistments([]);
     setAddDropRequests([]);
+    setStudentPayments([]);
 
     if (!authUid) {
       setIsStudentLoggedIn(false);
@@ -6789,6 +6791,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     listen<OnlineEnrollment>('enrollments', query(collection(db, 'enrollments'), where('studentUid', '==', authUid)), setEnrollments);
     listen<PreEnlistmentRecord>('preEnlistments', query(collection(db, 'preEnlistments'), where('studentUid', '==', authUid)), setPreEnlistments);
     listen<AddDropRequest>('addDropRequests', query(collection(db, 'addDropRequests'), where('studentUid', '==', authUid)), setAddDropRequests);
+    listen<StudentBalancePayment>('studentPayments', query(collection(db, 'studentPayments'), where('studentUid', '==', authUid)), setStudentPayments);
     listen<StudentNotification>('studentNotifications', query(collection(db, 'studentNotifications'), where('recipientUid', '==', authUid)), setStudentNotifications);
 
     return () => unsubs.forEach((u) => u());
@@ -9310,6 +9313,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
         // Adding & Dropping Module
         addDropRequests,
+        studentPayments,
         setAddDropRequests,
         submitAddDropRequest,
         reviewAddDropRequest,

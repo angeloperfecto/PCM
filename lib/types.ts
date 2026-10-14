@@ -698,8 +698,49 @@ export interface EnrollmentSystemConfig {
   defaultRegistrationFee: number;
   eligibilityRules?: string;
   requiredDocumentsList?: string[];
+  /** Where and how students pay, shown at every payment step. */
+  paymentInstructions?: PaymentInstructions;
+  /** Default downpayment (percent of the assessment) required before enrollment. */
+  downpaymentPercent?: number;
   updatedAt?: string;
   updatedBy?: string;
+}
+
+export interface PaymentBankAccount {
+  bank: string;
+  accountName: string;
+  accountNumber: string;
+  branch?: string;
+}
+
+export interface PaymentInstructions {
+  gcashName?: string;
+  gcashNumber?: string;
+  bankAccounts?: PaymentBankAccount[];
+  cashierLocation?: string;
+  cashierHours?: string;
+  notes?: string;
+}
+
+// A payment a student reports against their balance after enrollment (studentPayments/{id}).
+export interface StudentBalancePayment {
+  id: string;
+  studentRecordId: string;
+  studentId: string;
+  studentUid: string;
+  studentName: string;
+  amount: number;
+  method: string;
+  referenceNo: string;
+  paidOn: string;
+  term?: string;
+  proofDataUrl?: string;
+  proofFileName?: string;
+  status: 'Submitted' | 'Verified' | 'Rejected';
+  submittedAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  remarks?: string;
 }
 
 export type EnrollmentAdminSubTab =

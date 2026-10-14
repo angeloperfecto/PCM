@@ -511,6 +511,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   onOpenEnrollment,
 }) => {
   const { requirements, history, payments, loading } = useApplicationDetails(app.id);
+  const { enrollmentSystemConfig: paymentConfig } = usePCM();
   const [editingDetails, setEditingDetails] = useState(false);
   const [details, setDetails] = useState<Record<string, string>>(() =>
     Object.fromEntries(EDITABLE_APPLICANT_FIELDS.map((f) => [f.key, String((app as any)[f.key] ?? (f.key === 'programName' ? app.program ?? '' : ''))]))
@@ -896,6 +897,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({
             // Re-initialise the draft assessment when the student's registration arrives or changes.
             key={(app as any).registration?.submittedAt || 'no-registration'}
             defaultUnits={(app as any).registration?.totalUnits}
+            downpaymentPercent={paymentConfig?.downpaymentPercent}
             status={app.status}
             assessment={app.assessment}
             paymentStatus={app.paymentStatus}

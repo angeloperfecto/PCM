@@ -67,7 +67,6 @@ export const PortalView: React.FC = () => {
     signOutUser,
     studentLogout,
     addPracticumEntry,
-    makeTuitionPayment,
     enrollments,
     currentEnrollmentDraft,
     saveEnrollmentDraft,
@@ -112,11 +111,6 @@ export const PortalView: React.FC = () => {
   const [practicumHours, setPracticumHours] = useState(4);
   const [practicumSupervisor, setPracticumSupervisor] = useState('');
   const [practicumDescription, setPracticumDescription] = useState('');
-
-  // Payment form state
-  const [paymentAmount, setPaymentAmount] = useState(5000);
-  const [paymentMethod, setPaymentMethod] = useState('GCash');
-  const [paymentRef, setPaymentRef] = useState('');
 
   // Document upload modal state
   const [isDocModalOpen, setIsDocModalOpen] = useState(false);
@@ -201,14 +195,6 @@ export const PortalView: React.FC = () => {
     setPracticumLocation('');
     setPracticumSupervisor('');
     setPracticumDescription('');
-  };
-
-  // Payment submission
-  const handlePayment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (paymentAmount <= 0) return;
-    makeTuitionPayment(Number(paymentAmount), paymentMethod, paymentRef);
-    setPaymentRef('');
   };
 
   // Document upload handler
@@ -719,94 +705,8 @@ export const PortalView: React.FC = () => {
         )}
 
         {/* TAB 5: TUITION & FINANCIAL BILLING */}
-        {activeTab === 'financial' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-[#18392B] text-white p-6 rounded-xl border border-[#588B76]/40 space-y-2">
-                <span className="text-xs font-mono text-[#85AA9B] uppercase">Total Assessed Tuition</span>
-                <div className="font-serif text-3xl font-extrabold text-white">
-                  ₱{(studentProfile.tuitionTotal || 17800).toLocaleString('en-PH')}
-                </div>
-                <span className="text-xs text-slate-400 block">AY 2026–2027 (18 Units Total)</span>
-              </div>
-
-              <div className="bg-emerald-900 text-white p-6 rounded-xl border border-emerald-500/40 space-y-2">
-                <span className="text-xs font-mono text-emerald-300 uppercase">Total Paid to Date</span>
-                <div className="font-serif text-3xl font-extrabold text-white">
-                  ₱{(studentProfile.tuitionPaid || 0).toLocaleString('en-PH')}
-                </div>
-                <span className="text-xs text-emerald-200 block">Verified Official Receipts</span>
-              </div>
-
-              <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-2">
-                <span className="text-xs font-mono text-slate-500 uppercase">Outstanding Balance</span>
-                <div className={`font-serif text-3xl font-extrabold ${remainingBalance > 0 ? 'text-amber-700' : 'text-emerald-700'}`}>
-                  ₱{remainingBalance.toLocaleString('en-PH')}
-                </div>
-                <span className="text-xs text-slate-500 block">
-                  {remainingBalance === 0 ? 'Account Cleared & In Good Standing' : 'Payable prior to Term Finals'}
-                </span>
-              </div>
-            </div>
-
-            {/* Payment Portal */}
-            <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm space-y-4">
-              <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-[#588B76]" />
-                <span>Submit Online Tuition Installment Payment</span>
-              </h4>
-              <form onSubmit={handlePayment} className="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
-                <div className="space-y-1">
-                  <label className="text-slate-600 font-semibold">Payment Amount (PHP)</label>
-                  <input
-                    type="number"
-                    min="1000"
-                    max={remainingBalance || 50000}
-                    value={paymentAmount}
-                    onChange={(e) => setPaymentAmount(Number(e.target.value))}
-                    className="p-2.5 rounded border border-slate-300 w-full font-mono font-bold"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-slate-600 font-semibold">Payment Channel</label>
-                  <select
-                    value={paymentMethod}
-                    onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="p-2.5 rounded border border-slate-300 w-full bg-white"
-                  >
-                    <option value="GCash">GCash (0917-888-PCM1)</option>
-                    <option value="Maya">Maya (0918-999-PCM2)</option>
-                    <option value="Bank Transfer (BDO)">BDO (Acct # 0012-3456-7890)</option>
-                    <option value="Bank Transfer (BPI)">BPI (Acct # 9876-5432-10)</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-slate-600 font-semibold">Transaction Reference #</label>
-                  <input
-                    type="text"
-                    required
-                    value={paymentRef}
-                    onChange={(e) => setPaymentRef(e.target.value)}
-                    placeholder="e.g. GC-9821384"
-                    className="p-2.5 rounded border border-slate-300 w-full font-mono"
-                  />
-                </div>
-
-                <div className="flex items-end">
-                  <button
-                    type="submit"
-                    disabled={remainingBalance === 0}
-                    className="w-full bg-[#18392B] hover:bg-[#588B76] hover:text-[#18392B] text-white font-bold py-2.5 rounded transition uppercase cursor-pointer disabled:opacity-50"
-                  >
-                    Submit Payment
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
+        {/* Tuition & Billing: the same statement of account and payment reporting as Amount Due */}
+        {activeTab === 'financial' && <AmountDueModule />}
 
         {/* TAB 6: PRACTICUM TRACKER */}
         {activeTab === 'practicum' && (
