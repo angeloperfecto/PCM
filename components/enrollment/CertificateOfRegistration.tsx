@@ -212,6 +212,12 @@ export const CertificateOfRegistration: React.FC<{ student: StudentProfile; id?:
 
 // Prints only the certificate, in a separate window that carries the site's styles.
 export function printCertificate(id = 'pcm-cor-document') {
+  printDocument(id, 'Certificate of Registration');
+}
+
+// Prints one element (an official document) in its own window with the site's styles, so the
+// printout contains only that document.
+export function printDocument(id: string, title: string) {
   const el = document.getElementById(id);
   if (!el) return;
   const w = window.open('', '_blank', 'width=900,height=1100');
@@ -223,12 +229,12 @@ export function printCertificate(id = 'pcm-cor-document') {
     .map((n) => n.outerHTML)
     .join('\n');
   w.document.open();
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Certificate of Registration</title>${styles}
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${styles}
 <style>
   @page { size: A4; margin: 10mm; }
   html, body { background: #fff; margin: 0; }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; padding: 12px; }
-  .cor-sheet { box-shadow: none !important; max-width: 100% !important; }
+  .cor-sheet { box-shadow: none !important; max-width: 100% !important; border: 0 !important; }
   @media print { body { padding: 0; } }
 </style></head><body>${el.outerHTML}</body></html>`);
   w.document.close();

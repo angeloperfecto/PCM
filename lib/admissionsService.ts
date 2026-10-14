@@ -1093,6 +1093,10 @@ export async function finalizeEnrollment(
     verifiedAdmissionDocuments: verifiedDocs,
     // Fees and verified payments from the assessment and payment steps.
     tuitionTotal: Number(app.assessment?.total) || 0,
+    // The Registrar's itemized assessment, shown on the assessment slip and COR.
+    termAssessment: Number(app.assessment?.total) || 0,
+    previousBalance: 0,
+    termAssessmentLines: (app.assessment?.items || []).map((l: { name: string; amount: number }) => ({ name: l.name, amount: Number(l.amount) || 0 })),
     tuitionPaid: verifiedPaymentTotal(payments),
     tuitionBalance: Math.max(0, (Number(app.assessment?.total) || 0) - verifiedPaymentTotal(payments)),
     paymentStatus:

@@ -181,7 +181,7 @@ import {
 import { firebaseConfig } from './firebaseConfig';
 import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, requirementTemplates } from './enrollmentWorkflow';
 import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflow';
-import { termFees, accountSummary, parseTerm } from './studentLedger';
+import { termFees, accountSummary, parseTerm, officialAssessmentLines, applyOfficialLines } from './studentLedger';
 import { submitAdmissionApplication, transitionApplication } from './admissionsService';
 
 export interface ToastNotification {
@@ -5447,6 +5447,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       courses: enrolledCourses,
       currentSemester: term,
       termAssessment: fees.total,
+      termAssessmentLines: fees.lines,
       previousBalance,
       tuitionTotal,
       tuitionPaid,
@@ -5784,12 +5785,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Re-assess this term for the new unit load (Fee Structure) and adjust the running totals.
       const newUnits = updatedCourses.filter((c) => c.status !== 'Dropped').reduce((sum, c) => sum + (c.units || 0), 0);
       const before = accountSummary(targetStudent as any);
-      const newTermFees = termFees(newUnits, feeStructure, enrollmentSystemConfig).total;
+      const newTerm = termFees(newUnits, feeStructure, enrollmentSystemConfig);
+      const newTermFees = newTerm.total;
       const newTuitionTotal = Math.max(0, Math.round((before.totalCharges - before.termAssessment + newTermFees) * 100) / 100);
       const newBalance = Math.max(0, Math.round((newTuitionTotal - before.totalPaid) * 100) / 100);
       const profileFields = {
         courses: updatedCourses,
         termAssessment: newTermFees,
+        termAssessmentLines: newTerm.lines,
         previousBalance: before.previousBalance,
         tuitionTotal: newTuitionTotal,
         tuitionBalance: newBalance,
@@ -5936,7 +5939,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         paymentStatus = 'Unpaid';
       }
 
-      return {
+      const computed: StudentAssessment = {
         id: `asmt-${activeStudent.studentId || 'std'}-${(term.academicYear || '').replace(/\D/g, '')}-${term.semester || 'term'}`,
         studentId: activeStudent.studentId,
         academicYear: term.academicYear,
@@ -5962,9 +5965,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         dueDate: '',
         updatedAt: new Date().toISOString(),
       };
+      // The Registrar's itemized assessment, when known, replaces the fee-schedule estimate.
+      const official = hasOfficial ? officialAssessmentLines(activeStudent, applications) : null;
+      return official ? applyOfficialLines(computed, official) : computed;
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [students, studentProfile, feeStructure, isStudentLoggedIn]
+    [students, studentProfile, feeStructure, isStudentLoggedIn, applications]
   );
 
   // Student Document Vault & Verification

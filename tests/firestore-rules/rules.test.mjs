@@ -392,6 +392,7 @@ await check('student cannot change own program', false, () => updateDoc(doc(stud
 await check('student cannot mark self Enrolled', false, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { enrollmentStatus: 'Approved' }));
 await check('student cannot change own term assessment', false, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { termAssessment: 0 }));
 await check('student cannot change own previous balance', false, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { previousBalance: 0 }));
+await check('student cannot change own assessment lines', false, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { termAssessmentLines: [] }));
 await check('student submits a term enrollment with only status fields', true, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { enrollmentStatus: 'Submitted', currentSemester: '2nd Semester, AY 2026-2027', updatedAt: 'now' }));
 await check('student submits a semester enrollment (status Submitted)', true, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { enrollmentStatus: 'Submitted', currentSemester: '2nd Semester, AY 2026-2027' }));
 await check('legacy student links record by verified email', true, () => updateDoc(doc(legacyOwner, 'studentProfiles/std-legacy'), { authUid: 'leg1', linkedAt: 'now' }));
