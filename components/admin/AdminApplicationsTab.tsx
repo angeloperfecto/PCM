@@ -215,12 +215,15 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
-        <div>
-          <h2 className="flex items-center gap-2 font-serif text-2xl font-bold text-[#18392B]">
-            <FileCheck className="h-6 w-6 text-[#588B76]" /> Admissions & Enrollment
-          </h2>
-          <p className="text-xs text-slate-500">From application to official enrollment. Click a stage to filter.</p>
+      <div className="flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-xs sm:flex-row sm:items-center">
+        <div className="flex items-center gap-3.5">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#18392B] text-emerald-300 shadow-md">
+            <FileCheck className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="font-serif text-xl font-bold text-[#18392B] sm:text-2xl">Admissions Review</h2>
+            <p className="text-xs text-slate-500">Applications from submission to official enrollment. Select a stage or card to filter the list.</p>
+          </div>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={exportApplications} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
@@ -243,40 +246,102 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
         </div>
       )}
 
-      {/* Stage counters */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7">
-        <button
-          type="button"
-          onClick={() => setStatusFilter('action')}
-          className={`rounded-xl border p-3 text-left transition ${statusFilter === 'action' ? 'border-amber-400 bg-amber-50' : 'border-slate-200 bg-white hover:border-amber-300'}`}
-        >
-          <span className="block text-[10px] font-bold uppercase text-amber-700">Needs action</span>
-          <span className="text-xl font-bold text-slate-900">{applications.filter(needsStaffAction).length}</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setStatusFilter(statusFilter === 'payments' ? 'all' : 'payments')}
-          className={`rounded-xl border p-3 text-left transition ${statusFilter === 'payments' ? 'border-yellow-400 bg-yellow-50' : 'border-slate-200 bg-white hover:border-yellow-300'}`}
-        >
-          <span className="block text-[10px] font-bold uppercase text-yellow-800">Payments to verify</span>
-          <span className="text-xl font-bold text-slate-900">{applications.filter(isPaymentToVerify).length}</span>
-        </button>
-        {ALL_STATUSES.map((s) => (
-          <button
-            key={s}
-            type="button"
-            onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}
-            className={`rounded-xl border p-3 text-left transition ${statusFilter === s ? 'border-[#588B76] bg-emerald-50' : 'border-slate-200 bg-white hover:border-[#588B76]/50'}`}
-          >
-            <span className="block truncate text-[10px] font-bold uppercase text-slate-500">{STATUS_LABELS[s]}</span>
-            <span className="text-xl font-bold text-slate-900">{counts[s] || 0}</span>
-          </button>
-        ))}
-      </div>
+      {/* Key figures */}
+      {(() => {
+        const closed = ['Enrolled', 'Rejected', 'Withdrawn', 'Deferred'];
+        const inProgress = applications.filter((a) => !closed.includes(normalizeStatus(a.status))).length;
+        const kpis: { key: string; label: string; value: number; hint: string; tone: string; active: boolean; onClick: () => void }[] = [
+          { key: 'action', label: 'Needs action', value: applications.filter(needsStaffAction).length, hint: 'Waiting for staff', tone: 'amber', active: statusFilter === 'action', onClick: () => setStatusFilter(statusFilter === 'action' ? 'all' : 'action') },
+          { key: 'payments', label: 'Payments to verify', value: applications.filter(isPaymentToVerify).length, hint: 'Reported by applicants', tone: 'yellow', active: statusFilter === 'payments', onClick: () => setStatusFilter(statusFilter === 'payments' ? 'all' : 'payments') },
+          { key: 'progress', label: 'In progress', value: inProgress, hint: 'Open applications', tone: 'sky', active: false, onClick: () => setStatusFilter('all') },
+          { key: 'Enrolled', label: 'Officially enrolled', value: counts['Enrolled'] || 0, hint: 'Student record created', tone: 'emerald', active: statusFilter === 'Enrolled', onClick: () => setStatusFilter(statusFilter === 'Enrolled' ? 'all' : ('Enrolled' as any)) },
+        ];
+        const toneCls: Record<string, string> = {
+          amber: 'text-amber-700 border-amber-300 bg-amber-50',
+          yellow: 'text-yellow-800 border-yellow-300 bg-yellow-50',
+          sky: 'text-sky-800 border-sky-300 bg-sky-50',
+          emerald: 'text-emerald-800 border-emerald-300 bg-emerald-50',
+        };
+        const pipeline: { label: string; statuses: string[] }[] = [
+          { label: 'Intake', statuses: ['Submitted', 'Under Review', 'Requirements Incomplete', 'For Correction'] },
+          { label: 'Admission decision', statuses: ['For Admission Approval', 'Admitted'] },
+          { label: 'Enrollment steps', statuses: ['For Registration', 'For Assessment', 'For Payment', 'For Enrollment'] },
+          { label: 'Outcome', statuses: ['Enrolled', 'Rejected', 'Deferred', 'Withdrawn'] },
+        ];
+        return (
+          <>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {kpis.map((k) => (
+                <button
+                  key={k.key}
+                  type="button"
+                  onClick={k.onClick}
+                  aria-pressed={k.active}
+                  className={`rounded-2xl border bg-white p-4 text-left shadow-xs transition hover:shadow-sm ${k.active ? toneCls[k.tone] : 'border-slate-200'}`}
+                >
+                  <span className={`block text-[10px] font-bold uppercase tracking-wider ${toneCls[k.tone].split(' ')[0]}`}>{k.label}</span>
+                  <span className="mt-1 block font-serif text-3xl font-bold text-slate-900">{k.value}</span>
+                  <span className="text-[11px] text-slate-500">{k.hint}</span>
+                </button>
+              ))}
+            </div>
+
+            <section aria-label="Application pipeline" className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-[#18392B]">Pipeline by stage</h3>
+                {statusFilter !== 'all' && (
+                  <button type="button" onClick={() => setStatusFilter('all')} className="text-xs font-semibold text-[#18392B] underline">
+                    Show all
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {pipeline.map((g, gi) => (
+                  <div key={g.label}>
+                    <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">
+                      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-slate-100 text-[9px] text-slate-500">{gi + 1}</span>
+                      {g.label}
+                    </p>
+                    <ul className="space-y-1">
+                      {g.statuses
+                        .filter((st) => (ALL_STATUSES as string[]).includes(st))
+                        .map((st) => {
+                          const n = counts[st] || 0;
+                          const active = statusFilter === st;
+                          return (
+                            <li key={st}>
+                              <button
+                                type="button"
+                                onClick={() => setStatusFilter(active ? 'all' : (st as any))}
+                                aria-pressed={active}
+                                className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-xs transition ${
+                                  active ? 'bg-[#18392B] text-white' : n > 0 ? 'text-slate-800 hover:bg-slate-50' : 'text-slate-400 hover:bg-slate-50'
+                                }`}
+                              >
+                                <span className="truncate">{STATUS_LABELS[st as keyof typeof STATUS_LABELS] || st}</span>
+                                <span
+                                  className={`ml-2 min-w-[1.5rem] rounded-full px-1.5 text-center font-mono text-[11px] font-bold ${
+                                    active ? 'bg-white/20 text-white' : n > 0 ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-400'
+                                  }`}
+                                >
+                                  {n}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </section>
+          </>
+        );
+      })()}
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0 space-y-3">
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-xs sm:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <input
@@ -304,7 +369,25 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
             </select>
           </div>
 
-          <p className="text-xs text-slate-500">{filtered.length} application{filtered.length === 1 ? '' : 's'}</p>
+          <div className="flex items-center justify-between px-1">
+            <p className="text-xs font-semibold text-slate-600">
+              {filtered.length} application{filtered.length === 1 ? '' : 's'}
+              {statusFilter !== 'all' || programFilter !== 'all' || search ? ' (filtered)' : ''}
+            </p>
+            {(statusFilter !== 'all' || programFilter !== 'all' || search) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter('all');
+                  setProgramFilter('all');
+                  setSearch('');
+                }}
+                className="text-xs font-semibold text-[#18392B] underline"
+              >
+                Clear filters
+              </button>
+            )}
+          </div>
 
           {filtered.length === 0 ? (
             <div className="rounded-xl border border-dashed border-slate-300 bg-white p-8 text-center text-sm text-slate-500">No applications match these filters.</div>
@@ -315,13 +398,28 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
                   <button
                     type="button"
                     onClick={() => setSelectedId(a.id)}
-                    className="flex min-w-0 flex-1 flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-[#588B76] sm:flex-row sm:items-center sm:justify-between"
+                    className="flex min-w-0 flex-1 flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-xs transition hover:border-[#588B76] hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="min-w-0">
-                      <p className={`truncate text-sm font-bold ${liveName(a) ? 'text-slate-900' : 'italic text-slate-400'}`}>{liveName(a) || 'Unnamed application'}</p>
-                      <p className="truncate text-[11px] text-slate-500">
-                        {[a.referenceNumber || `ID ${a.id}`, a.programName || a.program || 'No program', a.email || 'No email'].join(' · ')}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#18392B]/10 font-serif text-sm font-bold text-[#18392B]" aria-hidden="true">
+                        {(liveName(a) || '?')
+                          .split(/\s+/)
+                          .filter(Boolean)
+                          .slice(0, 2)
+                          .map((w: string) => w[0])
+                          .join('')
+                          .toUpperCase()}
+                      </span>
+                      <div className="min-w-0">
+                        <p className={`truncate text-sm font-bold ${liveName(a) ? 'text-slate-900' : 'italic text-slate-400'}`}>{liveName(a) || 'Unnamed application'}</p>
+                        <p className="truncate text-[11px] text-slate-500">
+                          <span className="font-mono">{a.referenceNumber || `ID ${a.id}`}</span> · {a.programName || a.program || 'No program'}
+                        </p>
+                        <p className="truncate text-[11px] text-slate-400">
+                          {a.email || 'No email'}
+                          {a.submissionDate || a.createdAt ? ` · Submitted ${new Date(String(a.submissionDate || a.createdAt)).toLocaleDateString('en-PH', { month: 'short', day: 'numeric', year: 'numeric' })}` : ''}
+                        </p>
+                      </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
                       {normalizeStatus(a.status) === 'Enrolled' && a.studentId && (

@@ -187,6 +187,11 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
   // Academic term add/edit window (term null = new term)
   const [termModal, setTermModal] = useState<{ term: (typeof academicPeriods)[number] | null } | null>(null);
   const semesterOrder = (s: string) => (/^1st/i.test(s) ? 1 : /^2nd/i.test(s) ? 2 : /summer|mid/i.test(s) ? 3 : 4);
+  // The current term from Enrollment & Records → Academic Terms (falls back to an open term).
+  const currentPeriod =
+    academicPeriods.find((p) => p.isCurrent) || academicPeriods.find((p) => p.enrollmentStatus === 'Open' && p.status !== 'Archived') || null;
+  const fmtDate = (d?: string) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' }) : '');
+  const enrollmentOpen = currentPeriod?.enrollmentStatus === 'Open';
   const sortedAcademicPeriods = [...academicPeriods].sort(
     (a, b) => a.academicYear.localeCompare(b.academicYear) || semesterOrder(a.semester) - semesterOrder(b.semester) || a.semester.localeCompare(b.semester)
   );
@@ -397,12 +402,12 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
             <GraduationCap className="w-7 h-7" />
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
               <h2 className="font-serif text-xl sm:text-2xl font-bold text-[#18392B]">
                 PCM Enrollment & Academic Administration
               </h2>
-              <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                AY 2026–2027 Live
+              <span className={`whitespace-nowrap text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${currentPeriod ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                {currentPeriod ? `${currentPeriod.semester} · AY ${currentPeriod.academicYear}` : 'No current term'}
               </span>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
@@ -429,9 +434,9 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
         </div>
       </div>
 
-      {/* 2. SUB-NAVIGATION MODULE TABS */}
-      <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-1.5 text-xs font-bold">
-        {[
+      {/* 2. SUB-NAVIGATION: grouped modules */}
+      {(() => {
+        const navTabs: { id: string; label: string; icon: React.ElementType; count?: number; isPending?: boolean }[] = [
           { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
           { id: 'students', label: 'Student Directory', icon: Users, count: allStudents.length },
           { id: 'pre-enlistment', label: 'Pre-Enlistment', icon: FileCheck, count: pendingPreEnlistments, isPending: true },
@@ -445,38 +450,59 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           { id: 'fees', label: 'Tuition & Fee Policy', icon: PhilippinePeso },
           { id: 'payments', label: 'Student Payments', icon: PhilippinePeso, count: studentPayments.filter((p) => p.status === 'Submitted').length, isPending: true },
           { id: 'settings', label: 'System Governance', icon: Settings },
-        ].map((tab) => {
-          const Icon = tab.icon;
-          const isActive = activeSubTab === tab.id;
-          return (
-            <button
-              key={tab.id}
-              onClick={() => setActiveSubTab(tab.id as EnrollmentAdminSubTab)}
-              className={`px-3.5 py-2.5 rounded-xl flex items-center gap-2 whitespace-nowrap transition cursor-pointer shrink-0 ${
-                isActive
-                  ? 'bg-[#18392B] text-white shadow-xs'
-                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-              }`}
-            >
-              <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-[#588B76]'}`} />
-              <span>{tab.label}</span>
-              {tab.count !== undefined && (
-                <span
-                  className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono ${
-                    isActive
-                      ? 'bg-white/20 text-white'
-                      : tab.isPending && tab.count > 0
-                      ? 'bg-amber-500 text-white font-bold'
-                      : 'bg-slate-100 text-slate-700'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+        ];
+        const groups: { label: string; ids: string[] }[] = [
+          { label: 'Overview', ids: ['dashboard'] },
+          { label: 'Students', ids: ['students', 'pre-enlistment', 'enrollments', 'add-drop', 'payments'] },
+          { label: 'Academics', ids: ['academic-periods', 'subjects', 'curriculum', 'sections', 'instructors'] },
+          { label: 'Finance & Settings', ids: ['fees', 'settings'] },
+        ];
+        return (
+          <nav aria-label="Enrollment & Records sections" className="bg-white rounded-2xl border border-slate-200 shadow-xs p-3 sm:p-4">
+            <div className="divide-y divide-slate-100">
+              {groups.map((g) => (
+                <div key={g.label} className="flex min-w-0 flex-col gap-1.5 py-2 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:gap-4">
+                  <p className="shrink-0 text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400 sm:w-36">{g.label}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {g.ids
+                      .map((id) => navTabs.find((t) => t.id === id))
+                      .filter(Boolean)
+                      .map((tab) => {
+                        const t = tab!;
+                        const Icon = t.icon;
+                        const isActive = activeSubTab === t.id;
+                        const alert = t.isPending && (t.count || 0) > 0;
+                        return (
+                          <button
+                            key={t.id}
+                            type="button"
+                            aria-current={isActive ? 'page' : undefined}
+                            onClick={() => setActiveSubTab(t.id as EnrollmentAdminSubTab)}
+                            className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-xs font-semibold transition ${
+                              isActive ? 'bg-[#18392B] text-white shadow-sm' : 'bg-slate-50 text-slate-700 hover:bg-slate-100 hover:text-slate-900'
+                            }`}
+                          >
+                            <Icon className={`h-3.5 w-3.5 ${isActive ? 'text-emerald-300' : 'text-[#588B76]'}`} />
+                            <span>{t.label}</span>
+                            {t.count !== undefined && (
+                              <span
+                                className={`min-w-[1.25rem] rounded-full px-1.5 text-center font-mono text-[10px] ${
+                                  isActive ? 'bg-white/20 text-white' : alert ? 'bg-amber-500 font-bold text-white' : 'bg-slate-200/70 text-slate-600'
+                                }`}
+                              >
+                                {t.count}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </nav>
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* SUBVIEW 1: DASHBOARD OVERVIEW */}
@@ -488,11 +514,15 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
             <div className="space-y-1">
               <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-emerald-400/20 text-emerald-300 text-xs font-semibold">
                 <Sparkles className="w-3.5 h-3.5" />
-                <span>Current Term: 1st Semester, Academic Year 2026–2027</span>
+                <span>{currentPeriod ? `Current term: ${currentPeriod.semester}, Academic Year ${currentPeriod.academicYear}` : 'No current term set'}</span>
               </div>
-              <h3 className="font-serif text-2xl font-bold text-white">Enrollment Hub Operations Active</h3>
+              <h3 className="font-serif text-2xl font-bold text-white">{enrollmentOpen ? 'Enrollment is open' : 'Enrollment is closed'}</h3>
               <p className="text-xs text-slate-300 max-w-xl">
-                Online registration window closes on August 28, 2026. Review incoming pre-enlistments and verify student payment receipts promptly.
+                {!currentPeriod
+                  ? 'Set the current term in Academic Terms to open enrollment.'
+                  : enrollmentOpen
+                  ? `Online enrollment${currentPeriod.enrollmentEndDate ? ` closes on ${fmtDate(currentPeriod.enrollmentEndDate)}` : ' is open'}. Review incoming pre-enlistments and verify student payments promptly.`
+                  : `Online enrollment for this term is closed${currentPeriod.enrollmentStartDate ? ` (window: ${fmtDate(currentPeriod.enrollmentStartDate)} – ${fmtDate(currentPeriod.enrollmentEndDate)})` : ''}. Open it in Academic Terms when the next window starts.`}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
