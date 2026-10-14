@@ -128,6 +128,9 @@ export const TRACKER_STAGES: { status: WorkflowStatus; label: string }[] = [
 
 export const FINAL_STATUSES: WorkflowStatus[] = ['Enrolled', 'Rejected'];
 
+/** Admitted applicants use the Student Portal (admitted view) from these statuses until they are enrolled. */
+export const ADMITTED_PORTAL_STATUSES: WorkflowStatus[] = ['Admitted', 'For Assessment', 'For Payment', 'For Enrollment'];
+
 // Older applications used a different status vocabulary; map them onto the workflow.
 const LEGACY_STATUS_MAP: Record<string, WorkflowStatus> = {
   Draft: 'Submitted',
@@ -272,7 +275,7 @@ export function nextStepsFor(status: string | undefined, summary?: RequirementSu
       const outstanding = summary ? summary.missing.length + summary.rejected.length : 0;
       return outstanding > 0
         ? `Congratulations, you have been admitted! Please complete your remaining enrollment requirements (${outstanding} outstanding) below.`
-        : 'Congratulations, you have been admitted! The Registrar is verifying your documents before your enrollment assessment.';
+        : 'Congratulations, you have been admitted! You can now sign in to the MyPCM Student Portal to follow your remaining enrollment steps. The Registrar is verifying your documents before your enrollment assessment.';
     }
     case 'For Assessment':
       return 'Your requirements are verified. The Registrar is preparing your enrollment assessment (fees). You will be notified when it is ready.';
