@@ -9,6 +9,8 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  // Absolute base for the link-preview image URLs below.
+  metadataBase: new URL('https://www.pcm-baguio.com'),
   title: 'PCM — Philippine College of Ministry | Equipping Servants for Kingdom Impact',
   description: 'Philippine College of Ministry provides Christ-centered theological and ministry education designed to equip faithful servants, ministry leaders, and Christian workers for Kingdom impact in Lamtang, Benguet.',
   keywords: [
@@ -39,11 +41,15 @@ export const metadata: Metadata = {
     type: 'website',
     siteName: 'Philippine College of Ministry',
     locale: 'en_PH',
+    url: '/',
+    // Link-preview thumbnail (Facebook, Messenger, Viber, etc.): the PCM seal.
+    images: [{ url: '/og-image.png', width: 1200, height: 630, alt: 'Philippine College of Ministry logo', type: 'image/png' }],
   },
   twitter: {
     card: 'summary_large_image',
     title: 'PCM — Philippine College of Ministry | Equipping Servants for Kingdom Impact',
     description: 'Equipping Servants. Transforming Lives. Advancing God\'s Kingdom. Faithful Christ-centered theological education in the Philippines.',
+    images: ['/og-image.png'],
   },
 };
 
