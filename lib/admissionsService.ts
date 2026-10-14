@@ -44,6 +44,7 @@ import {
   transitionBlocker,
   validateRegistration,
   validateRequirementFile,
+  missingRequirements
 } from './enrollmentWorkflow';
 
 export interface Actor {
@@ -429,6 +430,42 @@ export async function requestMissingRequirements(
 
 // Applications made before the document checklist existed have none; staff can create it so
 // the applicant can upload documents and the workflow checks apply.
+// Adds current admission requirements that an application's checklist is missing (for example,
+// documents added to the list after the applicant applied). Existing items are left untouched.
+export async function addMissingRequirements(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord,
+  existing: ApplicationRequirement[],
+  templates: RequirementTemplate[]
+): Promise<{ ok: boolean; message: string }> {
+  const missing = missingRequirements(templates, existing);
+  if (missing.length === 0) return { ok: false, message: 'The checklist already has every current requirement.' };
+  const batch = writeBatch(db);
+  missing.forEach((t, i) => {
+    batch.set(doc(db, 'applications', app.id, 'requirements', t.id), {
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      required: t.required,
+      status: 'Missing',
+      applicantUid: app.applicantUid || '',
+      order: existing.length + i,
+    });
+  });
+  batch.update(doc(db, 'applications', app.id), { updatedAt: now() });
+  addHistory(batch, db, app.id, {
+    status: normalizeStatus(app.status),
+    previousStatus: app.status,
+    actor: 'staff',
+    byName: staff.name,
+    byRole: staff.role,
+    note: `Added to document checklist: ${missing.map((m) => m.name).join(', ')}.`,
+  });
+  await batch.commit();
+  return { ok: true, message: `Added ${missing.length} document${missing.length === 1 ? '' : 's'} to the checklist.` };
+}
+
 export async function createRequirementChecklist(
   db: Firestore,
   staff: Actor,

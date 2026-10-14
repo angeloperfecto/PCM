@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { usePCM } from '@/lib/store';
+import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { PaymentGuide } from '@/components/enrollment/PaymentInstructions';
 import {
   FileText,
@@ -35,7 +36,10 @@ export const AdmissionsView: React.FC = () => {
     setRequestInfoModalOpen,
     activeSubSection,
     currentSubSection,
+    enrollmentSystemConfig,
   } = usePCM();
+  // Same list applicants are asked for in the application form and Admissions Review.
+  const admissionDocs = admissionRequirementTemplates(enrollmentSystemConfig);
 
   React.useEffect(() => {
     const sub = activeSubSection || currentSubSection;
@@ -249,17 +253,14 @@ export const AdmissionsView: React.FC = () => {
                 Required Verification Documents
               </h3>
               <ul className="space-y-2.5 text-xs text-slate-700">
-                {[
-                  'Original PSA / NSO Birth Certificate (and 2 photocopies)',
-                  'Form 138 (Report Card) or Official Transcript of Records (TOR) with S.O. number',
-                  'Certificate of Good Moral Character from previous school or institution',
-                  'Four (4) recent 2x2 colored ID pictures (white background with collar)',
-                  'Medical Clearance Certificate from a licensed physician',
-                  'Church Membership Certificate or Baptismal Record',
-                ].map((req, i) => (
-                  <li key={i} className="flex items-start gap-2">
+                {admissionDocs.map((req) => (
+                  <li key={req.id} className="flex items-start gap-2">
                     <CheckCircle2 className="w-4 h-4 text-[#588B76] shrink-0 mt-0.5" />
-                    <span>{req}</span>
+                    <span>
+                      <strong className="font-semibold text-slate-800">{req.name}</strong>
+                      {!req.required && <span className="ml-1 text-[10px] font-bold uppercase text-slate-400">Optional</span>}
+                      {req.description && <span className="block text-slate-500">{req.description}</span>}
+                    </span>
                   </li>
                 ))}
               </ul>

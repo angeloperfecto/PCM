@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase';
 import { deleteApplicationDraft, loadApplicationDraft, saveApplicationDraft } from '@/lib/admissionsService';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { admissionRequirementTemplates, sameRequirement } from '@/lib/enrollmentWorkflow';
 import { isValidImageSrc } from '@/lib/utils';
 import {
   StudentProfile,
@@ -16,7 +17,6 @@ import {
   calculateStudentAge,
   generateStudentId,
   generateApplicationNumber,
-  getDefaultStudentRequirements,
 } from '@/lib/studentDefaults';
 import { uploadStudentFile, formatFileSize } from '@/lib/storageService';
 import {
@@ -82,7 +82,11 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     addToast,
     logActivity,
     firebaseAuthUser,
+    enrollmentSystemConfig,
   } = usePCM();
+  // The admission requirements list (Enrollment & Records → System Governance).
+  const admissionTemplates = admissionRequirementTemplates(enrollmentSystemConfig);
+  const templatesKey = admissionTemplates.map((t) => t.id).join('|');
 
   const fileInputId = useId();
 
@@ -260,9 +264,14 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   });
 
   // Step 7: Requirements List with live upload attachments
-  const [requirements, setRequirements] = useState<StudentRequirementItem[]>(() =>
-    getDefaultStudentRequirements()
-  );
+  const toItems = (templates: typeof admissionTemplates): StudentRequirementItem[] =>
+    templates.map((t) => ({ id: t.id, name: t.name, description: t.description, required: t.required, status: 'Pending' }));
+  const [requirements, setRequirements] = useState<StudentRequirementItem[]>(() => toItems(admissionTemplates));
+  // When the list loads or changes (and nothing is uploaded yet), show the current list.
+  useEffect(() => {
+    setRequirements((prev) => (prev.some((r) => r.file?.url) ? prev : toItems(admissionTemplates)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [templatesKey]);
   const [uploadingReqId, setUploadingReqId] = useState<string | null>(null);
 
   // Field validation errors
@@ -549,20 +558,14 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
 
       // Documents uploaded in step 7 carry over to the admission checklist when they were
       // stored inline (data URLs that fit in Firestore).
-      const templateKeywords: Record<string, RegExp> = {
-        'id-photo': /photo/i,
-        'birth-certificate': /birth/i,
-        'academic-records': /transcript|form 138|report card/i,
-        'good-moral': /moral/i,
-        'pastoral-recommendation': /pastoral/i,
-      };
+      // Each upload goes to the matching item of the admission checklist (same list, same ids).
       const initialFiles: Record<string, { dataUrl: string; size: number; type: string; name: string }> = {};
-      Object.entries(templateKeywords).forEach(([templateId, pattern]) => {
-        const item = requirements.find((r) => pattern.test(r.name) && r.file?.url?.startsWith('data:'));
+      admissionTemplates.forEach((t) => {
+        const item = requirements.find((r) => (r.id === t.id || sameRequirement(r.name, t.name)) && r.file?.url?.startsWith('data:'));
         const url = item?.file?.url || '';
         if (item && url.length < 950000) {
           const type = url.slice(5, url.indexOf(';')) || item.file?.type || '';
-          initialFiles[templateId] = { dataUrl: url, size: Math.round((url.length * 3) / 4), type, name: item.file?.name || item.name };
+          initialFiles[t.id] = { dataUrl: url, size: Math.round((url.length * 3) / 4), type, name: item.file?.name || item.name };
         }
       });
 
@@ -2175,7 +2178,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
               </h3>
               <p className="text-xs sm:text-sm text-slate-600 max-w-lg mx-auto mt-2 leading-relaxed">
                 Your registration was submitted as an admission application. The Admissions Office will review it and your
-                documents; you can follow every step under "Track Application Status".
+                documents; you can follow every step under &quot;Track Application Status&quot;.
               </p>
             </div>
 

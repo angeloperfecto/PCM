@@ -20,6 +20,7 @@ import { normalizeStatus } from '@/lib/enrollmentWorkflow';
 import { AcademicTermModal } from './AcademicTermModal';
 import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
+import { AdmissionRequirementsCard } from './AdmissionRequirementsCard';
 import { AcademicCourseModal } from './AcademicCourseModal';
 import {
   GraduationCap,
@@ -1568,6 +1569,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       {/* ========================================================================= */}
       {activeSubTab === 'settings' && (
         <div className="space-y-6">
+          <AdmissionRequirementsCard />
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <h4 className="font-serif text-lg font-bold text-[#18392B] flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-[#588B76]" />

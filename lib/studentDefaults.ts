@@ -1,4 +1,5 @@
 import { StudentProfile, StudentRequirementItem, StudentSubjectHistory, StudentPaymentRecord } from './types';
+import { sameRequirement } from './enrollmentWorkflow';
 
 export const DEFAULT_REQUIREMENTS_LIST: Omit<StudentRequirementItem, 'id' | 'status'>[] = [
   {
@@ -261,12 +262,14 @@ export function normalizeStudentProfile(raw: Partial<StudentProfile>): StudentPr
   };
 }
 
-// A student's requirement checklist as every screen should show it: documents verified in
-// Admissions (verifiedAdmissionDocuments, copied at enrollment) are listed as Verified, followed by
-// the student's own requirement items. The generic default list is only used for students who
-// have neither (e.g. records created by hand).
-const normalizeName = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-export function studentRequirementsView(profile: Partial<StudentProfile>): StudentRequirementItem[] {
+// A student's requirement checklist as every screen should show it, built on the admission
+// requirements list (enrollment settings): each required document shows as Verified when it was
+// verified in Admissions (verifiedAdmissionDocuments), else the student's own upload status, else
+// Pending. Documents outside the list (older or extra uploads) follow.
+export function studentRequirementsView(
+  profile: Partial<StudentProfile>,
+  templates?: { id: string; name: string; description?: string; required: boolean }[]
+): StudentRequirementItem[] {
   const admission: StudentRequirementItem[] = (((profile as any).verifiedAdmissionDocuments || []) as any[]).map((d) => ({
     id: `adm-${d.id}`,
     name: d.name,
@@ -277,6 +280,21 @@ export function studentRequirementsView(profile: Partial<StudentProfile>): Stude
     verificationDate: d.verifiedAt || '',
     remarks: 'From the admission application (Admissions Review)',
   }));
-  const own = profile.requirements && profile.requirements.length > 0 ? profile.requirements : admission.length ? [] : getDefaultStudentRequirements();
-  return [...admission, ...own.filter((o) => !admission.some((a) => normalizeName(a.name) === normalizeName(o.name)))];
+  const own = profile.requirements || [];
+  const base = templates && templates.length > 0 ? templates : getDefaultStudentRequirements();
+  const used = new Set<string>();
+  const list: StudentRequirementItem[] = base.map((t) => {
+    const adm = admission.find((a) => !used.has(a.id) && sameRequirement(a.name, t.name));
+    if (adm) {
+      used.add(adm.id);
+      return { ...adm, name: t.name, required: t.required };
+    }
+    const mine = own.find((o) => !used.has(o.id) && (o.id === t.id || sameRequirement(o.name, t.name)));
+    if (mine) {
+      used.add(mine.id);
+      return { ...mine, name: t.name, required: t.required };
+    }
+    return { id: t.id, name: t.name, description: t.description || '', required: t.required, status: 'Pending' };
+  });
+  return [...list, ...admission.filter((a) => !used.has(a.id)), ...own.filter((o) => !used.has(o.id))];
 }
