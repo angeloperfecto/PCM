@@ -34,7 +34,7 @@ const AssessmentSummary: React.FC<{ assessment: EnrollmentAssessment; payments: 
       <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full min-w-[280px] text-xs">
           <tbody>
-            {assessment.items.map((item, i) => (
+            {(assessment.items || []).map((item, i) => (
               <tr key={i} className="border-b border-slate-100">
                 <td className="p-2 text-slate-700">{item.name}</td>
                 <td className="p-2 text-right font-mono text-slate-900">{peso(item.amount)}</td>

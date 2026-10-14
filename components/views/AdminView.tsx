@@ -377,8 +377,8 @@ export const AdminView: React.FC = () => {
             {activeTab === 'media' && <AdminMediaTab />}
             {activeTab === 'downloads' && <AdminDownloadsTab />}
             {activeTab === 'youtube' && <AdminYouTubeTab />}
-            {activeTab === 'applications' && <AdminApplicationsTab />}
-            {activeTab === 'enrollments' && <AdminEnrollmentsTab />}
+            {activeTab === 'applications' && <AdminApplicationsTab onOpenEnrollment={() => setActiveTab('enrollments')} />}
+            {activeTab === 'enrollments' && <AdminEnrollmentsTab onOpenAdmissions={() => setActiveTab('applications')} />}
             {activeTab === 'donations' && <AdminDonationsTab />}
             {activeTab === 'studentLife' && <AdminStudentLifeTab />}
             {activeTab === 'scrapbook' && <AdminScrapbookTab />}

@@ -471,6 +471,8 @@ interface PCMContextType {
   studentProfile: StudentProfile;
   setStudentProfile: React.Dispatch<React.SetStateAction<StudentProfile>>;
   students: StudentProfile[];
+  /** Admin view: student records hidden because their email or id is in the Deletion Registry. */
+  registryBlockedStudents: StudentProfile[];
   setStudents: React.Dispatch<React.SetStateAction<StudentProfile[]>>;
   studentLogin: (id: string, pass: string) => boolean;
   studentLogout: () => void;
@@ -934,6 +936,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Student Portal, Multi-Student Directory, & Online Enrollment System
   const [isStudentLoggedIn, setIsStudentLoggedIn] = useState(false);
   const [students, setStudents] = useState<StudentProfile[]>([]);
+  const [registryBlockedStudents, setRegistryBlockedStudents] = useState<StudentProfile[]>([]);
+  const rawAdminStudentRowsRef = useRef<StudentProfile[] | null>(null);
   const [studentProfile, setStudentProfile] = useState<StudentProfile>(DEMO_STUDENT_PROFILE);
   const [enrollments, setEnrollments] = useState<OnlineEnrollment[]>([]);
   const [studentNotifications, setStudentNotifications] = useState<StudentNotification[]>([]);
@@ -6682,6 +6686,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCachedData('applications', list);
       });
       listen<StudentProfile>('studentProfiles', collection(db, 'studentProfiles'), (rows) => {
+        rawAdminStudentRowsRef.current = rows;
+        setRegistryBlockedStudents(rows.filter((s) => isUserDeletedRef.current(s)));
         const list = rows.filter((s) => !isUserDeletedRef.current(s));
         setStudents((prev) => (areEntitiesEqual(prev, list) ? prev : list));
         setCachedData('students', list);
@@ -6837,6 +6843,22 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       cancelled = true;
     };
   }, [isAdminLoggedIn, currentAdminUser?.role, firebaseAuthUser, adminUsers]);
+
+  // Admin view: when the Deletion Registry changes, re-split the loaded student records into
+  // visible and registry-blocked, so a removed or restored entry shows its student again at once.
+  useEffect(() => {
+    if (!isAdminLoggedIn) {
+      rawAdminStudentRowsRef.current = null;
+      setRegistryBlockedStudents([]);
+      return;
+    }
+    const rows = rawAdminStudentRowsRef.current;
+    if (!rows) return;
+    setRegistryBlockedStudents(rows.filter((s) => isUserDeleted(s)));
+    const visible = rows.filter((s) => !isUserDeleted(s));
+    setStudents((prev) => (areEntitiesEqual(prev, visible) ? prev : visible));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isUserDeleted, isAdminLoggedIn]);
 
   // An account deleted by an administrator is signed out in every browser where it is open.
   // The deletion registry (deletedUsers) is a live listener, so this runs as soon as the
@@ -9197,6 +9219,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         studentProfile,
         setStudentProfile,
         students,
+        registryBlockedStudents,
         setStudents,
         studentLogin,
         studentLogout,

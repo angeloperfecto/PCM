@@ -108,6 +108,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     mediaLibrary,
     donations,
     enrollments,
+    students,
     videos,
     scrapbook,
     testimonials,
@@ -143,7 +144,8 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           id: 'enrollments',
           label: 'Enrollment & Records',
           icon: GraduationCap,
-          count: enrollments.length,
+          // Official student records (includes students enrolled through Admissions Review).
+          count: students.length,
           highlight: true,
         },
         {
