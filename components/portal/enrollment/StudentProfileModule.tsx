@@ -33,6 +33,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { AdmissionDocumentsPanel, toStudentRequirementItems, useStudentAdmissionDocuments } from '@/components/enrollment/AdmissionDocumentsPanel';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { EditStudentInfoForm } from './EditStudentInfoForm';
 import { accountSummary, ledgerPayments, parseTerm } from '@/lib/studentLedger';
@@ -69,7 +70,11 @@ export const StudentProfileModule: React.FC = () => {
   };
 
   // Admission documents verified in Admissions, then the student's own requirement items.
-  const requirementsList: StudentRequirementItem[] = studentRequirementsView(studentProfile, admissionRequirementTemplates(enrollmentSystemConfig));
+  // Admission documents, live from the student's admission application (same as Admissions Review).
+  const admissionDocs = useStudentAdmissionDocuments(studentProfile);
+  const requirementsList: StudentRequirementItem[] = admissionDocs.app
+    ? toStudentRequirementItems(admissionDocs.requirements)
+    : studentRequirementsView(studentProfile, admissionRequirementTemplates(enrollmentSystemConfig));
 
   // Document upload handler
   const handleFileUpload = async (reqId: string, file: File) => {
@@ -597,7 +602,9 @@ export const StudentProfileModule: React.FC = () => {
                 Official Admissions Documents Vault
               </h3>
               <p className="text-xs text-slate-500">
-                Track verification status for all 8 mandatory admissions credentials and submit updated digital scans.
+                {admissionDocs.app
+                  ? 'Your admission documents and their verification status. Upload any missing or returned document here; the Registrar reviews it in Admissions.'
+                  : 'Track the verification status of your admission documents and submit updated digital scans.'}
               </p>
             </div>
 
@@ -608,8 +615,14 @@ export const StudentProfileModule: React.FC = () => {
             </div>
           </div>
 
+          {admissionDocs.app && (
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+              <AdmissionDocumentsPanel mode="student" app={admissionDocs.app} requirements={admissionDocs.requirements} loading={admissionDocs.loading} error={admissionDocs.error} />
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {requirementsList.map((req) => {
+            {(admissionDocs.app ? [] : requirementsList).map((req) => {
               const hasFile = req.file && req.file.url;
               const isUploading = uploadingReqId === req.id;
 

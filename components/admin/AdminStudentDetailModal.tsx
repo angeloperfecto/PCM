@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { AdmissionDocumentsPanel, toStudentRequirementItems, useStudentAdmissionDocuments } from '@/components/enrollment/AdmissionDocumentsPanel';
 import { EditStudentInfoForm } from '@/components/portal/enrollment/EditStudentInfoForm';
 import { ledgerPayments } from '@/lib/studentLedger';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
@@ -76,6 +77,8 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
   } = usePCM();
   // Always show the live record (real-time list), not the copy taken when the dossier was opened.
   const student = selectedStudent ? liveStudents.find((s) => s.id === selectedStudent.id) || selectedStudent : null;
+  // Admission documents, live from the student's admission application (same as Admissions Review).
+  const admissionDocs = useStudentAdmissionDocuments(student);
 
   const [activeTab, setActiveTab] = useState<
     'profile' | 'requirements' | 'academics' | 'payments' | 'advising' | 'cor'
@@ -187,7 +190,9 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
   };
 
   // Admission documents verified in Admissions, then the student's own requirement items.
-  const requirementsList = studentRequirementsView(student, admissionRequirementTemplates(enrollmentSystemConfig));
+  const requirementsList = admissionDocs.app
+    ? toStudentRequirementItems(admissionDocs.requirements)
+    : studentRequirementsView(student, admissionRequirementTemplates(enrollmentSystemConfig));
 
   // Subject history list
   const subjectsList = student.subjectHistory || [];
@@ -481,8 +486,12 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                 </div>
               </div>
 
+              {admissionDocs.app && (
+                <AdmissionDocumentsPanel mode="staff" app={admissionDocs.app} requirements={admissionDocs.requirements} loading={admissionDocs.loading} error={admissionDocs.error} />
+              )}
+
               <div className="space-y-3">
-                {requirementsList.map((req) => {
+                {(admissionDocs.app ? [] : requirementsList).map((req) => {
                   const hasFile = req.file && req.file.url;
                   const isVerifying = verifyingReqId === req.id;
 
