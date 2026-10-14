@@ -7,7 +7,7 @@ import {
   GraduationCap,
   Clock,
   BookOpen,
-  DollarSign,
+  PhilippinePeso,
   Briefcase,
   CheckCircle2,
   ArrowRight,

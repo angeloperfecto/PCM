@@ -23,7 +23,7 @@ import {
   Users,
   Compass,
   Heart,
-  DollarSign,
+  PhilippinePeso,
   Award,
   Image as ImageIcon,
 } from 'lucide-react';
@@ -202,7 +202,7 @@ export const Header: React.FC = () => {
           action: () => {
             navigateTo('portal');
           },
-          icon: DollarSign,
+          icon: PhilippinePeso,
         },
         {
           label: 'Academic Calendar & Registration Deadlines',

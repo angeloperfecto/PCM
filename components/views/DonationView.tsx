@@ -26,7 +26,7 @@ import {
   ChevronRight,
   Info,
   Calendar,
-  DollarSign,
+  PhilippinePeso,
   FileCheck,
   ArrowRight,
   MessageSquare,

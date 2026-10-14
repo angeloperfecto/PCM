@@ -30,7 +30,7 @@ import {
   GraduationCap,
   Calendar,
   Award,
-  DollarSign,
+  PhilippinePeso,
   BookOpen,
   LogOut,
   Flame,
