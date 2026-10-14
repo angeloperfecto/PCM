@@ -10,6 +10,7 @@ import {
   Receipt,
   CheckCircle2,
   Clock,
+  BookOpen,
 } from 'lucide-react';
 import { EnrollmentSubmenuTab } from '@/lib/types';
 import { usePCM } from '@/lib/store';
@@ -43,6 +44,11 @@ export const EnrollmentNavbar: React.FC<EnrollmentNavbarProps> = ({
       id: 'profile',
       label: 'Student Profile',
       icon: <User className="w-4 h-4" />,
+    },
+    {
+      id: 'curriculum',
+      label: 'Curriculum',
+      icon: <BookOpen className="w-4 h-4" />,
     },
     {
       id: 'pre-enlistment',

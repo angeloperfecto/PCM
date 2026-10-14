@@ -22,6 +22,7 @@ import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
 import { AdmissionRequirementsCard } from './AdmissionRequirementsCard';
 import { ClassListModal, classListFor } from './ClassListModal';
+import { AdminCurriculumPanel } from './AdminCurriculumPanel';
 import { AcademicCourseModal } from './AcademicCourseModal';
 import {
   GraduationCap,
@@ -70,6 +71,7 @@ export type EnrollmentAdminSubTab =
   | 'add-drop'
   | 'academic-periods'
   | 'subjects'
+  | 'curriculum'
   | 'sections'
   | 'instructors'
   | 'fees'
@@ -437,6 +439,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           { id: 'add-drop', label: 'Adding & Dropping', icon: RotateCcw, count: pendingAddDrop, isPending: true },
           { id: 'academic-periods', label: 'Academic Terms', icon: Calendar },
           { id: 'subjects', label: 'Curriculum Catalog', icon: BookOpen, count: academicSubjects.length },
+          { id: 'curriculum', label: 'Subjects per Year Level', icon: BookOpen },
           { id: 'sections', label: 'Class Schedules', icon: Layers },
           { id: 'instructors', label: 'Faculty Load', icon: User, count: faculty.length },
           { id: 'fees', label: 'Tuition & Fee Policy', icon: DollarSign },
@@ -1432,6 +1435,8 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           </div>
         </div>
       )}
+
+      {activeSubTab === 'curriculum' && <AdminCurriculumPanel />}
 
       {classListSubjectId && academicSubjects.find((x) => x.id === classListSubjectId) && (
         <ClassListModal

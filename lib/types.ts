@@ -601,9 +601,30 @@ export type EnrollmentSubmenuTab =
   | 'add-drop'
   | 'adding-dropping'
   | 'assessment'
-  | 'amount-due';
+  | 'amount-due'
+  | 'curriculum';
 
 export type Course = StudentCourse;
+
+/** One subject of a program's curriculum (curriculumSubjects collection), by year level and semester. */
+export interface CurriculumSubject {
+  id: string;
+  programId: string;
+  programName: string;
+  yearLevel: string; // "1st Year" … "4th Year"
+  semester: string; // "1st Semester", "2nd Semester", "Summer", or "" (whole year)
+  code: string;
+  title: string;
+  description?: string;
+  units: number;
+  prerequisites?: string;
+  type?: string; // Core, Major, Elective, General Education, Practicum
+  order?: number;
+  status: 'Active' | 'Inactive';
+  createdAt?: string;
+  updatedAt?: string;
+  updatedBy?: string;
+}
 
 export interface AcademicSubject {
   id: string;

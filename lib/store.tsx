@@ -47,6 +47,7 @@ import {
   PreEnlistmentRecord,
   AddDropRequest,
   StudentBalancePayment,
+  CurriculumSubject,
   AddDropAction,
   AddDropStatus,
   FeeStructureItem,
@@ -181,6 +182,7 @@ import { firebaseConfig } from './firebaseConfig';
 import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, admissionRequirementTemplates } from './enrollmentWorkflow';
 import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflow';
 import { termFees, accountSummary, parseTerm, officialAssessmentLines, applyOfficialLines } from './studentLedger';
+import { curriculumToImport, validateCurriculumSubject } from './curriculum';
 import { submitAdmissionApplication, transitionApplication } from './admissionsService';
 
 export interface ToastNotification {
@@ -419,6 +421,13 @@ interface PCMContextType {
   canDecideAdmissions: boolean;
   /** Approve/return enrollments, pre-enlistments and add/drop requests (isEnrollmentOffice in firestore.rules). */
   canManageEnrollment: boolean;
+  /** Subjects per year level (curriculumSubjects), live for every signed-in user. */
+  curriculumSubjects: CurriculumSubject[];
+  /** Registrar, Academic Admin, Admin and Super Admin may edit the curriculum (firestore.rules). */
+  canManageCurriculum: boolean;
+  saveCurriculumSubject: (subject: Partial<CurriculumSubject>) => Promise<boolean>;
+  deleteCurriculumSubject: (id: string) => Promise<boolean>;
+  importProgramCurricula: () => Promise<number>;
   // Registrar, Admin, Super Admin or Finance: may verify enrollment payments.
   canVerifyPayments: boolean;
   admissionsActor: () => { uid: string; name: string; email: string; role?: string };
@@ -956,6 +965,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [preEnlistments, setPreEnlistments] = useState<PreEnlistmentRecord[]>([]);
   const [addDropRequests, setAddDropRequests] = useState<AddDropRequest[]>([]);
   const [studentPayments, setStudentPayments] = useState<StudentBalancePayment[]>([]);
+  const [curriculumSubjects, setCurriculumSubjects] = useState<CurriculumSubject[]>([]);
   const [feeStructure, setFeeStructure] = useState<FeeStructureItem[]>([]);
 
   // Academic Periods, Class Sections, Instructors, and Enrollment Policy Config
@@ -4697,6 +4707,96 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Admission decisions are limited to enrollment staff (Registrar, Admin, Super Admin).
   const canDecideAdmissions = isAdminLoggedIn && ENROLLMENT_STAFF_ROLES.includes(currentAdminUser?.role || '');
   const canManageEnrollment = isAdminLoggedIn && ['Super Admin', 'Admin', 'Registrar', 'Academic Admin', 'Finance'].includes(currentAdminUser?.role || '');
+  const canManageCurriculum = isAdminLoggedIn && ['Super Admin', 'Admin', 'Registrar', 'Academic Admin'].includes(currentAdminUser?.role || '');
+
+  // Subjects per year level: one real-time listener for any signed-in user (students read only).
+  const curriculumUid = firebaseAuthUser?.uid || '';
+  useEffect(() => {
+    if (!curriculumUid) {
+      setCurriculumSubjects([]);
+      return;
+    }
+    const unsub = onSnapshot(
+      collection(db, 'curriculumSubjects'),
+      (snap) => setCurriculumSubjects(snap.docs.map((d) => ({ ...(d.data() as CurriculumSubject), id: d.id }))),
+      (err) => handleFirestoreError(err, OperationType.LIST, 'curriculumSubjects')
+    );
+    return () => unsub();
+  }, [curriculumUid]);
+
+  const curriculumSlug = (x: string) => x.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24);
+
+  const saveCurriculumSubject = async (input: Partial<CurriculumSubject>): Promise<boolean> => {
+    if (!canManageCurriculum) {
+      addToast('error', 'Not allowed', 'Only the Registrar, Academic Admin or an Admin can change the curriculum.');
+      return false;
+    }
+    const problem = validateCurriculumSubject(input, curriculumSubjects);
+    if (problem) {
+      addToast('warning', 'Check the subject', problem);
+      return false;
+    }
+    const now = new Date().toISOString();
+    const isNew = !input.id;
+    const id = input.id || `cur-${curriculumSlug(input.programId || '')}-${curriculumSlug(input.code || '')}-${Date.now().toString(36)}`;
+    const data: CurriculumSubject = cleanFirestoreData({
+      id,
+      programId: input.programId || '',
+      programName: input.programName || '',
+      yearLevel: input.yearLevel || '',
+      semester: input.semester || '',
+      code: (input.code || '').trim(),
+      title: (input.title || '').trim(),
+      description: (input.description || '').trim(),
+      units: Number(input.units) || 0,
+      prerequisites: (input.prerequisites || '').trim(),
+      type: input.type || 'Core',
+      order: Number.isFinite(Number(input.order)) ? Number(input.order) : 999,
+      status: input.status === 'Inactive' ? 'Inactive' : 'Active',
+      ...(isNew ? { createdAt: now } : {}),
+      updatedAt: now,
+      updatedBy: currentAdminUser?.name || 'Registrar',
+    });
+    if (!(await safeSetDoc(doc(db, 'curriculumSubjects', id), data, { merge: true }))) return false;
+    logActivity(isNew ? 'CREATE' : 'UPDATE', 'Curriculum', id, data.code, `${isNew ? 'Added' : 'Updated'} ${data.code} (${data.yearLevel}${data.semester ? ', ' + data.semester : ''}) in ${data.programName}.`);
+    addToast('success', isNew ? 'Subject added' : 'Subject updated', `${data.code} — ${data.title}`);
+    return true;
+  };
+
+  const deleteCurriculumSubject = async (id: string): Promise<boolean> => {
+    if (!canManageCurriculum) {
+      addToast('error', 'Not allowed', 'Only the Registrar, Academic Admin or an Admin can change the curriculum.');
+      return false;
+    }
+    const target = curriculumSubjects.find((x) => x.id === id);
+    if (!(await safeDeleteDoc(doc(db, 'curriculumSubjects', id)))) return false;
+    logActivity('DELETE', 'Curriculum', id, target?.code || id, `Removed ${target?.code || 'a subject'} from ${target?.programName || 'the curriculum'}.`);
+    addToast('info', 'Subject removed', target ? `${target.code} — ${target.title}` : 'The subject was removed.');
+    return true;
+  };
+
+  // Copies the subjects listed in Academic Programs (program curriculum) that are not in the
+  // collection yet. Existing entries are never changed.
+  const importProgramCurricula = async (): Promise<number> => {
+    if (!canManageCurriculum) return 0;
+    const items = curriculumToImport(programs, curriculumSubjects);
+    if (items.length === 0) {
+      addToast('info', 'Nothing to import', 'Every subject listed in Academic Programs is already in the curriculum.');
+      return 0;
+    }
+    const now = new Date().toISOString();
+    for (let i = 0; i < items.length; i += 400) {
+      const batch = writeBatch(db);
+      items.slice(i, i + 400).forEach((it, j) => {
+        const id = `cur-${curriculumSlug(it.programId)}-${curriculumSlug(it.code)}-${curriculumSlug(it.yearLevel)}-${(i + j).toString(36)}`;
+        batch.set(doc(db, 'curriculumSubjects', id), cleanFirestoreData({ ...it, id, createdAt: now, updatedAt: now, updatedBy: currentAdminUser?.name || 'Registrar' }));
+      });
+      if (!(await commitBatch(batch, 'curriculumSubjects'))) return 0;
+    }
+    logActivity('CREATE', 'Curriculum', 'import', 'Academic Programs', `Imported ${items.length} subjects from the program curricula.`);
+    addToast('success', 'Curriculum imported', `${items.length} subject${items.length === 1 ? '' : 's'} added from Academic Programs.`);
+    return items.length;
+  };
   // Payment verification is also open to the Finance office.
   const canVerifyPayments = isAdminLoggedIn && PAYMENT_STAFF_ROLES.includes(currentAdminUser?.role || '');
 
@@ -9172,6 +9272,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateApplicationStatus,
         canDecideAdmissions,
         canManageEnrollment,
+        curriculumSubjects,
+        canManageCurriculum,
+        saveCurriculumSubject,
+        deleteCurriculumSubject,
+        importProgramCurricula,
         canVerifyPayments,
         admissionsActor,
         addApplicationNote,

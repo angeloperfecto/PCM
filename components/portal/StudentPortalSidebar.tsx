@@ -169,6 +169,7 @@ export const StudentPortalSidebar: React.FC<StudentPortalSidebarProps> = ({
 
   const enrollmentSubItems = [
     { id: 'profile', label: 'Student Profile' },
+    { id: 'curriculum', label: 'Curriculum (Subjects per Year)' },
     { id: 'pre-enlistment', label: 'Pre-Enlistment' },
     { id: 'enrollment', label: 'Enrollment & COR' },
     { id: 'add-drop', label: 'Adding & Dropping' },
