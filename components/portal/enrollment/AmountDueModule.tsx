@@ -13,7 +13,11 @@ const peso = (n: number) => `₱${(Number(n) || 0).toLocaleString('en-PH', { min
 // Statement of account from the official student record, plus reporting a payment against the
 // balance. Reports are verified by the Finance Office before the balance changes.
 export const AmountDueModule: React.FC = () => {
-  const { studentProfile, studentPayments } = usePCM();
+  const { studentProfile, studentPayments, enrollments } = usePCM();
+  // A semester enrollment waiting for the Registrar: fees are posted to the account on approval.
+  const pendingEnrollment = (enrollments || []).find(
+    (e) => e.studentId === studentProfile.studentId && ['Submitted', 'Pending', 'Under Review'].includes(String(e.status))
+  );
   const total = Number(studentProfile.tuitionTotal) || 0;
   const paid = Number(studentProfile.tuitionPaid) || 0;
   const balance = balanceOf(studentProfile);
@@ -139,6 +143,20 @@ export const AmountDueModule: React.FC = () => {
               </p>
             )}
           </form>
+        </div>
+      )}
+
+      {balance <= 0 && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-3" data-testid="payment-methods-no-balance">
+          <h4 className="font-serif text-lg font-bold text-[#18392B] flex items-center gap-2">
+            <Receipt className="w-5 h-5 text-[#588B76]" /> Payment methods
+          </h4>
+          <p className="text-xs text-slate-700">
+            {pendingEnrollment
+              ? `Your enrollment request ${pendingEnrollment.referenceNumber || ''} is waiting for the Registrar. Once it is approved, your fees appear here and you can report your payment. You may already pay the downpayment using the details below.`
+              : 'You have no outstanding balance right now. When new fees are posted to your account, you can pay using the details below and report the payment here.'}
+          </p>
+          <PaymentInstructions reportHint={false} />
         </div>
       )}
 
