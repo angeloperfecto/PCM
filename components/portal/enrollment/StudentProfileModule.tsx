@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
+import { EditStudentInfoForm } from './EditStudentInfoForm';
 import { StudentProfile, StudentRequirementItem } from '@/lib/types';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 import { getDefaultStudentRequirements, calculateGPAFromGrades } from '@/lib/studentDefaults';
@@ -57,39 +58,11 @@ export const StudentProfileModule: React.FC = () => {
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
   const [uploadingReqId, setUploadingReqId] = useState<string | null>(null);
 
-  // Quick edit form state for contact & church
-  const [formData, setFormData] = useState({
-    mobileNumber: studentProfile.mobileNumber || studentProfile.phone || '',
-    email: studentProfile.email || '',
-    facebookAccount: studentProfile.facebookAccount || '',
-    currentAddress: studentProfile.currentAddress || studentProfile.address || '',
-    permanentAddress: studentProfile.permanentAddress || studentProfile.address || '',
-    homeChurch: studentProfile.homeChurch || studentProfile.churchName || '',
-    pastorName: studentProfile.pastorName || '',
-    pastorContactNumber: studentProfile.pastorContactNumber || studentProfile.pastorPhone || '',
-    emergencyContactPerson: studentProfile.emergencyContactPerson || studentProfile.emergencyContactName || '',
-    emergencyContactRelationship: studentProfile.emergencyContactRelationship || studentProfile.emergencyContactRelation || '',
-    emergencyContactNumber: studentProfile.emergencyContactNumber || studentProfile.emergencyContactPhone || '',
-  });
-
   const handleCopyId = () => {
     navigator.clipboard.writeText(studentProfile.studentId);
     setCopiedId(true);
     addToast('info', 'Student ID Copied', `${studentProfile.studentId} copied to clipboard.`);
     setTimeout(() => setCopiedId(false), 2000);
-  };
-
-  const handleSaveContact = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const success = await updateStudentProfile(studentProfile.id, {
-      ...formData,
-      phone: formData.mobileNumber,
-      address: formData.currentAddress,
-    });
-    if (success) {
-      setIsEditingContact(false);
-      addToast('success', 'Profile Updated', 'Your contact details have been updated.');
-    }
   };
 
   // Requirements list with defaults fallback
@@ -272,7 +245,7 @@ export const StudentProfileModule: React.FC = () => {
                 className="bg-white hover:bg-slate-50 text-[#18392B] border border-slate-300 font-semibold px-3 py-1.5 rounded-xl text-xs flex items-center gap-1.5 transition shadow-xs cursor-pointer"
               >
                 {isEditingContact ? <X className="w-3.5 h-3.5" /> : <Edit3 className="w-3.5 h-3.5" />}
-                <span>{isEditingContact ? 'Close Editor' : 'Quick Edit Contact'}</span>
+                <span>{isEditingContact ? 'Close Editor' : 'Edit My Information'}</span>
               </button>
 
               <button
@@ -306,130 +279,8 @@ export const StudentProfileModule: React.FC = () => {
         </div>
       </div>
 
-      {/* Quick Contact Editor Inline if toggled */}
-      {isEditingContact && (
-        <form
-          onSubmit={handleSaveContact}
-          className="bg-emerald-50/50 rounded-2xl border-2 border-emerald-300 p-6 space-y-4 shadow-sm"
-        >
-          <div className="flex items-center justify-between border-b border-emerald-200 pb-3">
-            <h3 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
-              <Edit3 className="w-4 h-4 text-[#588B76]" />
-              Update Contact, Church & Emergency Details
-            </h3>
-            <span className="text-xs text-slate-500">
-              Directly updates your official student records in Firebase
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 text-xs">
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Mobile Contact</label>
-              <input
-                type="tel"
-                value={formData.mobileNumber}
-                onChange={(e) => setFormData({ ...formData, mobileNumber: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 font-mono text-slate-900 focus:outline-none focus:border-[#588B76]"
-                placeholder="0917 123 4567"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Email Address</label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 focus:outline-none focus:border-[#588B76]"
-                placeholder="student@example.com"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Facebook Account / Link</label>
-              <input
-                type="text"
-                value={formData.facebookAccount}
-                onChange={(e) => setFormData({ ...formData, facebookAccount: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 focus:outline-none focus:border-[#588B76]"
-                placeholder="facebook.com/username"
-              />
-            </div>
-
-            <div className="sm:col-span-2">
-              <label className="block font-bold text-slate-700 mb-1">Current Residential Address</label>
-              <input
-                type="text"
-                value={formData.currentAddress}
-                onChange={(e) => setFormData({ ...formData, currentAddress: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 focus:outline-none focus:border-[#588B76]"
-                placeholder="Street, Barangay, City, Province"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Home Church</label>
-              <input
-                type="text"
-                value={formData.homeChurch}
-                onChange={(e) => setFormData({ ...formData, homeChurch: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 focus:outline-none focus:border-[#588B76]"
-                placeholder="Baguio Christian Fellowship"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Senior Pastor Name</label>
-              <input
-                type="text"
-                value={formData.pastorName}
-                onChange={(e) => setFormData({ ...formData, pastorName: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 focus:outline-none focus:border-[#588B76]"
-                placeholder="Rev. Danilo Santos"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Emergency Contact Person</label>
-              <input
-                type="text"
-                value={formData.emergencyContactPerson}
-                onChange={(e) => setFormData({ ...formData, emergencyContactPerson: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 focus:outline-none focus:border-[#588B76]"
-                placeholder="Full Name"
-              />
-            </div>
-
-            <div>
-              <label className="block font-bold text-slate-700 mb-1">Emergency Contact Number</label>
-              <input
-                type="tel"
-                value={formData.emergencyContactNumber}
-                onChange={(e) => setFormData({ ...formData, emergencyContactNumber: e.target.value })}
-                className="w-full bg-white border border-slate-300 rounded-lg p-2.5 font-mono text-slate-900 focus:outline-none focus:border-[#588B76]"
-                placeholder="0918 765 4321"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2 border-t border-emerald-200">
-            <button
-              type="button"
-              onClick={() => setIsEditingContact(false)}
-              className="px-4 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-200 transition cursor-pointer"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-5 py-2 rounded-xl text-xs transition flex items-center gap-1.5 shadow-sm cursor-pointer"
-            >
-              <Save className="w-3.5 h-3.5" />
-              <span>Save Record Changes</span>
-            </button>
-          </div>
-        </form>
-      )}
+      {/* Edit my information */}
+      {isEditingContact && <EditStudentInfoForm onClose={() => setIsEditingContact(false)} />}
 
       {/* 2. SUB-VIEW TABS */}
       <div className="bg-white p-2 rounded-2xl border border-slate-200 shadow-xs flex flex-wrap items-center gap-2 text-xs font-bold">
@@ -490,7 +341,7 @@ export const StudentProfileModule: React.FC = () => {
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Application Number:</span>
-                  <strong className="font-mono text-slate-800">{studentProfile.applicationNumber || 'N/A'}</strong>
+                  <strong className="font-mono text-slate-800">{studentProfile.applicationNumber || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">First / Middle / Last Name:</span>
@@ -500,30 +351,30 @@ export const StudentProfileModule: React.FC = () => {
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Preferred Name / Alias:</span>
-                  <strong className="text-slate-800">{studentProfile.preferredName || 'None'}</strong>
+                  <strong className="text-slate-800">{studentProfile.preferredName || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Date of Birth & Age:</span>
                   <strong className="text-slate-900">
-                    {studentProfile.dateOfBirth || studentProfile.birthDate || 'N/A'} ({studentProfile.age || '—'} yrs old)
+                    {studentProfile.dateOfBirth || studentProfile.birthDate || '—'} ({studentProfile.age || '—'} yrs old)
                   </strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Place of Birth:</span>
-                  <strong className="text-slate-900">{studentProfile.placeOfBirth || 'N/A'}</strong>
+                  <strong className="text-slate-900">{studentProfile.placeOfBirth || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Sex / Gender:</span>
-                  <strong className="text-slate-900">{studentProfile.sex || studentProfile.gender || 'Male'}</strong>
+                  <strong className="text-slate-900">{studentProfile.sex || studentProfile.gender || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Civil Status:</span>
-                  <strong className="text-slate-900">{studentProfile.civilStatus || 'Single'}</strong>
+                  <strong className="text-slate-900">{studentProfile.civilStatus || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Nationality & Religion:</span>
                   <strong className="text-slate-900">
-                    {studentProfile.nationality || 'Filipino'} • {studentProfile.religion || 'Christian'}
+                    {studentProfile.nationality || '—'} • {studentProfile.religion || '—'}
                   </strong>
                 </div>
               </div>
@@ -541,7 +392,7 @@ export const StudentProfileModule: React.FC = () => {
               <div className="space-y-2 text-xs divide-y divide-slate-100">
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Primary Mobile Number:</span>
-                  <strong className="font-mono text-slate-900">{studentProfile.mobileNumber || studentProfile.phone || 'N/A'}</strong>
+                  <strong className="font-mono text-slate-900">{studentProfile.mobileNumber || studentProfile.phone || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Official Email:</span>
@@ -549,28 +400,28 @@ export const StudentProfileModule: React.FC = () => {
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Facebook Account / URL:</span>
-                  <strong className="text-slate-800">{studentProfile.facebookAccount || 'Not Specified'}</strong>
+                  <strong className="text-slate-800">{studentProfile.facebookAccount || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Current Residence:</span>
                   <strong className="text-slate-900 text-right max-w-[220px] truncate">
-                    {studentProfile.currentAddress || studentProfile.address || 'N/A'}
+                    {studentProfile.currentAddress || studentProfile.address || '—'}
                   </strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Permanent Home Address:</span>
                   <strong className="text-slate-900 text-right max-w-[220px] truncate">
-                    {studentProfile.permanentAddress || studentProfile.address || 'N/A'}
+                    {studentProfile.permanentAddress || studentProfile.address || '—'}
                   </strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">City / Municipality:</span>
-                  <strong className="text-slate-900">{studentProfile.city || 'Baguio City'}</strong>
+                  <strong className="text-slate-900">{studentProfile.city || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Province & ZIP Code:</span>
                   <strong className="text-slate-900">
-                    {studentProfile.province || 'Benguet'} ({studentProfile.zipCode || '2600'})
+                    {studentProfile.province || '—'} ({studentProfile.zipCode || '—'})
                   </strong>
                 </div>
               </div>
@@ -588,32 +439,32 @@ export const StudentProfileModule: React.FC = () => {
               <div className="space-y-2 text-xs divide-y divide-slate-100">
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Father&apos;s Full Name:</span>
-                  <strong className="text-slate-900">{studentProfile.fatherName || 'Manuel Ramos Sr.'}</strong>
+                  <strong className="text-slate-900">{studentProfile.fatherName || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Mother&apos;s Maiden Name:</span>
-                  <strong className="text-slate-900">{studentProfile.motherName || 'Maria Joy David Ramos'}</strong>
+                  <strong className="text-slate-900">{studentProfile.motherName || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Guardian Name (if applicable):</span>
-                  <strong className="text-slate-900">{studentProfile.guardianName || 'None'}</strong>
+                  <strong className="text-slate-900">{studentProfile.guardianName || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Emergency Contact Person:</span>
                   <strong className="text-slate-900">
-                    {studentProfile.emergencyContactPerson || studentProfile.emergencyContactName || 'Maria Ramos'}
+                    {studentProfile.emergencyContactPerson || studentProfile.emergencyContactName || '—'}
                   </strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Emergency Number:</span>
                   <strong className="font-mono text-slate-900">
-                    {studentProfile.emergencyContactNumber || studentProfile.emergencyContactPhone || '09181234567'}
+                    {studentProfile.emergencyContactNumber || studentProfile.emergencyContactPhone || '—'}
                   </strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Emergency Relationship:</span>
                   <strong className="text-slate-900">
-                    {studentProfile.emergencyContactRelationship || studentProfile.emergencyContactRelation || 'Parent'}
+                    {studentProfile.emergencyContactRelationship || studentProfile.emergencyContactRelation || '—'}
                   </strong>
                 </div>
               </div>
@@ -631,25 +482,25 @@ export const StudentProfileModule: React.FC = () => {
               <div className="space-y-2 text-xs divide-y divide-slate-100">
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Last School Attended:</span>
-                  <strong className="text-slate-900">{studentProfile.lastSchoolAttended || 'Baguio City National High School'}</strong>
+                  <strong className="text-slate-900">{studentProfile.lastSchoolAttended || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Highest Attainment:</span>
                   <strong className="text-slate-900">
-                    {studentProfile.highestEducationalAttainment || 'Senior High School Graduate'}
+                    {studentProfile.highestEducationalAttainment || '—'}
                   </strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Previous Course / Strand:</span>
-                  <strong className="text-slate-800">{studentProfile.previousCourse || 'HUMSS Strand'}</strong>
+                  <strong className="text-slate-800">{studentProfile.previousCourse || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Year Graduated:</span>
-                  <strong className="font-mono text-slate-900">{studentProfile.yearGraduated || '2024'}</strong>
+                  <strong className="font-mono text-slate-900">{studentProfile.yearGraduated || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">General Average / Honors:</span>
-                  <strong className="text-slate-900">{studentProfile.generalAverage || '92.5 (With Honors)'}</strong>
+                  <strong className="text-slate-900">{studentProfile.generalAverage || '—'}</strong>
                 </div>
               </div>
             </div>
@@ -666,29 +517,29 @@ export const StudentProfileModule: React.FC = () => {
               <div className="space-y-2 text-xs divide-y divide-slate-100">
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Home Church / Congregation:</span>
-                  <strong className="text-slate-900">{studentProfile.homeChurch || studentProfile.churchName || 'Baguio Christian Fellowship'}</strong>
+                  <strong className="text-slate-900">{studentProfile.homeChurch || studentProfile.churchName || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Senior Pastor:</span>
-                  <strong className="text-slate-900">{studentProfile.pastorName || 'Rev. Danilo Santos'}</strong>
+                  <strong className="text-slate-900">{studentProfile.pastorName || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Pastor Contact:</span>
-                  <strong className="font-mono text-slate-900">{studentProfile.pastorContactNumber || studentProfile.pastorPhone || '09181234567'}</strong>
+                  <strong className="font-mono text-slate-900">{studentProfile.pastorContactNumber || studentProfile.pastorPhone || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Ministry Role & Dept:</span>
                   <strong className="text-slate-900">
-                    {studentProfile.ministryRole || 'Youth Leader'} ({studentProfile.ministryDepartment || 'Youth & Music'})
+                    {studentProfile.ministryRole || '—'} ({studentProfile.ministryDepartment || '—'})
                   </strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Water Baptism Status:</span>
-                  <strong className="text-emerald-700 font-bold">{studentProfile.isBaptized ? 'Water Baptized' : 'Baptized'}</strong>
+                  <strong className="text-emerald-700 font-bold">{studentProfile.isBaptized === true || studentProfile.waterBaptized === true ? 'Water baptized' : studentProfile.isBaptized === false || studentProfile.waterBaptized === false ? 'Not yet baptized' : '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Spiritual Mentor:</span>
-                  <strong className="text-slate-900">{studentProfile.mentorName || 'Dr. Benjamin Villanueva'}</strong>
+                  <strong className="text-slate-900">{studentProfile.mentorName || '—'}</strong>
                 </div>
               </div>
             </div>
@@ -711,11 +562,11 @@ export const StudentProfileModule: React.FC = () => {
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Assigned Academic Adviser:</span>
-                  <strong className="text-slate-900">{studentProfile.assignedAdviser || 'Dr. Benjamin Villanueva, Th.D.'}</strong>
+                  <strong className="text-slate-900">{studentProfile.assignedAdviser || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Cohort Section:</span>
-                  <strong className="text-slate-800">{studentProfile.section || 'Section A'}</strong>
+                  <strong className="text-slate-800">{studentProfile.section || '—'}</strong>
                 </div>
                 <div className="flex justify-between pt-1.5">
                   <span className="text-slate-500">Clearance Status:</span>
