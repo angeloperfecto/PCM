@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { EditStudentInfoForm } from '@/components/portal/enrollment/EditStudentInfoForm';
 import { ledgerPayments } from '@/lib/studentLedger';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
@@ -82,7 +83,6 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
 
   // Edit Profile Form State
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-  const [profileForm, setProfileForm] = useState<Partial<StudentProfile>>({});
 
   // Add Subject Grade State
   const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
@@ -118,61 +118,6 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
   if (!isOpen || !student) return null;
 
   // Initialize edit form when starting editing
-  const handleStartEdit = () => {
-    setProfileForm({
-      fullName: student.fullName || student.name || '',
-      firstName: student.firstName || '',
-      middleName: student.middleName || '',
-      lastName: student.lastName || '',
-      suffix: student.suffix || '',
-      preferredName: student.preferredName || '',
-      email: student.email || '',
-      mobileNumber: student.mobileNumber || student.phone || '',
-      dateOfBirth: student.dateOfBirth || student.birthDate || '',
-      placeOfBirth: student.placeOfBirth || '',
-      sex: student.sex || student.gender || 'Male',
-      civilStatus: student.civilStatus || 'Single',
-      nationality: student.nationality || 'Filipino',
-      religion: student.religion || 'Christian',
-      currentAddress: student.currentAddress || student.address || '',
-      permanentAddress: student.permanentAddress || student.address || '',
-      city: student.city || 'Baguio City',
-      province: student.province || 'Benguet',
-      fatherName: student.fatherName || '',
-      motherName: student.motherName || '',
-      guardianName: student.guardianName || '',
-      guardianContactNumber: student.guardianContactNumber || '',
-      emergencyContactPerson: student.emergencyContactPerson || student.emergencyContactName || '',
-      emergencyContactNumber: student.emergencyContactNumber || student.emergencyContactPhone || '',
-      emergencyContactRelationship: student.emergencyContactRelationship || '',
-      lastSchoolAttended: student.lastSchoolAttended || '',
-      highestEducationalAttainment: student.highestEducationalAttainment || '',
-      previousCourse: student.previousCourse || '',
-      yearGraduated: student.yearGraduated || '',
-      homeChurch: student.homeChurch || student.churchName || '',
-      pastorName: student.pastorName || '',
-      pastorContactNumber: student.pastorContactNumber || '',
-      ministryDepartment: student.ministryDepartment || '',
-      ministryRole: student.ministryRole || '',
-      program: student.program || student.degreeProgram || '',
-      yearLevel: student.yearLevel || '1st Year',
-      section: student.section || 'Section A',
-      assignedAdviser: student.assignedAdviser || 'Dr. Benjamin Villanueva',
-      academicStatus: student.academicStatus || 'Regular',
-      enrollmentStatus: student.enrollmentStatus || 'Enrolled',
-      adminNotes: student.adminNotes || '',
-    });
-    setIsEditingProfile(true);
-  };
-
-  const handleSaveProfile = async () => {
-    const success = await updateStudentProfile(student.id, profileForm);
-    if (success) {
-      setIsEditingProfile(false);
-      addToast('success', 'Profile Updated', 'Official student record synchronized with Firestore.');
-    }
-  };
-
   // Requirement status update
   const handleUpdateReqStatus = async (
     reqId: string,
@@ -299,7 +244,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
               </div>
               <p className="text-xs text-slate-300 font-mono mt-0.5">
                 Permanent ID: <strong className="text-white">{student.studentId}</strong> • App Ref:{' '}
-                {student.applicationNumber || 'N/A'} • {student.program || student.degreeProgram}
+                {student.applicationNumber || '—'} • {student.program || student.degreeProgram}
               </p>
             </div>
           </div>
@@ -365,30 +310,14 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                   </p>
                 </div>
 
-                {!isEditingProfile ? (
+                {!isEditingProfile && (
                   <button
-                    onClick={handleStartEdit}
+                    onClick={() => setIsEditingProfile(true)}
                     className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
                     <span>Edit Profile Data</span>
                   </button>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setIsEditingProfile(false)}
-                      className="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-3 py-1.5 rounded-lg transition cursor-pointer"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={handleSaveProfile}
-                      className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-1.5 rounded-lg transition flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Save Changes</span>
-                    </button>
-                  </div>
                 )}
               </div>
 
@@ -406,27 +335,27 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Date of Birth:</span>
-                        <strong className="text-slate-900">{student.dateOfBirth || student.birthDate || 'N/A'} ({student.age || '—'} yrs)</strong>
+                        <strong className="text-slate-900">{student.dateOfBirth || student.birthDate || '—'} ({student.age || '—'} yrs)</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Place of Birth:</span>
-                        <strong className="text-slate-900">{student.placeOfBirth || 'N/A'}</strong>
+                        <strong className="text-slate-900">{student.placeOfBirth || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Sex / Gender:</span>
-                        <strong className="text-slate-900">{student.sex || student.gender || 'Male'}</strong>
+                        <strong className="text-slate-900">{student.sex || student.gender || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Civil Status:</span>
-                        <strong className="text-slate-900">{student.civilStatus || 'Single'}</strong>
+                        <strong className="text-slate-900">{student.civilStatus || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Nationality:</span>
-                        <strong className="text-slate-900">{student.nationality || 'Filipino'}</strong>
+                        <strong className="text-slate-900">{student.nationality || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Religion:</span>
-                        <strong className="text-slate-900">{student.religion || 'Christian'}</strong>
+                        <strong className="text-slate-900">{student.religion || '—'}</strong>
                       </div>
                     </div>
                   </div>
@@ -439,7 +368,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                     <div className="space-y-1.5">
                       <div className="flex justify-between">
                         <span className="text-slate-500">Primary Mobile:</span>
-                        <strong className="text-slate-900 font-mono">{student.mobileNumber || student.phone || 'N/A'}</strong>
+                        <strong className="text-slate-900 font-mono">{student.mobileNumber || student.phone || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Email Address:</span>
@@ -447,19 +376,19 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Facebook Profile:</span>
-                        <strong className="text-slate-900">{student.facebookAccount || 'None'}</strong>
+                        <strong className="text-slate-900">{student.facebookAccount || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Current Address:</span>
-                        <strong className="text-slate-900 text-right max-w-[200px] truncate">{student.currentAddress || student.address || 'N/A'}</strong>
+                        <strong className="text-slate-900 text-right max-w-[200px] truncate">{student.currentAddress || student.address || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Permanent Address:</span>
-                        <strong className="text-slate-900 text-right max-w-[200px] truncate">{student.permanentAddress || student.address || 'N/A'}</strong>
+                        <strong className="text-slate-900 text-right max-w-[200px] truncate">{student.permanentAddress || student.address || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">City / Municipality:</span>
-                        <strong className="text-slate-900">{student.city || 'Baguio City'}, {student.province || 'Benguet'}</strong>
+                        <strong className="text-slate-900">{student.city || '—'}, {student.province || '—'}</strong>
                       </div>
                     </div>
                   </div>
@@ -472,27 +401,27 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                     <div className="space-y-1.5">
                       <div className="flex justify-between">
                         <span className="text-slate-500">Father&apos;s Name:</span>
-                        <strong className="text-slate-900">{student.fatherName || 'N/A'}</strong>
+                        <strong className="text-slate-900">{student.fatherName || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Mother&apos;s Maiden Name:</span>
-                        <strong className="text-slate-900">{student.motherName || 'N/A'}</strong>
+                        <strong className="text-slate-900">{student.motherName || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Guardian Name:</span>
-                        <strong className="text-slate-900">{student.guardianName || student.emergencyContactName || 'N/A'}</strong>
+                        <strong className="text-slate-900">{student.guardianName || student.emergencyContactName || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Emergency Contact Person:</span>
-                        <strong className="text-slate-900">{student.emergencyContactPerson || student.emergencyContactName || 'N/A'}</strong>
+                        <strong className="text-slate-900">{student.emergencyContactPerson || student.emergencyContactName || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Emergency Number:</span>
-                        <strong className="text-slate-900 font-mono">{student.emergencyContactNumber || student.emergencyContactPhone || 'N/A'}</strong>
+                        <strong className="text-slate-900 font-mono">{student.emergencyContactNumber || student.emergencyContactPhone || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Relationship:</span>
-                        <strong className="text-slate-900">{student.emergencyContactRelationship || student.emergencyContactRelation || 'Parent'}</strong>
+                        <strong className="text-slate-900">{student.emergencyContactRelationship || student.emergencyContactRelation || '—'}</strong>
                       </div>
                     </div>
                   </div>
@@ -505,89 +434,33 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                     <div className="space-y-1.5">
                       <div className="flex justify-between">
                         <span className="text-slate-500">Home Church:</span>
-                        <strong className="text-slate-900">{student.homeChurch || student.churchName || 'N/A'}</strong>
+                        <strong className="text-slate-900">{student.homeChurch || student.churchName || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Pastor / Overseer:</span>
-                        <strong className="text-slate-900">{student.pastorName || 'N/A'}</strong>
+                        <strong className="text-slate-900">{student.pastorName || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Pastor Contact:</span>
-                        <strong className="text-slate-900 font-mono">{student.pastorContactNumber || student.pastorPhone || 'N/A'}</strong>
+                        <strong className="text-slate-900 font-mono">{student.pastorContactNumber || student.pastorPhone || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Ministry Role:</span>
-                        <strong className="text-slate-900">{student.ministryRole || 'Youth Leader'}</strong>
+                        <strong className="text-slate-900">{student.ministryRole || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Ministry Department:</span>
-                        <strong className="text-slate-900">{student.ministryDepartment || 'Music / Youth'}</strong>
+                        <strong className="text-slate-900">{student.ministryDepartment || '—'}</strong>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-slate-500">Spiritual Mentor:</span>
-                        <strong className="text-slate-900">{student.mentorName || student.spiritualMentor || 'Dr. Benjamin Villanueva'}</strong>
+                        <strong className="text-slate-900">{student.mentorName || student.spiritualMentor || '—'}</strong>
                       </div>
                     </div>
                   </div>
                 </div>
               ) : (
-                /* Editable Profile Form */
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Full Legal Name</label>
-                    <input
-                      type="text"
-                      value={profileForm.fullName || ''}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, fullName: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Date of Birth</label>
-                    <input
-                      type="date"
-                      value={profileForm.dateOfBirth || ''}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, dateOfBirth: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Mobile Number</label>
-                    <input
-                      type="text"
-                      value={profileForm.mobileNumber || ''}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, mobileNumber: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Home Church</label>
-                    <input
-                      type="text"
-                      value={profileForm.homeChurch || ''}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, homeChurch: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Pastor Name</label>
-                    <input
-                      type="text"
-                      value={profileForm.pastorName || ''}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, pastorName: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Emergency Contact</label>
-                    <input
-                      type="text"
-                      value={profileForm.emergencyContactPerson || ''}
-                      onChange={(e) => setProfileForm((prev) => ({ ...prev, emergencyContactPerson: e.target.value }))}
-                      className="w-full px-2.5 py-1.5 text-xs border border-slate-300 rounded-lg bg-white"
-                    />
-                  </div>
-                </div>
+                <EditStudentInfoForm student={student} staff onClose={() => setIsEditingProfile(false)} />
               )}
             </div>
           )}
@@ -1101,7 +974,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                     </label>
                     <input
                       type="text"
-                      defaultValue={student.assignedAdviser || 'Dr. Benjamin Villanueva'}
+                      defaultValue={student.assignedAdviser || '—'}
                       onBlur={async (e) => {
                         await updateStudentProfile(student.id, { assignedAdviser: e.target.value });
                         addToast('info', 'Adviser Updated', `Adviser set to ${e.target.value}.`);
