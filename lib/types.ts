@@ -559,6 +559,8 @@ export interface StudentProfile {
   termAssessment?: number;
   /** Balance carried into this term from earlier terms. */
   previousBalance?: number;
+  /** The Registrar's itemized assessment for this term (name + amount per line). */
+  termAssessmentLines?: { name: string; amount: number }[];
   paymentHistory?: StudentPaymentRecord[];
   scholarshipDiscount?: number;
   scholarshipType?: string;

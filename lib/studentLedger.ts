@@ -10,7 +10,7 @@
 // enrollment/balance payments in `paymentRecords`. ledgerPayments() merges both.
 
 import { draftAssessmentLines } from './enrollmentWorkflow';
-import type { EnrollmentSystemConfig, FeeStructureItem, StudentPaymentRecord, StudentProfile } from './types';
+import type { EnrollmentSystemConfig, FeeStructureItem, StudentAssessment, StudentPaymentRecord, StudentProfile } from './types';
 
 export interface TermFees {
   lines: { name: string; amount: number }[];
@@ -95,4 +95,55 @@ export function parseTerm(currentSemester?: string): { semester: string; academi
   const sem = text.match(/(1st|2nd|3rd|Summer)[^,]*/i)?.[0]?.trim() || '';
   const ay = text.match(/(\d{4})\s*[–-]\s*(\d{4})/);
   return { semester: sem, academicYear: ay ? `${ay[1]}–${ay[2]}` : '' };
+}
+
+// The Registrar's itemized assessment for the current term: saved on the student record
+// (termAssessmentLines) when a term is approved or Admissions finalizes enrollment. For records
+// enrolled before that was saved, the admission application's assessment is used when its total
+// matches the official term assessment.
+export interface AssessmentLine {
+  name: string;
+  amount: number;
+}
+export function officialAssessmentLines(profile: Partial<StudentProfile>, applications?: any[]): AssessmentLine[] | null {
+  const stored = (profile as any).termAssessmentLines;
+  if (Array.isArray(stored) && stored.length) return stored.map((l: any) => ({ name: String(l.name || ''), amount: Number(l.amount) || 0 }));
+  const app = (applications || []).find(
+    (a) => a && ((a.studentRecordId && a.studentRecordId === profile.id) || (profile.applicationNumber && a.referenceNumber === profile.applicationNumber))
+  );
+  const items = app?.assessment?.items;
+  if (Array.isArray(items) && items.length && Math.abs((Number(app.assessment.total) || 0) - accountSummary(profile as any).termAssessment) < 0.01) {
+    return items.map((l: any) => ({ name: String(l.name || ''), amount: Number(l.amount) || 0 }));
+  }
+  return null;
+}
+
+// Rebuilds an assessment's breakdown from the official lines, so every line shown adds up to the
+// official total (no estimated fees, no reconciling adjustment).
+export function applyOfficialLines(a: StudentAssessment, lines: AssessmentLine[]): StudentAssessment {
+  const r2 = (n: number) => Math.round(n * 100) / 100;
+  const sum = (ls: AssessmentLine[]) => r2(ls.reduce((s, l) => s + l.amount, 0));
+  const tuition = lines.filter((l) => l.amount > 0 && /tuition/i.test(l.name));
+  const fees = lines.filter((l) => l.amount > 0 && !/tuition/i.test(l.name));
+  const discounts = lines.filter((l) => l.amount < 0);
+  const tuitionTotal = sum(tuition);
+  const unitsInName = Number(tuition[0]?.name.match(/(\d+)\s*units?/i)?.[1]) || 0;
+  const units = unitsInName || a.totalUnits;
+  return {
+    ...a,
+    totalUnits: units,
+    tuitionTotal,
+    tuitionPerUnit: units ? r2(tuitionTotal / units) : 0,
+    miscBreakdown: fees.map((l, i) => ({ id: `off-${i}`, name: l.name, amount: l.amount })),
+    miscellaneousTotal: sum(fees),
+    labBreakdown: [],
+    laboratoryTotal: 0,
+    otherBreakdown: [],
+    otherFeesTotal: 0,
+    discountsBreakdown: discounts.map((l, i) => ({ id: `offd-${i}`, name: l.name, amount: Math.abs(l.amount) })),
+    discountsTotal: Math.abs(sum(discounts)),
+    adjustmentsBreakdown: [],
+    adjustmentsTotal: 0,
+    totalAssessment: sum(lines),
+  };
 }
