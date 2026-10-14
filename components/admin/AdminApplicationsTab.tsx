@@ -87,7 +87,7 @@ function downloadCsv(filename: string, rows: unknown[][]) {
 // Admissions & Enrollment dashboard: every application from submission to enrollment.
 // Decisions are limited to the Registrar, Admin and Super Admin (also enforced by
 // firestore.rules); other admin roles can view.
-export const AdminApplicationsTab: React.FC = () => {
+export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> = ({ onOpenEnrollment }) => {
   const {
     applications,
     programs,
@@ -98,6 +98,8 @@ export const AdminApplicationsTab: React.FC = () => {
     addApplicationNote,
     enrollmentSystemConfig,
     feeStructure,
+    isUserDeleted,
+    removeDeletedUserRecord,
   } = usePCM();
 
   const [search, setSearch] = useState('');
@@ -300,6 +302,11 @@ export const AdminApplicationsTab: React.FC = () => {
                       {normalizeStatus(a.status) === 'Enrolled' && a.studentId && (
                         <span className="font-mono text-[11px] font-bold text-[#18392B]">{a.studentId}</span>
                       )}
+                      {(isUserDeleted(a.email || '') || (!!a.applicantUid && isUserDeleted(a.applicantUid))) && (
+                        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-800" title="This email is in the Deletion Registry">
+                          Deletion Registry
+                        </span>
+                      )}
                       <StatusBadge status={a.status} />
                     </div>
                   </button>
@@ -367,6 +374,9 @@ export const AdminApplicationsTab: React.FC = () => {
           onClose={() => setSelectedId(null)}
           onDelete={canDecideAdmissions ? () => setDeleteTarget(selected) : undefined}
           onNote={(note) => addApplicationNote(selected.id, note)}
+          registryBlocked={isUserDeleted(selected.email || '') || (!!selected.applicantUid && isUserDeleted(selected.applicantUid))}
+          onRemoveRegistryEntry={() => removeDeletedUserRecord((selected.email || selected.applicantUid || '').toLowerCase())}
+          onOpenEnrollment={onOpenEnrollment}
           toast={(ok, title, message) => addToast(ok ? 'success' : 'error', title, message)}
         />
       )}
@@ -474,6 +484,10 @@ interface DetailProps {
   onClose: () => void;
   onNote: (note: string) => void;
   toast: (ok: boolean, title: string, message: string) => void;
+  /** The applicant's email or account is in the Deletion Registry (blocked from the site). */
+  registryBlocked?: boolean;
+  onRemoveRegistryEntry?: () => Promise<boolean>;
+  onOpenEnrollment?: () => void;
 }
 
 const ApplicationDetail: React.FC<DetailProps> = ({
@@ -488,6 +502,9 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   onDelete,
   onNote,
   toast,
+  registryBlocked,
+  onRemoveRegistryEntry,
+  onOpenEnrollment,
 }) => {
   const { requirements, history, payments, loading } = useApplicationDetails(app.id);
   const [editingDetails, setEditingDetails] = useState(false);
@@ -523,7 +540,10 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   };
 
   const transitions = STAFF_TRANSITIONS[status].filter((t) => t !== 'Requirements Incomplete');
-  const finalizeBlocker = canFinalizeEnrollment(app.status, requirements, { assessment: app.assessment, paymentStatus: app.paymentStatus });
+  const finalizeBlocker =
+    canFinalizeEnrollment(app.status, requirements, { assessment: app.assessment, paymentStatus: app.paymentStatus }) ||
+    (registryBlocked ? 'This applicant’s email is in the Deletion Registry. Remove the registry entry first, or the new student record would be hidden and the student could not sign in.' : null);
+  const [removingRegistry, setRemovingRegistry] = useState(false);
   const noteRequired = pending && (pending.to === 'Rejected' || pending.to === 'Deferred');
 
   const field = (label: string, value?: React.ReactNode) =>
@@ -544,6 +564,11 @@ const ApplicationDetail: React.FC<DetailProps> = ({
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <StatusBadge status={app.status} />
               {status === 'Enrolled' && app.studentId && <span className="font-mono text-xs font-bold">{app.studentId}</span>}
+              {status === 'Enrolled' && onOpenEnrollment && (
+                <button type="button" onClick={onOpenEnrollment} className="text-[11px] font-bold text-[#18392B] underline hover:text-[#588B76]">
+                  Open in Enrollment &amp; Records
+                </button>
+              )}
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -564,6 +589,35 @@ const ApplicationDetail: React.FC<DetailProps> = ({
 
         <div className="space-y-5 p-4 sm:p-6">
           <ApplicationProgress status={app.status} />
+
+          {registryBlocked && (
+            <div className="space-y-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+              <p className="font-bold">This applicant’s email is in the Deletion Registry</p>
+              <p>
+                An account with <strong>{app.email}</strong> was deleted earlier, so this person is signed out of the site
+                {status === 'Enrolled' ? ' and their student record is hidden in Enrollment & Records' : ' and cannot be enrolled until this is resolved'}.
+                Removing the registry entry lets them use the site again (it does not restore the old deleted account).
+              </p>
+              {canDecide && onRemoveRegistryEntry && (
+                <button
+                  type="button"
+                  disabled={removingRegistry}
+                  onClick={async () => {
+                    if (!window.confirm(`Remove ${app.email} from the Deletion Registry? They will be able to sign in again.`)) return;
+                    setRemovingRegistry(true);
+                    try {
+                      await onRemoveRegistryEntry();
+                    } finally {
+                      setRemovingRegistry(false);
+                    }
+                  }}
+                  className="rounded-lg bg-rose-600 px-3 py-1.5 font-bold text-white hover:bg-rose-700 disabled:opacity-50"
+                >
+                  {removingRegistry ? 'Removing…' : 'Remove registry entry'}
+                </button>
+              )}
+            </div>
+          )}
 
           {!app.applicantUid && (
             <p className="rounded-lg border border-slate-200 bg-white p-3 text-[11px] text-slate-600">

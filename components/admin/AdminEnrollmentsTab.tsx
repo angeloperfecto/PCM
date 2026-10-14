@@ -15,6 +15,7 @@ import {
 } from '@/lib/types';
 import { AdminStudentDetailModal } from './AdminStudentDetailModal';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
+import { normalizeStatus } from '@/lib/enrollmentWorkflow';
 import { AcademicTermModal } from './AcademicTermModal';
 import { AcademicCourseModal } from './AcademicCourseModal';
 import {
@@ -69,10 +70,13 @@ export type EnrollmentAdminSubTab =
   | 'fees'
   | 'settings';
 
-export const AdminEnrollmentsTab: React.FC = () => {
+export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = ({ onOpenAdmissions }) => {
   const {
     enrollments,
     students,
+    applications,
+    registryBlockedStudents,
+    removeDeletedUserRecord,
     studentProfile,
     academicSubjects,
     addAcademicSubject,
@@ -173,8 +177,8 @@ export const AdminEnrollmentsTab: React.FC = () => {
   );
 
   // Pending delete confirmation (shared by every list in this tab)
-  type DeleteKind = 'student' | 'preEnlistment' | 'enrollment' | 'addDrop' | 'term' | 'course';
-  const [pendingDelete, setPendingDelete] = useState<{ kind: DeleteKind; id: string; label: string; message: string } | null>(null);
+  type DeleteKind = 'student' | 'preEnlistment' | 'enrollment' | 'addDrop' | 'term' | 'course' | 'registry';
+  const [pendingDelete, setPendingDelete] = useState<{ kind: DeleteKind; id: string; label: string; message: string; title?: string; confirmLabel?: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const confirmPendingDelete = async () => {
@@ -193,6 +197,8 @@ export const AdminEnrollmentsTab: React.FC = () => {
           ? await deleteAddDropRequest(id)
           : kind === 'course'
           ? await deleteAcademicSubject(id)
+          : kind === 'registry'
+          ? await removeDeletedUserRecord(id)
           : await deleteAcademicPeriod(id);
       if (ok) {
         if (kind === 'enrollment' && selectedEnrollment?.id === id) setSelectedEnrollment(null);
@@ -214,6 +220,55 @@ export const AdminEnrollmentsTab: React.FC = () => {
   const returnedEnrollments = enrollments.filter((e) => e.status === 'Returned for Correction').length;
   const pendingPreEnlistments = preEnlistments.filter((p) => p.status === 'Submitted').length;
   const pendingAddDrop = addDropRequests.filter((a) => a.status === 'Pending').length;
+
+  // Admissions Review and Enrollment & Records read the same Firestore data: an application
+  // that reaches "Enrolled" creates the student record listed in the Student Directory.
+  const officiallyEnrolled = students.filter((s) => (s.enrollmentStatus || '') === 'Enrolled').length;
+  const admissionsStages = [
+    { label: 'New applications', statuses: ['Submitted', 'Under Review', 'Requirements Incomplete'], hint: 'Documents & review' },
+    { label: 'Admission decision', statuses: ['For Admission Approval', 'Admitted'], hint: 'Approve or admit' },
+    { label: 'Assessment & payment', statuses: ['For Assessment', 'For Payment'], hint: 'Fees & receipts' },
+    { label: 'Ready to enroll', statuses: ['For Enrollment'], hint: 'Confirm enrollment' },
+    { label: 'Enrolled via admissions', statuses: ['Enrolled'], hint: 'Student record created' },
+  ].map((st) => ({ ...st, count: applications.filter((a) => st.statuses.includes(normalizeStatus(a.status))).length }));
+  const confirmRegistryRemoval = (s: { fullName?: string; name?: string; email?: string; studentId?: string }) =>
+    setPendingDelete({
+      kind: 'registry',
+      id: (s.email || s.studentId || '').toLowerCase(),
+      label: `${s.fullName || s.name || 'Student'} (${s.email || s.studentId})`,
+      title: 'Remove from Deletion Registry?',
+      confirmLabel: 'Remove Entry',
+      message:
+        'This email is in the Deletion Registry (an account deleted earlier), so the student record is hidden here and the student is signed out of the portal. Removing the entry shows the record again and lets the student sign in. It does not restore the old deleted account.',
+    });
+  const registryNotice =
+    registryBlockedStudents.length > 0 ? (
+      <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-xs text-rose-900 space-y-2">
+        <p className="font-bold">
+          {registryBlockedStudents.length} student record{registryBlockedStudents.length > 1 ? 's are' : ' is'} hidden because the email is in the
+          Deletion Registry
+        </p>
+        <p className="text-rose-800">
+          These students were enrolled (or created) after an account with the same email was deleted. They are left out of the directory and
+          counts, and cannot use the Student Portal, until the registry entry is removed.
+        </p>
+        <ul className="space-y-1.5">
+          {registryBlockedStudents.map((s) => (
+            <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 bg-white/70 rounded-lg px-3 py-2 border border-rose-100">
+              <span>
+                <strong>{s.fullName || s.name}</strong> · <span className="font-mono">{s.studentId}</span> · {s.email}
+              </span>
+              <button
+                onClick={() => confirmRegistryRemoval(s)}
+                className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white font-bold cursor-pointer"
+              >
+                Remove registry entry
+              </button>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ) : null;
 
   // Student list resolution: only saved records, never the built-in sample profile
   const allStudents = students;
@@ -438,12 +493,46 @@ export const AdminEnrollmentsTab: React.FC = () => {
             </div>
           </div>
 
+          {registryNotice}
+
+          {/* Admissions pipeline (same applications as Admissions Review) */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
+                <FileCheck className="w-5 h-5 text-[#588B76]" />
+                <span>Admissions Pipeline</span>
+                <span className="text-xs font-sans font-normal text-slate-500">({applications.length} applications)</span>
+              </h4>
+              {onOpenAdmissions && (
+                <button onClick={onOpenAdmissions} className="text-xs font-bold text-[#18392B] hover:text-[#588B76] underline cursor-pointer">
+                  Open Admissions Review
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {admissionsStages.map((st) => (
+                <button
+                  key={st.label}
+                  onClick={onOpenAdmissions}
+                  disabled={!onOpenAdmissions}
+                  className="text-left p-3 rounded-xl border border-slate-200 bg-slate-50/60 hover:border-[#588B76] transition cursor-pointer disabled:cursor-default"
+                >
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block">{st.label}</span>
+                  <span className="text-2xl font-serif font-bold text-[#18392B] block">{st.count}</span>
+                  <span className="text-[10px] text-slate-500">{st.hint}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           {/* KPI Metric Cards */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
               <span className="text-[11px] font-mono text-slate-500 uppercase block">Total Enrolled</span>
-              <span className="font-serif text-3xl font-bold text-[#18392B]">{approvedEnrollments}</span>
-              <span className="text-[11px] text-emerald-600 block mt-1">Official COR Issued</span>
+              <span className="font-serif text-3xl font-bold text-[#18392B]">{officiallyEnrolled}</span>
+              <span className="text-[11px] text-emerald-600 block mt-1">
+                Official student records · {approvedEnrollments} term enrollment{approvedEnrollments === 1 ? '' : 's'} approved
+              </span>
             </div>
             <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-xs bg-amber-50/40">
               <span className="text-[11px] font-mono text-amber-800 uppercase block">Pending Review</span>
@@ -555,6 +644,7 @@ export const AdminEnrollmentsTab: React.FC = () => {
       {/* ========================================================================= */}
       {activeSubTab === 'students' && (
         <div className="space-y-4">
+          {registryNotice}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
             <div className="flex flex-wrap items-center gap-3">
               <div className="relative">
@@ -616,6 +706,9 @@ export const AdminEnrollmentsTab: React.FC = () => {
                     <td className="p-3.5">
                       <div className="font-bold text-slate-900">{student.fullName || student.name}</div>
                       <div className="text-[11px] font-mono text-slate-500">{student.studentId} • {student.email}</div>
+                      {(student as any).applicationNumber && (
+                        <div className="text-[10px] text-slate-400">Admitted via application {(student as any).applicationNumber}</div>
+                      )}
                     </td>
                     <td className="p-3.5">
                       <span className="font-medium text-slate-800">{student.degreeProgram || student.program}</span>
@@ -1948,7 +2041,8 @@ export const AdminEnrollmentsTab: React.FC = () => {
       )}
       <ConfirmDeleteModal
         isOpen={!!pendingDelete}
-        title="Delete this record?"
+        title={pendingDelete?.title || 'Delete this record?'}
+        confirmLabel={pendingDelete?.confirmLabel}
         itemName={pendingDelete?.label}
         message={pendingDelete?.message}
         isLoading={isDeleting}
