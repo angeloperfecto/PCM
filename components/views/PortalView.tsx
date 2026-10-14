@@ -15,6 +15,7 @@ import { EnrollmentModule } from '@/components/portal/enrollment/EnrollmentModul
 import { AddDropModule } from '@/components/portal/enrollment/AddDropModule';
 import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModule';
 import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule';
+import { PaymentInstructions } from '@/components/enrollment/PaymentInstructions';
 import { MyApplicationPanel } from '@/components/enrollment/MyApplicationPanel';
 import { AdmittedStudentPortal } from '@/components/portal/AdmittedStudentPortal';
 import { ADMITTED_PORTAL_STATUSES, normalizeStatus } from '@/lib/enrollmentWorkflow';
@@ -71,6 +72,7 @@ export const PortalView: React.FC = () => {
     currentEnrollmentDraft,
     saveEnrollmentDraft,
     submitEnrollment,
+    enrollmentSystemConfig,
     uploadStudentDocument,
     studentNotifications,
     markNotificationRead,
@@ -128,7 +130,8 @@ export const PortalView: React.FC = () => {
   const [wizardSemester, setWizardSemester] = useState('1st Semester');
   const [wizardSchoolYear, setWizardSchoolYear] = useState('2026-2027');
   const [wizardPaymentMethod, setWizardPaymentMethod] = useState('GCash');
-  const [wizardPaymentOption, setWizardPaymentOption] = useState('Installment (40% Downpayment)');
+  const downpaymentPercent = enrollmentSystemConfig?.downpaymentPercent ?? 40;
+  const [wizardPaymentOption, setWizardPaymentOption] = useState(`Installment (${downpaymentPercent}% Downpayment)`);
   const [wizardPaymentRef, setWizardPaymentRef] = useState('');
   const [wizardNotes, setWizardNotes] = useState('');
 
@@ -1067,7 +1070,7 @@ export const PortalView: React.FC = () => {
                       className="w-full p-2.5 rounded-lg border border-slate-300 bg-white"
                     >
                       <option value="Full Payment (5% Discount)">Full Payment (5% Discount)</option>
-                      <option value="Installment (40% Downpayment)">Installment (40% Downpayment)</option>
+                      <option value={`Installment (${downpaymentPercent}% Downpayment)`}>Installment ({downpaymentPercent}% Downpayment)</option>
                       <option value="Monthly Installment Plan">Monthly Installment Plan</option>
                     </select>
                   </div>
@@ -1087,6 +1090,12 @@ export const PortalView: React.FC = () => {
                     </select>
                   </div>
                 </div>
+
+                <PaymentInstructions compact reportHint={false} />
+                <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">
+                  Pay through any of the channels above. If you pay now, enter the reference number below. You can also pay after the Registrar
+                  approves your enrollment and report it in <strong>Amount Due &amp; Payment</strong>; the Finance Office verifies every payment.
+                </p>
 
                 <div className="space-y-1">
                   <label className="text-slate-700 font-semibold">Proof of Payment Reference (Optional)</label>
