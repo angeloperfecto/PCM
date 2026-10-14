@@ -21,6 +21,7 @@ import { AcademicTermModal } from './AcademicTermModal';
 import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
 import { AdmissionRequirementsCard } from './AdmissionRequirementsCard';
+import { ClassListModal, classListFor } from './ClassListModal';
 import { AcademicCourseModal } from './AcademicCourseModal';
 import {
   GraduationCap,
@@ -133,6 +134,8 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
   const [selectedStudentDossier, setSelectedStudentDossier] = useState<StudentProfile | null>(null);
   const [isCORModalOpen, setIsCORModalOpen] = useState(false);
   const [corStudentSnap, setCorStudent] = useState<StudentProfile | null>(null);
+  // Subject whose master list (class list) is open.
+  const [classListSubjectId, setClassListSubjectId] = useState<string | null>(null);
   // Open dialogs follow the live records, so changes appear without reopening them.
   const selectedEnrollment = selectedEnrollmentSnap ? enrollments.find((e) => e.id === selectedEnrollmentSnap.id) || selectedEnrollmentSnap : null;
   const corStudent = corStudentSnap ? students.find((s) => s.id === corStudentSnap.id) || corStudentSnap : null;
@@ -1371,10 +1374,11 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {academicSubjects.map((subj) => {
-              const enrolled = subj.enrolledCount || 18;
-              const cap = subj.capacity || 30;
-              const pct = Math.min(100, Math.round((enrolled / cap) * 100));
+            {academicSubjects.filter((subj) => !subj.isArchived).map((subj) => {
+              // Counted from the student records (the same list the class list shows).
+              const enrolled = classListFor(subj, students).length;
+              const cap = Number(subj.capacity) || 0;
+              const pct = cap ? Math.min(100, Math.round((enrolled / cap) * 100)) : 0;
 
               return (
                 <div key={subj.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
@@ -1404,7 +1408,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                   <div className="space-y-1">
                     <div className="flex justify-between text-[11px] font-medium text-slate-600">
                       <span>Seat Capacity Fill</span>
-                      <span className="font-mono font-bold">{enrolled}/{cap} ({pct}%)</span>
+                      <span className="font-mono font-bold">{cap ? `${enrolled}/${cap} (${pct}%)` : `${enrolled} enrolled`}</span>
                     </div>
                     <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
                       <div
@@ -1415,11 +1419,26 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                       />
                     </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => setClassListSubjectId(subj.id)}
+                    className="w-full rounded-lg border border-[#588B76]/40 bg-emerald-50/60 px-3 py-2 text-xs font-bold text-[#18392B] hover:bg-emerald-100"
+                  >
+                    View class list ({enrolled})
+                  </button>
                 </div>
               );
             })}
           </div>
         </div>
+      )}
+
+      {classListSubjectId && academicSubjects.find((x) => x.id === classListSubjectId) && (
+        <ClassListModal
+          subject={academicSubjects.find((x) => x.id === classListSubjectId)!}
+          students={students}
+          onClose={() => setClassListSubjectId(null)}
+        />
       )}
 
       {/* ========================================================================= */}
