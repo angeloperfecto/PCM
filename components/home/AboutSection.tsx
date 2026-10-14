@@ -59,12 +59,11 @@ export const AboutSection: React.FC = () => {
           <div className="lg:col-span-5 relative">
             <div className="relative rounded-sm overflow-hidden shadow-md border-2 border-[#D0DED8] h-[400px]">
               <Image
-                src="https://images.unsplash.com/photo-1524178232363-1fb2b075b655?q=80&w=1000&auto=format&fit=crop"
-                alt="PCM Theological Classroom Discussion"
+                src="/images/pcm-class-discussion.jpg"
+                alt="PCM students in a class discussion in the library"
                 fill
                 className="object-cover object-center"
                 sizes="(max-width: 1024px) 100vw, 40vw"
-                referrerPolicy="no-referrer"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#18392B]/95 via-[#18392B]/40 to-transparent" />
               
