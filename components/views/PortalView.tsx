@@ -16,6 +16,8 @@ import { AddDropModule } from '@/components/portal/enrollment/AddDropModule';
 import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModule';
 import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule';
 import { MyApplicationPanel } from '@/components/enrollment/MyApplicationPanel';
+import { AdmittedStudentPortal } from '@/components/portal/AdmittedStudentPortal';
+import { ADMITTED_PORTAL_STATUSES, normalizeStatus } from '@/lib/enrollmentWorkflow';
 import {
   StudentPortalSidebar,
   StudentPortalTabType,
@@ -58,6 +60,7 @@ export const PortalView: React.FC = () => {
   const {
     isStudentLoggedIn,
     studentProfile,
+    applications,
     students,
     firebaseAuthUser,
     signInWithGoogle,
@@ -276,6 +279,20 @@ export const PortalView: React.FC = () => {
   // application tracker (the Student Portal opens once the Registrar finalizes enrollment,
   // or immediately for existing students whose record email matches their Google account).
   if (!isStudentLoggedIn) {
+    // Admitted applicants get the Student Portal (admitted view) until they are officially enrolled.
+    const ownEmail = firebaseAuthUser?.emailVerified ? (firebaseAuthUser.email || '').toLowerCase() : '';
+    const admittedApp = firebaseAuthUser
+      ? applications.find(
+          (a) =>
+            (a.applicantUid === firebaseAuthUser.uid || (!!ownEmail && (a.email || '').toLowerCase() === ownEmail)) &&
+            (ADMITTED_PORTAL_STATUSES.includes(normalizeStatus(a.status)) ||
+              // Enrolled, but the new student record is not linked to this browser yet.
+              normalizeStatus(a.status) === 'Enrolled')
+        )
+      : undefined;
+    if (admittedApp) {
+      return <AdmittedStudentPortal app={admittedApp} />;
+    }
     if (firebaseAuthUser) {
       return (
         <div className="w-full min-h-[85vh] bg-slate-50 py-10 px-4 font-sans">

@@ -6,7 +6,7 @@ import { usePCM } from '@/lib/store';
 import { db, auth } from '@/lib/firebase';
 import { submitPayment, uploadRequirementFile } from '@/lib/admissionsService';
 import { ApplicantPaymentSection } from './PaymentSection';
-import { isOpenApplication, nextStepsFor, normalizeStatus, summarizeRequirements } from '@/lib/enrollmentWorkflow';
+import { ADMITTED_PORTAL_STATUSES, isOpenApplication, nextStepsFor, normalizeStatus, summarizeRequirements } from '@/lib/enrollmentWorkflow';
 import { ApplicationProgress, StatusBadge } from './ApplicationProgress';
 import { RequirementsChecklist } from './RequirementsChecklist';
 import { useApplicationDetails } from './useApplicationDetails';
@@ -14,7 +14,7 @@ import { useApplicationDetails } from './useApplicationDetails';
 // The signed-in applicant's own application(s): progress tracker, next steps, documents
 // to upload, notifications and status history.
 export const MyApplicationPanel: React.FC<{ onStartApplication?: () => void }> = ({ onStartApplication }) => {
-  const { applications, studentNotifications, firebaseAuthUser, navigateTo, markNotificationRead } = usePCM();
+  const { applications, studentNotifications, firebaseAuthUser, navigateTo, markNotificationRead, currentSection } = usePCM();
 
   // Admins have every application loaded, so always filter to the signed-in user's own.
   const mine = useMemo(() => {
@@ -104,7 +104,7 @@ export const MyApplicationPanel: React.FC<{ onStartApplication?: () => void }> =
               </span>
             </p>
           )}
-          {status === 'Enrolled' && (
+          {(status === 'Enrolled' || (ADMITTED_PORTAL_STATUSES.includes(status) && currentSection !== 'portal')) && (
             <button
               type="button"
               onClick={() => navigateTo('portal')}
