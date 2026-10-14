@@ -225,11 +225,12 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
   // that reaches "Enrolled" creates the student record listed in the Student Directory.
   const officiallyEnrolled = students.filter((s) => (s.enrollmentStatus || '') === 'Enrolled').length;
   const admissionsStages = [
-    { label: 'New applications', statuses: ['Submitted', 'Under Review', 'Requirements Incomplete'], hint: 'Documents & review' },
+    { label: 'New applications', statuses: ['Submitted', 'Under Review', 'Requirements Incomplete', 'For Correction'], hint: 'Documents & review' },
     { label: 'Admission decision', statuses: ['For Admission Approval', 'Admitted'], hint: 'Approve or admit' },
+    { label: 'Registration', statuses: ['For Registration'], hint: 'Students choosing subjects' },
     { label: 'Assessment & payment', statuses: ['For Assessment', 'For Payment'], hint: 'Fees & receipts' },
-    { label: 'Ready to enroll', statuses: ['For Enrollment'], hint: 'Confirm enrollment' },
-    { label: 'Enrolled via admissions', statuses: ['Enrolled'], hint: 'Student record created' },
+    { label: 'Final verification', statuses: ['For Enrollment'], hint: 'Checklist & approval' },
+    { label: 'Officially enrolled', statuses: ['Enrolled'], hint: 'Student record created' },
   ].map((st) => ({ ...st, count: applications.filter((a) => st.statuses.includes(normalizeStatus(a.status))).length }));
   const confirmRegistryRemoval = (s: { fullName?: string; name?: string; email?: string; studentId?: string }) =>
     setPendingDelete({
@@ -509,7 +510,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                 </button>
               )}
             </div>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {admissionsStages.map((st) => (
                 <button
                   key={st.label}

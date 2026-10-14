@@ -272,7 +272,23 @@ await check('Registrar cannot skip from Under Review straight to Admitted', fals
 await check('Registrar sends the application for admission approval', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Admission Approval' }));
 await check('Registrar admits the applicant', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'Admitted' }));
 await check('Registrar cannot enroll straight from Admitted', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'Enrolled', paymentStatus: 'Verified', assessment: { total: 1 } }));
-await check('Registrar moves the admitted applicant to assessment', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Assessment' }));
+await check('Registrar cannot skip registration and go straight to assessment', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Assessment' }));
+await check('Registrar opens the student registration', true, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Registration' }));
+await check('Registrar cannot start the assessment before a registration exists', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Assessment' }));
+await check('applicant cannot submit a registration without subjects', false, () => updateDoc(doc(applicant, 'applications/appA'), { registration: { subjects: [], totalUnits: 0 }, status: 'For Assessment', updatedAt: 'now' }));
+await check('applicant cannot change other fields while registering', false, () => updateDoc(doc(applicant, 'applications/appA'), { registration: { subjects: [{ code: 'BIB-101', units: 3 }], totalUnits: 3 }, status: 'For Assessment', fullName: 'Changed', updatedAt: 'now' }));
+await check('applicant cannot skip to payment while registering', false, () => updateDoc(doc(applicant, 'applications/appA'), { registration: { subjects: [{ code: 'BIB-101', units: 3 }], totalUnits: 3 }, status: 'For Payment', updatedAt: 'now' }));
+await check('applicant submits the registration (moves to assessment)', true, () => {
+  const b = writeBatch(applicant);
+  b.update(doc(applicant, 'applications/appA'), {
+    registration: { programName: 'B.Th.', yearLevel: '1st Year', academicYear: '2026–2027', semester: '1st Semester', subjects: [{ subjectId: 's1', code: 'BIB-101', title: 'OT Survey', units: 3 }], totalUnits: 3, submittedAt: 'now', submittedBy: 'Applicant' },
+    status: 'For Assessment',
+    updatedAt: 'now',
+  });
+  b.set(doc(applicant, 'applications/appA/history/hReg'), { status: 'For Assessment', actor: 'applicant', byName: 'Applicant' });
+  return b.commit();
+});
+await check('applicant cannot change the registration after submitting', false, () => updateDoc(doc(applicant, 'applications/appA'), { registration: { subjects: [{ code: 'X', units: 30 }], totalUnits: 30 }, updatedAt: 'now' }));
 await check('cannot request payment without an assessment', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Payment' }));
 await check('cannot mark For Enrollment before payment is verified', false, () => updateDoc(doc(registrar, 'applications/appA'), { status: 'For Enrollment' }));
 await check('Finance cannot save assessments', false, () => updateDoc(doc(finance, 'applications/appA'), { status: 'For Payment', assessment: { total: 20000, minimumPayment: 5000 }, paymentStatus: 'Awaiting Payment' }));
@@ -311,6 +327,37 @@ await check('staff can waive payment with an assessment on file', true, async ()
   await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'applications/appW'), { applicantUid: 'appl2', status: 'For Assessment', email: 'appl2@gmail.com' }));
   return updateDoc(doc(registrar, 'applications/appW'), { status: 'For Enrollment', paymentStatus: 'Waived', assessment: { total: 0, minimumPayment: 0 }, paymentWaivedReason: 'Full scholarship' });
 });
+
+section('Corrections, withdrawal and drafts');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const db = ctx.firestore();
+  await setDoc(doc(db, 'applications/appC'), { applicantUid: 'appl2', status: 'Under Review', email: 'appl2@gmail.com', fullName: 'Wrong Name', referenceNumber: 'PCM-2026-CCCC' });
+  await setDoc(doc(db, 'applications/appE'), { applicantUid: 'appl2', status: 'Enrolled', email: 'appl2@gmail.com' });
+});
+await check('Registrar returns the application for correction', true, () => updateDoc(doc(registrar, 'applications/appC'), { status: 'For Correction', applicantMessage: 'Please use your full legal name.' }));
+await check('applicant cannot change their program while correcting', false, () => updateDoc(doc(otherApplicant, 'applications/appC'), { programName: 'MDiv', status: 'Under Review', updatedAt: 'now' }));
+await check('applicant cannot admit themselves while correcting', false, () => updateDoc(doc(otherApplicant, 'applications/appC'), { fullName: 'Right Name', status: 'Admitted', updatedAt: 'now' }));
+await check('applicant sends corrected details back for review', true, () => {
+  const b = writeBatch(otherApplicant);
+  b.update(doc(otherApplicant, 'applications/appC'), { fullName: 'Right Name', status: 'Under Review', correctedAt: 'now', updatedAt: 'now' });
+  b.set(doc(otherApplicant, 'applications/appC/history/hCor'), { status: 'Under Review', actor: 'applicant', byName: 'Right Name' });
+  return b.commit();
+});
+await check('applicant cannot edit details outside a correction request', false, () => updateDoc(doc(otherApplicant, 'applications/appC'), { fullName: 'Again', updatedAt: 'now' }));
+await check('applicant withdraws an open application', true, () => {
+  const b = writeBatch(otherApplicant);
+  b.update(doc(otherApplicant, 'applications/appC'), { status: 'Withdrawn', withdrawnAt: 'now', withdrawalReason: 'Studying elsewhere', updatedAt: 'now' });
+  b.set(doc(otherApplicant, 'applications/appC/history/hWd'), { status: 'Withdrawn', actor: 'applicant', byName: 'Right Name' });
+  return b.commit();
+});
+await check('a withdrawn application cannot be reopened', false, () => updateDoc(doc(registrar, 'applications/appC'), { status: 'Under Review' }));
+await check('an enrolled application cannot be withdrawn', false, () => updateDoc(doc(otherApplicant, 'applications/appE'), { status: 'Withdrawn', withdrawalReason: 'x', updatedAt: 'now' }));
+await check("applicant cannot withdraw someone else's application", false, () => updateDoc(doc(applicant, 'applications/other1'), { status: 'Withdrawn', withdrawalReason: 'x', updatedAt: 'now' }));
+await check('applicant saves an application draft', true, () => setDoc(doc(applicant, 'applicationDrafts/appl1'), { uid: 'appl1', step: 3, data: { firstName: 'Ana' }, updatedAt: 'now' }));
+await check('applicant reads own draft', true, () => getDoc(doc(applicant, 'applicationDrafts/appl1')));
+await check("applicant cannot read another applicant's draft", false, () => getDoc(doc(otherApplicant, 'applicationDrafts/appl1')));
+await check("applicant cannot write another applicant's draft", false, () => setDoc(doc(otherApplicant, 'applicationDrafts/appl1'), { uid: 'appl1', step: 1, data: {}, updatedAt: 'now' }));
+await check('applicant deletes own draft after submitting', true, () => deleteDoc(doc(applicant, 'applicationDrafts/appl1')));
 
 section('Deleting applications');
 await env.withSecurityRulesDisabled(async (ctx) => {

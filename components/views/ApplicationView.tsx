@@ -11,7 +11,7 @@ import { Search, ShieldCheck, Sparkles, FileText } from 'lucide-react';
 // One way to apply: the online registration wizard creates the admission application
 // (and carries over any documents uploaded on the way). "Track" shows that application.
 export const ApplicationView: React.FC = () => {
-  const { activeTrackerRef, firebaseAuthUser, signInWithGoogle } = usePCM();
+  const { activeTrackerRef, firebaseAuthUser, signInWithGoogle, isStudentLoggedIn, studentProfile, navigateTo } = usePCM();
 
   const [mode, setMode] = useState<'apply' | 'track'>(() => (activeTrackerRef ? 'track' : 'apply'));
   const [isSigningIn, setIsSigningIn] = useState(false);
@@ -118,6 +118,22 @@ export const ApplicationView: React.FC = () => {
         {mode === 'apply' &&
           (!firebaseAuthUser ? (
             signInCard('start your application')
+          ) : isStudentLoggedIn ? (
+            // Officially enrolled students do not apply again (no duplicate student records).
+            <div className="mx-auto max-w-lg space-y-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center shadow-sm sm:p-8">
+              <FileText className="mx-auto h-10 w-10 text-[#588B76]" />
+              <h3 className="font-serif text-xl font-bold text-[#18392B]">You are already an enrolled PCM student</h3>
+              <p className="text-xs leading-relaxed text-slate-700">
+                Student ID <strong className="font-mono">{studentProfile?.studentId}</strong>. Enrollment for later terms is done in the Student Portal.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigateTo('portal')}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#18392B] px-5 py-3 text-sm font-bold text-white hover:bg-[#23533e]"
+              >
+                Open the Student Portal
+              </button>
+            </div>
           ) : openAppRef === null ? (
             <p className="text-center text-xs text-slate-500 py-10">Checking for an existing application…</p>
           ) : openAppRef ? (
@@ -150,7 +166,7 @@ export const ApplicationView: React.FC = () => {
                   </p>
                 </div>
               </div>
-              <StudentRegistrationWizard showAdmissionsBridge={false} onCancel={() => setMode('track')} onCompleted={() => setMode('track')} />
+              <StudentRegistrationWizard showAdmissionsBridge={false} enableDraft onCancel={() => setMode('track')} onCompleted={() => setMode('track')} />
             </div>
           ))}
       </div>

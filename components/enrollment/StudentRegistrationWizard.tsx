@@ -1,6 +1,8 @@
 'use client';
 
-import React, { useState, useId, useEffect, useCallback } from 'react';
+import React, { useState, useId, useEffect, useCallback, useRef } from 'react';
+import { db } from '@/lib/firebase';
+import { deleteApplicationDraft, loadApplicationDraft, saveApplicationDraft } from '@/lib/admissionsService';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { isValidImageSrc } from '@/lib/utils';
@@ -57,6 +59,8 @@ interface StudentRegistrationWizardProps {
   onCancel?: () => void;
   /** Show the "link an existing admissions application" banner (off on the public Apply page, where this form is the application). */
   showAdmissionsBridge?: boolean;
+  /** Save progress as a draft on the signed-in account and offer to resume it (public Apply page). */
+  enableDraft?: boolean;
 }
 
 export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps> = ({
@@ -65,6 +69,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   onCompleted,
   onCancel,
   showAdmissionsBridge = true,
+  enableDraft = false,
 }) => {
   const {
     programs,
@@ -76,6 +81,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     navigateTo,
     addToast,
     logActivity,
+    firebaseAuthUser,
   } = usePCM();
 
   const fileInputId = useId();
@@ -596,6 +602,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
       if (!ref) return;
 
       setSubmittedReference(ref);
+      if (enableDraft && firebaseAuthUser?.uid) deleteApplicationDraft(db, firebaseAuthUser.uid).catch(() => {});
       setCurrentStep(9);
       if (onCompleted) onCompleted(ref);
     } catch (err: any) {
@@ -605,6 +612,38 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
       setIsSubmitting(false);
     }
   };
+
+  // Draft: progress is saved to the applicant's account (applicationDrafts/{uid}) so the form
+  // can be finished later or on another device. Uploaded files are not part of the draft.
+  const [draftInfo, setDraftInfo] = useState<{ resumedFrom?: string; savedAt?: string }>({});
+  const [draftReady, setDraftReady] = useState(false);
+  const draftRequestedRef = useRef(false);
+  useEffect(() => {
+    const uid = firebaseAuthUser?.uid;
+    if (!enableDraft || !uid || draftRequestedRef.current) return;
+    draftRequestedRef.current = true;
+    loadApplicationDraft(db, uid)
+      .then((d) => {
+        if (d?.data) {
+          setFormData((prev) => ({ ...prev, ...d.data }));
+          setCurrentStep(Math.min(Math.max(1, Number(d.step) || 1), 8));
+          setDraftInfo({ resumedFrom: d.updatedAt });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setDraftReady(true));
+  }, [enableDraft, firebaseAuthUser]);
+  useEffect(() => {
+    const uid = firebaseAuthUser?.uid;
+    if (!enableDraft || !uid || !draftReady || submittedReference || currentStep > 8) return;
+    const timer = setTimeout(() => {
+      const { profilePhoto: _photo, studentIdNumber: _sid, ...rest } = formData as any;
+      saveApplicationDraft(db, uid, currentStep, rest)
+        .then(() => setDraftInfo((info) => ({ ...info, savedAt: new Date().toISOString() })))
+        .catch(() => {});
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [enableDraft, firebaseAuthUser, draftReady, formData, currentStep, submittedReference]);
 
   const handleCopy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -699,6 +738,29 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
 
       {/* Main Form Body */}
       <div className="p-6 sm:p-8 lg:p-10">
+        {enableDraft && currentStep <= 8 && (draftInfo.resumedFrom || draftInfo.savedAt) && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-600" data-testid="draft-status">
+            <span>
+              {draftInfo.resumedFrom ? `Your saved draft from ${new Date(draftInfo.resumedFrom).toLocaleString()} was restored. ` : ''}
+              {draftInfo.savedAt ? `Draft saved ${new Date(draftInfo.savedAt).toLocaleTimeString()} — you can finish later or on another device.` : ''}
+              {' '}Uploaded documents are not part of the draft.
+            </span>
+            {draftInfo.resumedFrom && (
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!window.confirm('Discard your saved draft and start over?')) return;
+                  if (firebaseAuthUser?.uid) await deleteApplicationDraft(db, firebaseAuthUser.uid).catch(() => {});
+                  window.location.reload();
+                }}
+                className="font-semibold text-slate-700 underline hover:text-rose-700"
+              >
+                Start over
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Connected Admissions Banner (Steps 1 to 8) */}
         {showAdmissionsBridge && currentStep <= 8 && (
           <>

@@ -6,10 +6,11 @@ import { usePCM } from '@/lib/store';
 import { db, auth } from '@/lib/firebase';
 import { submitPayment, uploadRequirementFile } from '@/lib/admissionsService';
 import { ApplicantPaymentSection } from './PaymentSection';
-import { ADMITTED_PORTAL_STATUSES, isOpenApplication, nextStepsFor, normalizeStatus, summarizeRequirements } from '@/lib/enrollmentWorkflow';
+import { ADMITTED_PORTAL_STATUSES, isOpenApplication, nextStepsFor, normalizeStatus, statusLabel, summarizeRequirements } from '@/lib/enrollmentWorkflow';
 import { ApplicationProgress, StatusBadge } from './ApplicationProgress';
 import { RequirementsChecklist } from './RequirementsChecklist';
 import { useApplicationDetails } from './useApplicationDetails';
+import { CorrectionForm, EnrollmentConfirmationCard, RegistrationForm, RegistrationSummary, WithdrawApplication } from './ApplicantSteps';
 
 // The signed-in applicant's own application(s): progress tracker, next steps, documents
 // to upload, notifications and status history.
@@ -70,7 +71,7 @@ export const MyApplicationPanel: React.FC<{ onStartApplication?: () => void }> =
           >
             {mine.map((a) => (
               <option key={a.id} value={a.id}>
-                {a.referenceNumber} — {normalizeStatus(a.status)}
+                {a.referenceNumber} — {statusLabel(a.status)}
               </option>
             ))}
           </select>
@@ -91,7 +92,7 @@ export const MyApplicationPanel: React.FC<{ onStartApplication?: () => void }> =
 
         <div
           className={`rounded-xl border p-4 text-xs ${
-            status === 'Requirements Incomplete' ? 'border-amber-300 bg-amber-50 text-amber-950' : 'border-slate-200 bg-slate-50 text-slate-700'
+            status === 'Requirements Incomplete' || status === 'For Correction' || status === 'For Registration' ? 'border-amber-300 bg-amber-50 text-amber-950' : 'border-slate-200 bg-slate-50 text-slate-700'
           }`}
         >
           <p className="mb-1 font-bold text-[#18392B]">What happens next</p>
@@ -115,6 +116,11 @@ export const MyApplicationPanel: React.FC<{ onStartApplication?: () => void }> =
           )}
         </div>
       </div>
+
+      <EnrollmentConfirmationCard app={app as any} payments={payments} />
+      {status === 'For Correction' && <CorrectionForm key={app.id + (app.updatedAt || '')} app={app as any} />}
+      {status === 'For Registration' && <RegistrationForm key={app.id} app={app as any} />}
+      {(app as any).registration && status !== 'For Registration' && <RegistrationSummary registration={(app as any).registration} />}
 
       <ApplicantPaymentSection
         status={app.status}
@@ -202,6 +208,8 @@ export const MyApplicationPanel: React.FC<{ onStartApplication?: () => void }> =
           )}
         </section>
       </div>
+
+      <WithdrawApplication app={app as any} />
     </div>
   );
 };

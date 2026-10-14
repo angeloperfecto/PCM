@@ -6,8 +6,12 @@
 import {
   Firestore,
   collection,
+  deleteDoc,
   doc,
+  getDoc,
   getDocs,
+  increment,
+  setDoc,
   query,
   runTransaction,
   where,
@@ -18,7 +22,13 @@ import { blobToDataUrl, compressImageFile } from './firebase';
 import {
   ApplicationPayment,
   ApplicationRequirement,
+  CatalogSubject,
   EnrollmentAssessment,
+  EnrollmentRegistration,
+  NOTE_REQUIRED_STATUSES,
+  RegisteredSubject,
+  RegistrationPolicy,
+  STATUS_LABELS,
   FeeLine,
   PaymentStatus,
   RequirementTemplate,
@@ -32,6 +42,7 @@ import {
   normalizeStatus,
   summarizeRequirements,
   transitionBlocker,
+  validateRegistration,
   validateRequirementFile,
 } from './enrollmentWorkflow';
 
@@ -297,9 +308,9 @@ export async function transitionApplication(
   requirements: ApplicationRequirement[],
   note: string
 ): Promise<{ ok: boolean; message: string }> {
-  const blocker = transitionBlocker(app.status, to, requirements);
+  const blocker = transitionBlocker(app.status, to, requirements, { registration: app.registration });
   if (blocker) return { ok: false, message: blocker };
-  if ((to === 'Rejected' || to === 'Deferred' || to === 'Requirements Incomplete') && !note.trim()) {
+  if (NOTE_REQUIRED_STATUSES.includes(to) && !note.trim()) {
     return { ok: false, message: 'Please add a note explaining this decision; the applicant will see it.' };
   }
 
@@ -310,7 +321,8 @@ export async function transitionApplication(
     updatedAt: timestamp,
     lastDecisionBy: staff.name,
     lastDecisionAt: timestamp,
-    ...(note.trim() ? { applicantMessage: note.trim() } : {}),
+    // Each decision replaces the note shown to the applicant (an empty note clears an old one).
+    applicantMessage: note.trim(),
   });
   addHistory(batch, db, app.id, {
     status: to,
@@ -325,11 +337,11 @@ export async function transitionApplication(
     batch,
     db,
     app,
-    `Application status: ${to}`,
+    `Application status: ${STATUS_LABELS[to]}`,
     `${nextStepsFor(to, summary)}${note.trim() ? ` Note from the Admissions Office: ${note.trim()}` : ''}`
   );
   await batch.commit();
-  return { ok: true, message: `Application moved to "${to}".` };
+  return { ok: true, message: `Application moved to "${STATUS_LABELS[to]}".` };
 }
 
 export async function reviewRequirement(
@@ -556,6 +568,9 @@ export async function saveAssessment(
   if (!summarizeRequirements(requirements).allRequiredVerified) {
     return { ok: false, message: 'All required documents must be verified before the assessment.' };
   }
+  if (!app.registration?.subjects?.length) {
+    return { ok: false, message: 'The student has no academic registration on file. Send the application back to "For Registration" first.' };
+  }
   const items = input.items
     .map((i) => ({ name: i.name.trim(), amount: Math.round(Number(i.amount) * 100) / 100 }))
     .filter((i) => i.name);
@@ -621,6 +636,9 @@ export async function waivePayment(
   if (!summarizeRequirements(requirements).allRequiredVerified) {
     return { ok: false, message: 'All required documents must be verified first.' };
   }
+  if (!app.registration?.subjects?.length) {
+    return { ok: false, message: 'The student has no academic registration on file. Send the application back to "For Registration" first.' };
+  }
   if (!reason.trim()) return { ok: false, message: 'Please record why no payment is required.' };
   const timestamp = now();
   const assessment: EnrollmentAssessment = app.assessment || {
@@ -655,6 +673,141 @@ export async function waivePayment(
   notifyApplicant(batch, db, app, 'No payment required', `No payment is required for your enrollment. ${nextStepsFor('For Enrollment')}`);
   await batch.commit();
   return { ok: true, message: 'Payment waived; the applicant is ready for enrollment confirmation.' };
+}
+
+// Fields an applicant may change when the Admissions Office returns the application for correction.
+export const APPLICANT_CORRECTION_FIELDS: { key: string; label: string }[] = EDITABLE_APPLICANT_FIELDS.filter((f) => f.key !== 'programName');
+
+// Step 2: the applicant corrects their details and sends the application back for review.
+export async function resubmitCorrections(
+  db: Firestore,
+  applicant: Actor,
+  app: ApplicationRecord,
+  changes: Record<string, string>
+): Promise<{ ok: boolean; message: string }> {
+  if (normalizeStatus(app.status) !== 'For Correction') {
+    return { ok: false, message: 'Corrections can be sent while the application is "For Correction".' };
+  }
+  const allowed = new Set(APPLICANT_CORRECTION_FIELDS.map((f) => f.key));
+  const update: Record<string, string> = {};
+  const changedLabels: string[] = [];
+  Object.entries(changes).forEach(([k, v]) => {
+    if (!allowed.has(k)) return;
+    const value = String(v ?? '').trim();
+    if (value === String(app[k] ?? '').trim()) return;
+    update[k] = value;
+    changedLabels.push(APPLICANT_CORRECTION_FIELDS.find((f) => f.key === k)!.label);
+  });
+  if ('fullName' in update && !update.fullName) return { ok: false, message: 'Full name cannot be empty.' };
+  const timestamp = now();
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'applications', app.id), { ...update, status: 'Under Review', correctedAt: timestamp, updatedAt: timestamp });
+  addHistory(batch, db, app.id, {
+    status: 'Under Review',
+    previousStatus: app.status,
+    actor: 'applicant',
+    byName: app.fullName || applicant.name,
+    note: changedLabels.length ? `Corrected: ${changedLabels.join(', ')}.` : 'Confirmed details without changes.',
+  });
+  notifyStaff(batch, db, app, applicant.uid, 'Corrections submitted', `${app.fullName} sent their corrected application back for review${changedLabels.length ? ` (${changedLabels.join(', ')})` : ''}.`);
+  await batch.commit();
+  return { ok: true, message: 'Thank you. Your corrected application is back with the Admissions Office.' };
+}
+
+// Step 5: the admitted student submits their academic registration (program, year level,
+// term and subjects). It moves the application to "For Assessment".
+export async function submitRegistration(
+  db: Firestore,
+  applicant: Actor,
+  app: ApplicationRecord,
+  input: { programId?: string; programName: string; yearLevel: string; academicYear: string; semester: string; subjects: RegisteredSubject[] },
+  policy: RegistrationPolicy,
+  catalog: CatalogSubject[]
+): Promise<{ ok: boolean; message: string }> {
+  if (normalizeStatus(app.status) !== 'For Registration') {
+    return { ok: false, message: 'Subjects can be chosen once the Registrar opens your registration.' };
+  }
+  const problem = validateRegistration(input, policy, catalog);
+  if (problem) return { ok: false, message: problem };
+  const timestamp = now();
+  const subjects = input.subjects.map((sub) => ({
+    subjectId: sub.subjectId,
+    code: sub.code,
+    title: sub.title,
+    units: Number(sub.units) || 0,
+    section: sub.section || '',
+    schedule: sub.schedule || '',
+    room: sub.room || '',
+    instructor: sub.instructor || '',
+  }));
+  const registration: EnrollmentRegistration = {
+    ...(input.programId ? { programId: input.programId } : {}),
+    programName: input.programName.trim(),
+    yearLevel: input.yearLevel,
+    academicYear: input.academicYear,
+    semester: input.semester,
+    subjects,
+    totalUnits: subjects.reduce((sum, sub) => sum + sub.units, 0),
+    submittedAt: timestamp,
+    submittedBy: app.fullName || applicant.name,
+  };
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'applications', app.id), { registration, status: 'For Assessment', updatedAt: timestamp });
+  addHistory(batch, db, app.id, {
+    status: 'For Assessment',
+    previousStatus: app.status,
+    actor: 'applicant',
+    byName: app.fullName || applicant.name,
+    note: `Registration: ${registration.yearLevel}, ${registration.semester} AY ${registration.academicYear}; ${subjects.length} subjects, ${registration.totalUnits} units.`,
+  });
+  notifyStaff(batch, db, app, applicant.uid, 'Registration submitted', `${app.fullName} registered for ${subjects.length} subjects (${registration.totalUnits} units). Ready for assessment.`);
+  notifyApplicant(batch, db, app, 'Registration received', nextStepsFor('For Assessment'));
+  await batch.commit();
+  return { ok: true, message: 'Registration submitted. The Registrar will prepare your assessment.' };
+}
+
+// The applicant withdraws their own application (any open stage before enrollment).
+export async function withdrawApplication(
+  db: Firestore,
+  applicant: Actor,
+  app: ApplicationRecord,
+  reason: string
+): Promise<{ ok: boolean; message: string }> {
+  if (!isOpenApplication(app.status)) return { ok: false, message: 'This application can no longer be withdrawn.' };
+  if (!reason.trim()) return { ok: false, message: 'Please tell us briefly why you are withdrawing.' };
+  const timestamp = now();
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'applications', app.id), {
+    status: 'Withdrawn',
+    withdrawnAt: timestamp,
+    withdrawalReason: reason.trim(),
+    updatedAt: timestamp,
+  });
+  addHistory(batch, db, app.id, {
+    status: 'Withdrawn',
+    previousStatus: app.status,
+    actor: 'applicant',
+    byName: app.fullName || applicant.name,
+    note: reason.trim(),
+  });
+  notifyStaff(batch, db, app, applicant.uid, 'Application withdrawn', `${app.fullName} withdrew application ${app.referenceNumber}: ${reason.trim()}`);
+  await batch.commit();
+  return { ok: true, message: 'Your application was withdrawn.' };
+}
+
+// Draft of the online application form, saved per Google account so it can be finished
+// later or on another device (applicationDrafts/{uid}; only the owner can read or write it).
+export async function saveApplicationDraft(db: Firestore, uid: string, step: number, data: Record<string, any>): Promise<void> {
+  await setDoc(doc(db, 'applicationDrafts', uid), { uid, step, data, updatedAt: now() });
+}
+
+export async function loadApplicationDraft(db: Firestore, uid: string): Promise<{ step: number; data: Record<string, any>; updatedAt: string } | null> {
+  const snap = await getDoc(doc(db, 'applicationDrafts', uid));
+  return snap.exists() ? (snap.data() as any) : null;
+}
+
+export async function deleteApplicationDraft(db: Firestore, uid: string): Promise<void> {
+  await deleteDoc(doc(db, 'applicationDrafts', uid));
 }
 
 // Step 6: the applicant reports a payment for verification.
@@ -877,7 +1030,11 @@ export async function finalizeEnrollment(
   options: FinalizeOptions,
   payments: ApplicationPayment[] = []
 ): Promise<FinalizeResult> {
-  const blocker = canFinalizeEnrollment(app.status, requirements, { assessment: app.assessment, paymentStatus: app.paymentStatus });
+  const blocker = canFinalizeEnrollment(app.status, requirements, {
+    assessment: app.assessment,
+    paymentStatus: app.paymentStatus,
+    registration: app.registration,
+  });
   if (blocker) return { ok: false, message: blocker };
   if (!options.academicYear.trim() || !options.semester.trim() || !options.yearLevel.trim()) {
     return { ok: false, message: 'Academic year, semester and year level are required.' };
@@ -911,10 +1068,22 @@ export async function finalizeEnrollment(
     pastorName: app.pastorName || existing?.data?.pastorName || '',
     mentorName: existing?.data?.mentorName || '',
     avatarUrl: existing?.data?.avatarUrl || '',
-    program: app.programName || app.program || '',
-    programId: app.programId || '',
-    degreeProgram: app.programName || app.program || '',
+    program: app.registration?.programName || app.programName || app.program || '',
+    programId: app.registration?.programId || app.programId || '',
+    degreeProgram: app.registration?.programName || app.programName || app.program || '',
     yearLevel: options.yearLevel,
+    // Subjects from the student's registration, shown in the Student Portal and COR.
+    courses: (app.registration?.subjects || []).map((sub: RegisteredSubject) => ({
+      id: sub.subjectId,
+      code: sub.code,
+      title: sub.title,
+      units: Number(sub.units) || 0,
+      schedule: sub.schedule || '',
+      room: sub.room || '',
+      instructor: sub.instructor || '',
+      status: 'Enrolled',
+    })),
+    totalUnitsEnrolled: Number(app.registration?.totalUnits) || 0,
     academicYear: options.academicYear,
     semester: options.semester,
     currentSemester: `${options.semester}, AY ${options.academicYear}`,
@@ -950,17 +1119,32 @@ export async function finalizeEnrollment(
     enrolledAt: timestamp,
     enrolledBy: staff.name,
     updatedAt: timestamp,
-    ...(existing ? {} : { createdAt: timestamp, courses: [], subjectHistory: [], practicumEntries: [], documents: [] }),
+    ...(existing ? {} : { createdAt: timestamp, subjectHistory: [], practicumEntries: [], documents: [] }),
   };
 
   const appWithRecord = { ...app, studentRecordId: recordId };
   const batch = writeBatch(db);
   batch.set(doc(db, 'studentProfiles', recordId), profile, { merge: true });
+  // Seat counts for the registered subjects (only catalog entries that still exist).
+  const subjectIds: string[] = Array.from(new Set<string>((app.registration?.subjects || []).map((sub: RegisteredSubject) => sub.subjectId).filter(Boolean)));
+  const existingSubjects = await Promise.all(subjectIds.map((id) => getDoc(doc(db, 'academicSubjects', id)).then((snap) => (snap.exists() ? id : null)).catch(() => null)));
+  existingSubjects.filter(Boolean).forEach((id) => batch.update(doc(db, 'academicSubjects', id as string), { enrolledCount: increment(1) }));
   batch.update(doc(db, 'applications', app.id), {
     status: 'Enrolled',
     studentId,
     studentRecordId: recordId,
     enrolledAt: timestamp,
+    enrollmentConfirmation: {
+      studentId,
+      confirmedAt: timestamp,
+      confirmedBy: staff.name,
+      academicYear: options.academicYear,
+      semester: options.semester,
+      yearLevel: options.yearLevel,
+      programName: app.registration?.programName || app.programName || app.program || '',
+      totalUnits: Number(app.registration?.totalUnits) || 0,
+      subjectCount: (app.registration?.subjects || []).length,
+    },
     updatedAt: timestamp,
     lastDecisionBy: staff.name,
     lastDecisionAt: timestamp,

@@ -6,10 +6,14 @@ import { usePCM } from '@/lib/store';
 import { db } from '@/lib/firebase';
 import { Application } from '@/lib/types';
 import {
+  NOTE_REQUIRED_STATUSES,
   STAFF_TRANSITIONS,
+  STATUS_LABELS,
   TRACKER_STAGES,
   WorkflowStatus,
+  finalVerificationChecklist,
   normalizeStatus,
+  statusLabel,
   requirementTemplates,
   summarizeRequirements,
   transitionBlocker,
@@ -58,7 +62,7 @@ interface StaffNotification {
   read?: boolean;
 }
 
-const OUTCOME_STATUSES: WorkflowStatus[] = ['Rejected', 'Deferred'];
+const OUTCOME_STATUSES: WorkflowStatus[] = ['For Correction', 'Rejected', 'Deferred', 'Withdrawn'];
 const ALL_STATUSES: WorkflowStatus[] = [...TRACKER_STAGES.map((s) => s.status), ...OUTCOME_STATUSES];
 
 // Statuses where the next move is the Admissions Office's.
@@ -243,7 +247,7 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
             onClick={() => setStatusFilter(statusFilter === s ? 'all' : s)}
             className={`rounded-xl border p-3 text-left transition ${statusFilter === s ? 'border-[#588B76] bg-emerald-50' : 'border-slate-200 bg-white hover:border-[#588B76]/50'}`}
           >
-            <span className="block truncate text-[10px] font-bold uppercase text-slate-500">{s}</span>
+            <span className="block truncate text-[10px] font-bold uppercase text-slate-500">{STATUS_LABELS[s]}</span>
             <span className="text-xl font-bold text-slate-900">{counts[s] || 0}</span>
           </button>
         ))}
@@ -268,7 +272,7 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
               <option value="action">Needs action</option>
               <option value="payments">Payments to verify</option>
               {ALL_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>{STATUS_LABELS[s]}</option>
               ))}
             </select>
             <select value={programFilter} onChange={(e) => setProgramFilter(e.target.value)} aria-label="Filter by program" className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
@@ -521,7 +525,13 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   const [flagged, setFlagged] = useState<Record<string, string>>({});
   const [requestNote, setRequestNote] = useState('');
   const [showFinalize, setShowFinalize] = useState(false);
-  const [finalize, setFinalize] = useState({ academicYear: '2026–2027', semester: '1st Semester', yearLevel: '1st Year' });
+  // Term and year level come from the student's registration; staff can adjust them.
+  const [finalize, setFinalize] = useState(() => ({
+    academicYear: app.registration?.academicYear || '2026–2027',
+    semester: app.registration?.semester || '1st Semester',
+    yearLevel: app.registration?.yearLevel || '1st Year',
+  }));
+  const [verifiedConfirm, setVerifiedConfirm] = useState(false);
   const [note, setNote] = useState('');
 
   const run = async (title: string, action: () => Promise<{ ok: boolean; message: string }>) => {
@@ -541,10 +551,11 @@ const ApplicationDetail: React.FC<DetailProps> = ({
 
   const transitions = STAFF_TRANSITIONS[status].filter((t) => t !== 'Requirements Incomplete');
   const finalizeBlocker =
-    canFinalizeEnrollment(app.status, requirements, { assessment: app.assessment, paymentStatus: app.paymentStatus }) ||
+    canFinalizeEnrollment(app.status, requirements, { assessment: app.assessment, paymentStatus: app.paymentStatus, registration: app.registration }) ||
     (registryBlocked ? 'This applicant’s email is in the Deletion Registry. Remove the registry entry first, or the new student record would be hidden and the student could not sign in.' : null);
   const [removingRegistry, setRemovingRegistry] = useState(false);
-  const noteRequired = pending && (pending.to === 'Rejected' || pending.to === 'Deferred');
+  const noteRequired = pending && NOTE_REQUIRED_STATUSES.includes(pending.to);
+  const checklist = finalVerificationChecklist(app as any, requirements, payments);
 
   const field = (label: string, value?: React.ReactNode) =>
     value ? (
@@ -632,7 +643,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({
               <h4 className="text-sm font-bold text-[#18392B]">Decision</h4>
               <div className="flex flex-wrap gap-2">
                 {transitions.map((to) => {
-                  const blocker = transitionBlocker(app.status, to, requirements);
+                  const blocker = transitionBlocker(app.status, to, requirements, { registration: (app as any).registration });
                   return (
                     <button
                       key={to}
@@ -648,10 +659,22 @@ const ApplicationDetail: React.FC<DetailProps> = ({
                           ? 'bg-rose-600 text-white hover:bg-rose-700'
                           : to === 'Deferred'
                           ? 'bg-orange-500 text-white hover:bg-orange-600'
+                          : to === 'Withdrawn'
+                          ? 'border border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                          : to === 'For Correction'
+                          ? 'border border-amber-400 bg-amber-50 text-amber-900 hover:bg-amber-100'
                           : 'bg-[#18392B] text-white hover:bg-[#23533e]'
                       }`}
                     >
-                      {to === 'Under Review' && (status === 'Rejected' || status === 'Deferred') ? 'Reopen for review' : `Move to ${to}`}
+                      {to === 'Under Review' && (status === 'Rejected' || status === 'Deferred')
+                        ? 'Reopen for review'
+                        : to === 'For Correction'
+                        ? 'Return for correction'
+                        : to === 'Withdrawn'
+                        ? 'Mark withdrawn'
+                        : to === 'For Registration' && status === 'For Assessment'
+                        ? 'Return registration for changes'
+                        : `Move to ${STATUS_LABELS[to]}`}
                     </button>
                   );
                 })}
@@ -665,21 +688,39 @@ const ApplicationDetail: React.FC<DetailProps> = ({
                     Request missing documents
                   </button>
                 ) : null}
-                {status === 'For Enrollment' && (
+              </div>
+              {status === 'For Enrollment' && (
+                <div className="space-y-2 rounded-xl border border-teal-200 bg-teal-50/60 p-3" data-testid="final-verification">
+                  <p className="text-xs font-bold text-teal-900">Final enrollment verification</p>
+                  <ul className="space-y-1">
+                    {checklist.map((item) => (
+                      <li key={item.label} className="flex items-start gap-2 text-xs">
+                        <span className={`mt-0.5 font-bold ${item.ok ? 'text-emerald-700' : 'text-rose-700'}`}>{item.ok ? '✓' : '✗'}</span>
+                        <span>
+                          <strong className="text-slate-800">{item.label}</strong> — <span className="text-slate-600">{item.detail}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <label className="flex items-start gap-2 text-xs text-slate-700">
+                    <input type="checkbox" checked={verifiedConfirm} onChange={(e) => setVerifiedConfirm(e.target.checked)} className="mt-0.5" />
+                    <span>I have reviewed this checklist and the records above, and approve official enrollment.</span>
+                  </label>
                   <button
                     type="button"
-                    disabled={busy || !!finalizeBlocker}
-                    title={finalizeBlocker || undefined}
+                    disabled={busy || !!finalizeBlocker || !verifiedConfirm || checklist.some((i) => !i.ok)}
+                    title={finalizeBlocker || (!verifiedConfirm ? 'Tick the verification box first.' : undefined)}
                     onClick={() => setShowFinalize(true)}
                     className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-40"
                   >
                     <GraduationCap className="h-4 w-4" /> Finalize enrollment
                   </button>
-                )}
-              </div>
-              {transitions.some((t) => transitionBlocker(app.status, t, requirements)) && (
+                  {finalizeBlocker && <p className="text-[11px] text-rose-700">{finalizeBlocker}</p>}
+                </div>
+              )}
+              {transitions.some((t) => transitionBlocker(app.status, t, requirements, { registration: (app as any).registration })) && (
                 <p className="text-[11px] text-slate-500">
-                  Greyed-out steps need documents first: {summary.missing.length} missing, {summary.rejected.length} to replace, {summary.awaitingReview.length} awaiting your review.
+                  Greyed-out steps are waiting on documents or the student’s registration: {summary.missing.length} missing, {summary.rejected.length} to replace, {summary.awaitingReview.length} awaiting your review.
                 </p>
               )}
 
@@ -807,8 +848,54 @@ const ApplicationDetail: React.FC<DetailProps> = ({
             </form>
           )}
 
+          {/* Academic registration (step 5) */}
+          {(status === 'For Registration' || (app as any).registration) && (
+            <section className="space-y-2 rounded-2xl border border-slate-200 bg-white p-4" data-testid="registration-panel">
+              <h4 className="text-sm font-bold text-[#18392B]">Academic registration</h4>
+              {(app as any).registration ? (
+                <>
+                  <p className="text-xs text-slate-600">
+                    {(app as any).registration.programName} · {(app as any).registration.yearLevel} · {(app as any).registration.semester}, AY{' '}
+                    {(app as any).registration.academicYear} · submitted {new Date((app as any).registration.submittedAt).toLocaleString()}
+                  </p>
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full min-w-[480px] text-xs">
+                      <thead className="bg-slate-50 text-left text-slate-500">
+                        <tr>
+                          <th className="p-2">Code</th>
+                          <th className="p-2">Subject</th>
+                          <th className="p-2">Schedule</th>
+                          <th className="p-2 text-right">Units</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(app as any).registration.subjects.map((sub: any) => (
+                          <tr key={sub.subjectId || sub.code} className="border-t border-slate-100">
+                            <td className="p-2 font-mono font-bold">{sub.code}</td>
+                            <td className="p-2">{sub.title}</td>
+                            <td className="p-2 text-slate-600">{sub.schedule || '—'}</td>
+                            <td className="p-2 text-right font-mono">{sub.units}</td>
+                          </tr>
+                        ))}
+                        <tr className="border-t border-slate-200 bg-slate-50 font-bold">
+                          <td className="p-2" colSpan={3}>Total units</td>
+                          <td className="p-2 text-right font-mono">{(app as any).registration.totalUnits}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              ) : (
+                <p className="text-xs text-slate-600">Waiting for the student to choose their subjects in the Student Portal.</p>
+              )}
+            </section>
+          )}
+
           {/* Assessment & payment (steps 5-6) */}
           <StaffPaymentSection
+            // Re-initialise the draft assessment when the student's registration arrives or changes.
+            key={(app as any).registration?.submittedAt || 'no-registration'}
+            defaultUnits={(app as any).registration?.totalUnits}
             status={app.status}
             assessment={app.assessment}
             paymentStatus={app.paymentStatus}
@@ -948,7 +1035,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/60 p-4" role="alertdialog" aria-modal="true" aria-label="Confirm decision">
           <div className="w-full max-w-md space-y-3 rounded-2xl bg-white p-5 shadow-2xl">
             <h4 className="flex items-center gap-2 font-serif text-lg font-bold text-[#18392B]">
-              <ShieldAlert className="h-5 w-5 text-amber-500" /> Move to “{pending.to}”?
+              <ShieldAlert className="h-5 w-5 text-amber-500" /> Move to “{STATUS_LABELS[pending.to]}”?
             </h4>
             <p className="text-xs text-slate-600">
               {app.fullName} will be notified. {pending.to === 'Rejected' ? 'This closes the application (it can be reopened later).' : ''}

@@ -2,15 +2,15 @@
 
 import React from 'react';
 import { CheckCircle2, Circle, Clock, XCircle, PauseCircle, AlertTriangle } from 'lucide-react';
-import { TRACKER_STAGES, normalizeStatus, stageIndex } from '@/lib/enrollmentWorkflow';
+import { STATUS_LABELS, TRACKER_STAGES, normalizeStatus, stageIndex } from '@/lib/enrollmentWorkflow';
 
-// Status tracker: Application Submitted -> Under Review -> Requirements -> For Admission
-// Approval -> Admitted -> Assessment -> Payment -> For Enrollment -> Enrolled, with
-// Rejected / Deferred shown as an outcome banner.
+// Status tracker: Application Submitted -> Under Review -> Requirements -> Admission Decision
+// -> Admitted -> Registration -> Assessment -> Payment -> Final Verification -> Officially
+// Enrolled, with Rejected / Deferred / Withdrawn shown as an outcome banner.
 export const ApplicationProgress: React.FC<{ status?: string; compact?: boolean }> = ({ status, compact }) => {
   const current = normalizeStatus(status);
   const currentIndex = stageIndex(status);
-  const closed = current === 'Rejected' || current === 'Deferred';
+  const closed = current === 'Rejected' || current === 'Deferred' || current === 'Withdrawn';
 
   return (
     <div className="space-y-3" aria-label="Application progress">
@@ -24,14 +24,14 @@ export const ApplicationProgress: React.FC<{ status?: string; compact?: boolean 
           }`}
         >
           {current === 'Rejected' ? <XCircle className="h-4 w-4 shrink-0" /> : <PauseCircle className="h-4 w-4 shrink-0" />}
-          <span>Application {current === 'Rejected' ? 'not approved' : 'deferred'}</span>
+          <span>Application {current === 'Rejected' ? 'not approved' : current === 'Withdrawn' ? 'withdrawn' : 'deferred'}</span>
         </div>
       )}
-      <ol className={`grid gap-2 ${compact ? 'grid-cols-9' : 'grid-cols-1 sm:grid-cols-3 lg:grid-cols-9'}`}>
+      <ol className={`grid gap-2 ${compact ? 'grid-cols-10' : 'grid-cols-1 sm:grid-cols-5 lg:grid-cols-10'}`}>
         {TRACKER_STAGES.map((stage, i) => {
           const done = !closed && (i < currentIndex || current === 'Enrolled');
           const active = !closed && i === currentIndex && current !== 'Enrolled';
-          const incomplete = active && stage.status === 'Requirements Incomplete';
+          const incomplete = active && (current === 'Requirements Incomplete' || current === 'For Correction');
           return (
             <li
               key={stage.status}
@@ -56,7 +56,7 @@ export const ApplicationProgress: React.FC<{ status?: string; compact?: boolean 
                 <Circle className="h-4 w-4 shrink-0" />
               )}
               {!compact && (
-                <span>{stage.status === 'Requirements Incomplete' && (done || !active) ? 'Requirements' : incomplete ? 'Requirements Incomplete' : stage.label}</span>
+                <span>{stage.status === 'Requirements Incomplete' && (done || !active) ? 'Requirements' : incomplete ? STATUS_LABELS[current] : stage.label}</span>
               )}
             </li>
           );
@@ -72,6 +72,9 @@ export const StatusBadge: React.FC<{ status?: string }> = ({ status }) => {
     Submitted: 'bg-blue-100 text-blue-800 border-blue-200',
     'Under Review': 'bg-indigo-100 text-indigo-800 border-indigo-200',
     'Requirements Incomplete': 'bg-amber-100 text-amber-900 border-amber-300',
+    'For Correction': 'bg-amber-100 text-amber-900 border-amber-300',
+    'For Registration': 'bg-lime-100 text-lime-900 border-lime-300',
+    Withdrawn: 'bg-slate-100 text-slate-700 border-slate-300',
     'For Admission Approval': 'bg-purple-100 text-purple-800 border-purple-200',
     Admitted: 'bg-emerald-100 text-emerald-800 border-emerald-200',
     'For Assessment': 'bg-cyan-100 text-cyan-800 border-cyan-200',
@@ -83,7 +86,7 @@ export const StatusBadge: React.FC<{ status?: string }> = ({ status }) => {
   };
   return (
     <span className={`inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-bold ${styles[s]}`}>
-      {s}
+      {STATUS_LABELS[s]}
     </span>
   );
 };

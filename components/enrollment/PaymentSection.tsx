@@ -271,14 +271,18 @@ export const StaffPaymentSection: React.FC<{
   feeStructure: { name: string; amount: number; isPerUnit?: boolean; required?: boolean }[];
   defaults: { tuitionPerUnit?: number; registrationFee?: number };
   requirementsVerified: boolean;
+  /** Units from the student's registration, used for the draft assessment. */
+  defaultUnits?: number;
   onSaveAssessment: (input: { units: number; items: FeeLine[]; minimumPayment: number; notes: string }) => Promise<Result>;
   onWaive: (reason: string) => Promise<Result>;
   onReviewPayment: (p: ApplicationPayment, verdict: 'Verified' | 'Rejected', remarks: string) => Promise<Result>;
 }> = (props) => {
   const s = normalizeStatus(props.status);
   const editable = props.canAssess && (s === 'For Assessment' || s === 'For Payment');
-  const [units, setUnits] = useState(props.assessment?.units || 18);
-  const [items, setItems] = useState<FeeLine[]>(() => props.assessment?.items || draftAssessmentLines(props.feeStructure, 18, props.defaults));
+  const [units, setUnits] = useState(props.assessment?.units || props.defaultUnits || 18);
+  const [items, setItems] = useState<FeeLine[]>(
+    () => props.assessment?.items || draftAssessmentLines(props.feeStructure, props.defaultUnits || 18, props.defaults)
+  );
   const total = useMemo(() => Math.round(items.reduce((t, i) => t + (Number(i.amount) || 0), 0) * 100) / 100, [items]);
   const [minimum, setMinimum] = useState<string>(props.assessment ? String(props.assessment.minimumPayment) : '');
   const [notes, setNotes] = useState(props.assessment?.notes || '');

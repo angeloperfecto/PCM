@@ -7,10 +7,11 @@ import { MyApplicationPanel } from '@/components/enrollment/MyApplicationPanel';
 import { normalizeStatus, type WorkflowStatus } from '@/lib/enrollmentWorkflow';
 
 const PATH: { status: WorkflowStatus; label: string; detail: string }[] = [
-  { status: 'Admitted', label: 'Admitted', detail: 'Admission approved; complete any remaining requirements' },
-  { status: 'For Assessment', label: 'Requirements verified', detail: 'The Registrar prepares your fee assessment' },
-  { status: 'For Payment', label: 'Assessment & payment', detail: 'Pay at least the minimum and report your payment' },
-  { status: 'For Enrollment', label: 'Payment verified', detail: 'The Registrar confirms your enrollment' },
+  { status: 'Admitted', label: 'Admitted', detail: 'Admission approved; the Registrar verifies your documents' },
+  { status: 'For Registration', label: 'Registration', detail: 'Choose your year level and subjects' },
+  { status: 'For Assessment', label: 'Assessment', detail: 'The Registrar computes your fees' },
+  { status: 'For Payment', label: 'Payment', detail: 'Pay at least the minimum and report your payment' },
+  { status: 'For Enrollment', label: 'Final verification', detail: 'The Registrar checks everything and approves' },
   { status: 'Enrolled', label: 'Officially enrolled', detail: 'Student ID issued; full Student Portal opens' },
 ];
 
@@ -57,7 +58,7 @@ export const AdmittedStudentPortal: React.FC<Props> = ({ app }) => {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm space-y-3">
           <h3 className="font-serif text-base font-bold text-[#18392B]">Your path to official enrollment</h3>
-          <ol className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+          <ol className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-2">
             {PATH.map((step, i) => {
               const done = i < currentIndex;
               const current = i === currentIndex;
