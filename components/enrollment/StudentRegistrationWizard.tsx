@@ -55,6 +55,8 @@ interface StudentRegistrationWizardProps {
   // with the existing reference if the applicant already has an open application).
   onCompleted?: (referenceNumber: string) => void;
   onCancel?: () => void;
+  /** Show the "link an existing admissions application" banner (off on the public Apply page, where this form is the application). */
+  showAdmissionsBridge?: boolean;
 }
 
 export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps> = ({
@@ -62,6 +64,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   initialAppData,
   onCompleted,
   onCancel,
+  showAdmissionsBridge = true,
 }) => {
   const {
     programs,
@@ -697,7 +700,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
       {/* Main Form Body */}
       <div className="p-6 sm:p-8 lg:p-10">
         {/* Connected Admissions Banner (Steps 1 to 8) */}
-        {currentStep <= 8 && (
+        {showAdmissionsBridge && currentStep <= 8 && (
           <>
             {linkedApp ? (
               <div className="mb-6 p-4 rounded-xl border border-emerald-300 bg-emerald-50/90 text-emerald-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
