@@ -260,3 +260,23 @@ export function normalizeStudentProfile(raw: Partial<StudentProfile>): StudentPr
     updatedAt: new Date().toISOString(),
   };
 }
+
+// A student's requirement checklist as every screen should show it: documents verified in
+// Admissions (verifiedAdmissionDocuments, copied at enrollment) are listed as Verified, followed by
+// the student's own requirement items. The generic default list is only used for students who
+// have neither (e.g. records created by hand).
+const normalizeName = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+export function studentRequirementsView(profile: Partial<StudentProfile>): StudentRequirementItem[] {
+  const admission: StudentRequirementItem[] = (((profile as any).verifiedAdmissionDocuments || []) as any[]).map((d) => ({
+    id: `adm-${d.id}`,
+    name: d.name,
+    description: 'Verified during admission',
+    required: true,
+    status: 'Verified',
+    verifiedBy: d.verifiedBy || 'Admissions',
+    verificationDate: d.verifiedAt || '',
+    remarks: 'From the admission application (Admissions Review)',
+  }));
+  const own = profile.requirements && profile.requirements.length > 0 ? profile.requirements : admission.length ? [] : getDefaultStudentRequirements();
+  return [...admission, ...own.filter((o) => !admission.some((a) => normalizeName(a.name) === normalizeName(o.name)))];
+}

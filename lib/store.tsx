@@ -6260,6 +6260,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     remarks?: string,
     file?: any
   ): Promise<boolean> => {
+    if (requirementId.startsWith('adm-')) {
+      addToast('info', 'Verified in Admissions', 'This document was verified during admission. Manage it in Admissions Review.');
+      return false;
+    }
     const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId || studentProfile.studentId === studentId ? studentProfile : null);
     if (!target) return false;
 

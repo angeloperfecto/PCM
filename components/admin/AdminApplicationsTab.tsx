@@ -3,6 +3,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import { usePCM } from '@/lib/store';
+import type { StudentProfile } from '@/lib/types';
+import { accountSummary } from '@/lib/studentLedger';
 import { db } from '@/lib/firebase';
 import { Application } from '@/lib/types';
 import {
@@ -91,6 +93,19 @@ function downloadCsv(filename: string, rows: unknown[][]) {
 // Admissions & Enrollment dashboard: every application from submission to enrollment.
 // Decisions are limited to the Registrar, Admin and Super Admin (also enforced by
 // firestore.rules); other admin roles can view.
+// The student record created when Admissions finalized this application. Once a student is
+// enrolled, that record (kept up to date by the student and the Registrar) is the source of truth
+// for their details; the application keeps what was submitted.
+function linkedStudent(app: { studentRecordId?: string; studentId?: string; referenceNumber?: string } | null, students: StudentProfile[]): StudentProfile | null {
+  if (!app) return null;
+  return (
+    (app.studentRecordId ? students.find((s) => s.id === app.studentRecordId) : undefined) ||
+    (app.studentId ? students.find((s) => s.studentId === app.studentId) : undefined) ||
+    (app.referenceNumber ? students.find((s) => s.applicationNumber === app.referenceNumber || s.referenceNumber === app.referenceNumber) : undefined) ||
+    null
+  );
+}
+
 export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> = ({ onOpenEnrollment }) => {
   const {
     applications,
@@ -104,7 +119,9 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
     feeStructure,
     isUserDeleted,
     removeDeletedUserRecord,
+    students,
   } = usePCM();
+  const liveName = (a: any) => linkedStudent(a, students)?.fullName || a.fullName;
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'action' | 'payments' | WorkflowStatus>('all');
@@ -145,12 +162,12 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
         if (statusFilter !== 'all' && statusFilter !== 'action' && statusFilter !== 'payments' && s !== statusFilter) return false;
         if (programFilter !== 'all' && (a.programName || a.program) !== programFilter) return false;
         if (!q) return true;
-        return [a.fullName, a.email, a.referenceNumber, a.studentId, a.phone]
+        return [a.fullName, linkedStudent(a as any, students)?.fullName, a.email, a.referenceNumber, a.studentId, a.phone]
           .filter(Boolean)
           .some((v) => String(v).toLowerCase().includes(q));
       })
       .sort((a, b) => (b.updatedAt || b.createdAt || '').localeCompare(a.updatedAt || a.createdAt || ''));
-  }, [applications, search, statusFilter, programFilter]);
+  }, [applications, search, statusFilter, programFilter, students]);
 
   const selected = applications.find((a) => a.id === selectedId) || null;
   const unreadAlerts = staffNotes.filter((n) => !n.read).length;
@@ -297,7 +314,7 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
                     className="flex min-w-0 flex-1 flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:border-[#588B76] sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0">
-                      <p className={`truncate text-sm font-bold ${a.fullName ? 'text-slate-900' : 'italic text-slate-400'}`}>{a.fullName || 'Unnamed application'}</p>
+                      <p className={`truncate text-sm font-bold ${liveName(a) ? 'text-slate-900' : 'italic text-slate-400'}`}>{liveName(a) || 'Unnamed application'}</p>
                       <p className="truncate text-[11px] text-slate-500">
                         {[a.referenceNumber || `ID ${a.id}`, a.programName || a.program || 'No program', a.email || 'No email'].join(' · ')}
                       </p>
@@ -511,7 +528,9 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   onOpenEnrollment,
 }) => {
   const { requirements, history, payments, loading } = useApplicationDetails(app.id);
-  const { enrollmentSystemConfig: paymentConfig } = usePCM();
+  const { enrollmentSystemConfig: paymentConfig, students } = usePCM();
+  const student = normalizeStatus(app.status) === 'Enrolled' ? linkedStudent(app as any, students) : null;
+  const account = student ? accountSummary(student as any) : null;
   const [editingDetails, setEditingDetails] = useState(false);
   const [details, setDetails] = useState<Record<string, string>>(() =>
     Object.fromEntries(EDITABLE_APPLICANT_FIELDS.map((f) => [f.key, String((app as any)[f.key] ?? (f.key === 'programName' ? app.program ?? '' : ''))]))
@@ -558,6 +577,17 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   const noteRequired = pending && NOTE_REQUIRED_STATUSES.includes(pending.to);
   const checklist = finalVerificationChecklist(app as any, requirements, payments);
 
+  // Current value from the student record; the application's value is shown only if it differs.
+  const same = (a?: unknown, b?: unknown) => String(a ?? '').trim().toLowerCase() === String(b ?? '').trim().toLowerCase();
+  const liveField = (label: string, current?: string, submitted?: string) =>
+    current || submitted ? (
+      <div>
+        <dt className="text-[10px] font-semibold uppercase text-slate-400">{label}</dt>
+        <dd className="text-xs text-slate-800">{current || '—'}</dd>
+        {submitted && !same(current, submitted) && <dd className="text-[10px] text-slate-400">On application: {submitted}</dd>}
+      </div>
+    ) : null;
+
   const field = (label: string, value?: React.ReactNode) =>
     value ? (
       <div>
@@ -572,10 +602,17 @@ const ApplicationDetail: React.FC<DetailProps> = ({
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-slate-200 bg-white p-4">
           <div className="min-w-0">
             <p className="font-mono text-[11px] font-bold text-[#588B76]">{app.referenceNumber}</p>
-            <h3 className="truncate font-serif text-xl font-bold text-[#18392B]">{app.fullName || 'Unnamed application'}</h3>
+            <h3 className="truncate font-serif text-xl font-bold text-[#18392B]">{student?.fullName || app.fullName || 'Unnamed application'}</h3>
             <div className="mt-1 flex flex-wrap items-center gap-2">
               <StatusBadge status={app.status} />
-              {status === 'Enrolled' && app.studentId && <span className="font-mono text-xs font-bold">{app.studentId}</span>}
+              {status === 'Enrolled' && (student?.studentId || app.studentId) && <span className="font-mono text-xs font-bold">{student?.studentId || app.studentId}</span>}
+              {student && (
+                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-900" title="Current student record">
+                  Now: {student.enrollmentStatus || '—'}
+                  {student.currentSemester ? ` · ${student.currentSemester}` : ''}
+                  {account ? ` · balance ₱${account.balance.toLocaleString()}` : ''}
+                </span>
+              )}
               {status === 'Enrolled' && onOpenEnrollment && (
                 <button type="button" onClick={onOpenEnrollment} className="text-[11px] font-bold text-[#18392B] underline hover:text-[#588B76]">
                   Open in Enrollment &amp; Records
@@ -801,6 +838,9 @@ const ApplicationDetail: React.FC<DetailProps> = ({
           <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between gap-2">
               <h4 className="text-sm font-bold text-[#18392B]">Admission documents</h4>
+              {student && (
+                <p className="text-[11px] text-slate-500">Documents submitted for admission. They also appear as verified in the student&apos;s Requirements Checklist (Enrollment &amp; Records and the Student Portal).</p>
+              )}
               {canDecide && !loading && requirements.length === 0 && status !== 'Enrolled' && (
                 <button
                   type="button"
@@ -915,8 +955,16 @@ const ApplicationDetail: React.FC<DetailProps> = ({
           {/* Applicant details */}
           <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
             <div className="flex items-center justify-between gap-2">
-              <h4 className="text-sm font-bold text-[#18392B]">Applicant information</h4>
-              {canDecide && !editingDetails && (
+              <h4 className="text-sm font-bold text-[#18392B]">
+                {student ? 'Student information' : 'Applicant information'}
+                {student && <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">Live from the student record</span>}
+              </h4>
+              {student && onOpenEnrollment && (
+                <button type="button" onClick={onOpenEnrollment} className="text-xs font-semibold text-[#18392B] underline">
+                  Edit in Enrollment &amp; Records
+                </button>
+              )}
+              {!student && canDecide && !editingDetails && (
                 <button type="button" onClick={() => setEditingDetails(true)} className="text-xs font-semibold text-[#18392B] underline">
                   Correct details
                 </button>
@@ -953,7 +1001,36 @@ const ApplicationDetail: React.FC<DetailProps> = ({
                 </div>
               </form>
             )}
+            {student && (
+              <p className="text-[11px] text-slate-500">
+                This applicant is enrolled, so details come from the student record and stay in sync with the Student Portal and
+                Enrollment &amp; Records. Where the original application differs, it is shown as &quot;On application&quot;.
+              </p>
+            )}
             <dl className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {student ? (
+                <>
+                  {liveField('Program', student.degreeProgram || student.program, app.programName || app.program)}
+                  {liveField('Year level / section', [student.yearLevel, student.section].filter(Boolean).join(' • '))}
+                  {liveField('Current term', student.currentSemester)}
+                  {liveField('Email', student.email, app.email)}
+                  {liveField('Mobile', student.mobileNumber || student.phone, app.phone)}
+                  {liveField('Date of birth', student.dateOfBirth || student.birthDate, app.dateOfBirth || app.birthDate)}
+                  {liveField('Sex', student.sex || student.gender, app.gender)}
+                  {liveField('Civil status', student.civilStatus, app.civilStatus)}
+                  {liveField('Address', student.currentAddress || student.address, app.address)}
+                  {liveField('Home church', student.homeChurch || student.churchName, app.churchName || app.churchAffiliation)}
+                  {liveField('Senior pastor', student.pastorName, app.pastorName)}
+                  {liveField('Pastor contact', student.pastorContactNumber || student.pastorPhone, app.pastorContact)}
+                  {liveField('Highest education', student.highestEducationalAttainment, app.highestEducation)}
+                  {liveField('Previous school', student.lastSchoolAttended, app.previousSchool || app.highSchool || app.previousCollege)}
+                  {liveField('Year graduated', student.yearGraduated, app.yearGraduated)}
+                  {liveField('Emergency contact', [student.emergencyContactPerson || student.emergencyContactName, student.emergencyContactNumber || student.emergencyContactPhone].filter(Boolean).join(' · '))}
+                  {field('Applicant type', app.applicantType)}
+                  {field('Application submitted', app.submissionDate || app.createdAt)}
+                </>
+              ) : (
+                <>
               {field('Program', app.programName || app.program)}
               {field('Email', app.email)}
               {field('Mobile', app.phone)}
@@ -969,6 +1046,8 @@ const ApplicationDetail: React.FC<DetailProps> = ({
               {field('Year graduated', app.yearGraduated)}
               {field('Applicant type', app.applicantType)}
               {field('Submitted', app.submissionDate || app.createdAt)}
+                </>
+              )}
             </dl>
             {(app.christianTestimony || app.personalTestimony) && (
               <div>
