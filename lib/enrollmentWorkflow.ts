@@ -490,13 +490,56 @@ export const DEFAULT_REQUIREMENTS: RequirementTemplate[] = [
   { id: 'testimony-essay', name: 'Christian Testimony Essay', description: 'Optional if already written in the application.', required: false },
 ];
 
-// Uses the Registrar's configured list (enrollment settings) when present.
+// Document kinds, so differently worded names of the same document match
+// (e.g. "Official Transcript of Records (TOR)" and "Form 138 / Transcript of Records").
+const REQUIREMENT_KINDS: RegExp[] = [
+  /photo|picture|2\s*[x×]\s*2/i,
+  /birth|\bpsa\b|\bnso\b/i,
+  /transcript|\btor\b|form\s*138|report\s*card/i,
+  /good\s*moral|moral\s*character/i,
+  /pastoral|pastor/i,
+  /testimony|essay/i,
+  /medical|physical|health/i,
+  /diploma|graduation/i,
+  /church\s*member|baptism|baptismal/i,
+];
+const normalizeDocName = (s: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+export function sameRequirement(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  if (normalizeDocName(a) === normalizeDocName(b)) return true;
+  return REQUIREMENT_KINDS.some((re) => re.test(a) && re.test(b));
+}
+
+// Uses the Registrar's configured list (enrollment settings) when present. IDs are kept as they
+// were (known default id on an exact name match, else req-N-slug) so existing checklists still match.
 export function requirementTemplates(configuredRequired?: string[]): RequirementTemplate[] {
   if (!configuredRequired || configuredRequired.length === 0) return DEFAULT_REQUIREMENTS;
   return configuredRequired.map((name, i) => {
-    const known = DEFAULT_REQUIREMENTS.find((d) => d.name.toLowerCase() === name.toLowerCase());
-    return known || { id: `req-${i + 1}-${slug(name)}`, name, description: '', required: true };
+    const exact = DEFAULT_REQUIREMENTS.find((d) => d.name.toLowerCase() === name.toLowerCase());
+    if (exact) return exact;
+    const similar = DEFAULT_REQUIREMENTS.find((d) => sameRequirement(d.name, name));
+    return { id: `req-${i + 1}-${slug(name)}`, name, description: similar?.description || '', required: true };
   });
+}
+
+// The single admission-requirements list: the structured list from the enrollment settings, else
+// the older list of names, else the defaults.
+export function admissionRequirementTemplates(config?: {
+  admissionRequirements?: { id?: string; name: string; description?: string; required?: boolean }[];
+  requiredDocumentsList?: string[];
+} | null): RequirementTemplate[] {
+  const list = config?.admissionRequirements;
+  if (Array.isArray(list) && list.some((r) => r && r.name && r.name.trim())) {
+    return list
+      .filter((r) => r && r.name && r.name.trim())
+      .map((r, i) => ({ id: r.id || `req-${i + 1}-${slug(r.name)}`, name: r.name.trim(), description: r.description || '', required: r.required !== false }));
+  }
+  return requirementTemplates(config?.requiredDocumentsList);
+}
+
+// Current requirements missing from an application's checklist (e.g. added to the list later).
+export function missingRequirements(templates: RequirementTemplate[], existing: { id: string; name: string }[]): RequirementTemplate[] {
+  return templates.filter((t) => !existing.some((e) => e.id === t.id || sameRequirement(e.name, t.name)));
 }
 
 function slug(s: string): string {

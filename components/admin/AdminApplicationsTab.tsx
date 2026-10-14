@@ -16,12 +16,16 @@ import {
   finalVerificationChecklist,
   normalizeStatus,
   statusLabel,
-  requirementTemplates,
+  
   summarizeRequirements,
   transitionBlocker,
   canFinalizeEnrollment,
+  admissionRequirementTemplates,
+  missingRequirements,
+  type RequirementTemplate,
 } from '@/lib/enrollmentWorkflow';
 import {
+  addMissingRequirements,
   EDITABLE_APPLICANT_FIELDS,
   addRequirement,
   createRequirementChecklist,
@@ -391,7 +395,7 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
           }}
           actor={admissionsActor}
           programs={programs}
-          requiredDocs={enrollmentSystemConfig?.requiredDocumentsList}
+          requiredDocs={admissionRequirementTemplates(enrollmentSystemConfig)}
           onClose={() => setSelectedId(null)}
           onDelete={canDecideAdmissions ? () => setDeleteTarget(selected) : undefined}
           onNote={(note) => addApplicationNote(selected.id, note)}
@@ -501,7 +505,7 @@ interface DetailProps {
   feeDefaults: { tuitionPerUnit?: number; registrationFee?: number };
   actor: () => { uid: string; name: string; email: string; role?: string };
   programs: any[];
-  requiredDocs?: string[];
+  requiredDocs?: RequirementTemplate[];
   onClose: () => void;
   onNote: (note: string) => void;
   toast: (ok: boolean, title: string, message: string) => void;
@@ -845,13 +849,31 @@ const ApplicationDetail: React.FC<DetailProps> = ({
                 <button
                   type="button"
                   disabled={busy}
-                  onClick={() => run('Checklist created', () => createRequirementChecklist(db, actor(), app as any, requirementTemplates(requiredDocs)))}
+                  onClick={() => run('Checklist created', () => createRequirementChecklist(db, actor(), app as any, requiredDocs || []))}
                   className="rounded-lg border border-[#588B76] px-3 py-1.5 text-xs font-semibold text-[#18392B] hover:bg-emerald-50"
                 >
                   Create document checklist
                 </button>
               )}
             </div>
+            {!loading && requirements.length > 0 && missingRequirements(requiredDocs || [], requirements).length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
+                <span>
+                  Not in this checklist yet (current admission requirements):{' '}
+                  <strong>{missingRequirements(requiredDocs || [], requirements).map((t) => t.name).join(', ')}</strong>
+                </span>
+                {canDecide && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => run('Checklist updated', () => addMissingRequirements(db, actor(), app as any, requirements, requiredDocs || []))}
+                    className="rounded-lg bg-[#18392B] px-3 py-1.5 font-bold text-white disabled:opacity-50"
+                  >
+                    Add missing documents
+                  </button>
+                )}
+              </div>
+            )}
             {loading ? (
               <p className="text-xs text-slate-500">Loading documents…</p>
             ) : (

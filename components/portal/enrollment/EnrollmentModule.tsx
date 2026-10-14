@@ -18,6 +18,8 @@ import {
   QrCode,
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { studentRequirementsView } from '@/lib/studentDefaults';
+import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { OnlineEnrollment } from '@/lib/types';
 
 interface EnrollmentModuleProps {
@@ -29,7 +31,7 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
   onOpenWizard,
   onOpenCORModal,
 }) => {
-  const { studentProfile, enrollments } = usePCM();
+  const { studentProfile, enrollments, enrollmentSystemConfig } = usePCM();
 
   // Latest online enrollment application
   const latestEnrollment =
@@ -51,32 +53,15 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
     0
   );
 
-  const requiredDocuments = [
-    {
-      name: 'Official Transcript of Records / Form 138',
-      desc: 'Academic records from previous school/institution',
-      status: 'Verified',
-      date: 'Aug 05, 2026',
-    },
-    {
-      name: 'Pastoral Recommendation & Church Endorsement',
-      desc: 'Signed by Senior Pastor Danilo Santos',
-      status: 'Verified',
-      date: 'Aug 07, 2026',
-    },
-    {
-      name: 'Certificate of Good Moral Character',
-      desc: 'Official institutional clearance',
-      status: 'Verified',
-      date: 'Aug 06, 2026',
-    },
-    {
-      name: 'Proof of Downpayment / Bank Deposit Slip',
-      desc: 'BDO Unibank Ref #849182 • ₱5,000.00',
-      status: 'Verified',
-      date: 'Aug 10, 2026',
-    },
-  ];
+  // The student's real checklist (admission requirements list), not sample documents.
+  const requiredDocuments = studentRequirementsView(studentProfile, admissionRequirementTemplates(enrollmentSystemConfig)).map((r) => ({
+    name: r.name,
+    desc: r.remarks || r.description || '',
+    status: r.status,
+    date: r.verificationDate || r.uploadDate || '',
+    required: r.required,
+  }));
+  const verifiedCount = requiredDocuments.filter((d) => d.status === 'Verified').length;
 
   return (
     <div id="pcm-enrollment-module" className="space-y-6">
@@ -242,8 +227,8 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
             <FileText className="w-4 h-4 text-purple-700" />
             Enrollment Documents & Verification Vault
           </h4>
-          <span className="text-xs font-mono font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200">
-            All Requirements Verified (4/4)
+          <span className={`text-xs font-mono font-semibold px-2.5 py-1 rounded border ${verifiedCount === requiredDocuments.length ? 'text-emerald-800 bg-emerald-50 border-emerald-200' : 'text-amber-900 bg-amber-50 border-amber-200'}`}>
+            {verifiedCount} of {requiredDocuments.length} verified
           </span>
         </div>
 
@@ -255,13 +240,14 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
             >
               <div className="space-y-1">
                 <div className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                  <CheckCircle2 className={`w-4 h-4 ${doc.status === 'Verified' ? 'text-emerald-600' : 'text-slate-300'}`} />
                   <strong className="text-slate-900">{doc.name}</strong>
+                  {!doc.required && <span className="text-[9px] font-bold uppercase text-slate-400">Optional</span>}
                 </div>
-                <p className="text-[11px] text-slate-500">{doc.desc}</p>
-                <span className="text-[10px] text-slate-400 font-mono block">Verified: {doc.date}</span>
+                {doc.desc && <p className="text-[11px] text-slate-500">{doc.desc}</p>}
+                {doc.date && <span className="text-[10px] text-slate-400 font-mono block">{doc.status === 'Verified' ? 'Verified' : 'Updated'}: {String(doc.date).slice(0, 10)}</span>}
               </div>
-              <span className="bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold px-2 py-0.5 rounded">
+              <span className={`font-mono text-[10px] font-bold px-2 py-0.5 rounded ${doc.status === 'Verified' ? 'bg-emerald-100 text-emerald-800' : doc.status === 'Rejected' ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-900'}`}>
                 {doc.status}
               </span>
             </div>

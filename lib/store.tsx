@@ -107,8 +107,7 @@ import {
   INITIAL_STUDENT_LIFE_CONFIG,
   INITIAL_LIFE_AT_PCM_CONFIG,
 } from './initialData';
-import {
-  getDefaultStudentRequirements,
+import { studentRequirementsView,
   calculateGPAFromGrades,
   normalizeStudentProfile,
   generateStudentId,
@@ -179,7 +178,7 @@ import {
   DATA_DROPPED_EVENT,
 } from './firebase';
 import { firebaseConfig } from './firebaseConfig';
-import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, requirementTemplates } from './enrollmentWorkflow';
+import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, admissionRequirementTemplates } from './enrollmentWorkflow';
 import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflow';
 import { termFees, accountSummary, parseTerm, officialAssessmentLines, applyOfficialLines } from './studentLedger';
 import { submitAdmissionApplication, transitionApplication } from './admissionsService';
@@ -4678,7 +4677,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         db,
         { uid: user.uid, name: fullName, email: user.emailVerified ? (user.email || '').toLowerCase() : null },
         data,
-        requirementTemplates(enrollmentSystemConfig?.requiredDocumentsList),
+        admissionRequirementTemplates(enrollmentSystemConfig),
         initialFiles
       );
       if (!result.ok) {
@@ -6273,9 +6272,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const target = students.find((s) => s.id === studentId || s.studentId === studentId) || (studentProfile.id === studentId || studentProfile.studentId === studentId ? studentProfile : null);
     if (!target) return false;
 
-    const existingReqs = target.requirements && target.requirements.length > 0
-      ? target.requirements
-      : getDefaultStudentRequirements();
+    // The same checklist the screens show (admission requirements list), minus admission documents.
+    const existingReqs = studentRequirementsView(target, admissionRequirementTemplates(enrollmentSystemConfig)).filter((r) => !r.id.startsWith('adm-'));
 
     const now = new Date().toISOString();
     const updatedReqs = existingReqs.map((req) => {

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { ledgerPayments } from '@/lib/studentLedger';
+import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { isValidImageSrc } from '@/lib/utils';
 import {
@@ -58,6 +59,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
 }) => {
   const {
     students: liveStudents,
+    enrollmentSystemConfig,
     updateStudentProfile,
     updateStudentRequirementStatus,
     addStudentSubjectHistory,
@@ -240,7 +242,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
   };
 
   // Admission documents verified in Admissions, then the student's own requirement items.
-  const requirementsList = studentRequirementsView(student);
+  const requirementsList = studentRequirementsView(student, admissionRequirementTemplates(enrollmentSystemConfig));
 
   // Subject history list
   const subjectsList = student.subjectHistory || [];

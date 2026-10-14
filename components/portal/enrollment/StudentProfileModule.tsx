@@ -39,11 +39,13 @@ import { accountSummary, ledgerPayments, parseTerm } from '@/lib/studentLedger';
 import { StudentProfile, StudentRequirementItem } from '@/lib/types';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 import { studentRequirementsView, calculateGPAFromGrades } from '@/lib/studentDefaults';
+import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { uploadStudentFile } from '@/lib/storageService';
 import { isValidImageSrc } from '@/lib/utils';
 
 export const StudentProfileModule: React.FC = () => {
   const {
+    enrollmentSystemConfig,
     studentProfile,
     updateStudentProfile,
     updateStudentRequirementStatus,
@@ -67,7 +69,7 @@ export const StudentProfileModule: React.FC = () => {
   };
 
   // Admission documents verified in Admissions, then the student's own requirement items.
-  const requirementsList: StudentRequirementItem[] = studentRequirementsView(studentProfile);
+  const requirementsList: StudentRequirementItem[] = studentRequirementsView(studentProfile, admissionRequirementTemplates(enrollmentSystemConfig));
 
   // Document upload handler
   const handleFileUpload = async (reqId: string, file: File) => {

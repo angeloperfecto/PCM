@@ -704,6 +704,9 @@ export interface EnrollmentSystemConfig {
   defaultRegistrationFee: number;
   eligibilityRules?: string;
   requiredDocumentsList?: string[];
+  /** Admission documents applicants submit (Enrollment & Records → System Governance). The single list used by the
+   *  public Admissions page, the application form, application checklists and student checklists. */
+  admissionRequirements?: { id: string; name: string; description?: string; required: boolean }[];
   /** Where and how students pay, shown at every payment step. */
   paymentInstructions?: PaymentInstructions;
   /** Default downpayment (percent of the assessment) required before enrollment. */
