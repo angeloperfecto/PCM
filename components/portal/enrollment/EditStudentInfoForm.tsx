@@ -6,6 +6,7 @@ import { Edit3, Lock, Save, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { usePCM } from '@/lib/store';
 import type { StudentProfile } from '@/lib/types';
+import { YEAR_LEVELS } from '@/lib/curriculum';
 
 type FieldType = 'text' | 'tel' | 'email' | 'date' | 'number' | 'select' | 'textarea' | 'yesno';
 interface FieldDef {
@@ -116,14 +117,49 @@ function ageFrom(dateOfBirth: string): number | undefined {
   return age >= 0 && age < 130 ? age : undefined;
 }
 
-export const EditStudentInfoForm: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-  const { studentProfile, addToast } = usePCM();
-  const initial = useMemo(() => Object.fromEntries(ALL_FIELDS.map((f) => [f.key, readValue(studentProfile, f)])), [studentProfile]);
+// Fields only staff (Registrar/Admin) edit from the Admin Workspace.
+const staffSections = (programNames: string[]): { title: string; fields: FieldDef[] }[] => [
+  {
+    title: 'Name (as printed on the COR)',
+    fields: [
+      { key: 'fullName', label: 'Full legal name', wide: true, aliases: ['name'] },
+      { key: 'firstName', label: 'First name' },
+      { key: 'middleName', label: 'Middle name' },
+      { key: 'lastName', label: 'Last name' },
+      { key: 'suffix', label: 'Suffix (Jr., III)' },
+    ],
+  },
+  {
+    title: 'Academic record',
+    fields: [
+      { key: 'degreeProgram', label: 'Program', type: 'select', options: programNames, aliases: ['program'] },
+      { key: 'yearLevel', label: 'Year level', type: 'select', options: YEAR_LEVELS },
+      { key: 'section', label: 'Section' },
+      { key: 'academicStatus', label: 'Academic standing', type: 'select', options: ['Regular', 'Irregular', 'Probationary', "Dean's List", 'Leave of Absence', 'Graduated'] },
+      { key: 'assignedAdviser' as any, label: 'Academic adviser' },
+      { key: 'mentorName', label: 'Spiritual mentor', aliases: ['spiritualMentor'] },
+      { key: 'adminNotes' as any, label: 'Registrar notes (staff only)', type: 'textarea', wide: true },
+    ],
+  },
+];
+
+// Students edit their own record (Student Portal). Staff pass `student` and `staff` to edit any record
+// from the Admin Workspace, including name and academic record. Only changed fields are saved.
+export const EditStudentInfoForm: React.FC<{ onClose: () => void; student?: StudentProfile; staff?: boolean }> = ({ onClose, student, staff }) => {
+  const { studentProfile: ownProfile, addToast, programs, logActivity } = usePCM();
+  const studentProfile = student || ownProfile;
+  const programNames = useMemo(
+    () => Array.from(new Set((programs || []).map((p) => p.name || p.title || p.code).filter(Boolean) as string[])),
+    [programs]
+  );
+  const sections = useMemo(() => (staff ? [...staffSections(programNames), ...SECTIONS] : SECTIONS), [staff, programNames]);
+  const fields = useMemo(() => sections.flatMap((s) => s.fields), [sections]);
+  const initial = useMemo(() => Object.fromEntries(fields.map((f) => [f.key, readValue(studentProfile, f)])), [studentProfile, fields]);
   const [values, setValues] = useState<Record<string, string>>(initial);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const changed = ALL_FIELDS.filter((f) => (values[f.key] || '').trim() !== (initial[f.key] || '').trim());
+  const changed = fields.filter((f) => (values[f.key] || '').trim() !== (initial[f.key] || '').trim());
 
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,6 +171,7 @@ export const EditStudentInfoForm: React.FC<{ onClose: () => void }> = ({ onClose
     const dob = values.dateOfBirth;
     if (dob && dob > new Date().toISOString().slice(0, 10)) return setError('Date of birth cannot be in the future.');
     if (values.guardianEmail && !/^\S+@\S+\.\S+$/.test(values.guardianEmail.trim())) return setError('Enter a valid guardian email address.');
+    if (staff && !(values.fullName || '').trim() && !(values.firstName || '').trim()) return setError('The student\'s name cannot be empty.');
 
     // Write only what changed (plus the older field names that mirror it), so the update never
     // touches Registrar-controlled fields.
@@ -148,15 +185,31 @@ export const EditStudentInfoForm: React.FC<{ onClose: () => void }> = ({ onClose
         if (age !== undefined) updates.age = age;
       }
     }
+    // Staff: when the name parts change (and the full name was not edited), rebuild the full name.
+    const nameParts = ['firstName', 'middleName', 'lastName', 'suffix'];
+    if (staff && changed.some((f) => nameParts.includes(f.key)) && !changed.some((f) => f.key === 'fullName')) {
+      const composed = [values.firstName, values.middleName, values.lastName].map((x) => (x || '').trim()).filter(Boolean).join(' ') + ((values.suffix || '').trim() ? ` ${values.suffix.trim()}` : '');
+      if ((values.firstName || '').trim() && (values.lastName || '').trim()) {
+        updates.fullName = composed;
+        updates.name = composed;
+      }
+    }
     setSaving(true);
     try {
       await updateDoc(doc(db, 'studentProfiles', studentProfile.id), updates);
-      addToast('success', 'Information saved', `${changed.length} detail${changed.length === 1 ? '' : 's'} updated in your student record.`);
+      if (staff) {
+        logActivity('UPDATE', 'Student Profile', studentProfile.id, studentProfile.fullName || studentProfile.studentId, `Updated ${changed.map((f) => f.label).join(', ')}.`);
+        addToast('success', 'Student record saved', `${changed.length} detail${changed.length === 1 ? '' : 's'} updated for ${studentProfile.fullName || studentProfile.studentId}.`);
+      } else {
+        addToast('success', 'Information saved', `${changed.length} detail${changed.length === 1 ? '' : 's'} updated in your student record.`);
+      }
       onClose();
     } catch (err: any) {
       setError(
         err?.code === 'permission-denied'
-          ? 'Your changes could not be saved because this record is not linked to your account. Please contact the Registrar.'
+          ? staff
+            ? 'Your account does not have permission to change student records.'
+            : 'Your changes could not be saved because this record is not linked to your account. Please contact the Registrar.'
           : 'Your changes could not be saved. Please check your connection and try again.'
       );
     } finally {
@@ -165,7 +218,13 @@ export const EditStudentInfoForm: React.FC<{ onClose: () => void }> = ({ onClose
   };
 
   const input = 'w-full bg-white border border-slate-300 rounded-lg p-2.5 text-slate-900 focus:outline-none focus:border-[#588B76]';
-  const locked: [string, string | undefined][] = [
+  const locked: [string, string | undefined][] = staff
+    ? [
+        ['Student ID', studentProfile.studentId],
+        ['Email (Google sign-in)', studentProfile.email],
+        ['Enrollment status', String(studentProfile.enrollmentStatus || '')],
+      ]
+    : [
     ['Full name', [studentProfile.firstName, studentProfile.middleName, studentProfile.lastName, studentProfile.suffix].filter(Boolean).join(' ') || studentProfile.fullName],
     ['Student ID', studentProfile.studentId],
     ['Email (Google sign-in)', studentProfile.email],
@@ -178,14 +237,14 @@ export const EditStudentInfoForm: React.FC<{ onClose: () => void }> = ({ onClose
     <form onSubmit={save} className="bg-emerald-50/50 rounded-2xl border-2 border-emerald-300 p-4 sm:p-6 space-y-5 shadow-sm" data-testid="edit-student-info">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-emerald-200 pb-3">
         <h3 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
-          <Edit3 className="w-4 h-4 text-[#588B76]" /> Edit my information
+          <Edit3 className="w-4 h-4 text-[#588B76]" /> {staff ? 'Edit student record' : 'Edit my information'}
         </h3>
-        <span className="text-xs text-slate-500">Changes are saved to your official student record.</span>
+        <span className="text-xs text-slate-500">{staff ? 'Only changed fields are saved; the student sees them in the Student Portal right away.' : 'Changes are saved to your official student record.'}</span>
       </div>
 
       <section className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
         <p className="mb-2 flex items-center gap-1.5 font-bold text-slate-700">
-          <Lock className="h-3.5 w-3.5 text-slate-500" /> Managed by the Registrar
+          <Lock className="h-3.5 w-3.5 text-slate-500" /> {staff ? 'Fixed fields' : 'Managed by the Registrar'}
         </p>
         <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-3">
           {locked.map(([label, value]) => (
@@ -195,10 +254,14 @@ export const EditStudentInfoForm: React.FC<{ onClose: () => void }> = ({ onClose
             </div>
           ))}
         </dl>
-        <p className="mt-2 text-[11px] text-slate-500">To correct these, contact the Office of the Registrar with a supporting document (e.g. PSA birth certificate).</p>
+        <p className="mt-2 text-[11px] text-slate-500">
+          {staff
+            ? 'The Student ID and sign-in email identify the student; the enrollment status changes through the enrollment workflow.'
+            : 'To correct these, contact the Office of the Registrar with a supporting document (e.g. PSA birth certificate).'}
+        </p>
       </section>
 
-      {SECTIONS.map((section) => (
+      {sections.map((section) => (
         <fieldset key={section.title} className="space-y-3">
           <legend className="font-serif text-sm font-bold text-[#18392B]">{section.title}</legend>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
@@ -243,7 +306,7 @@ export const EditStudentInfoForm: React.FC<{ onClose: () => void }> = ({ onClose
           <X className="w-3.5 h-3.5" /> Cancel
         </button>
         <button type="submit" disabled={saving} className="bg-[#18392B] hover:bg-[#588B76] disabled:opacity-50 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition cursor-pointer">
-          <Save className="w-3.5 h-3.5" /> {saving ? 'Saving…' : 'Save my information'}
+          <Save className="w-3.5 h-3.5" /> {saving ? 'Saving…' : staff ? 'Save student record' : 'Save my information'}
         </button>
       </div>
     </form>
