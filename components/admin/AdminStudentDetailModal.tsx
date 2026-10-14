@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { isValidImageSrc } from '@/lib/utils';
 import {
   StudentProfile,
@@ -1125,132 +1126,16 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
           {/* ========================================================================= */}
           {activeTab === 'cor' && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-                <div>
-                  <h4 className="font-serif text-base font-bold text-slate-900">
-                    Official Certificate of Registration (COR)
-                  </h4>
-                  <p className="text-[11px] text-slate-500">
-                    Institutional enrollment voucher ready for printing or digital PDF export.
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => window.print()}
-                  className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-md"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>Print Certificate</span>
-                </button>
-              </div>
-
-              {/* Printable Voucher Paper */}
-              <div className="bg-white border-2 border-slate-300 rounded-xl p-8 max-w-3xl mx-auto shadow-md space-y-6 font-serif">
-                {/* Header */}
-                <div className="text-center border-b-2 border-slate-900 pb-4">
-                  <h2 className="text-xl font-bold tracking-tight text-slate-900 uppercase">
-                    Philippine College of Ministry
-                  </h2>
-                  <p className="text-xs font-sans text-slate-600">
-                    Seminary Hill, Baguio City, Benguet, Philippines • Office of the Registrar
-                  </p>
-                  <h3 className="text-sm font-sans font-bold uppercase tracking-widest text-[#18392B] mt-2">
-                    Official Certificate of Registration (COR)
-                  </h3>
-                  <p className="text-[11px] font-sans font-mono text-slate-500">
-                    1st Semester, Academic Year 2026–2027
-                  </p>
-                </div>
-
-                {/* Student Info Box */}
-                <div className="grid grid-cols-2 gap-4 text-xs font-sans border-b border-slate-200 pb-4">
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Student Name:</span>
-                    <strong className="text-slate-900 text-sm">{student.fullName}</strong>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-slate-500 block text-[10px]">Permanent Student ID:</span>
-                    <strong className="font-mono text-slate-900 text-sm">{student.studentId}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Degree Program:</span>
-                    <strong className="text-slate-800">{student.program || student.degreeProgram}</strong>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-slate-500 block text-[10px]">Year Level & Section:</span>
-                    <strong className="text-slate-800">{student.yearLevel} • {student.section || 'Section A'}</strong>
-                  </div>
-                </div>
-
-                {/* Courses Table */}
-                <div className="space-y-2 font-sans">
-                  <strong className="text-xs text-slate-900 uppercase tracking-wider block">
-                    Officially Enlisted Courses
-                  </strong>
-                  <table className="w-full text-left text-xs border border-slate-300">
-                    <thead className="bg-slate-100 border-b border-slate-300 font-bold">
-                      <tr>
-                        <th className="p-2">Course Code</th>
-                        <th className="p-2">Course Title</th>
-                        <th className="p-2 text-center">Units</th>
-                        <th className="p-2">Schedule</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {(student.courses && student.courses.length > 0
-                        ? student.courses
-                        : [
-                            { code: 'THEO 101', title: 'Systematic Theology I', units: 3, schedule: 'M/Th 8:30–10:00' },
-                            { code: 'BIBL 102', title: 'New Testament Survey', units: 3, schedule: 'T/F 10:30–12:00' },
-                            { code: 'MINI 105', title: 'Principles of Christian Leadership', units: 3, schedule: 'W 1:30–4:30' },
-                          ]
-                      ).map((c, i) => (
-                        <tr key={i}>
-                          <td className="p-2 font-mono font-bold">{c.code}</td>
-                          <td className="p-2">{c.title}</td>
-                          <td className="p-2 text-center font-mono">{c.units}u</td>
-                          <td className="p-2 text-slate-600">{c.schedule || 'TBA'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Tuition Assessment */}
-                <div className="border border-slate-300 rounded-lg p-3 font-sans text-xs flex justify-between">
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Tuition Assessment</span>
-                    <strong className="text-slate-900 font-mono">₱{(student.tuitionTotal || 18500).toLocaleString()}</strong>
-                  </div>
-                  <div>
-                    <span className="text-slate-500 block text-[10px]">Total Payments Credited</span>
-                    <strong className="text-emerald-700 font-mono">₱{(student.tuitionPaid || 0).toLocaleString()}</strong>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-slate-500 block text-[10px]">Net Remaining Balance</span>
-                    <strong className="text-amber-800 font-mono">
-                      ₱{(student.tuitionBalance ?? Math.max(0, (student.tuitionTotal || 18500) - (student.tuitionPaid || 0))).toLocaleString()}
-                    </strong>
-                  </div>
-                </div>
-
-                {/* Signatures */}
-                <div className="pt-10 grid grid-cols-2 gap-8 text-center font-sans text-xs">
-                  <div>
-                    <div className="border-b border-slate-900 w-48 mx-auto pb-1 font-bold">
-                      {student.assignedAdviser || 'Dr. Benjamin Villanueva'}
-                    </div>
-                    <span className="text-slate-500 text-[10px] block mt-1">Dean of Academic Affairs</span>
-                  </div>
-
-                  <div>
-                    <div className="border-b border-slate-900 w-48 mx-auto pb-1 font-bold">
-                      Office of the Registrar
-                    </div>
-                    <span className="text-slate-500 text-[10px] block mt-1">Institutional Seal & Registrar</span>
-                  </div>
-                </div>
-              </div>
+            <div className="flex justify-end gap-2 print:hidden">
+              <button
+                onClick={() => printCertificate()}
+                className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>Print COR</span>
+              </button>
+            </div>
+              <CertificateOfRegistration student={student} />
             </div>
           )}
         </div>

@@ -15,6 +15,7 @@ import { EnrollmentModule } from '@/components/portal/enrollment/EnrollmentModul
 import { AddDropModule } from '@/components/portal/enrollment/AddDropModule';
 import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModule';
 import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule';
+import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { PaymentInstructions } from '@/components/enrollment/PaymentInstructions';
 import { MyApplicationPanel } from '@/components/enrollment/MyApplicationPanel';
 import { AdmittedStudentPortal } from '@/components/portal/AdmittedStudentPortal';
@@ -1194,87 +1195,10 @@ export const PortalView: React.FC = () => {
 
       {/* --- MODAL 2: OFFICIAL CERTIFICATE OF REGISTRATION (COR) --- */}
       {isCORModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[95vh] overflow-y-auto p-8 space-y-6 shadow-2xl border border-slate-300 print:p-0 print:border-none">
-            {/* Header */}
-            <div className="text-center space-y-2 border-b-2 border-[#18392B] pb-4">
-              <div className="w-16 h-16 mx-auto flex items-center justify-center">
-                <Emblem id="cor-emblem" size={56} />
-              </div>
-              <h2 className="font-serif text-xl font-extrabold text-[#18392B] tracking-wide uppercase">
-                Philippine College of Ministry
-              </h2>
-              <p className="text-[11px] text-slate-600 font-serif">
-                Bagabag, Nueva Vizcaya, Philippines • Office of the Registrar
-              </p>
-              <div className="inline-block bg-[#18392B] text-white px-4 py-1 rounded text-xs font-mono font-bold uppercase tracking-wider">
-                Official Certificate of Registration (COR)
-              </div>
-            </div>
-
-            {/* Student Meta Details */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
-              <div>
-                <span className="text-slate-400 block text-[10px]">Student ID No.</span>
-                <strong className="font-mono text-[#18392B]">{studentProfile.studentId}</strong>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px]">Student Full Name</span>
-                <strong>{studentProfile.fullName || studentProfile.name}</strong>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px]">Program / Degree</span>
-                <strong>{studentProfile.degreeProgram || studentProfile.program}</strong>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px]">Term & School Year</span>
-                <strong>{studentProfile.currentSemester}</strong>
-              </div>
-            </div>
-
-            {/* Subjects Table */}
-            <div className="space-y-2">
-              <h4 className="font-serif text-xs font-bold text-[#18392B] uppercase">Registered Course Enlistment</h4>
-              <table className="w-full text-left text-xs border border-slate-300">
-                <thead className="bg-[#18392B] text-white">
-                  <tr>
-                    <th className="p-2 border border-slate-300">Course Code</th>
-                    <th className="p-2 border border-slate-300">Subject Description</th>
-                    <th className="p-2 border border-slate-300">Units</th>
-                    <th className="p-2 border border-slate-300">Schedule & Room</th>
-                    <th className="p-2 border border-slate-300">Instructor</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-300">
-                  {(studentProfile.courses || []).map((c) => (
-                    <tr key={c.code || c.id}>
-                      <td className="p-2 font-mono font-bold border border-slate-300">{c.code}</td>
-                      <td className="p-2 font-medium border border-slate-300">{c.title}</td>
-                      <td className="p-2 font-mono border border-slate-300">{c.units}</td>
-                      <td className="p-2 border border-slate-300">{c.schedule} ({c.room})</td>
-                      <td className="p-2 border border-slate-300">{c.instructor}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Signatures & Seal */}
-            <div className="pt-6 grid grid-cols-2 gap-8 text-xs text-center border-t border-slate-200">
-              <div className="space-y-6">
-                <div className="h-10 border-b border-slate-400"></div>
-                <span>Student Signature</span>
-              </div>
-              <div className="space-y-6">
-                <div className="h-10 border-b border-slate-400 flex items-center justify-center font-serif font-bold text-[#18392B]">
-                  Dr. Benjamin Villanueva
-                </div>
-                <span>College Registrar / Chancellor</span>
-              </div>
-            </div>
-
-            {/* Print Action */}
-            <div className="flex justify-end gap-2 pt-4 border-t border-slate-200 print:hidden">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-2 sm:p-4 overflow-y-auto">
+          <div className="bg-slate-100 rounded-2xl max-w-[880px] w-full max-h-[95vh] overflow-y-auto overflow-x-hidden p-3 sm:p-5 space-y-4 shadow-2xl border border-slate-300">
+            <CertificateOfRegistration student={studentProfile} />
+            <div className="flex justify-end gap-2 print:hidden">
               <button
                 onClick={() => setIsCORModalOpen(false)}
                 className="px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold hover:bg-slate-100"
@@ -1282,11 +1206,11 @@ export const PortalView: React.FC = () => {
                 Close
               </button>
               <button
-                onClick={() => window.print()}
+                onClick={() => printCertificate()}
                 className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-2 rounded-lg text-xs flex items-center gap-1.5 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />
-                <span>Print Document</span>
+                <span>Print COR</span>
               </button>
             </div>
           </div>
