@@ -76,6 +76,7 @@ export type EnrollmentAdminSubTab =
 
 export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = ({ onOpenAdmissions }) => {
   const {
+    canManageEnrollment,
     enrollments,
     students,
     applications,
@@ -127,10 +128,13 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
   const [programFilter, setProgramFilter] = useState<string>('all');
 
   // Modals & Drawers
-  const [selectedEnrollment, setSelectedEnrollment] = useState<OnlineEnrollment | null>(null);
+  const [selectedEnrollmentSnap, setSelectedEnrollment] = useState<OnlineEnrollment | null>(null);
   const [selectedStudentDossier, setSelectedStudentDossier] = useState<StudentProfile | null>(null);
   const [isCORModalOpen, setIsCORModalOpen] = useState(false);
-  const [corStudent, setCorStudent] = useState<StudentProfile | null>(null);
+  const [corStudentSnap, setCorStudent] = useState<StudentProfile | null>(null);
+  // Open dialogs follow the live records, so changes appear without reopening them.
+  const selectedEnrollment = selectedEnrollmentSnap ? enrollments.find((e) => e.id === selectedEnrollmentSnap.id) || selectedEnrollmentSnap : null;
+  const corStudent = corStudentSnap ? students.find((s) => s.id === corStudentSnap.id) || corStudentSnap : null;
 
   // Return for correction modal state
   const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
@@ -934,7 +938,15 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                       ₱{(enr.estimatedTuition || 0).toLocaleString()}
                     </td>
                     <td className="p-3.5 font-mono text-slate-600">
-                      {enr.paymentReference || 'Unpaid / On-Site'}
+                      {(() => {
+                        // Approved: the student's live account; otherwise what the student reported.
+                        const acct = enr.status === 'Approved' ? students.find((st) => st.studentId === enr.studentId) : undefined;
+                        if (acct) {
+                          const bal = Math.max(0, Number(acct.tuitionBalance) || 0);
+                          return bal > 0 ? `Balance ₱${bal.toLocaleString()}` : 'Fully paid';
+                        }
+                        return enr.paymentReference ? `Ref ${enr.paymentReference}` : 'No payment reported';
+                      })()}
                     </td>
                     <td className="p-3.5">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -959,8 +971,10 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                         </button>
                         {enr.status !== 'Approved' && (
                           <button
+                            disabled={!canManageEnrollment}
+                            title={canManageEnrollment ? undefined : 'Only the Registrar, Academic Admin, Finance or an Admin can do this'}
                             onClick={() => handleApproveEnrollment(enr)}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-2.5 py-1 rounded-lg text-[11px] transition cursor-pointer"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-2.5 py-1 rounded-lg text-[11px] transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             Approve
                           </button>
@@ -1075,14 +1089,18 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                       {req.status === 'Pending' ? (
                         <div className="flex items-center justify-end gap-1.5">
                           <button
+                            disabled={!canManageEnrollment}
+                            title={canManageEnrollment ? undefined : 'Only the Registrar, Academic Admin, Finance or an Admin can do this'}
                             onClick={() => reviewAddDropRequest(req.id, 'Approved', 'Cleared by Academic Registrar')}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             Approve
                           </button>
                           <button
+                            disabled={!canManageEnrollment}
+                            title={canManageEnrollment ? undefined : 'Only the Registrar, Academic Admin, Finance or an Admin can do this'}
                             onClick={() => reviewAddDropRequest(req.id, 'Rejected', 'Exceeds maximum allowable units')}
-                            className="bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer"
+                            className="bg-rose-600 hover:bg-rose-700 text-white px-2.5 py-1 rounded-lg text-[11px] font-semibold transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                           >
                             Disapprove
                           </button>
@@ -1745,8 +1763,10 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
               </button>
               <div className="flex items-center gap-2">
                 <button
+                  disabled={!canManageEnrollment}
+                  title={canManageEnrollment ? undefined : 'Only the Registrar, Academic Admin, Finance or an Admin can do this'}
                   onClick={() => handleApproveEnrollment(selectedEnrollment)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl transition cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Approve Application
                 </button>
@@ -1941,8 +1961,10 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                   Close
                 </button>
                 <button
+                  disabled={!canManageEnrollment}
+                  title={canManageEnrollment ? undefined : 'Only the Registrar, Academic Admin, Finance or an Admin can do this'}
                   onClick={() => handleApprovePreEnlistment(selectedPreEnlistment.id)}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl transition"
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-4 py-2 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Approve Course Load
                 </button>

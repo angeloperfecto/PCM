@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { Emblem } from '@/components/common/Emblem';
 import {
@@ -17,6 +17,7 @@ import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModul
 import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { PaymentInstructions } from '@/components/enrollment/PaymentInstructions';
+import { termFees } from '@/lib/studentLedger';
 import { MyApplicationPanel } from '@/components/enrollment/MyApplicationPanel';
 import { AdmittedStudentPortal } from '@/components/portal/AdmittedStudentPortal';
 import { ADMITTED_PORTAL_STATUSES, normalizeStatus } from '@/lib/enrollmentWorkflow';
@@ -74,6 +75,9 @@ export const PortalView: React.FC = () => {
     saveEnrollmentDraft,
     submitEnrollment,
     enrollmentSystemConfig,
+    feeStructure,
+    academicPeriods,
+    academicSubjects,
     uploadStudentDocument,
     studentNotifications,
     markNotificationRead,
@@ -126,33 +130,52 @@ export const PortalView: React.FC = () => {
   // --- ONLINE ENROLLMENT WIZARD STATE ---
   const [isEnrollmentWizardOpen, setIsEnrollmentWizardOpen] = useState(false);
   const [wizardStep, setWizardStep] = useState<number>(1);
-  const [wizardProgram, setWizardProgram] = useState(studentProfile?.degreeProgram || 'Bachelor of Theology');
-  const [wizardYearLevel, setWizardYearLevel] = useState(studentProfile?.yearLevel || '3rd Year');
-  const [wizardSemester, setWizardSemester] = useState('1st Semester');
-  const [wizardSchoolYear, setWizardSchoolYear] = useState('2026-2027');
+  const [wizardProgram, setWizardProgram] = useState(studentProfile?.degreeProgram || studentProfile?.program || '');
+  const [wizardYearLevel, setWizardYearLevel] = useState(studentProfile?.yearLevel || '');
+  // Program and year level are official (Registrar) fields: always the student's current record.
+  useEffect(() => {
+    if (!isEnrollmentWizardOpen) return;
+    setWizardProgram(studentProfile?.degreeProgram || studentProfile?.program || '');
+    setWizardYearLevel(studentProfile?.yearLevel || '');
+  }, [isEnrollmentWizardOpen, studentProfile?.degreeProgram, studentProfile?.program, studentProfile?.yearLevel]);
+  // Terms come from Enrollment & Records → Academic Terms; the current (or first open) term is the default.
+  const enrollableTerms = useMemo(() => {
+    const list = (academicPeriods || []).filter((p) => p.status !== 'Archived');
+    const open = list.filter((p) => p.enrollmentStatus === 'Open');
+    return (open.length ? open : list).sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
+  }, [academicPeriods]);
+  const defaultTerm = enrollableTerms[0];
+  const [wizardSemester, setWizardSemester] = useState(defaultTerm?.semester || '');
+  const [wizardSchoolYear, setWizardSchoolYear] = useState((defaultTerm?.academicYear || '').replace('–', '-'));
+  useEffect(() => {
+    if (!wizardSchoolYear && defaultTerm) {
+      setWizardSemester(defaultTerm.semester);
+      setWizardSchoolYear(defaultTerm.academicYear.replace('–', '-'));
+    }
+  }, [defaultTerm, wizardSchoolYear]);
   const [wizardPaymentMethod, setWizardPaymentMethod] = useState('GCash');
   const downpaymentPercent = enrollmentSystemConfig?.downpaymentPercent ?? 40;
   const [wizardPaymentOption, setWizardPaymentOption] = useState(`Installment (${downpaymentPercent}% Downpayment)`);
   const [wizardPaymentRef, setWizardPaymentRef] = useState('');
   const [wizardNotes, setWizardNotes] = useState('');
 
-  // Available subjects pool for enrollment selection
-  const AVAILABLE_CATALOG_SUBJECTS: SelectedSubject[] = [
-    { code: 'BIB-301', title: 'Greek Exegesis of Romans', units: 3, schedule: 'Mon/Wed 8:00–9:30 AM', room: 'Room 201', instructor: 'Dr. Benjamin Villanueva' },
-    { code: 'THEO-302', title: 'Pneumatology & Eschatology', units: 3, schedule: 'Tue/Thu 10:00–11:30 AM', room: 'Room 104', instructor: 'Rev. Emmanuel Santos' },
-    { code: 'MIN-305', title: 'Church Planting & Multiplication', units: 3, schedule: 'Mon/Wed 1:30–3:00 PM', room: 'Chapel Hall', instructor: 'Pastor Ronald Cruz' },
-    { code: 'PAST-310', title: 'Pastoral Counseling & Ethics', units: 3, schedule: 'Tue/Thu 1:30–3:00 PM', room: 'Room 205', instructor: 'Dr. Maria Rebecca Santos' },
-    { code: 'HIST-301', title: 'Philippine Church History', units: 3, schedule: 'Friday 9:00–12:00 PM', room: 'Room 102', instructor: 'Prof. David Morales' },
-    { code: 'APOL-301', title: 'Christian Apologetics & Worldviews', units: 3, schedule: 'Friday 1:30–4:30 PM', room: 'Room 103', instructor: 'Rev. Samuel Garcia' },
-  ];
+  // Subjects offered for the chosen term, from Enrollment & Records → Academic Course Catalog.
+  const AVAILABLE_CATALOG_SUBJECTS: SelectedSubject[] = useMemo(() => {
+    const live = (academicSubjects || []).filter((c) => !c.isArchived && c.status !== 'Closed');
+    const ay = wizardSchoolYear.replace('-', '–');
+    const forTerm = live.filter((c) => (!c.semester || c.semester === wizardSemester) && (!c.academicYear || c.academicYear.replace('-', '–') === ay));
+    return (forTerm.length ? forTerm : live).map((c) => ({
+      id: c.id,
+      code: c.code,
+      title: c.title,
+      units: Number(c.units) || 0,
+      schedule: c.schedule || 'TBA',
+      room: c.room || 'TBA',
+      instructor: c.instructor || 'TBA',
+    }));
+  }, [academicSubjects, wizardSemester, wizardSchoolYear]);
 
-  const [selectedSubjects, setSelectedSubjects] = useState<SelectedSubject[]>([
-    AVAILABLE_CATALOG_SUBJECTS[0],
-    AVAILABLE_CATALOG_SUBJECTS[1],
-    AVAILABLE_CATALOG_SUBJECTS[2],
-    AVAILABLE_CATALOG_SUBJECTS[3],
-    AVAILABLE_CATALOG_SUBJECTS[4],
-  ]);
+  const [selectedSubjects, setSelectedSubjects] = useState<SelectedSubject[]>([]);
 
   const toggleSubjectSelection = (subj: SelectedSubject) => {
     if (selectedSubjects.some((s) => s.code === subj.code)) {
@@ -163,9 +186,9 @@ export const PortalView: React.FC = () => {
   };
 
   const totalWizardUnits = selectedSubjects.reduce((sum, s) => sum + s.units, 0);
-  const tuitionPerUnit = 850;
-  const miscellaneousFees = 2500;
-  const estimatedTuitionTotal = totalWizardUnits * tuitionPerUnit + miscellaneousFees;
+  // Same formula the Registrar uses on approval (Fee Structure).
+  const wizardFees = termFees(totalWizardUnits, feeStructure || [], enrollmentSystemConfig);
+  const estimatedTuitionTotal = wizardFees.total;
 
   // Active student's latest enrollment record
   const latestEnrollment =
@@ -237,6 +260,10 @@ export const PortalView: React.FC = () => {
   };
 
   const handleSubmitEnrollment = async () => {
+    if (!wizardSemester || !wizardSchoolYear) {
+      addToast('warning', 'No term selected', 'No academic term is open for enrollment. Please check with the Registrar.');
+      return;
+    }
     if (selectedSubjects.length === 0) {
       addToast('warning', 'Subject Required', 'Please select at least 1 course subject to enroll.');
       return;
@@ -948,44 +975,40 @@ export const PortalView: React.FC = () => {
               <div className="space-y-4 text-xs">
                 <div className="space-y-1">
                   <label className="text-slate-700 font-semibold">Degree Program</label>
-                  <select
-                    value={wizardProgram}
-                    onChange={(e) => setWizardProgram(e.target.value)}
-                    className="w-full p-2.5 rounded-lg border border-slate-300 bg-white"
-                  >
-                    <option value="Bachelor of Theology">Bachelor of Theology (B.Th.)</option>
-                    <option value="Bachelor of Ministry">Bachelor of Ministry (B.Min.)</option>
-                    <option value="Master of Divinity">Master of Divinity (M.Div.)</option>
-                    <option value="Diploma in Christian Ministry">Diploma in Christian Ministry</option>
-                  </select>
+                  <p className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 font-semibold text-slate-800">{wizardProgram || '—'}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <label className="text-slate-700 font-semibold">Year Level</label>
-                    <select
-                      value={wizardYearLevel}
-                      onChange={(e) => setWizardYearLevel(e.target.value)}
-                      className="w-full p-2.5 rounded-lg border border-slate-300 bg-white"
-                    >
-                      <option value="1st Year">1st Year</option>
-                      <option value="2nd Year">2nd Year</option>
-                      <option value="3rd Year">3rd Year</option>
-                      <option value="4th Year">4th Year</option>
-                    </select>
+                    <p className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 font-semibold text-slate-800">{wizardYearLevel || '—'}</p>
+                    <p className="text-[10px] text-slate-500">From your student record. Ask the Registrar to change your program or year level.</p>
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-slate-700 font-semibold">Academic Semester</label>
-                    <select
-                      value={wizardSemester}
-                      onChange={(e) => setWizardSemester(e.target.value)}
-                      className="w-full p-2.5 rounded-lg border border-slate-300 bg-white"
-                    >
-                      <option value="1st Semester">1st Semester (Aug–Dec 2026)</option>
-                      <option value="2nd Semester">2nd Semester (Jan–May 2027)</option>
-                      <option value="Summer Term">Summer Term (Jun–Jul 2027)</option>
-                    </select>
+                    <label className="text-slate-700 font-semibold">Academic Term</label>
+                    {enrollableTerms.length > 0 ? (
+                      <select
+                        value={`${wizardSemester}|${wizardSchoolYear}`}
+                        onChange={(e) => {
+                          const [sem, ay] = e.target.value.split('|');
+                          setWizardSemester(sem);
+                          setWizardSchoolYear(ay);
+                        }}
+                        className="w-full p-2.5 rounded-lg border border-slate-300 bg-white"
+                      >
+                        {enrollableTerms.map((p) => (
+                          <option key={p.id} value={`${p.semester}|${p.academicYear.replace('–', '-')}`}>
+                            {p.semester}, AY {p.academicYear}
+                            {p.enrollmentStatus === 'Open' ? '' : ' (enrollment closed)'}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-amber-900">
+                        No academic term is open for enrollment yet. Please check with the Registrar.
+                      </p>
+                    )}
                   </div>
                 </div>
 
@@ -993,7 +1016,8 @@ export const PortalView: React.FC = () => {
                   <label className="text-slate-700 font-semibold">Student Contact Phone</label>
                   <input
                     type="text"
-                    defaultValue={studentProfile.phone || '0917-555-4321'}
+                    defaultValue={studentProfile.mobileNumber || studentProfile.phone || ''}
+                    placeholder="0917 123 4567"
                     className="w-full p-2.5 rounded-lg border border-slate-300"
                   />
                 </div>
@@ -1011,6 +1035,11 @@ export const PortalView: React.FC = () => {
                 </div>
 
                 <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                  {AVAILABLE_CATALOG_SUBJECTS.length === 0 && (
+                    <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
+                      No subjects are offered for this term yet. Please check with the Registrar.
+                    </p>
+                  )}
                   {AVAILABLE_CATALOG_SUBJECTS.map((subj) => {
                     const isSelected = selectedSubjects.some((s) => s.code === subj.code);
                     return (
@@ -1048,16 +1077,18 @@ export const PortalView: React.FC = () => {
             {wizardStep === 3 && (
               <div className="space-y-4 text-xs">
                 <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                  <div className="flex justify-between">
-                    <span>Tuition Fee ({totalWizardUnits} units @ ₱{tuitionPerUnit}/unit):</span>
-                    <span className="font-mono font-bold">₱{(totalWizardUnits * tuitionPerUnit).toLocaleString()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Registration & Miscellaneous:</span>
-                    <span className="font-mono font-bold">₱{miscellaneousFees.toLocaleString()}</span>
-                  </div>
+                  {wizardFees.lines.length === 0 ? (
+                    <p className="text-amber-900">The fee schedule has not been published yet. The Registrar will assess your fees when your enrollment is approved.</p>
+                  ) : (
+                    wizardFees.lines.map((l) => (
+                      <div key={l.name} className="flex justify-between gap-3">
+                        <span>{l.name}</span>
+                        <span className="font-mono font-bold">₱{l.amount.toLocaleString()}</span>
+                      </div>
+                    ))
+                  )}
                   <div className="pt-2 border-t border-slate-200 flex justify-between font-serif text-sm font-bold text-[#18392B]">
-                    <span>Total Assessed Tuition:</span>
+                    <span>Estimated total (final amount set by the Registrar):</span>
                     <span className="font-mono text-base">₱{estimatedTuitionTotal.toLocaleString()}</span>
                   </div>
                 </div>

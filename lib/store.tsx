@@ -181,6 +181,7 @@ import {
 import { firebaseConfig } from './firebaseConfig';
 import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, requirementTemplates } from './enrollmentWorkflow';
 import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflow';
+import { termFees, accountSummary, parseTerm } from './studentLedger';
 import { submitAdmissionApplication, transitionApplication } from './admissionsService';
 
 export interface ToastNotification {
@@ -417,6 +418,8 @@ interface PCMContextType {
   updateApplicationStatus: (id: string, status: any, note?: string) => Promise<boolean>;
   // Registrar, Admin or Super Admin: may make admission decisions and finalize enrollment.
   canDecideAdmissions: boolean;
+  /** Approve/return enrollments, pre-enlistments and add/drop requests (isEnrollmentOffice in firestore.rules). */
+  canManageEnrollment: boolean;
   // Registrar, Admin, Super Admin or Finance: may verify enrollment payments.
   canVerifyPayments: boolean;
   admissionsActor: () => { uid: string; name: string; email: string; role?: string };
@@ -486,7 +489,7 @@ interface PCMContextType {
   setEnrollments: React.Dispatch<React.SetStateAction<OnlineEnrollment[]>>;
   currentEnrollmentDraft: Partial<OnlineEnrollment> | null;
   setCurrentEnrollmentDraft: React.Dispatch<React.SetStateAction<Partial<OnlineEnrollment> | null>>;
-  saveEnrollmentDraft: (draft: Partial<OnlineEnrollment>) => Promise<OnlineEnrollment>;
+  saveEnrollmentDraft: (draft: Partial<OnlineEnrollment>) => Promise<OnlineEnrollment | null>;
   submitEnrollment: (data: Partial<OnlineEnrollment>) => Promise<{ success: boolean; referenceNumber?: string; message?: string }>;
   updateEnrollmentStatus: (enrollmentId: string, status: EnrollmentStatus, adminRemarks?: string) => Promise<boolean>;
   approveEnrollment: (enrollmentId: string, remarks?: string) => Promise<boolean>;
@@ -495,7 +498,7 @@ interface PCMContextType {
   deleteEnrollment: (enrollmentId: string) => Promise<boolean>;
 
   // Student Documents Vault & Verification
-  uploadStudentDocument: (studentId: string, docData: Omit<StudentDocument, 'id' | 'uploadDate' | 'verificationStatus'>) => Promise<StudentDocument>;
+  uploadStudentDocument: (studentId: string, docData: Omit<StudentDocument, 'id' | 'uploadDate' | 'verificationStatus'>) => Promise<StudentDocument | null>;
   updateDocumentVerification: (studentId: string, docId: string, status: DocumentVerificationStatus, adminFeedback?: string) => Promise<boolean>;
 
   // Student Profile & Academic Management (Admin / Registrar)
@@ -530,7 +533,7 @@ interface PCMContextType {
   // Class Sections Management
   classSections: ClassSection[];
   setClassSections: React.Dispatch<React.SetStateAction<ClassSection[]>>;
-  addClassSection: (section: Omit<ClassSection, 'id'>) => Promise<ClassSection>;
+  addClassSection: (section: Omit<ClassSection, 'id'>) => Promise<ClassSection | null>;
   updateClassSection: (id: string, updates: Partial<ClassSection>) => Promise<boolean>;
   deleteClassSection: (id: string) => Promise<boolean>;
   transferStudentSection: (studentId: string, fromSectionId: string, toSectionId: string) => Promise<boolean>;
@@ -538,7 +541,7 @@ interface PCMContextType {
   // Instructors Faculty Management
   instructors: InstructorRecord[];
   setInstructors: React.Dispatch<React.SetStateAction<InstructorRecord[]>>;
-  addInstructor: (instructor: Omit<InstructorRecord, 'id'>) => Promise<InstructorRecord>;
+  addInstructor: (instructor: Omit<InstructorRecord, 'id'>) => Promise<InstructorRecord | null>;
   updateInstructor: (id: string, updates: Partial<InstructorRecord>) => Promise<boolean>;
   deleteInstructor: (id: string) => Promise<boolean>;
 
@@ -553,12 +556,12 @@ interface PCMContextType {
   addAcademicSubject: (subject: Omit<AcademicSubject, 'id'>) => Promise<AcademicSubject | null>;
   updateAcademicSubject: (id: string, updates: Partial<AcademicSubject>) => Promise<boolean>;
   deleteAcademicSubject: (id: string) => Promise<boolean>;
-  duplicateAcademicSubject: (subjectId: string, newAcademicYear: string, newSemester: string) => Promise<AcademicSubject>;
+  duplicateAcademicSubject: (subjectId: string, newAcademicYear: string, newSemester: string) => Promise<AcademicSubject | null>;
 
   // Pre-Enlistment Module
   preEnlistments: PreEnlistmentRecord[];
   setPreEnlistments: React.Dispatch<React.SetStateAction<PreEnlistmentRecord[]>>;
-  submitPreEnlistment: (record: Omit<PreEnlistmentRecord, 'id' | 'createdAt'>) => Promise<PreEnlistmentRecord>;
+  submitPreEnlistment: (record: Omit<PreEnlistmentRecord, 'id' | 'createdAt'>) => Promise<PreEnlistmentRecord | null>;
   updatePreEnlistmentStatus: (id: string, status: PreEnlistmentRecord['status'], remarks?: string) => Promise<boolean>;
   deletePreEnlistment: (id: string) => Promise<boolean>;
 
@@ -567,7 +570,7 @@ interface PCMContextType {
   /** Balance payments reported by students (admins: all; students: their own). */
   studentPayments: StudentBalancePayment[];
   setAddDropRequests: React.Dispatch<React.SetStateAction<AddDropRequest[]>>;
-  submitAddDropRequest: (req: Omit<AddDropRequest, 'id' | 'createdAt' | 'status' | 'dateSubmitted'>) => Promise<AddDropRequest>;
+  submitAddDropRequest: (req: Omit<AddDropRequest, 'id' | 'createdAt' | 'status' | 'dateSubmitted'>) => Promise<AddDropRequest | null>;
   reviewAddDropRequest: (id: string, status: AddDropStatus, adminRemarks?: string) => Promise<boolean>;
   deleteAddDropRequest: (id: string) => Promise<boolean>;
 
@@ -575,7 +578,7 @@ interface PCMContextType {
   feeStructure: FeeStructureItem[];
   setFeeStructure: React.Dispatch<React.SetStateAction<FeeStructureItem[]>>;
   updateFeeStructureItem: (id: string, updates: Partial<FeeStructureItem>) => Promise<boolean>;
-  addFeeStructureItem: (item: Omit<FeeStructureItem, 'id'>) => Promise<FeeStructureItem>;
+  addFeeStructureItem: (item: Omit<FeeStructureItem, 'id'>) => Promise<FeeStructureItem | null>;
   deleteFeeStructureItem: (id: string) => Promise<boolean>;
   calculateStudentAssessment: (studentId?: string, overrideUnits?: number, additionalFeeIds?: string[]) => StudentAssessment;
 
@@ -1915,9 +1918,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 seedBatchIfEmpty('mediaLibrary', INITIAL_MEDIA_ITEMS),
                 seedBatchIfEmpty('galleryAlbums', INITIAL_GALLERY_ALBUMS),
                 seedBatchIfEmpty('studentLifeAlbums', INITIAL_STUDENT_LIFE_ALBUMS),
-                seedBatchIfEmpty('adminUsers', INITIAL_ADMIN_USERS),
-                seedBatchIfEmpty('users', INITIAL_USER_ACCOUNTS),
-                seedBatchIfEmpty('studentProfiles', INITIAL_STUDENTS),
+                // Accounts and student records are never seeded with sample people.
                 seedBatchIfEmpty('donationPaymentMethods', INITIAL_DONATION_METHODS),
                 seedBatchIfEmpty('academicSubjects', INITIAL_ACADEMIC_SUBJECTS),
                 seedBatchIfEmpty('feeStructure', INITIAL_FEE_STRUCTURE),
@@ -4696,6 +4697,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Admission decisions are limited to enrollment staff (Registrar, Admin, Super Admin).
   const canDecideAdmissions = isAdminLoggedIn && ENROLLMENT_STAFF_ROLES.includes(currentAdminUser?.role || '');
+  const canManageEnrollment = isAdminLoggedIn && ['Super Admin', 'Admin', 'Registrar', 'Academic Admin', 'Finance'].includes(currentAdminUser?.role || '');
   // Payment verification is also open to the Finance office.
   const canVerifyPayments = isAdminLoggedIn && PAYMENT_STAFF_ROLES.includes(currentAdminUser?.role || '');
 
@@ -4754,11 +4756,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return next;
     });
 
-    try {
-      await safeSetDoc(doc(db, 'applications', id), cleanFirestoreData({ adminNotes: newNotes }), { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeSetDoc(doc(db, 'applications', id), cleanFirestoreData({ adminNotes: newNotes }), { merge: true }))) return undefined;
 
     addToast('info', 'Internal Note Logged', 'Application review note saved.');
   };
@@ -4775,11 +4773,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return next;
     });
 
-    try {
-      await safeDeleteDoc(doc(db, 'applications', id));
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeDeleteDoc(doc(db, 'applications', id)))) return undefined;
 
     logActivity('DELETE', 'Admission Application', id, targetApp?.fullName || 'Applicant', 'Deleted admission application record.');
     addToast('info', 'Application Removed', 'Application record deleted.');
@@ -5080,11 +5074,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     setStudentProfile(updated);
     setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-    try {
-      await safeSetDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeSetDoc(doc(db, 'studentProfiles', studentProfile.id), updated, { merge: true }))) return undefined;
     addToast('success', 'Ministry Log Submitted', 'Practicum hours submitted to Dean of Students.');
   };
 
@@ -5126,6 +5116,35 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Firebase uid of the student who owns a record (studentUid / recipientUid), which
   // firestore.rules uses to let students see only their own requests and notifications.
+  // The student record an action is about. Never falls back to the built-in demo profile: an
+  // admin acting on a student who is not loaded gets null (and a message) instead of writing the
+  // demo student into the database.
+  const findStudentRecord = (key?: string): StudentProfile | null => {
+    if (!key) return null;
+    const list: StudentProfile[] = stateRef.current?.students || students;
+    const found = list.find((s) => s.id === key || s.studentId === key);
+    if (found) return found;
+    return isStudentLoggedIn && (studentProfile.id === key || studentProfile.studentId === key) ? studentProfile : null;
+  };
+  const studentNotFound = () => {
+    addToast('error', 'Student record not found', 'This student record is not loaded. Refresh the page and try again.');
+  };
+
+  // Saves only the given fields of a student record, so a stale local copy never overwrites
+  // newer changes made by another admin or by the student.
+  const saveStudentFields = (id: string, fields: Record<string, unknown>) =>
+    safeSetDoc(doc(db, 'studentProfiles', id), cleanFirestoreData({ ...fields, updatedAt: new Date().toISOString() }), { merge: true });
+
+  const commitBatch = async (batch: ReturnType<typeof writeBatch>, path: string): Promise<boolean> => {
+    try {
+      await batch.commit();
+      return true;
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, path);
+      return false;
+    }
+  };
+
   const studentUidFor = (studentKey?: string): string | undefined => {
     if (!studentKey) return undefined;
     const match = (s?: StudentProfile | null) => !!s && (s.id === studentKey || s.studentId === studentKey);
@@ -5134,16 +5153,17 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Online Enrollment Workflow Engine
-  const saveEnrollmentDraft = async (draft: Partial<OnlineEnrollment>): Promise<OnlineEnrollment> => {
+  const saveEnrollmentDraft = async (draft: Partial<OnlineEnrollment>): Promise<OnlineEnrollment | null> => {
     const id = draft.id || `enr-draft-${studentProfile.id || Date.now()}`;
-    const refNo = draft.referenceNumber || `ENR-DRAFT-${Math.floor(1000 + Math.random() * 9000)}`;
+    const refNo = draft.referenceNumber || `ENR-DRAFT-${Date.now().toString(36).toUpperCase()}`;
     const draftStudentId = draft.studentId || studentProfile.studentId;
+    if (!draftStudentId) return null;
 
     const fullDraft: OnlineEnrollment = {
       id,
       referenceNumber: refNo,
       studentUid: studentUidFor(draftStudentId),
-      studentId: draftStudentId || '2024-PCM-0418',
+      studentId: draftStudentId,
       studentName: draft.studentName || studentProfile.fullName || studentProfile.name || 'Student',
       studentEmail: draft.studentEmail || studentProfile.email,
       studentContact: draft.studentContact || studentProfile.phone || '',
@@ -5156,9 +5176,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'Draft',
       selectedSubjects: draft.selectedSubjects || [],
       totalUnits: (draft.selectedSubjects || []).reduce((sum, s) => sum + (s.units || 0), 0),
-      estimatedTuition: draft.estimatedTuition || ((draft.selectedSubjects || []).reduce((sum, s) => sum + (s.units || 0), 0) * 850 + 2500),
+      estimatedTuition: termFees((draft.selectedSubjects || []).reduce((sum, s) => sum + (s.units || 0), 0), feeStructure, enrollmentSystemConfig).total,
       paymentMethod: draft.paymentMethod || 'GCash',
-      paymentOption: draft.paymentOption || 'Installment (40% Downpayment)',
+      paymentOption: draft.paymentOption || `Installment (${enrollmentSystemConfig?.downpaymentPercent ?? 40}% Downpayment)`,
       proofOfPaymentUrl: draft.proofOfPaymentUrl || '',
       submittedAt: '',
       submissionDate: '',
@@ -5178,11 +5198,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [fullDraft, ...prev];
     });
 
-    try {
-      await safeSetDoc(doc(db, 'enrollments', id), cleanFirestoreData(fullDraft));
-    } catch (e) {
-      console.warn('Save enrollment draft notice:', e);
-    }
+    if (!(await safeSetDoc(doc(db, 'enrollments', id), cleanFirestoreData(fullDraft)))) return null;
 
     addToast('info', 'Draft Saved', 'Your enrollment application draft has been saved securely.');
     return fullDraft;
@@ -5280,7 +5296,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return { success: false, message: 'Please select at least 1 subject.' };
       }
 
-      const refNo = `ENR-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+      if (!(data.studentId || studentProfile.studentId)) {
+        addToast('error', 'Student record not found', 'Your student record is not loaded yet. Please refresh and try again.');
+        return { success: false, message: 'Student record not loaded.' };
+      }
+      // Year of submission + time-based suffix: unique, no random collisions.
+      const refNo = `ENR-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`;
       const id = data.id && !data.id.includes('draft') ? data.id : `enr-${Date.now()}`;
       const now = new Date().toISOString();
 
@@ -5288,7 +5309,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id,
         referenceNumber: refNo,
         studentUid: studentUidFor(data.studentId || studentProfile.studentId),
-        studentId: data.studentId || studentProfile.studentId || '2024-PCM-0418',
+        studentId: data.studentId || studentProfile.studentId,
         studentName: data.studentName || studentProfile.fullName || studentProfile.name || 'Student',
         studentEmail: data.studentEmail || studentProfile.email,
         studentContact: data.studentContact || studentProfile.phone || '',
@@ -5301,9 +5322,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'Submitted',
         selectedSubjects: subjects,
         totalUnits: subjects.reduce((sum, s) => sum + (s.units || 0), 0),
-        estimatedTuition: data.estimatedTuition || (subjects.reduce((sum, s) => sum + (s.units || 0), 0) * 850 + 2500),
+        estimatedTuition: termFees(subjects.reduce((sum, s) => sum + (s.units || 0), 0), feeStructure, enrollmentSystemConfig).total,
         paymentMethod: data.paymentMethod || 'GCash',
-        paymentOption: data.paymentOption || 'Installment (40% Downpayment)',
+        paymentOption: data.paymentOption || `Installment (${enrollmentSystemConfig?.downpaymentPercent ?? 40}% Downpayment)`,
         proofOfPaymentUrl: data.proofOfPaymentUrl || '',
         paymentReference: data.paymentReference || '',
         submittedAt: now,
@@ -5325,12 +5346,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setStudentProfile(updatedStudent);
       setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
 
-      try {
-        await safeSetDoc(doc(db, 'enrollments', id), cleanFirestoreData(submission));
-        await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
-      } catch (e) {
-        console.warn('Submit enrollment Firestore sync notice:', e);
-      }
+      // The request and the student's status change are saved together (students may only
+      // change enrollmentStatus/currentSemester on their own record).
+      const submitBatch = writeBatch(db);
+      submitBatch.set(doc(db, 'enrollments', id), cleanFirestoreData(submission));
+      submitBatch.set(
+        doc(db, 'studentProfiles', updatedStudent.id),
+        { enrollmentStatus: 'Submitted', currentSemester: updatedStudent.currentSemester, updatedAt: now },
+        { merge: true }
+      );
+      if (!(await commitBatch(submitBatch, `enrollments/${id}`))) return { success: false, message: 'Your enrollment could not be saved. Please try again.' };
 
       // Trigger Notification for Student
       await addStudentNotification(updatedStudent.id, {
@@ -5344,7 +5369,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('success', 'Enrollment Submitted!', `Application ${refNo} sent to Registrar for verification.`);
       return { success: true, referenceNumber: refNo };
     },
-    [studentProfile, addToast, addStudentNotification, logActivity]
+    [studentProfile, addToast, addStudentNotification, logActivity, feeStructure, enrollmentSystemConfig]
   );
 
   const updateEnrollmentStatus = async (enrollmentId: string, status: EnrollmentStatus, adminRemarks?: string): Promise<boolean> => {
@@ -5359,11 +5384,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updated : e)));
-    try {
-      await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true });
-    } catch (e) {
-      console.warn('Update enrollment status sync notice:', e);
-    }
+    if (!(await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true }))) return false;
 
     logActivity('UPDATE', 'Online Enrollment', enrollmentId, target.studentName, `Enrollment status updated to "${status}".`);
     addToast('info', 'Enrollment Status Updated', `Status changed to ${status}.`);
@@ -5373,64 +5394,85 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const approveEnrollment = async (enrollmentId: string, remarks?: string): Promise<boolean> => {
     const target = enrollments.find((e) => e.id === enrollmentId);
     if (!target) return false;
+    if (target.status === 'Approved') {
+      addToast('info', 'Already approved', `${target.referenceNumber} was already approved.`);
+      return true;
+    }
+    const student = findStudentRecord(target.studentId);
+    if (!student) {
+      studentNotFound();
+      return false;
+    }
+
+    // Term assessment from the Fee Structure for the approved subjects.
+    const units = (target.selectedSubjects || []).reduce((sum, s) => sum + (Number(s.units) || 0), 0);
+    const fees = termFees(units, feeStructure, enrollmentSystemConfig);
+    if (fees.total <= 0) {
+      addToast('error', 'Fees not set up', 'Add the tuition and fee items in Enrollment & Records → Tuition & Fee Policy before approving enrollments.');
+      return false;
+    }
 
     const now = new Date().toISOString();
-    const updatedEnrollment: OnlineEnrollment = {
-      ...target,
-      status: 'Approved',
-      approvedAt: now,
-      approvedBy: currentAdminUser.name || 'Office of the Registrar',
-      adminRemarks: remarks || 'Officially verified and approved by the Registrar.',
-    };
+    const term = `${target.semester}, AY ${target.schoolYear}`;
+    const summary = accountSummary(student as any);
+    // Re-approving the same term replaces that term's assessment instead of adding it twice.
+    const sameTerm = (student.currentSemester || '') === term && typeof (student as any).termAssessment === 'number';
+    const baseCharges = summary.totalCharges - (sameTerm ? summary.termAssessment : 0);
+    const tuitionTotal = Math.round((baseCharges + fees.total) * 100) / 100;
+    const tuitionPaid = summary.totalPaid;
+    const tuitionBalance = Math.max(0, Math.round((tuitionTotal - tuitionPaid) * 100) / 100);
+    const previousBalance = sameTerm ? summary.previousBalance : summary.balance;
 
-    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updatedEnrollment : e)));
-
-    // Update Student Profile with Enrolled Courses & Tuition
-    const student = students.find((s) => s.studentId === target.studentId || s.id === target.studentId) || studentProfile;
     const enrolledCourses: StudentCourse[] = (target.selectedSubjects || []).map((sub, idx) => ({
       id: sub.id || `crs-${sub.code.toLowerCase().replace(/\s+/g, '-')}-${idx}`,
       code: sub.code,
       title: sub.title,
       units: sub.units,
-      instructor: sub.instructor || 'Faculty Member',
+      instructor: sub.instructor || 'TBA',
       schedule: sub.schedule || 'TBA',
-      room: sub.room || 'Main Hall',
+      room: sub.room || 'TBA',
       status: 'Enrolled',
     }));
 
-    const tuitionTotal = target.estimatedTuition || student.tuitionTotal || 15000;
-    const tuitionBalance = Math.max(0, tuitionTotal - (student.tuitionPaid || 0));
-
-    const updatedStudent: StudentProfile = {
-      ...student,
-      enrollmentStatus: 'Enrolled',
+    const updatedEnrollment: OnlineEnrollment = {
+      ...target,
+      status: 'Approved',
+      approvedAt: now,
+      approvedBy: currentAdminUser?.name || 'Office of the Registrar',
+      adminRemarks: remarks || 'Officially verified and approved by the Registrar.',
+      estimatedTuition: fees.total,
+    };
+    const studentFields = {
+      enrollmentStatus: 'Enrolled' as const,
       courses: enrolledCourses,
-      currentSemester: `${target.semester}, AY ${target.schoolYear}`,
+      currentSemester: term,
+      termAssessment: fees.total,
+      previousBalance,
       tuitionTotal,
+      tuitionPaid,
       tuitionBalance,
+      paymentStatus: tuitionBalance <= 0 ? 'Paid' : tuitionPaid > 0 ? 'Partially Paid' : 'Unpaid',
+      updatedAt: now,
     };
 
-    if (student.id === studentProfile.id) {
-      setStudentProfile(updatedStudent);
-    }
-    setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updatedEnrollment), { merge: true });
+    batch.set(doc(db, 'studentProfiles', student.id), cleanFirestoreData(studentFields), { merge: true });
+    if (!(await commitBatch(batch, `enrollments/${enrollmentId}`))) return false;
 
-    try {
-      await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updatedEnrollment), { merge: true });
-      await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
-    } catch (e) {
-      console.warn('Approve enrollment sync notice:', e);
-    }
+    const updatedStudent = { ...student, ...studentFields } as StudentProfile;
+    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updatedEnrollment : e)));
+    setStudents((prev) => prev.map((s) => (s.id === student.id ? updatedStudent : s)));
 
-    await addStudentNotification(updatedStudent.id, {
+    await addStudentNotification(student.id, {
       type: 'enrollment',
       title: 'Enrollment Approved — Certificate of Registration Ready',
-      message: `Your enrollment for ${target.semester}, AY ${target.schoolYear} has been officially approved! You can now access your class schedule and Certificate of Registration.`,
+      message: `Your enrollment for ${term} has been officially approved. Assessment: ₱${fees.total.toLocaleString()}; balance due: ₱${tuitionBalance.toLocaleString()}. You can now view your class schedule and Certificate of Registration.`,
       linkSection: 'portal',
     });
 
-    logActivity('UPDATE', 'Online Enrollment', enrollmentId, target.studentName, `Approved enrollment application (${target.referenceNumber}).`);
-    addToast('success', 'Enrollment Approved!', `Student ${target.studentName} is now officially enrolled.`);
+    logActivity('UPDATE', 'Online Enrollment', enrollmentId, target.studentName, `Approved enrollment application (${target.referenceNumber}); assessment ₱${fees.total.toLocaleString()}.`);
+    addToast('success', 'Enrollment Approved!', `${target.studentName} is now officially enrolled. Assessment ₱${fees.total.toLocaleString()}.`);
     return true;
   };
 
@@ -5444,24 +5486,19 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adminRemarks: adminFeedback,
     };
 
+    const student = findStudentRecord(target.studentId);
+    if (!student) {
+      studentNotFound();
+      return false;
+    }
+    const batch = writeBatch(db);
+    batch.set(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true });
+    batch.set(doc(db, 'studentProfiles', student.id), { enrollmentStatus: 'Returned for Correction', updatedAt: new Date().toISOString() }, { merge: true });
+    if (!(await commitBatch(batch, `enrollments/${enrollmentId}`))) return false;
+
+    const updatedStudent: StudentProfile = { ...student, enrollmentStatus: 'Returned for Correction' };
     setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updated : e)));
-
-    const student = students.find((s) => s.studentId === target.studentId || s.id === target.studentId) || studentProfile;
-    const updatedStudent: StudentProfile = {
-      ...student,
-      enrollmentStatus: 'Returned for Correction',
-    };
-    if (student.id === studentProfile.id) {
-      setStudentProfile(updatedStudent);
-    }
     setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
-
-    try {
-      await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true });
-      await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
-    } catch (e) {
-      console.warn('Return enrollment sync notice:', e);
-    }
 
     await addStudentNotification(updatedStudent.id, {
       type: 'alert',
@@ -5486,11 +5523,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updated : e)));
-    try {
-      await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeSetDoc(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true }))) return false;
 
     logActivity('UPDATE', 'Online Enrollment', enrollmentId, target.studentName, `Rejected enrollment: ${reason}`);
     addToast('info', 'Enrollment Disapproved', 'Enrollment application has been disapproved.');
@@ -5551,7 +5584,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Pre-Enlistment Workflow
-  const submitPreEnlistment = async (recordData: Omit<PreEnlistmentRecord, 'id' | 'createdAt'>): Promise<PreEnlistmentRecord> => {
+  const submitPreEnlistment = async (recordData: Omit<PreEnlistmentRecord, 'id' | 'createdAt'>): Promise<PreEnlistmentRecord | null> => {
     const id = `pre-${recordData.studentId.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}`;
     const now = new Date().toISOString();
     const newRecord: PreEnlistmentRecord = {
@@ -5576,11 +5609,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return next;
     });
 
-    try {
-      await safeSetDoc(doc(db, 'preEnlistments', id), cleanFirestoreData(newRecord));
-    } catch (e) {
-      console.warn('Submit pre-enlistment notice:', e);
-    }
+    if (!(await safeSetDoc(doc(db, 'preEnlistments', id), cleanFirestoreData(newRecord)))) return null;
 
     addStudentNotification(recordData.studentId, {
       title: 'Pre-Enlistment Submitted',
@@ -5615,11 +5644,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('preEnlistments', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'preEnlistments', id), cleanFirestoreData(updated), { merge: true });
-    } catch (e) {
-      console.warn('Update pre-enlistment status notice:', e);
-    }
+    if (!(await safeSetDoc(doc(db, 'preEnlistments', id), cleanFirestoreData(updated), { merge: true }))) return false;
 
     addStudentNotification(target.studentId, {
       title: `Pre-Enlistment ${status}`,
@@ -5634,7 +5659,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Adding & Dropping Workflow
-  const submitAddDropRequest = async (reqData: Omit<AddDropRequest, 'id' | 'createdAt' | 'status' | 'dateSubmitted'>): Promise<AddDropRequest> => {
+  const submitAddDropRequest = async (reqData: Omit<AddDropRequest, 'id' | 'createdAt' | 'status' | 'dateSubmitted'>): Promise<AddDropRequest | null> => {
     const id = `ad-${reqData.studentId.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}`;
     const now = new Date().toISOString();
     const newReq: AddDropRequest = {
@@ -5651,11 +5676,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('addDropRequests', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'addDropRequests', id), cleanFirestoreData(newReq));
-    } catch (e) {
-      console.warn('Submit add-drop request notice:', e);
-    }
+    if (!(await safeSetDoc(doc(db, 'addDropRequests', id), cleanFirestoreData(newReq)))) return null;
 
     addStudentNotification(reqData.studentId, {
       title: `Add/Drop Request Filed (${reqData.action}: ${reqData.subjectCode})`,
@@ -5716,15 +5737,15 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('addDropRequests', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'addDropRequests', id), cleanFirestoreData(updatedReq), { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeSetDoc(doc(db, 'addDropRequests', id), cleanFirestoreData(updatedReq), { merge: true }))) return false;
 
     // If Approved, update student profile courses & subject catalog enrolled count!
     if (status === 'Approved') {
-      const targetStudent = students.find((s) => s.studentId === target.studentId) || studentProfile;
+      const targetStudent = findStudentRecord(target.studentId);
+      if (!targetStudent) {
+        studentNotFound();
+        return false;
+      }
       let updatedCourses = [...(targetStudent.courses || [])];
 
       if (target.action === 'Add') {
@@ -5760,14 +5781,21 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
+      // Re-assess this term for the new unit load (Fee Structure) and adjust the running totals.
       const newUnits = updatedCourses.filter((c) => c.status !== 'Dropped').reduce((sum, c) => sum + (c.units || 0), 0);
-      const newTuitionTotal = newUnits * 850 + 3000;
-      const updatedProfile: StudentProfile = {
-        ...targetStudent,
+      const before = accountSummary(targetStudent as any);
+      const newTermFees = termFees(newUnits, feeStructure, enrollmentSystemConfig).total;
+      const newTuitionTotal = Math.max(0, Math.round((before.totalCharges - before.termAssessment + newTermFees) * 100) / 100);
+      const newBalance = Math.max(0, Math.round((newTuitionTotal - before.totalPaid) * 100) / 100);
+      const profileFields = {
         courses: updatedCourses,
+        termAssessment: newTermFees,
+        previousBalance: before.previousBalance,
         tuitionTotal: newTuitionTotal,
-        tuitionBalance: Math.max(0, newTuitionTotal - (targetStudent.tuitionPaid || 0)),
+        tuitionBalance: newBalance,
+        paymentStatus: newBalance <= 0 ? 'Paid' : before.totalPaid > 0 ? 'Partially Paid' : 'Unpaid',
       };
+      const updatedProfile: StudentProfile = { ...targetStudent, ...profileFields } as StudentProfile;
 
       setStudents((prev) => {
         const next = prev.map((s) => (s.studentId === target.studentId ? updatedProfile : s));
@@ -5778,11 +5806,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setStudentProfile(updatedProfile);
         setCachedData('studentProfile', updatedProfile);
       }
-      try {
-        await safeSetDoc(doc(db, 'studentProfiles', targetStudent.id || targetStudent.studentId), cleanFirestoreData(updatedProfile), { merge: true });
-      } catch (e) {
-        console.warn(e);
-      }
+      if (!(await saveStudentFields(targetStudent.id, profileFields))) return false;
     }
 
     // Send notification to student
@@ -5805,16 +5829,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('feeStructure', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'feeStructure', id), cleanFirestoreData(updates), { merge: true });
-    } catch (e) {
-      console.warn('Update fee structure notice:', e);
-    }
+    if (!(await safeSetDoc(doc(db, 'feeStructure', id), cleanFirestoreData(updates), { merge: true }))) return false;
     addToast('success', 'Fee Updated', 'Institutional fee schedule updated.');
     return true;
   };
 
-  const addFeeStructureItem = async (itemData: Omit<FeeStructureItem, 'id'>): Promise<FeeStructureItem> => {
+  const addFeeStructureItem = async (itemData: Omit<FeeStructureItem, 'id'>): Promise<FeeStructureItem | null> => {
     const id = `fee-${Date.now()}`;
     const newItem: FeeStructureItem = { ...itemData, id };
     setFeeStructure((prev) => {
@@ -5822,11 +5842,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('feeStructure', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'feeStructure', id), cleanFirestoreData(newItem));
-    } catch (e) {
-      console.warn('Add fee structure notice:', e);
-    }
+    if (!(await safeSetDoc(doc(db, 'feeStructure', id), cleanFirestoreData(newItem)))) return null;
     addToast('success', 'Fee Item Created', `${newItem.name} has been added to the institutional schedule.`);
     return newItem;
   };
@@ -5837,11 +5853,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('feeStructure', next);
       return next;
     });
-    try {
-      await safeDeleteDoc(doc(db, 'feeStructure', id));
-    } catch (e) {
-      console.warn('Delete fee structure notice:', e);
-    }
+    if (!(await safeDeleteDoc(doc(db, 'feeStructure', id)))) return false;
     addToast('info', 'Fee Item Removed', 'Fee item removed.');
     return true;
   };
@@ -5849,7 +5861,9 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Assessment Calculation Engine
   const calculateStudentAssessment = useCallback(
     (studentId?: string, overrideUnits?: number, additionalFeeIds?: string[]): StudentAssessment => {
-      const activeStudent = students.find((s) => s.studentId === studentId || s.id === studentId) || studentProfile;
+      const activeStudent = findStudentRecord(studentId || studentProfile.studentId) || studentProfile;
+      const account = accountSummary(activeStudent as any);
+      const term = parseTerm(activeStudent.currentSemester);
       const enrolledCourses = (activeStudent.courses || []).filter((c) => c.status !== 'Dropped');
       const units = overrideUnits !== undefined
         ? overrideUnits
@@ -5898,16 +5912,20 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const adjustmentsTotal = 0;
       const adjustmentsBreakdown: { id: string; name: string; amount: number; note?: string }[] = [];
 
-      // 7. Total Assessment
-      const totalAssessment = Math.max(0, tuitionTotal + miscellaneousTotal + laboratoryTotal + otherFeesTotal - discountsTotal + adjustmentsTotal);
-      const previousBalance = 0;
+      // 7. Total: the Registrar's official assessment on the student record wins over this
+      // fee-schedule estimate; any difference is shown as an adjustment so the lines add up.
+      const computedTotal = Math.max(0, tuitionTotal + miscellaneousTotal + laboratoryTotal + otherFeesTotal - discountsTotal + adjustmentsTotal);
+      const hasOfficial = account.totalCharges > 0;
+      const totalAssessment = hasOfficial ? account.termAssessment : computedTotal;
+      const difference = Math.round((totalAssessment - computedTotal) * 100) / 100;
+      if (hasOfficial && Math.abs(difference) >= 0.01) {
+        adjustmentsBreakdown.push({ id: 'adj-registrar', name: 'Registrar assessment adjustment', amount: difference, note: 'Difference between the official assessment and the current fee schedule' });
+      }
+      const previousBalance = hasOfficial ? account.previousBalance : 0;
 
-      // 8. Total Amount Paid from verified records
-      const verifiedPayments = (activeStudent.paymentHistory || activeStudent.paymentRecords || []).filter(
-        (p) => p.status === 'Verified' || !p.status
-      );
-      const totalAmountPaid = verifiedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-      const currentAmountDue = Math.max(0, (totalAssessment + previousBalance) - totalAmountPaid);
+      // 8. Paid and due: from the official record.
+      const totalAmountPaid = hasOfficial ? account.paymentsThisTerm : 0;
+      const currentAmountDue = hasOfficial ? account.balance : computedTotal;
 
       let paymentStatus: 'Paid' | 'Partially Paid' | 'Unpaid' | 'Overdue' = 'Unpaid';
       if (currentAmountDue <= 0 && totalAssessment > 0) {
@@ -5919,10 +5937,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       return {
-        id: `asmt-${activeStudent.studentId || 'std'}-2026-1`,
+        id: `asmt-${activeStudent.studentId || 'std'}-${(term.academicYear || '').replace(/\D/g, '')}-${term.semester || 'term'}`,
         studentId: activeStudent.studentId,
-        academicYear: '2026–2027',
-        semester: '1st Semester',
+        academicYear: term.academicYear,
+        semester: term.semester,
         tuitionTotal,
         tuitionPerUnit,
         totalUnits: units,
@@ -5934,22 +5952,23 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         otherBreakdown,
         discountsTotal,
         discountsBreakdown,
-        adjustmentsTotal,
+        adjustmentsTotal: adjustmentsBreakdown.reduce((sum, a) => sum + a.amount, adjustmentsTotal),
         adjustmentsBreakdown,
         totalAssessment,
         previousBalance,
         totalAmountPaid,
         currentAmountDue,
         paymentStatus,
-        dueDate: 'October 15, 2026',
+        dueDate: '',
         updatedAt: new Date().toISOString(),
       };
     },
-    [students, studentProfile, feeStructure]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [students, studentProfile, feeStructure, isStudentLoggedIn]
   );
 
   // Student Document Vault & Verification
-  const uploadStudentDocument = async (studentId: string, docData: Omit<StudentDocument, 'id' | 'uploadDate' | 'verificationStatus'>): Promise<StudentDocument> => {
+  const uploadStudentDocument = async (studentId: string, docData: Omit<StudentDocument, 'id' | 'uploadDate' | 'verificationStatus'>): Promise<StudentDocument | null> => {
     const newDoc: StudentDocument = {
       ...docData,
       id: `doc-${Date.now()}`,
@@ -5957,7 +5976,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       verificationStatus: 'Pending Verification',
     };
 
-    const targetStudent = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
+    const targetStudent = findStudentRecord(studentId);
+    if (!targetStudent) {
+      studentNotFound();
+      return null;
+    }
     const updatedDocs = [newDoc, ...(targetStudent.documents || [])];
 
     const updatedStudent: StudentProfile = {
@@ -5970,18 +5993,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
 
-    try {
-      await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
-    } catch (e) {
-      console.warn('Upload student doc sync notice:', e);
-    }
+    if (!(await saveStudentFields(updatedStudent.id, { documents: updatedDocs }))) return null;
 
     addToast('success', 'Document Uploaded', `${newDoc.name} submitted for Registrar verification.`);
     return newDoc;
   };
 
   const updateDocumentVerification = async (studentId: string, docId: string, status: DocumentVerificationStatus, adminFeedback?: string): Promise<boolean> => {
-    const targetStudent = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
+    const targetStudent = findStudentRecord(studentId);
+    if (!targetStudent) {
+      studentNotFound();
+      return false;
+    }
     const updatedDocs = (targetStudent.documents || []).map((d) =>
       d.id === docId
         ? {
@@ -6004,11 +6027,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
 
-    try {
-      await safeSetDoc(doc(db, 'studentProfiles', updatedStudent.id), cleanFirestoreData(updatedStudent), { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await saveStudentFields(updatedStudent.id, { documents: updatedDocs }))) return false;
 
     const docItem = updatedDocs.find((d) => d.id === docId);
     await addStudentNotification(updatedStudent.id, {
@@ -6080,11 +6099,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    try {
-      await safeSetDoc(doc(db, 'studentProfiles', updated.id), updated, { merge: true });
-    } catch (e) {
-      console.warn('Update student profile sync notice:', e);
-    }
+    if (!(await saveStudentFields(updated.id, updates as any))) return false;
 
     logActivity('UPDATE', 'Student Profile', updated.id, updated.fullName || updated.name || 'Student', updates.avatarUrl !== undefined ? 'Updated student profile photo.' : 'Updated student record and academic information.');
     addToast('success', 'Profile Updated', `Updated record for ${updated.fullName || updated.name || 'Student'}.`);
@@ -6111,7 +6126,11 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addStudentGrade = async (studentId: string, courseCode: string, midtermGrade: number | string, finalGrade: number | string): Promise<boolean> => {
-    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
+    const target = findStudentRecord(studentId);
+    if (!target) {
+      studentNotFound();
+      return false;
+    }
     const updatedCourses = (target.courses || []).map((c) =>
       c.code === courseCode
         ? {
@@ -6133,11 +6152,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
 
-    try {
-      await safeSetDoc(doc(db, 'studentProfiles', updated.id), cleanFirestoreData(updated), { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await saveStudentFields(updated.id, { courses: updatedCourses }))) return false;
 
     await addStudentNotification(updated.id, {
       type: 'grade',
@@ -6153,32 +6168,33 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const recordStudentPayment = useCallback(
     async (studentId: string, payment: Omit<StudentPaymentRecord, 'id'>): Promise<boolean> => {
-      const target = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
+      const target = findStudentRecord(studentId);
+      if (!target) {
+        studentNotFound();
+        return false;
+      }
       const newPayment: StudentPaymentRecord = {
         ...payment,
         id: `pay-${Date.now()}`,
       };
 
-      const newPaid = (target.tuitionPaid || 0) + payment.amount;
-      const newBalance = Math.max(0, (target.tuitionTotal || 0) - newPaid);
-
-      const updated: StudentProfile = {
-        ...target,
+      const counts = !payment.status || payment.status === 'Verified';
+      const newPaid = Math.round(((target.tuitionPaid || 0) + (counts ? payment.amount : 0)) * 100) / 100;
+      const newBalance = Math.max(0, Math.round(((target.tuitionTotal || 0) - newPaid) * 100) / 100);
+      const paymentFields = {
         tuitionPaid: newPaid,
         tuitionBalance: newBalance,
+        paymentStatus: newBalance <= 0 ? 'Paid' : newPaid > 0 ? 'Partially Paid' : 'Unpaid',
         paymentHistory: [newPayment, ...(target.paymentHistory || [])],
       };
+      const updated: StudentProfile = { ...target, ...paymentFields } as StudentProfile;
 
       if (target.id === studentProfile.id) {
         setStudentProfile(updated);
       }
       setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
 
-      try {
-        await safeSetDoc(doc(db, 'studentProfiles', updated.id), cleanFirestoreData(updated), { merge: true });
-      } catch (e) {
-        console.warn(e);
-      }
+      if (!(await saveStudentFields(updated.id, paymentFields))) return false;
 
       await addStudentNotification(updated.id, {
         type: 'payment',
@@ -6191,6 +6207,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('success', 'Payment Recorded', `Official receipt issued for ₱${payment.amount.toLocaleString()}.`);
       return true;
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [students, studentProfile, addStudentNotification, logActivity, addToast]
   );
 
@@ -6207,29 +6224,30 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     paymentId: string,
     updates: Partial<StudentPaymentRecord>
   ): Promise<boolean> => {
-    const target = students.find((s) => s.id === studentId || s.studentId === studentId) || studentProfile;
-    const paymentHistory = (target.paymentHistory || []).map((p) =>
-      p.id === paymentId ? { ...p, ...updates } : p
-    );
-    const verifiedPayments = paymentHistory.filter((p) => p.status === 'Verified' || !p.status);
-    const newPaid = verifiedPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
-    const newBalance = Math.max(0, (target.tuitionTotal || 0) - newPaid);
-
-    const updated: StudentProfile = {
-      ...target,
+    const target = findStudentRecord(studentId);
+    if (!target) {
+      studentNotFound();
+      return false;
+    }
+    const counted = (p?: StudentPaymentRecord) => (p && (p.status === 'Verified' || !p.status) ? Number(p.amount) || 0 : 0);
+    const oldEntry = (target.paymentHistory || []).find((p) => p.id === paymentId);
+    if (!oldEntry) return false;
+    const newEntry = { ...oldEntry, ...updates };
+    const paymentHistory = (target.paymentHistory || []).map((p) => (p.id === paymentId ? newEntry : p));
+    const newPaid = Math.max(0, Math.round(((target.tuitionPaid || 0) - counted(oldEntry) + counted(newEntry)) * 100) / 100);
+    const newBalance = Math.max(0, Math.round(((target.tuitionTotal || 0) - newPaid) * 100) / 100);
+    const paymentFields = {
       paymentHistory,
       tuitionPaid: newPaid,
       tuitionBalance: newBalance,
+      paymentStatus: newBalance <= 0 ? 'Paid' : newPaid > 0 ? 'Partially Paid' : 'Unpaid',
     };
+    const updated: StudentProfile = { ...target, ...paymentFields } as StudentProfile;
     if (target.id === studentProfile.id) {
       setStudentProfile(updated);
     }
     setStudents((prev) => prev.map((s) => (s.id === updated.id ? updated : s)));
-    try {
-      await safeSetDoc(doc(db, 'studentProfiles', updated.id), cleanFirestoreData(updated), { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await saveStudentFields(updated.id, paymentFields))) return false;
     logActivity('UPDATE', 'Payment Record', paymentId, target.fullName || target.name || 'Student', 'Updated student tuition payment entry.');
     addToast('success', 'Payment Record Updated', 'The payment entry has been modified.');
     return true;
@@ -6436,7 +6454,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Class Sections Management
-  const addClassSection = async (sectionData: Omit<ClassSection, 'id'>): Promise<ClassSection> => {
+  const addClassSection = async (sectionData: Omit<ClassSection, 'id'>): Promise<ClassSection | null> => {
     const id = `sec-${Date.now()}`;
     const newSection: ClassSection = cleanFirestoreData({
       ...sectionData,
@@ -6451,11 +6469,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('classSections', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'classSections', id), newSection);
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeSetDoc(doc(db, 'classSections', id), newSection))) return null;
     logActivity('CREATE', 'Class Section', id, newSection.sectionName, `Created class section ${newSection.sectionCode}.`);
     addToast('success', 'Section Created', `Class section ${newSection.sectionName} added.`);
     return newSection;
@@ -6468,11 +6482,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('classSections', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'classSections', id), sanitized, { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeSetDoc(doc(db, 'classSections', id), sanitized, { merge: true }))) return false;
     logActivity('UPDATE', 'Class Section', id, updates.sectionName || 'Section', 'Updated section information.');
     addToast('success', 'Section Updated', 'Class section updated.');
     return true;
@@ -6484,11 +6494,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('classSections', next);
       return next;
     });
-    try {
-      await safeDeleteDoc(doc(db, 'classSections', id));
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeDeleteDoc(doc(db, 'classSections', id)))) return false;
     logActivity('DELETE', 'Class Section', id, 'Class Section', 'Removed class section.');
     addToast('info', 'Section Deleted', 'Class section removed.');
     return true;
@@ -6523,7 +6529,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Instructors Management
-  const addInstructor = async (instructorData: Omit<InstructorRecord, 'id'>): Promise<InstructorRecord> => {
+  const addInstructor = async (instructorData: Omit<InstructorRecord, 'id'>): Promise<InstructorRecord | null> => {
     const id = `inst-${Date.now()}`;
     const newInst: InstructorRecord = cleanFirestoreData({
       ...instructorData,
@@ -6536,11 +6542,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('instructors', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'instructors', id), newInst);
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeSetDoc(doc(db, 'instructors', id), newInst))) return null;
     logActivity('CREATE', 'Instructor', id, newInst.fullName, `Added instructor ${newInst.fullName} (${newInst.employeeId}).`);
     addToast('success', 'Instructor Added', `${newInst.fullName} added to faculty roster.`);
     return newInst;
@@ -6553,11 +6555,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('instructors', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'instructors', id), sanitized, { merge: true });
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeSetDoc(doc(db, 'instructors', id), sanitized, { merge: true }))) return false;
     logActivity('UPDATE', 'Instructor', id, updates.fullName || 'Instructor', 'Updated faculty credentials / load.');
     addToast('success', 'Instructor Updated', 'Instructor record updated.');
     return true;
@@ -6569,11 +6567,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('instructors', next);
       return next;
     });
-    try {
-      await safeDeleteDoc(doc(db, 'instructors', id));
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeDeleteDoc(doc(db, 'instructors', id)))) return false;
     logActivity('DELETE', 'Instructor', id, 'Instructor', 'Removed instructor from directory.');
     addToast('info', 'Instructor Removed', 'Instructor removed from system.');
     return true;
@@ -6600,7 +6594,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     subjectId: string,
     newAcademicYear: string,
     newSemester: string
-  ): Promise<AcademicSubject> => {
+  ): Promise<AcademicSubject | null> => {
     const source = academicSubjects.find((s) => s.id === subjectId);
     if (!source) throw new Error('Subject not found');
     const id = `subj-${source.code.toLowerCase()}-${Date.now()}`;
@@ -6617,11 +6611,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setCachedData('academicSubjects', next);
       return next;
     });
-    try {
-      await safeSetDoc(doc(db, 'academicSubjects', id), duplicated);
-    } catch (e) {
-      console.warn(e);
-    }
+    if (!(await safeSetDoc(doc(db, 'academicSubjects', id), duplicated))) return null;
     logActivity('CREATE', 'Subject Duplicated', id, duplicated.code, `Duplicated ${duplicated.code} to ${newAcademicYear} ${newSemester}.`);
     addToast('success', 'Subject Duplicated', `${duplicated.code} cloned for ${newAcademicYear} ${newSemester}.`);
     return duplicated;
@@ -8519,9 +8509,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setMediaItems(INITIAL_MEDIA_ITEMS);
     setGalleryAlbums(INITIAL_GALLERY_ALBUMS);
     setStudentLifeAlbums(INITIAL_STUDENT_LIFE_ALBUMS);
-    setApplications(INITIAL_APPLICATIONS);
-    setAdminUsers(INITIAL_ADMIN_USERS);
-    setStudentProfile(DEMO_STUDENT_PROFILE);
+    // Applications, students and admin accounts are real records: Reset never replaces them.
     setActivityLogs(INITIAL_ACTIVITY_LOGS);
     setDonationMethods(INITIAL_DONATION_METHODS);
     setDonations(INITIAL_DONATIONS);
@@ -8543,8 +8531,6 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       mediaItems: INITIAL_MEDIA_ITEMS,
       galleryAlbums: INITIAL_GALLERY_ALBUMS,
       studentLifeAlbums: INITIAL_STUDENT_LIFE_ALBUMS,
-      adminUsers: INITIAL_ADMIN_USERS,
-      studentProfile: DEMO_STUDENT_PROFILE,
       donationMethods: INITIAL_DONATION_METHODS,
       donations: INITIAL_DONATIONS,
       donationSettings: INITIAL_DONATION_SETTINGS,
@@ -9177,6 +9163,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         submitApplication,
         updateApplicationStatus,
         canDecideAdmissions,
+        canManageEnrollment,
         canVerifyPayments,
         admissionsActor,
         addApplicationNote,

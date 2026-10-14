@@ -30,6 +30,7 @@ export const AssessmentModule: React.FC<AssessmentModuleProps> = ({
   const assessment: StudentAssessment = useMemo(() => {
     return calculateStudentAssessment(studentProfile.studentId);
   }, [calculateStudentAssessment, studentProfile.studentId]);
+  const termLabel = assessment.semester ? `AY ${assessment.academicYear} • ${assessment.semester}` : studentProfile.currentSemester || 'Current term';
 
   return (
     <div id="pcm-assessment-module" className="space-y-6">
@@ -39,7 +40,7 @@ export const AssessmentModule: React.FC<AssessmentModuleProps> = ({
           <div>
             <div className="flex items-center gap-2">
               <span className="bg-purple-100 text-purple-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-md border border-purple-200">
-                AY 2026–2027 • 1st Semester
+                {termLabel}
               </span>
               <span className="text-slate-300">•</span>
               <span className="text-xs text-slate-500 font-mono">
@@ -105,7 +106,7 @@ export const AssessmentModule: React.FC<AssessmentModuleProps> = ({
             <strong className="font-mono text-lg font-bold text-purple-950">
               ₱{assessment.totalAssessment.toLocaleString()}
             </strong>
-            <span className="text-[10px] text-purple-700 block font-medium">AY 2026–2027 1st Sem</span>
+            <span className="text-[10px] text-purple-700 block font-medium">{termLabel}</span>
           </div>
         </div>
       </div>
@@ -127,7 +128,7 @@ export const AssessmentModule: React.FC<AssessmentModuleProps> = ({
           <div className="space-y-2 text-xs">
             <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-lg border border-slate-200/80">
               <div>
-                <span className="font-semibold text-slate-900 block">Undergraduate Tuition (B.Th.)</span>
+                <span className="font-semibold text-slate-900 block">Tuition ({studentProfile.degreeProgram || studentProfile.program || 'program'})</span>
                 <span className="text-[11px] text-slate-500 font-mono">
                   {assessment.totalUnits} Units × ₱{assessment.tuitionPerUnit.toLocaleString()} / academic unit
                 </span>
@@ -240,7 +241,7 @@ export const AssessmentModule: React.FC<AssessmentModuleProps> = ({
             Total Assessed Matriculation Due
           </h4>
           <p className="text-xs text-slate-300">
-            For Bachelor of Theology ({assessment.totalUnits} Enrolled Units) • Term 1
+            For {studentProfile.degreeProgram || studentProfile.program || 'your program'} ({assessment.totalUnits} Enrolled Units) • {termLabel}
           </p>
         </div>
 
@@ -268,7 +269,7 @@ export const AssessmentModule: React.FC<AssessmentModuleProps> = ({
               <h3 className="font-serif text-xl font-bold text-purple-950 pt-2">
                 Official Student Assessment Slip
               </h3>
-              <p className="text-xs text-slate-600">Academic Year 2026–2027 • 1st Semester</p>
+              <p className="text-xs text-slate-600">{termLabel}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-xs border-b border-slate-100 pb-3">

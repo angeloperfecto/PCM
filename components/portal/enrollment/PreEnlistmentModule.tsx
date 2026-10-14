@@ -23,15 +23,27 @@ import { AcademicSubject, PreEnlistmentRecord } from '@/lib/types';
 export const PreEnlistmentModule: React.FC = () => {
   const {
     academicSubjects,
+    academicPeriods,
     preEnlistments,
     submitPreEnlistment,
     studentProfile,
     addToast,
   } = usePCM();
 
-  // Find student's active pre-enlistment if any
+  // Pre-enlistment is for the term whose pre-enlistment is open (else the current term),
+  // from Enrollment & Records → Academic Terms.
+  const openTerms = (academicPeriods || []).filter((p) => p.preEnlistmentStatus === 'Open' && p.status !== 'Archived');
+  const preTerm =
+    openTerms.find((p) => p.status === 'Upcoming') ||
+    openTerms.find((p) => !p.isCurrent) ||
+    openTerms[0] ||
+    (academicPeriods || []).find((p) => p.isCurrent);
+  const preOpen = preTerm?.preEnlistmentStatus === 'Open';
+  const termLabel = preTerm ? `AY ${preTerm.academicYear} • ${preTerm.semester}` : 'No term open for pre-enlistment';
+
+  // Find student's pre-enlistment for that term, if any
   const existingRecord = preEnlistments.find(
-    (p) => p && p.studentId === studentProfile?.studentId && p.semester === '1st Semester'
+    (p) => p && p.studentId === studentProfile?.studentId && !!preTerm && p.semester === preTerm.semester && (p.academicYear || '').replace('-', '–') === preTerm.academicYear.replace('-', '–')
   );
 
   // Selected subject IDs in current working draft
@@ -114,16 +126,20 @@ export const PreEnlistmentModule: React.FC = () => {
       addToast('error', 'Selection Empty', 'Please select at least 1 course for pre-enlistment.');
       return;
     }
+    if (!preTerm || !preOpen || !studentProfile?.studentId) {
+      addToast('error', 'Pre-enlistment closed', 'Pre-enlistment is not open for any term right now. Please check with the Registrar.');
+      return;
+    }
 
     setIsSubmitting(true);
     const recordPayload: Omit<PreEnlistmentRecord, 'id' | 'createdAt'> = {
-      studentId: studentProfile?.studentId || 'PCM-STU-CURRENT',
-      studentName: studentProfile?.fullName || 'Student User',
-      program: studentProfile?.degreeProgram || studentProfile?.program || 'Bachelor of Theology',
-      degreeProgram: studentProfile?.degreeProgram || studentProfile?.program || 'Bachelor of Theology',
-      yearLevel: studentProfile?.yearLevel || '1st Year',
-      academicYear: '2026–2027',
-      semester: '1st Semester',
+      studentId: studentProfile.studentId,
+      studentName: studentProfile?.fullName || studentProfile?.name || '',
+      program: studentProfile?.degreeProgram || studentProfile?.program || '',
+      degreeProgram: studentProfile?.degreeProgram || studentProfile?.program || '',
+      yearLevel: studentProfile?.yearLevel || '',
+      academicYear: preTerm.academicYear,
+      semester: preTerm.semester,
       selectedSubjectCodes: selectedSubjects.map((s) => s.code).filter(Boolean) as string[],
       totalUnits: totalSelectedUnits,
       status: 'Submitted',
@@ -148,7 +164,7 @@ export const PreEnlistmentModule: React.FC = () => {
           <div>
             <div className="flex items-center gap-2">
               <span className="bg-purple-100 text-purple-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-md border border-purple-200">
-                AY 2026–2027 • 1st Semester
+                {termLabel}
               </span>
               <span className="text-slate-400 text-xs">•</span>
               <span className="text-xs font-semibold text-slate-600">
@@ -444,7 +460,7 @@ export const PreEnlistmentModule: React.FC = () => {
               <h3 className="font-serif text-xl font-bold text-purple-950 pt-2">
                 Official Pre-Enlistment Advising Checklist
               </h3>
-              <p className="text-xs text-slate-600">Academic Year 2026–2027 • 1st Semester</p>
+              <p className="text-xs text-slate-600">{termLabel}</p>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-xs font-sans border-b border-slate-100 pb-3">

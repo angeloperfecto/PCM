@@ -555,6 +555,10 @@ export interface StudentProfile {
   tuitionBalance?: number;
   paymentStatus?: 'Unpaid' | 'Partially Paid' | 'Paid' | 'Overdue' | 'Waived';
   paymentRecords?: StudentPaymentRecord[];
+  /** This term's assessment (set when the Registrar approves the term). */
+  termAssessment?: number;
+  /** Balance carried into this term from earlier terms. */
+  previousBalance?: number;
   paymentHistory?: StudentPaymentRecord[];
   scholarshipDiscount?: number;
   scholarshipType?: string;
