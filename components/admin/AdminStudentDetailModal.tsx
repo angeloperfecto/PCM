@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { ledgerPayments } from '@/lib/studentLedger';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { isValidImageSrc } from '@/lib/utils';
 import {
@@ -51,11 +52,12 @@ interface AdminStudentDetailModalProps {
 }
 
 export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = ({
-  student,
+  student: selectedStudent,
   isOpen,
   onClose,
 }) => {
   const {
+    students: liveStudents,
     updateStudentProfile,
     updateStudentRequirementStatus,
     addStudentSubjectHistory,
@@ -69,6 +71,8 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
     programs,
     faculty,
   } = usePCM();
+  // Always show the live record (real-time list), not the copy taken when the dossier was opened.
+  const student = selectedStudent ? liveStudents.find((s) => s.id === selectedStudent.id) || selectedStudent : null;
 
   const [activeTab, setActiveTab] = useState<
     'profile' | 'requirements' | 'academics' | 'payments' | 'advising' | 'cor'
@@ -95,13 +99,15 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
 
   // Record Payment State
   const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
-  const [newPayment, setNewPayment] = useState(() => ({
-    amount: 5000,
+  // Starts empty: each receipt needs its own OR number (a preset one would be reused).
+  const emptyPayment = () => ({
+    amount: '' as string | number,
     paymentMethod: 'GCash / Bank Transfer',
-    referenceNumber: 'REF-202601',
-    officialReceiptNumber: 'OR-2026-001',
-    remarks: 'Tuition installment payment',
-  }));
+    referenceNumber: '',
+    officialReceiptNumber: '',
+    remarks: '',
+  });
+  const [newPayment, setNewPayment] = useState(emptyPayment);
 
   // Requirement Verification State
   const [verifyingReqId, setVerifyingReqId] = useState<string | null>(null);
@@ -212,6 +218,10 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
   // Record Payment
   const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!(Number(newPayment.amount) > 0) || !newPayment.officialReceiptNumber.trim()) {
+      addToast('warning', 'Payment details needed', 'Enter the amount and the official receipt (OR) number.');
+      return;
+    }
     const success = await recordStudentPayment(student.id, {
       amount: Number(newPayment.amount),
       paymentMethod: newPayment.paymentMethod,
@@ -224,6 +234,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
 
     if (success) {
       setIsRecordPaymentOpen(false);
+      setNewPayment(emptyPayment());
       addToast('success', 'Payment Credited', `Official receipt ${newPayment.officialReceiptNumber} issued.`);
     }
   };
@@ -237,7 +248,8 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
   const subjectsList = student.subjectHistory || [];
 
   // Payment history list
-  const paymentList = student.paymentHistory || student.paymentRecords || [];
+  // Cashier, enrollment and verified balance payments together.
+  const paymentList = ledgerPayments(student as any);
 
   return (
     <div id="pcm-admin-student-modal" className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
@@ -936,11 +948,11 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                       paymentList.map((pay) => (
                         <tr key={pay.id} className="hover:bg-slate-50 transition">
                           <td className="p-3 font-mono font-bold text-[#18392B]">
-                            {pay.officialReceiptNumber || 'OR-PENDING'}
+                            {pay.receipt || '—'}
                           </td>
-                          <td className="p-3 font-mono">{pay.paymentDate || pay.date}</td>
-                          <td className="p-3">{pay.paymentMethod || 'Bank Deposit'}</td>
-                          <td className="p-3 text-slate-500">{pay.remarks || pay.referenceNumber || 'Tuition'}</td>
+                          <td className="p-3 font-mono">{(pay.date || '').slice(0, 10) || '—'}</td>
+                          <td className="p-3">{pay.method || '—'}</td>
+                          <td className="p-3 text-slate-500">{[pay.description, pay.reference && `ref ${pay.reference}`].filter(Boolean).join(' · ') || '—'}</td>
                           <td className="p-3 text-right font-mono font-bold text-slate-900">
                             ₱{(pay.amount || 0).toLocaleString()}
                           </td>

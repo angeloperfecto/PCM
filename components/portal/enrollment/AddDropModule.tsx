@@ -16,12 +16,14 @@ import {
   FileCheck,
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { parseTerm } from '@/lib/studentLedger';
 import { AddDropAction, AcademicSubject, StudentCourse } from '@/lib/types';
 
 export const AddDropModule: React.FC = () => {
   const {
     studentProfile,
     academicSubjects,
+    academicPeriods,
     addDropRequests,
     submitAddDropRequest,
     addToast,
@@ -40,8 +42,17 @@ export const AddDropModule: React.FC = () => {
   // Courses available to add
   const enrolledCodes = enrolledCourses.map((c) => c.code);
   const availableToAdd = academicSubjects.filter(
-    (s) => !enrolledCodes.includes(s.code)
+    (s) => !enrolledCodes.includes(s.code) && !s.isArchived && s.status !== 'Closed'
   );
+
+  // The add/drop window of the student's current term (or the current term).
+  const term = parseTerm(studentProfile.currentSemester);
+  const period =
+    (academicPeriods || []).find((p) => p.semester === term.semester && p.academicYear.replace('-', '–') === term.academicYear) ||
+    (academicPeriods || []).find((p) => p.isCurrent);
+  const fmt = (d?: string) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' }) : '');
+  const windowOpen = period?.addDropStatus === 'Open';
+  const windowDates = period ? [fmt(period.addDropStartDate), fmt(period.addDropEndDate)].filter(Boolean).join(' – ') : '';
 
   // Modal state
   const [selectedAction, setSelectedAction] = useState<AddDropAction | null>(null);
@@ -89,8 +100,8 @@ export const AddDropModule: React.FC = () => {
         subjectTitle: targetSubject.title,
         units: targetSubject.units,
         reason: reason.trim(),
-        semester: '1st Semester',
-        academicYear: '2026–2027',
+        semester: term.semester || period?.semester || '',
+        academicYear: term.academicYear || period?.academicYear || '',
       });
       closeActionModal();
     } finally {
@@ -105,13 +116,14 @@ export const AddDropModule: React.FC = () => {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
             <div className="flex items-center gap-2">
-              <span className="bg-emerald-100 text-emerald-800 text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-md border border-emerald-300 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                Add/Drop Window: ACTIVE
+              <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-md border flex items-center gap-1 ${windowOpen ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-700 border-slate-300'}`}>
+                <span className={`w-2 h-2 rounded-full ${windowOpen ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
+                Add/Drop Window: {windowOpen ? 'OPEN' : 'CLOSED'}
               </span>
-              <span className="text-slate-300">•</span>
+              {(period || windowDates) && <span className="text-slate-300">•</span>}
               <span className="text-xs text-slate-500 font-mono">
-                Valid: August 15 – September 05, 2026
+                {period ? `${period.semester}, AY ${period.academicYear}` : ''}
+                {windowDates ? ` · ${windowDates}` : ''}
               </span>
             </div>
             <h3 className="font-serif text-2xl font-bold text-[#18392B] mt-1">
@@ -186,8 +198,10 @@ export const AddDropModule: React.FC = () => {
                     </span>
                   ) : (
                     <button
+                      disabled={!windowOpen}
+                      title={windowOpen ? undefined : 'The add/drop window is closed'}
                       onClick={() => openActionModal('Drop', { code: c.code, title: c.title, units: c.units })}
-                      className="bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-semibold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition shadow-2xs cursor-pointer shrink-0"
+                      className="bg-white hover:bg-rose-50 text-rose-700 border border-rose-200 font-semibold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition shadow-2xs cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <MinusCircle className="w-3.5 h-3.5" />
                       <span>Drop Course</span>
@@ -252,8 +266,10 @@ export const AddDropModule: React.FC = () => {
                     </span>
                   ) : (
                     <button
+                      disabled={!windowOpen}
+                      title={windowOpen ? undefined : 'The add/drop window is closed'}
                       onClick={() => openActionModal('Add', { code: s.code, title: s.title, units: s.units })}
-                      className="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition shadow-2xs cursor-pointer shrink-0"
+                      className="bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-300 font-semibold px-3 py-1.5 rounded-lg text-xs flex items-center gap-1 transition shadow-2xs cursor-pointer shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Add Course</span>

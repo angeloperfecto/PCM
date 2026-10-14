@@ -35,6 +35,7 @@ import {
 import { usePCM } from '@/lib/store';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { EditStudentInfoForm } from './EditStudentInfoForm';
+import { accountSummary, ledgerPayments, parseTerm } from '@/lib/studentLedger';
 import { StudentProfile, StudentRequirementItem } from '@/lib/types';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 import { getDefaultStudentRequirements, calculateGPAFromGrades } from '@/lib/studentDefaults';
@@ -116,11 +117,12 @@ export const StudentProfileModule: React.FC = () => {
   const progressPercent = Math.min(100, Math.round((completedUnits / totalCurriculumUnits) * 100));
 
   // Payment numbers
-  const totalTuition = studentProfile.tuitionTotal || 18500;
-  const paidTuition = studentProfile.tuitionPaid || 0;
-  const balanceTuition = studentProfile.tuitionBalance !== undefined
-    ? studentProfile.tuitionBalance
-    : Math.max(0, totalTuition - paidTuition);
+  const account = accountSummary(studentProfile as any);
+  const totalTuition = account.termAssessment;
+  const paidTuition = account.paymentsThisTerm;
+  const balanceTuition = account.balance;
+  const ledger = ledgerPayments(studentProfile as any);
+  const termLabel = parseTerm(studentProfile.currentSemester);
 
   return (
     <div id="pcm-student-profile-module" className="space-y-6 font-sans">
@@ -715,11 +717,11 @@ export const StudentProfileModule: React.FC = () => {
                 Student Financial Assessment & Official Payment Ledger
               </h3>
               <p className="text-xs text-slate-500">
-                Official billing statement for Academic Year 2026–2027.
+                Official billing statement for {studentProfile.currentSemester || 'the current term'}.
               </p>
             </div>
-            <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-300">
-              Account in Good Standing
+            <span className={`text-xs font-mono font-bold px-3 py-1 rounded-full border ${balanceTuition > 0 ? 'text-amber-900 bg-amber-100 border-amber-300' : 'text-emerald-800 bg-emerald-100 border-emerald-300'}`}>
+              {balanceTuition > 0 ? 'Balance due' : 'Fully paid'}
             </span>
           </div>
 
@@ -729,7 +731,7 @@ export const StudentProfileModule: React.FC = () => {
               <strong className="font-mono text-2xl font-bold text-slate-900">
                 ₱{totalTuition.toLocaleString()}
               </strong>
-              <span className="text-[11px] text-slate-500 block mt-1">18 Units + Institutional Fees</span>
+              <span className="text-[11px] text-slate-500 block mt-1">{termLabel.semester ? `${termLabel.semester} ${termLabel.academicYear}` : 'Current term'}{account.previousBalance > 0 ? ` · plus ₱${account.previousBalance.toLocaleString()} previous balance` : ''}</span>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-emerald-200 shadow-xs">
@@ -737,7 +739,7 @@ export const StudentProfileModule: React.FC = () => {
               <strong className="font-mono text-2xl font-bold text-emerald-700">
                 ₱{paidTuition.toLocaleString()}
               </strong>
-              <span className="text-[11px] text-emerald-600 block mt-1">Confirmed with Official Receipts</span>
+              <span className="text-[11px] text-emerald-600 block mt-1">Verified by the Finance Office</span>
             </div>
 
             <div className="bg-white p-4 rounded-2xl border border-amber-200 shadow-xs">
@@ -745,7 +747,7 @@ export const StudentProfileModule: React.FC = () => {
               <strong className="font-mono text-2xl font-bold text-amber-800">
                 ₱{balanceTuition.toLocaleString()}
               </strong>
-              <span className="text-[11px] text-slate-500 block mt-1">Payable before Midterm Examination</span>
+              <span className="text-[11px] text-slate-500 block mt-1">Pay from Amount Due &amp; Payment</span>
             </div>
           </div>
 
@@ -766,27 +768,19 @@ export const StudentProfileModule: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {(studentProfile.paymentHistory && studentProfile.paymentHistory.length > 0
-                  ? studentProfile.paymentHistory
-                  : [
-                      {
-                        id: 'pay-1',
-                        officialReceiptNumber: 'OR-2026-0812',
-                        date: '2026-08-10',
-                        amount: 6500,
-                        paymentMethod: 'GCash / Bank Transfer',
-                        remarks: 'Initial Enrollment Downpayment',
-                        status: 'Verified',
-                      },
-                    ]
-                ).map((p, idx) => (
-                  <tr key={idx} className="hover:bg-slate-50 transition">
+                {ledger.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-6 text-center text-slate-400">No payments recorded yet.</td>
+                  </tr>
+                )}
+                {ledger.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50 transition">
                     <td className="p-3.5 font-mono font-bold text-[#18392B]">
-                      {p.officialReceiptNumber || 'OR-PENDING'}
+                      {p.receipt || p.reference || '—'}
                     </td>
-                    <td className="p-3.5 font-mono">{p.date || '2026-08-10'}</td>
-                    <td className="p-3.5">{p.paymentMethod}</td>
-                    <td className="p-3.5 text-slate-500">{p.remarks}</td>
+                    <td className="p-3.5 font-mono">{(p.date || '').slice(0, 10) || '—'}</td>
+                    <td className="p-3.5">{p.method || '—'}</td>
+                    <td className="p-3.5 text-slate-500">{p.description || '—'}</td>
                     <td className="p-3.5 font-mono font-bold text-right text-slate-900">
                       ₱{(p.amount || 0).toLocaleString()}
                     </td>

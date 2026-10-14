@@ -5,7 +5,8 @@ import { CheckCircle2, Clock, Receipt, XCircle } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import { db, auth } from '@/lib/firebase';
 import { PAYMENT_METHODS } from '@/lib/enrollmentWorkflow';
-import { balanceOf, submitBalancePayment } from '@/lib/studentPaymentsService';
+import { submitBalancePayment } from '@/lib/studentPaymentsService';
+import { accountSummary, ledgerPayments } from '@/lib/studentLedger';
 import { PaymentInstructions } from '@/components/enrollment/PaymentInstructions';
 
 const peso = (n: number) => `₱${(Number(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -18,9 +19,8 @@ export const AmountDueModule: React.FC = () => {
   const pendingEnrollment = (enrollments || []).find(
     (e) => e.studentId === studentProfile.studentId && ['Submitted', 'Pending', 'Under Review'].includes(String(e.status))
   );
-  const total = Number(studentProfile.tuitionTotal) || 0;
-  const paid = Number(studentProfile.tuitionPaid) || 0;
-  const balance = balanceOf(studentProfile);
+  const account = accountSummary(studentProfile as any);
+  const balance = account.balance;
 
   const mine = useMemo(
     () => studentPayments.filter((p) => p.studentRecordId === studentProfile.id).sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')),
@@ -28,19 +28,14 @@ export const AmountDueModule: React.FC = () => {
   );
   const pending = mine.filter((p) => p.status === 'Submitted');
   const pendingTotal = pending.reduce((s, p) => s + p.amount, 0);
-  // Verified payments on the official record (enrollment payments and verified balance payments).
-  const verifiedRecords = useMemo(() => {
-    const records = [...((studentProfile as any).paymentRecords || []), ...((studentProfile.paymentHistory || []) as any[])];
-    const seen = new Set<string>();
-    return records
-      .filter((r: any) => (r.status === 'Verified' || !r.status) && (Number(r.amount) || 0) > 0)
-      .filter((r: any) => {
-        const key = r.id || `${r.referenceNo || r.referenceNumber}-${r.amount}`;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-  }, [studentProfile]);
+  // Verified payments on the official record (cashier, enrollment and verified balance payments).
+  const verifiedRecords = useMemo(
+    () =>
+      ledgerPayments(studentProfile as any)
+        .filter((r) => r.status === 'Verified' && r.amount > 0)
+        .map((r) => ({ id: r.id, amount: r.amount, method: r.method, referenceNo: r.reference, paymentDate: r.date, description: r.description })),
+    [studentProfile]
+  );
 
   const [form, setForm] = useState({ amount: '', method: PAYMENT_METHODS[0], referenceNo: '', paidOn: new Date().toISOString().slice(0, 10) });
   const [proof, setProof] = useState<File | null>(null);
@@ -55,18 +50,22 @@ export const AmountDueModule: React.FC = () => {
           <h3 className="font-serif text-2xl font-bold text-[#18392B] mt-1">Amount Due</h3>
           <p className="text-xs text-slate-500">{studentProfile.currentSemester || 'Current term'} · Student ID {studentProfile.studentId}</p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" data-testid="statement">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3" data-testid="statement">
           <div className="rounded-xl border border-slate-200 p-4">
-            <span className="text-[11px] font-mono uppercase text-slate-500">Total assessment</span>
-            <div className="font-serif text-2xl font-bold text-[#18392B]">{peso(total)}</div>
+            <span className="text-[11px] font-mono uppercase text-slate-500">This term&apos;s assessment</span>
+            <div className="font-serif text-xl sm:text-2xl font-bold text-[#18392B]">{peso(account.termAssessment)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-200 p-4">
+            <span className="text-[11px] font-mono uppercase text-slate-500">Previous balance</span>
+            <div className="font-serif text-xl sm:text-2xl font-bold text-slate-800">{peso(account.previousBalance)}</div>
           </div>
           <div className="rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
             <span className="text-[11px] font-mono uppercase text-emerald-700">Verified payments</span>
-            <div className="font-serif text-2xl font-bold text-emerald-800">{peso(paid)}</div>
+            <div className="font-serif text-xl sm:text-2xl font-bold text-emerald-800">{peso(account.paymentsThisTerm)}</div>
           </div>
           <div className={`rounded-xl border p-4 ${balance > 0 ? 'border-amber-200 bg-amber-50/60' : 'border-emerald-200 bg-emerald-50/60'}`}>
             <span className="text-[11px] font-mono uppercase text-slate-600">Outstanding balance</span>
-            <div className={`font-serif text-2xl font-bold ${balance > 0 ? 'text-amber-800' : 'text-emerald-800'}`} data-testid="balance">
+            <div className={`font-serif text-xl sm:text-2xl font-bold ${balance > 0 ? 'text-amber-800' : 'text-emerald-800'}`} data-testid="balance">
               {peso(balance)}
             </div>
             {pendingTotal > 0 && <span className="text-[11px] text-slate-600">{peso(pendingTotal)} waiting for verification</span>}

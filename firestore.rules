@@ -360,6 +360,7 @@ service cloud.firestore {
         'degreeProgram', 'major', 'specialization', 'yearLevel', 'section', 'academicStatus', 'enrollmentStatus',
         'academicYear', 'semester', 'currentSemester', 'gpa', 'totalUnitsEarned', 'courses', 'subjectHistory',
         'tuitionTotal', 'tuitionPaid', 'tuitionBalance', 'paymentStatus', 'paymentRecords', 'paymentHistory',
+        'termAssessment', 'previousBalance',
         'verificationStatus', 'accountStatus', 'portalAccess', 'admissionRequirementsVerified',
         'verifiedAdmissionDocuments', 'enrolledAt', 'enrolledBy'];
     }

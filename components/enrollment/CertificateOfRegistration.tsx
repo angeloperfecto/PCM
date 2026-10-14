@@ -4,6 +4,7 @@ import React from 'react';
 import { Emblem } from '@/components/common/Emblem';
 import { usePCM } from '@/lib/store';
 import type { StudentProfile } from '@/lib/types';
+import { accountSummary } from '@/lib/studentLedger';
 
 const peso = (n: number) => `₱${(Number(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const OFFICIAL = ['Enrolled', 'Officially Enrolled', 'Approved'];
@@ -26,9 +27,7 @@ export const CertificateOfRegistration: React.FC<{ student: StudentProfile; id?:
 
   const courses = (student.courses || []).filter((c) => c.status !== 'Dropped');
   const totalUnits = courses.reduce((s, c) => s + (Number(c.units) || 0), 0);
-  const total = Number(student.tuitionTotal) || 0;
-  const paid = Number(student.tuitionPaid) || 0;
-  const balance = typeof student.tuitionBalance === 'number' ? Math.max(0, student.tuitionBalance) : Math.max(0, total - paid);
+  const account = accountSummary(student as any);
   const isOfficial = OFFICIAL.includes(String(student.enrollmentStatus || ''));
   const issued = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const name = student.fullName || student.name || '';
@@ -167,16 +166,22 @@ export const CertificateOfRegistration: React.FC<{ student: StudentProfile; id?:
             <caption className="bg-[#18392B] px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-white">Assessment summary</caption>
             <tbody>
               <tr className="border-b border-slate-200">
-                <td className="px-3 py-1.5 text-slate-600">Total assessment</td>
-                <td className="px-3 py-1.5 text-right font-mono font-semibold">{peso(total)}</td>
+                <td className="px-3 py-1.5 text-slate-600">Assessment this term</td>
+                <td className="px-3 py-1.5 text-right font-mono font-semibold">{peso(account.termAssessment)}</td>
               </tr>
+              {account.previousBalance > 0 && (
+                <tr className="border-b border-slate-200">
+                  <td className="px-3 py-1.5 text-slate-600">Previous balance</td>
+                  <td className="px-3 py-1.5 text-right font-mono font-semibold">{peso(account.previousBalance)}</td>
+                </tr>
+              )}
               <tr className="border-b border-slate-200">
                 <td className="px-3 py-1.5 text-slate-600">Payments received</td>
-                <td className="px-3 py-1.5 text-right font-mono font-semibold">{peso(paid)}</td>
+                <td className="px-3 py-1.5 text-right font-mono font-semibold">{peso(account.paymentsThisTerm)}</td>
               </tr>
               <tr>
                 <td className="px-3 py-1.5 font-bold">Balance</td>
-                <td className="px-3 py-1.5 text-right font-mono font-bold text-[#18392B]">{peso(balance)}</td>
+                <td className="px-3 py-1.5 text-right font-mono font-bold text-[#18392B]">{peso(account.balance)}</td>
               </tr>
             </tbody>
           </table>
