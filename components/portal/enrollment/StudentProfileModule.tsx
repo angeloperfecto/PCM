@@ -21,7 +21,7 @@ import {
   GraduationCap,
   Camera,
   FileCheck,
-  DollarSign,
+  PhilippinePeso,
   Printer,
   Upload,
   Eye,
@@ -289,7 +289,7 @@ export const StudentProfileModule: React.FC = () => {
         {[
           { id: 'dossier', label: '1. Complete Profile Dossier', icon: User },
           { id: 'requirements', label: '2. Document Requirements Vault', icon: FileCheck, count: requirementsList.filter((r) => r.status !== 'Verified').length },
-          { id: 'payments', label: '3. Tuition & Payment Ledger', icon: DollarSign },
+          { id: 'payments', label: '3. Tuition & Payment Ledger', icon: PhilippinePeso },
           { id: 'academics', label: '4. Scholastic Records & Grades', icon: BookOpen },
           { id: 'cor', label: '5. Official Certificate of Registration (COR)', icon: Printer },
         ].map((tab) => {

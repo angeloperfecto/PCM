@@ -22,7 +22,7 @@ import {
   Eye,
   FileText,
   Sliders,
-  DollarSign,
+  PhilippinePeso,
   AlertCircle,
   X,
   Copy,

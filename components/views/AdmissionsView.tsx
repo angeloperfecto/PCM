@@ -6,7 +6,7 @@ import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { PaymentGuide } from '@/components/enrollment/PaymentInstructions';
 import {
   FileText,
-  DollarSign,
+  PhilippinePeso,
   Award,
   CheckCircle2,
   HelpCircle,
@@ -338,7 +338,7 @@ export const AdmissionsView: React.FC = () => {
               {
                 title: 'Work-Study Student Assistantship',
                 desc: 'On-campus assistantship opportunities in the theological library, administration, and campus grounds offsetting tuition and dorm fees.',
-                icon: DollarSign,
+                icon: PhilippinePeso,
               },
               {
                 title: 'Local Church Matching Fund',

@@ -37,7 +37,7 @@ import {
   RotateCcw,
   Trash2,
   Edit2,
-  DollarSign,
+  PhilippinePeso,
   Plus,
   BookOpen,
   Award,
@@ -442,8 +442,8 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           { id: 'curriculum', label: 'Subjects per Year Level', icon: BookOpen },
           { id: 'sections', label: 'Class Schedules', icon: Layers },
           { id: 'instructors', label: 'Faculty Load', icon: User, count: faculty.length },
-          { id: 'fees', label: 'Tuition & Fee Policy', icon: DollarSign },
-          { id: 'payments', label: 'Student Payments', icon: DollarSign, count: studentPayments.filter((p) => p.status === 'Submitted').length, isPending: true },
+          { id: 'fees', label: 'Tuition & Fee Policy', icon: PhilippinePeso },
+          { id: 'payments', label: 'Student Payments', icon: PhilippinePeso, count: studentPayments.filter((p) => p.status === 'Submitted').length, isPending: true },
           { id: 'settings', label: 'System Governance', icon: Settings },
         ].map((tab) => {
           const Icon = tab.icon;

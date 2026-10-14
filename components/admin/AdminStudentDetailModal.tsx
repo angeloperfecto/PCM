@@ -31,7 +31,7 @@ import {
   ShieldCheck,
   Calendar,
   HeartHandshake,
-  DollarSign,
+  PhilippinePeso,
   FileCheck,
   Plus,
   Trash2,
@@ -263,7 +263,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
             { id: 'profile', label: 'Student Profile', icon: User },
             { id: 'requirements', label: 'Requirements Checklist', icon: FileCheck, count: requirementsList.filter((r) => r.status === 'Submitted' || r.status === 'Pending').length },
             { id: 'academics', label: 'Permanent Academic Ledger', icon: BookOpen, count: subjectsList.length },
-            { id: 'payments', label: 'Tuition & Payments', icon: DollarSign },
+            { id: 'payments', label: 'Tuition & Payments', icon: PhilippinePeso },
             { id: 'advising', label: 'Advising & Status', icon: Award },
             { id: 'cor', label: 'Official COR Voucher', icon: Printer },
           ].map((tab) => {

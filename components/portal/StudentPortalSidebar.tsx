@@ -6,7 +6,7 @@ import {
   Calendar,
   Award,
   FileText,
-  DollarSign,
+  PhilippinePeso,
   Flame,
   BookOpen,
   Bell,
@@ -132,7 +132,7 @@ export const StudentPortalSidebar: React.FC<StudentPortalSidebarProps> = ({
         {
           id: 'financial',
           label: 'Tuition & Billing',
-          icon: DollarSign,
+          icon: PhilippinePeso,
           badge: remainingBalance > 0 ? `₱${remainingBalance.toLocaleString()}` : 'Cleared',
         },
       ],

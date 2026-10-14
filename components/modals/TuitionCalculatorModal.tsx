@@ -5,7 +5,7 @@ import { usePCM } from '@/lib/store';
 import {
   X,
   Calculator,
-  DollarSign,
+  PhilippinePeso,
   CheckCircle2,
   Sparkles,
   ArrowRight,
