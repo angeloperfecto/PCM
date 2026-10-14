@@ -460,7 +460,7 @@ export function nextStepsFor(status: string | undefined, summary?: RequirementSu
     case 'For Assessment':
       return 'Your registration was received. The Registrar is preparing your enrollment assessment (fees). You will be notified when it is ready.';
     case 'For Payment':
-      return 'Your assessment is ready. Please pay at least the minimum amount shown below and submit your payment details for verification.';
+      return 'Your assessment is ready. Please pay at least the downpayment shown below (see How to pay) and submit your payment details for verification. The rest of your fees becomes your balance, payable after enrollment.';
     case 'For Enrollment':
       return 'Your payment is settled. The Registrar is doing the final verification and will confirm your enrollment and Student ID.';
     case 'Enrolled':

@@ -10,7 +10,7 @@ const PATH: { status: WorkflowStatus; label: string; detail: string }[] = [
   { status: 'Admitted', label: 'Admitted', detail: 'Admission approved; the Registrar verifies your documents' },
   { status: 'For Registration', label: 'Registration', detail: 'Choose your year level and subjects' },
   { status: 'For Assessment', label: 'Assessment', detail: 'The Registrar computes your fees' },
-  { status: 'For Payment', label: 'Payment', detail: 'Pay at least the minimum and report your payment' },
+  { status: 'For Payment', label: 'Payment', detail: 'Pay the downpayment and report your payment' },
   { status: 'For Enrollment', label: 'Final verification', detail: 'The Registrar checks everything and approves' },
   { status: 'Enrolled', label: 'Officially enrolled', detail: 'Student ID issued; full Student Portal opens' },
 ];

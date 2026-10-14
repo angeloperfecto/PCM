@@ -2,6 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, Clock, Plus, Receipt, Trash2, XCircle } from 'lucide-react';
+import { PaymentInstructions } from './PaymentInstructions';
 import {
   ApplicationPayment,
   EnrollmentAssessment,
@@ -45,7 +46,7 @@ const AssessmentSummary: React.FC<{ assessment: EnrollmentAssessment; payments: 
               <td className="p-2 text-right font-mono">{peso(assessment.total)}</td>
             </tr>
             <tr className="border-b border-slate-100">
-              <td className="p-2 text-slate-700">Minimum payment before enrollment</td>
+              <td className="p-2 text-slate-700">Downpayment required before enrollment</td>
               <td className="p-2 text-right font-mono font-bold text-[#18392B]">{peso(assessment.minimumPayment)}</td>
             </tr>
             <tr>
@@ -211,8 +212,9 @@ export const ApplicantPaymentSection: React.FC<{
             }
           }}
         >
+          <PaymentInstructions compact />
           <p className="text-xs text-slate-700">
-            Pay at least <strong>{peso(remaining)}</strong> more through GCash, bank transfer or the PCM cashier, then enter the details here. The
+            Pay at least <strong>{peso(remaining)}</strong> more to complete your downpayment (you may pay more, up to the full amount), then enter the details here. The
             Finance Office verifies each payment.
           </p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -271,6 +273,8 @@ export const StaffPaymentSection: React.FC<{
   feeStructure: { name: string; amount: number; isPerUnit?: boolean; required?: boolean }[];
   defaults: { tuitionPerUnit?: number; registrationFee?: number };
   requirementsVerified: boolean;
+  /** Default downpayment as a percent of the total (enrollment settings). */
+  downpaymentPercent?: number;
   /** Units from the student's registration, used for the draft assessment. */
   defaultUnits?: number;
   onSaveAssessment: (input: { units: number; items: FeeLine[]; minimumPayment: number; notes: string }) => Promise<Result>;
@@ -349,8 +353,8 @@ export const StaffPaymentSection: React.FC<{
           <div className="flex flex-wrap items-end gap-3">
             <p className="text-sm font-bold">Total: {peso(total)}</p>
             <label className="text-xs font-semibold text-slate-700">
-              Minimum payment before enrollment (₱)
-              <input type="number" min="1" step="0.01" value={minimum} placeholder={String(Math.round(total * 0.4))} onChange={(e) => setMinimum(e.target.value)} className="mt-1 w-36 rounded-lg border border-slate-300 p-1.5 text-sm" />
+              Downpayment before enrollment (₱) · default {props.downpaymentPercent ?? 40}% of total
+              <input type="number" min="1" step="0.01" value={minimum} placeholder={String(Math.round(total * ((props.downpaymentPercent ?? 40) / 100)))} onChange={(e) => setMinimum(e.target.value)} className="mt-1 w-36 rounded-lg border border-slate-300 p-1.5 text-sm" />
             </label>
           </div>
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} placeholder="Notes for the applicant (discounts, payment instructions)" className="w-full rounded-lg border border-slate-300 p-2 text-xs" />
@@ -358,7 +362,7 @@ export const StaffPaymentSection: React.FC<{
             <button
               type="button"
               disabled={busy}
-              onClick={() => run(() => props.onSaveAssessment({ units, items, minimumPayment: Number(minimum || Math.round(total * 0.4)), notes }))}
+              onClick={() => run(() => props.onSaveAssessment({ units, items, minimumPayment: Number(minimum || Math.round(total * ((props.downpaymentPercent ?? 40) / 100))), notes }))}
               className="rounded-lg bg-[#18392B] px-3 py-2 text-xs font-bold text-white hover:bg-[#23533e] disabled:opacity-50"
             >
               {busy ? 'Saving…' : 'Save assessment & request payment'}

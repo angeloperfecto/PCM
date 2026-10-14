@@ -17,6 +17,8 @@ import { AdminStudentDetailModal } from './AdminStudentDetailModal';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import { normalizeStatus } from '@/lib/enrollmentWorkflow';
 import { AcademicTermModal } from './AcademicTermModal';
+import { StudentPaymentsPanel } from './StudentPaymentsPanel';
+import { PaymentSettingsCard } from './PaymentSettingsCard';
 import { AcademicCourseModal } from './AcademicCourseModal';
 import {
   GraduationCap,
@@ -68,6 +70,7 @@ export type EnrollmentAdminSubTab =
   | 'sections'
   | 'instructors'
   | 'fees'
+  | 'payments'
   | 'settings';
 
 export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = ({ onOpenAdmissions }) => {
@@ -76,6 +79,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
     students,
     applications,
     registryBlockedStudents,
+    studentPayments,
     removeDeletedUserRecord,
     studentProfile,
     academicSubjects,
@@ -427,6 +431,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           { id: 'sections', label: 'Class Schedules', icon: Layers },
           { id: 'instructors', label: 'Faculty Load', icon: User, count: faculty.length },
           { id: 'fees', label: 'Tuition & Fee Policy', icon: DollarSign },
+          { id: 'payments', label: 'Student Payments', icon: DollarSign, count: studentPayments.filter((p) => p.status === 'Submitted').length, isPending: true },
           { id: 'settings', label: 'System Governance', icon: Settings },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -1533,8 +1538,12 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
               </tbody>
             </table>
           </div>
+
+          <PaymentSettingsCard />
         </div>
       )}
+
+      {activeSubTab === 'payments' && <StudentPaymentsPanel />}
 
       {/* ========================================================================= */}
       {/* SUBVIEW 11: SYSTEM GOVERNANCE & SETTINGS */}
