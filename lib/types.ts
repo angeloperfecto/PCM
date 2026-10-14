@@ -178,6 +178,22 @@ export type ApplicationStatus =
 export interface AdmissionApplication {
   id: string;
   referenceNumber: string;
+  /** Academic registration chosen by the admitted student (see lib/enrollmentWorkflow EnrollmentRegistration). */
+  registration?: import('./enrollmentWorkflow').EnrollmentRegistration | null;
+  withdrawnAt?: string;
+  withdrawalReason?: string;
+  correctedAt?: string;
+  enrollmentConfirmation?: {
+    studentId: string;
+    confirmedAt: string;
+    confirmedBy: string;
+    academicYear: string;
+    semester: string;
+    yearLevel: string;
+    programName: string;
+    totalUnits: number;
+    subjectCount: number;
+  };
   trackingNumber?: string;
   createdAt?: string;
   submissionDate?: string;

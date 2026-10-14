@@ -63,3 +63,24 @@ registration ₱1,500, library ₱1,000).
 - Registrar: finalize creates 2026-PCM-0001 with portal access, tuition ₱17,800, paid
   ₱5,000, balance ₱12,800 and both payment records; audit trail lists assessment, both
   verifications and enrollment with names and times; detail corrections are logged.
+
+## Restructured admission-to-enrollment workflow (2026-10-14)
+
+Statuses shown to users: Submitted, Under Review, Incomplete Requirements, For Correction,
+For Admission Decision, Admitted, For Registration, For Assessment, Pending Payment,
+For Final Verification, Officially Enrolled, Rejected, Deferred, Withdrawn (stored values unchanged).
+
+Tested through the real screens with two sessions (applicant on 127.0.0.1, Registrar on localhost):
+
+- Draft: three steps filled, page reloaded -> draft restored at step 4; deleted on submission.
+- Submit -> Under Review -> Return for correction (note) -> applicant fixes name -> Under Review.
+- Documents uploaded; For Registration stays blocked until all required documents are verified.
+- Admitted -> For Registration; assessment blocked until the student registers.
+- Student Portal: subject selection enforces 12-24 units, max 8 subjects, no timetable clash,
+  no full sections; 4 subjects / 12 units submitted -> For Assessment.
+- Assessment drafted from the registered 12 units (P15,700); payment reported and verified.
+- Final verification checklist (5 items) + approval tick -> Finalize: Student ID 2026-PCM-0001,
+  student record with the 4 subjects, seat counts +1, enrollment confirmation printable.
+- After reload the Student Portal shows the subjects in Class Schedule; Apply page tells the
+  enrolled student to use the portal; complete audit trail (11 entries).
+- Second applicant: registration form fits 375 px; withdrawal needs a reason; can re-apply.

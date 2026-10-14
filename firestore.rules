@@ -213,27 +213,32 @@ service cloud.firestore {
     // retired statuses may be moved into the early stages of the workflow.
     function allowedNextStatuses(from) {
       return {
-        'Submitted': ['Under Review', 'Requirements Incomplete', 'Rejected', 'Deferred'],
-        'Under Review': ['Requirements Incomplete', 'For Admission Approval', 'Rejected', 'Deferred'],
-        'Requirements Incomplete': ['Under Review', 'For Admission Approval', 'Rejected', 'Deferred'],
-        'For Admission Approval': ['Admitted', 'Requirements Incomplete', 'Rejected', 'Deferred'],
-        'Admitted': ['For Assessment', 'Requirements Incomplete', 'Deferred'],
-        'For Assessment': ['Admitted', 'For Payment', 'For Enrollment', 'Deferred'],
-        'For Payment': ['For Assessment', 'For Enrollment', 'Deferred'],
-        'For Enrollment': ['For Assessment', 'Enrolled', 'Deferred'],
+        'Submitted': ['Under Review', 'Requirements Incomplete', 'For Correction', 'Rejected', 'Deferred', 'Withdrawn'],
+        'Under Review': ['Requirements Incomplete', 'For Correction', 'For Admission Approval', 'Rejected', 'Deferred', 'Withdrawn'],
+        'Requirements Incomplete': ['Under Review', 'For Correction', 'For Admission Approval', 'Rejected', 'Deferred', 'Withdrawn'],
+        'For Correction': ['Under Review', 'Rejected', 'Deferred', 'Withdrawn'],
+        'For Admission Approval': ['Admitted', 'Requirements Incomplete', 'For Correction', 'Rejected', 'Deferred', 'Withdrawn'],
+        'Admitted': ['For Registration', 'Requirements Incomplete', 'Deferred', 'Withdrawn'],
+        'For Registration': ['For Assessment', 'Admitted', 'Deferred', 'Withdrawn'],
+        'For Assessment': ['For Registration', 'For Payment', 'For Enrollment', 'Deferred', 'Withdrawn'],
+        'For Payment': ['For Assessment', 'For Enrollment', 'Deferred', 'Withdrawn'],
+        'For Enrollment': ['For Assessment', 'Enrolled', 'Deferred', 'Withdrawn'],
         'Enrolled': [],
         'Rejected': ['Under Review'],
-        'Deferred': ['Under Review']
+        'Deferred': ['Under Review'],
+        'Withdrawn': []
       }.get(from, ['Under Review', 'Requirements Incomplete', 'For Admission Approval', 'Admitted', 'Rejected', 'Deferred']);
     }
 
-    // Official enrollment only from "For Enrollment", with an assessment on file and
-    // payment verified or waived.
+    // Official enrollment only from "For Enrollment", with a registration and an assessment
+    // on file and payment verified or waived. Assessment starts once a registration exists.
     function validStaffStatusChange() {
       let from = resource.data.get('status', '');
       let to = request.resource.data.get('status', '');
       return from == to
         || (to in allowedNextStatuses(from)
+          && (to != 'For Assessment' || from != 'For Registration' || request.resource.data.get('registration', null) != null)
+          && (to != 'Enrolled' || request.resource.data.get('registration', null) != null)
           && (to != 'For Payment' || request.resource.data.get('assessment', null) != null)
           && (to != 'For Enrollment' || request.resource.data.get('paymentStatus', '') in ['Verified', 'Waived'])
           && (to != 'Enrolled'
@@ -261,11 +266,32 @@ service cloud.firestore {
           && changedKeys().hasOnly(['status', 'updatedAt'])
           && resource.data.get('status', '') in ['Requirements Incomplete', 'Additional Documents Required']
           && request.resource.data.get('status', '') == 'Under Review')
-        // ...or report a payment while "For Payment".
+        // ...or report a payment while "For Payment"...
         || (ownsApplication(resource.data)
           && changedKeys().hasOnly(['paymentStatus', 'updatedAt'])
           && resource.data.get('status', '') == 'For Payment'
-          && request.resource.data.get('paymentStatus', '') == 'Submitted');
+          && request.resource.data.get('paymentStatus', '') == 'Submitted')
+        || applicantWorkflowUpdate();
+    }
+
+    // Applicant steps: submit the academic registration ("For Registration" -> "For Assessment"),
+    // send corrected details back ("For Correction" -> "Under Review"), or withdraw an open
+    // application. Each may change only its own fields.
+    function applicantWorkflowUpdate() {
+      let from = resource.data.get('status', '');
+      let to = request.resource.data.get('status', '');
+      return ownsApplication(resource.data)
+        && ((from == 'For Registration' && to == 'For Assessment'
+            && changedKeys().hasOnly(['registration', 'status', 'updatedAt'])
+            && request.resource.data.registration.subjects is list
+            && request.resource.data.registration.subjects.size() > 0
+            && request.resource.data.registration.totalUnits is number)
+          || (from == 'For Correction' && to == 'Under Review'
+            && changedKeys().hasOnly(['fullName', 'phone', 'dateOfBirth', 'gender', 'civilStatus', 'address', 'churchName',
+              'pastorName', 'previousSchool', 'status', 'correctedAt', 'updatedAt']))
+          || (to == 'Withdrawn'
+            && !(from in ['Enrolled', 'Rejected', 'Withdrawn'])
+            && changedKeys().hasOnly(['status', 'withdrawnAt', 'withdrawalReason', 'updatedAt'])));
     }
 
     match /applications/{appId} {
@@ -319,7 +345,7 @@ service cloud.firestore {
         allow create: if isPaymentStaff()
           || (ownsApplication(getAfter(applicationPath(appId)).data)
             && request.resource.data.get('actor', '') == 'applicant'
-            && request.resource.data.get('status', '') in ['Submitted', 'Under Review']);
+            && request.resource.data.get('status', '') in ['Submitted', 'Under Review', 'For Assessment', 'Withdrawn']);
       }
     }
 
@@ -403,6 +429,14 @@ service cloud.firestore {
       allow update: if isAdmin()
         || (isSignedIn() && resource.data.get('recipientUid', '') == request.auth.uid && changedKeys().hasOnly(['read']));
       allow delete: if isAdmin();
+    }
+
+    // Unfinished online application, one per Google account; private to its owner.
+    match /applicationDrafts/{uid} {
+      allow read, delete: if isSignedIn() && request.auth.uid == uid;
+      allow create, update: if isSignedIn() && request.auth.uid == uid
+        && request.resource.data.get('uid', '') == uid
+        && request.resource.data.keys().hasOnly(['uid', 'step', 'data', 'updatedAt']);
     }
 
     // Alerts for admissions staff about applicant activity.

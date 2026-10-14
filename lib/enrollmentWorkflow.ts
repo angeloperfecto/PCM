@@ -2,23 +2,137 @@
 // applicant-facing instructions. Pure functions only (no Firebase), so they can be shared by
 // the applicant tracker, the admin review screens and the tests.
 
-// 1. Application (Submitted) -> 2. Review (Under Review / Requirements Incomplete)
-// -> 3. Admission decision (For Admission Approval -> Admitted) -> 4. Requirements completion
-// (Admitted, until every required document is verified) -> 5. Assessment (For Assessment)
-// -> 6. Payment verification (For Payment) -> 7. Confirmation (For Enrollment -> Enrolled)
-// -> 8. Student Portal activation (on enrollment).
+// 1. Online application (Submitted; unfinished forms are saved as a draft per account)
+// -> 2. Review (Under Review; Requirements Incomplete for documents, For Correction for details)
+// -> 3. Admission decision (For Admission Approval -> Admitted)
+// -> 4. Requirements (Admitted, until every required document is verified)
+// -> 5. Registration (For Registration: the admitted student picks year level, term and subjects)
+// -> 6. Assessment and payment (For Assessment -> For Payment)
+// -> 7. Final verification (For Enrollment: checklist reviewed by the Registrar)
+// -> 8. Official enrollment (Enrolled: student record, Student ID, portal) .
+// Rejected, Deferred and Withdrawn are outcomes. Stored values never change; staff and
+// applicants see the names in STATUS_LABELS.
 export type WorkflowStatus =
   | 'Submitted'
   | 'Under Review'
   | 'Requirements Incomplete'
+  | 'For Correction'
   | 'For Admission Approval'
   | 'Admitted'
+  | 'For Registration'
   | 'For Assessment'
   | 'For Payment'
   | 'For Enrollment'
   | 'Enrolled'
   | 'Rejected'
-  | 'Deferred';
+  | 'Deferred'
+  | 'Withdrawn';
+
+// Names shown to applicants and staff for each stored status.
+export const STATUS_LABELS: Record<WorkflowStatus, string> = {
+  Submitted: 'Submitted',
+  'Under Review': 'Under Review',
+  'Requirements Incomplete': 'Incomplete Requirements',
+  'For Correction': 'For Correction',
+  'For Admission Approval': 'For Admission Decision',
+  Admitted: 'Admitted',
+  'For Registration': 'For Registration',
+  'For Assessment': 'For Assessment',
+  'For Payment': 'Pending Payment',
+  'For Enrollment': 'For Final Verification',
+  Enrolled: 'Officially Enrolled',
+  Rejected: 'Rejected',
+  Deferred: 'Deferred',
+  Withdrawn: 'Withdrawn',
+};
+
+export function statusLabel(status?: string | null): string {
+  return STATUS_LABELS[normalizeStatus(status)];
+}
+
+// Academic registration chosen by the admitted student (applications/{id}.registration).
+export interface RegisteredSubject {
+  subjectId: string;
+  code: string;
+  title: string;
+  units: number;
+  section?: string;
+  schedule?: string;
+  room?: string;
+  instructor?: string;
+}
+
+export interface EnrollmentRegistration {
+  programId?: string;
+  programName: string;
+  yearLevel: string;
+  academicYear: string;
+  semester: string;
+  subjects: RegisteredSubject[];
+  totalUnits: number;
+  submittedAt: string;
+  submittedBy: string;
+}
+
+export const YEAR_LEVELS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'];
+
+export interface RegistrationPolicy {
+  minUnits: number;
+  maxUnits: number;
+  maxSubjects: number;
+  enforceScheduleConflicts?: boolean;
+  enforceSectionCapacity?: boolean;
+}
+
+// Catalog entry as stored in academicSubjects (only the fields the checks need).
+export interface CatalogSubject {
+  id: string;
+  code: string;
+  units: number;
+  schedule?: string;
+  capacity?: number;
+  enrolledCount?: number;
+  status?: string;
+  isArchived?: boolean;
+}
+
+// Why a registration cannot be submitted, or null when it follows PCM's academic policies.
+export function validateRegistration(
+  reg: Pick<EnrollmentRegistration, 'programName' | 'yearLevel' | 'academicYear' | 'semester' | 'subjects'>,
+  policy: RegistrationPolicy,
+  catalog: CatalogSubject[] = []
+): string | null {
+  if (!reg.programName?.trim()) return 'Choose your academic program.';
+  if (!reg.yearLevel?.trim()) return 'Choose your year level.';
+  if (!reg.academicYear?.trim() || !reg.semester?.trim()) return 'There is no open enrollment term. Please contact the Registrar.';
+  if (!reg.subjects || reg.subjects.length === 0) return 'Select at least one subject.';
+  const codes = reg.subjects.map((s) => s.code.trim().toUpperCase());
+  const dup = codes.find((c, i) => codes.indexOf(c) !== i);
+  if (dup) return `${dup} is selected more than once.`;
+  if (policy.maxSubjects > 0 && reg.subjects.length > policy.maxSubjects) {
+    return `You can take at most ${policy.maxSubjects} subjects this term.`;
+  }
+  const units = reg.subjects.reduce((sum, s) => sum + (Number(s.units) || 0), 0);
+  if (policy.minUnits > 0 && units < policy.minUnits) return `A full load needs at least ${policy.minUnits} units (you have ${units}).`;
+  if (policy.maxUnits > 0 && units > policy.maxUnits) return `The maximum load is ${policy.maxUnits} units (you have ${units}).`;
+  if (policy.enforceScheduleConflicts) {
+    const times = reg.subjects.map((s) => (s.schedule || '').trim().toLowerCase()).filter(Boolean);
+    const clash = times.find((t, i) => times.indexOf(t) !== i);
+    if (clash) {
+      const clashing = reg.subjects.filter((s) => (s.schedule || '').trim().toLowerCase() === clash);
+      return `${clashing.map((s) => s.code).join(' and ')} meet at the same time (${(clashing[0].schedule || '').trim()}). Choose a different subject or section.`;
+    }
+  }
+  for (const s of reg.subjects) {
+    const c = catalog.find((x) => x.id === s.subjectId);
+    if (!c) continue;
+    if (c.isArchived || (c.status && c.status !== 'Open')) return `${s.code} is not open for enrollment.`;
+    if (policy.enforceSectionCapacity && Number(c.capacity) > 0 && Number(c.enrolledCount || 0) >= Number(c.capacity)) {
+      return `${s.code} is full. Choose another subject or section.`;
+    }
+  }
+  return null;
+}
 
 export type PaymentStatus = 'Awaiting Payment' | 'Submitted' | 'Partially Paid' | 'Verified' | 'Waived' | 'Rejected';
 
@@ -118,18 +232,19 @@ export const TRACKER_STAGES: { status: WorkflowStatus; label: string }[] = [
   { status: 'Submitted', label: 'Application Submitted' },
   { status: 'Under Review', label: 'Under Review' },
   { status: 'Requirements Incomplete', label: 'Requirements' },
-  { status: 'For Admission Approval', label: 'For Admission Approval' },
+  { status: 'For Admission Approval', label: 'Admission Decision' },
   { status: 'Admitted', label: 'Admitted' },
+  { status: 'For Registration', label: 'Registration' },
   { status: 'For Assessment', label: 'Assessment' },
   { status: 'For Payment', label: 'Payment' },
-  { status: 'For Enrollment', label: 'For Enrollment' },
-  { status: 'Enrolled', label: 'Enrolled' },
+  { status: 'For Enrollment', label: 'Final Verification' },
+  { status: 'Enrolled', label: 'Officially Enrolled' },
 ];
 
-export const FINAL_STATUSES: WorkflowStatus[] = ['Enrolled', 'Rejected'];
+export const FINAL_STATUSES: WorkflowStatus[] = ['Enrolled', 'Rejected', 'Withdrawn'];
 
 /** Admitted applicants use the Student Portal (admitted view) from these statuses until they are enrolled. */
-export const ADMITTED_PORTAL_STATUSES: WorkflowStatus[] = ['Admitted', 'For Assessment', 'For Payment', 'For Enrollment'];
+export const ADMITTED_PORTAL_STATUSES: WorkflowStatus[] = ['Admitted', 'For Registration', 'For Assessment', 'For Payment', 'For Enrollment'];
 
 // Older applications used a different status vocabulary; map them onto the workflow.
 const LEGACY_STATUS_MAP: Record<string, WorkflowStatus> = {
@@ -148,36 +263,46 @@ const LEGACY_STATUS_MAP: Record<string, WorkflowStatus> = {
 export function normalizeStatus(status?: string | null): WorkflowStatus {
   if (!status) return 'Submitted';
   if ((TRACKER_STAGES.map((s) => s.status) as string[]).includes(status)) return status as WorkflowStatus;
-  if (status === 'Rejected' || status === 'Deferred') return status;
+  if (status === 'Rejected' || status === 'Deferred' || status === 'Withdrawn' || status === 'For Correction') return status;
   return LEGACY_STATUS_MAP[status] || 'Under Review';
 }
 
 // Index of the stage on the tracker (Rejected/Deferred return -1).
 export function stageIndex(status?: string | null): number {
   const s = normalizeStatus(status);
-  return TRACKER_STAGES.findIndex((stage) => stage.status === s);
+  // Corrections happen at the same point as missing documents.
+  const shown = s === 'For Correction' ? 'Requirements Incomplete' : s;
+  return TRACKER_STAGES.findIndex((stage) => stage.status === shown);
 }
 
 // Status moves staff may make with the decision buttons. Some steps happen only through
 // their own action so the required data is captured:
+//   For Registration -> For Assessment submitRegistration (by the student) or this button
+//                                      once a registration is on file
 //   For Assessment -> For Payment      saveAssessment (fees)
 //   For Assessment -> For Enrollment   waivePayment (no payment required, with reason)
 //   For Payment    -> For Enrollment   reviewPayment (verified total reaches the minimum)
 //   For Enrollment -> Enrolled         finalizeEnrollment (creates the student record)
 // firestore.rules enforces the same order (validStaffTransition).
 export const STAFF_TRANSITIONS: Record<WorkflowStatus, WorkflowStatus[]> = {
-  Submitted: ['Under Review', 'Requirements Incomplete', 'Rejected', 'Deferred'],
-  'Under Review': ['Requirements Incomplete', 'For Admission Approval', 'Rejected', 'Deferred'],
-  'Requirements Incomplete': ['Under Review', 'For Admission Approval', 'Rejected', 'Deferred'],
-  'For Admission Approval': ['Admitted', 'Requirements Incomplete', 'Rejected', 'Deferred'],
-  Admitted: ['For Assessment', 'Requirements Incomplete', 'Deferred'],
-  'For Assessment': ['Admitted', 'Deferred'],
-  'For Payment': ['For Assessment', 'Deferred'],
-  'For Enrollment': ['For Assessment', 'Deferred'],
+  Submitted: ['Under Review', 'Requirements Incomplete', 'For Correction', 'Rejected', 'Deferred', 'Withdrawn'],
+  'Under Review': ['Requirements Incomplete', 'For Correction', 'For Admission Approval', 'Rejected', 'Deferred', 'Withdrawn'],
+  'Requirements Incomplete': ['Under Review', 'For Correction', 'For Admission Approval', 'Rejected', 'Deferred', 'Withdrawn'],
+  'For Correction': ['Under Review', 'Rejected', 'Deferred', 'Withdrawn'],
+  'For Admission Approval': ['Admitted', 'Requirements Incomplete', 'For Correction', 'Rejected', 'Deferred', 'Withdrawn'],
+  Admitted: ['For Registration', 'Requirements Incomplete', 'Deferred', 'Withdrawn'],
+  'For Registration': ['For Assessment', 'Admitted', 'Deferred', 'Withdrawn'],
+  'For Assessment': ['For Registration', 'Deferred', 'Withdrawn'],
+  'For Payment': ['For Assessment', 'Deferred', 'Withdrawn'],
+  'For Enrollment': ['For Assessment', 'Deferred', 'Withdrawn'],
   Enrolled: [],
   Rejected: ['Under Review'],
   Deferred: ['Under Review'],
+  Withdrawn: [],
 };
+
+// Decisions that must carry a note for the applicant.
+export const NOTE_REQUIRED_STATUSES: WorkflowStatus[] = ['Rejected', 'Deferred', 'Requirements Incomplete', 'For Correction', 'Withdrawn'];
 
 export interface RequirementSummary {
   total: number;
@@ -208,18 +333,22 @@ export function summarizeRequirements(reqs: ApplicationRequirement[]): Requireme
 export function transitionBlocker(
   from: string | undefined,
   to: WorkflowStatus,
-  reqs: ApplicationRequirement[]
+  reqs: ApplicationRequirement[],
+  app?: { registration?: EnrollmentRegistration | null }
 ): string | null {
   const current = normalizeStatus(from);
   if (!STAFF_TRANSITIONS[current].includes(to)) {
-    return `An application that is "${current}" cannot be moved to "${to}".`;
+    return `An application that is "${STATUS_LABELS[current]}" cannot be moved to "${STATUS_LABELS[to]}".`;
   }
   const summary = summarizeRequirements(reqs);
   if (to === 'For Admission Approval' && !summary.allRequiredSubmitted) {
-    return 'All required documents must be submitted before the application goes for admission approval.';
+    return 'All required documents must be submitted before the application goes for an admission decision.';
   }
-  if (to === 'For Assessment' && !summary.allRequiredVerified) {
-    return 'All required documents must be verified before the enrollment assessment.';
+  if ((to === 'For Registration' || to === 'For Assessment') && !summary.allRequiredVerified) {
+    return 'All required documents must be verified first.';
+  }
+  if (to === 'For Assessment' && current === 'For Registration' && !app?.registration?.subjects?.length) {
+    return 'The student has not submitted their academic registration (subjects) yet.';
   }
   return null;
 }
@@ -229,21 +358,68 @@ export function transitionBlocker(
 export function canFinalizeEnrollment(
   status: string | undefined,
   reqs: ApplicationRequirement[],
-  app?: { assessment?: EnrollmentAssessment | null; paymentStatus?: string }
+  app?: { assessment?: EnrollmentAssessment | null; paymentStatus?: string; registration?: EnrollmentRegistration | null }
 ): string | null {
   if (normalizeStatus(status) !== 'For Enrollment') {
-    return 'Only applications marked "For Enrollment" can be finalized.';
+    return 'Only applications at "For Final Verification" can be finalized.';
   }
   if (!summarizeRequirements(reqs).allRequiredVerified) {
     return 'All required documents must be verified before enrollment is finalized.';
   }
   if (app) {
+    if (!app.registration?.subjects?.length) return 'The student’s academic registration (program, term and subjects) must be on file.';
     if (!app.assessment) return 'An enrollment assessment must be saved first.';
     if (app.paymentStatus !== 'Verified' && app.paymentStatus !== 'Waived') {
       return 'Payment must be verified (or waived) before enrollment is confirmed.';
     }
   }
   return null;
+}
+
+export interface ChecklistItem {
+  label: string;
+  ok: boolean;
+  detail: string;
+}
+
+// Final enrollment verification: everything the Registrar confirms before official enrollment.
+export function finalVerificationChecklist(
+  app: { status?: string; assessment?: EnrollmentAssessment | null; paymentStatus?: string; paymentWaivedReason?: string; registration?: EnrollmentRegistration | null },
+  reqs: ApplicationRequirement[],
+  payments: ApplicationPayment[]
+): ChecklistItem[] {
+  const summary = summarizeRequirements(reqs);
+  const verified = verifiedPaymentTotal(payments);
+  const reg = app.registration;
+  const admitted = stageIndex(app.status) >= stageIndex('Admitted');
+  return [
+    { label: 'Admission approved', ok: admitted, detail: admitted ? 'The applicant was admitted.' : 'The applicant has not been admitted.' },
+    {
+      label: 'Required documents verified',
+      ok: summary.allRequiredVerified,
+      detail: `${summary.verified} of ${summary.total} documents verified${summary.allRequiredVerified ? '' : ` · ${summary.missing.length + summary.rejected.length + summary.awaitingReview.length} still open`}.`,
+    },
+    {
+      label: 'Academic registration on file',
+      ok: !!reg?.subjects?.length,
+      detail: reg?.subjects?.length
+        ? `${reg.programName} · ${reg.yearLevel} · ${reg.semester}, AY ${reg.academicYear} · ${reg.subjects.length} subjects, ${reg.totalUnits} units.`
+        : 'No subjects selected.',
+    },
+    {
+      label: 'Assessment saved',
+      ok: !!app.assessment,
+      detail: app.assessment ? `Total ₱${Number(app.assessment.total).toLocaleString()}, minimum ₱${Number(app.assessment.minimumPayment).toLocaleString()}.` : 'No assessment yet.',
+    },
+    {
+      label: 'Payment verified or authorized exemption',
+      ok: app.paymentStatus === 'Verified' || app.paymentStatus === 'Waived',
+      detail:
+        app.paymentStatus === 'Waived'
+          ? `Exempted: ${app.paymentWaivedReason || 'reason on record'}.`
+          : `₱${verified.toLocaleString()} verified${app.assessment ? ` of ₱${Number(app.assessment.minimumPayment).toLocaleString()} minimum` : ''}.`,
+    },
+  ];
 }
 
 // After an applicant uploads documents, a "Requirements Incomplete" application returns to
@@ -269,26 +445,32 @@ export function nextStepsFor(status: string | undefined, summary?: RequirementSu
         ? `Action needed: please submit or replace ${outstanding} document${outstanding === 1 ? '' : 's'} listed below. Your application returns to review automatically once all required documents are in.`
         : 'Action needed: please review the remarks from the Admissions Office below.';
     }
+    case 'For Correction':
+      return 'Action needed: the Admissions Office asked you to correct some details in your application. Read the note, update the details below and send them back for review.';
     case 'For Admission Approval':
       return 'Your documents are complete and your application is with the Admissions Committee for a decision.';
     case 'Admitted': {
       const outstanding = summary ? summary.missing.length + summary.rejected.length : 0;
       return outstanding > 0
         ? `Congratulations, you have been admitted! Please complete your remaining enrollment requirements (${outstanding} outstanding) below.`
-        : 'Congratulations, you have been admitted! You can now sign in to the MyPCM Student Portal to follow your remaining enrollment steps. The Registrar is verifying your documents before your enrollment assessment.';
+        : 'Congratulations, you have been admitted! You can now use the MyPCM Student Portal to follow your enrollment. Once the Registrar has verified your documents you will choose your subjects.';
     }
+    case 'For Registration':
+      return 'Action needed: choose your year level and subjects for the term below and submit your registration.';
     case 'For Assessment':
-      return 'Your requirements are verified. The Registrar is preparing your enrollment assessment (fees). You will be notified when it is ready.';
+      return 'Your registration was received. The Registrar is preparing your enrollment assessment (fees). You will be notified when it is ready.';
     case 'For Payment':
       return 'Your assessment is ready. Please pay at least the minimum amount shown below and submit your payment details for verification.';
     case 'For Enrollment':
-      return 'Your payment is verified. The Registrar will confirm your enrollment and assign your official Student ID.';
+      return 'Your payment is settled. The Registrar is doing the final verification and will confirm your enrollment and Student ID.';
     case 'Enrolled':
       return 'You are officially enrolled and your Student Portal is active. Open it to see your Student ID, classes and records.';
     case 'Deferred':
       return 'Your application has been deferred. Please read the note from the Admissions Office; we will contact you about the next intake.';
     case 'Rejected':
       return 'We are unable to offer admission at this time. Please read the note from the Admissions Office for details.';
+    case 'Withdrawn':
+      return 'This application was withdrawn. You can start a new application at any time.';
   }
 }
 
@@ -354,5 +536,5 @@ export const PAYMENT_STAFF_ROLES = [...ENROLLMENT_STAFF_ROLES, 'Finance'];
 // Applications that still count as "open" for duplicate checks.
 export function isOpenApplication(status?: string | null): boolean {
   const s = normalizeStatus(status);
-  return s !== 'Rejected' && s !== 'Enrolled';
+  return s !== 'Rejected' && s !== 'Enrolled' && s !== 'Withdrawn';
 }
