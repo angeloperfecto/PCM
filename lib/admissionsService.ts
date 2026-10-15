@@ -1109,6 +1109,9 @@ export async function finalizeEnrollment(
     program: app.registration?.programName || app.programName || app.program || '',
     programId: app.registration?.programId || app.programId || '',
     degreeProgram: app.registration?.programName || app.programName || app.program || '',
+    // The major chosen in the registration form ("No Major" when not applicable).
+    major: (app as any).registrationDetails?.major || existing?.data?.major || '',
+    specialization: (app as any).registrationDetails?.major || existing?.data?.specialization || existing?.data?.major || '',
     yearLevel: options.yearLevel,
     // Subjects from the student's registration, shown in the Student Portal and COR.
     courses: (app.registration?.subjects || []).map((sub: RegisteredSubject) => ({
