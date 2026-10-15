@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { StudentAvatar } from '@/components/common/StudentAvatar';
 import {
   GraduationCap,
   Calendar,
@@ -196,9 +197,12 @@ export const StudentPortalSidebar: React.FC<StudentPortalSidebarProps> = ({
       {/* Student Profile Quick Header */}
       <div className="p-4 border-b border-slate-200 bg-gradient-to-b from-[#18392B]/5 to-transparent">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-[#18392B] text-white font-serif font-black text-lg flex items-center justify-center shadow-xs border border-[#588B76]/30 shrink-0">
-            {(studentProfile.fullName || studentProfile.name || 'S').charAt(0)}
-          </div>
+          <StudentAvatar
+            photo={studentProfile.avatarUrl}
+            altPhoto={studentProfile.profilePhoto}
+            name={studentProfile.fullName || studentProfile.name || 'Student'}
+            className="w-11 h-11 rounded-xl bg-[#18392B] text-white font-serif font-black text-lg shadow-xs border border-[#588B76]/30"
+          />
           {!isCollapsed && (
             <div className="min-w-0 flex-1">
               <h3 className="font-serif font-bold text-sm text-slate-900 truncate leading-tight">
