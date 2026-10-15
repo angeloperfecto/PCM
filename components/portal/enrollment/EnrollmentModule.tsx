@@ -21,7 +21,7 @@ import { usePCM } from '@/lib/store';
 import { AdmissionDocumentsPanel, toStudentRequirementItems, useStudentAdmissionDocuments } from '@/components/enrollment/AdmissionDocumentsPanel';
 import { studentRequirementsView } from '@/lib/studentDefaults';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
-import { OnlineEnrollment } from '@/lib/types';
+import { ReEnrollmentStatusCard } from './ReEnrollmentStatusCard';
 
 interface EnrollmentModuleProps {
   onOpenWizard: () => void;
@@ -35,15 +35,15 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
   const { studentProfile, enrollments, enrollmentSystemConfig } = usePCM();
 
   // Latest online enrollment application
-  const latestEnrollment =
-    enrollments.find((e) => e.studentId === studentProfile.studentId) ||
-    enrollments[0];
+  const latestEnrollment = enrollments
+    .filter((e) => e.studentId === studentProfile.studentId || e.studentRecordId === studentProfile.id)
+    .sort((a, b) => String(b.submittedAt || '').localeCompare(String(a.submittedAt || '')))[0];
+  const currentTerm = studentProfile.currentSemester || '';
 
   const isOfficiallyEnrolled =
     studentProfile.enrollmentStatus === 'Approved' ||
     (studentProfile.enrollmentStatus as string) === 'Enrolled' ||
-    (studentProfile.enrollmentStatus as string) === 'Officially Enrolled' ||
-    latestEnrollment?.status === 'Approved';
+    (studentProfile.enrollmentStatus as string) === 'Officially Enrolled';
 
   const enrolledCourses = (studentProfile.courses || []).filter(
     (c) => c.status !== 'Dropped'
@@ -70,17 +70,20 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
 
   return (
     <div id="pcm-enrollment-module" className="space-y-6">
+      {/* Next term: re-enrollment status, requirements and uploads */}
+      <ReEnrollmentStatusCard onStart={onOpenWizard} />
+
       {/* Official Status Card */}
       <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-6">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-100 pb-4">
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-mono font-bold text-[#588B76] uppercase">
-                Academic Year 2026–2027 • 1st Semester
+                {currentTerm || 'No term on record yet'}
               </span>
               <span className="text-slate-300">•</span>
               <span className="text-xs text-slate-500 font-mono">
-                Ref: {latestEnrollment?.referenceNumber || 'ENR-2026-0418'}
+                Ref: {latestEnrollment?.referenceNumber || '—'}
               </span>
             </div>
             <h3 className="font-serif text-2xl font-bold text-[#18392B] mt-1">
@@ -105,7 +108,7 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
               className="bg-purple-700 hover:bg-purple-800 text-white font-bold px-4 py-2.5 rounded-xl text-xs transition flex items-center gap-2 cursor-pointer shadow-sm"
             >
               <PlusCircle className="w-4 h-4" />
-              <span>Enrollment Application Wizard</span>
+              <span>Re-enroll for the next term</span>
             </button>
           </div>
         </div>
@@ -113,8 +116,8 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
         {/* Status Timeline */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           {[
-            { step: '1', title: 'Course Enlistment', desc: `${totalEnrolledUnits} units selected`, completed: true },
-            { step: '2', title: 'Document Verification', desc: 'TOR & Pastoral Endorsement', completed: true },
+            { step: '1', title: 'Course Enlistment', desc: `${totalEnrolledUnits} units`, completed: enrolledCourses.length > 0 },
+            { step: '2', title: 'Document Verification', desc: `${verifiedCount} of ${requiredDocuments.length} documents verified`, completed: requiredDocuments.length > 0 && verifiedCount === requiredDocuments.length },
             { step: '3', title: 'Registrar Approval', desc: 'Dean & Registrar signed', completed: isOfficiallyEnrolled },
             { step: '4', title: 'Official COR Released', desc: 'Matriculation certified', completed: isOfficiallyEnrolled },
           ].map((st) => (
@@ -146,7 +149,7 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
             <span className="text-slate-400 block text-[10px] uppercase font-bold">Matriculation Status</span>
             <strong className="text-emerald-800 font-bold flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5" />
-              {studentProfile.enrollmentStatus || 'Officially Enrolled'}
+              {studentProfile.enrollmentStatus || '—'}
             </strong>
           </div>
           <div>
@@ -174,7 +177,7 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
               <GraduationCap className="w-4 h-4 text-[#588B76]" />
               Officially Enrolled Subject Schedule
             </h4>
-            <p className="text-xs text-slate-500">Official section assignments for AY 2026–2027 (1st Semester)</p>
+            <p className="text-xs text-slate-500">Official section assignments{currentTerm ? ` for ${currentTerm}` : ''}</p>
           </div>
           <span className="text-xs font-mono font-bold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full border border-emerald-300">
             Certified by Registrar
@@ -196,6 +199,13 @@ export const EnrollmentModule: React.FC<EnrollmentModuleProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-slate-700">
+                {enrolledCourses.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="p-6 text-center text-slate-500">
+                      No subjects for the current term. Once your re-enrollment is approved, your subjects appear here.
+                    </td>
+                  </tr>
+                )}
                 {enrolledCourses.map((c) => (
                   <tr key={c.id || c.code} className="hover:bg-slate-50 transition">
                     <td className="p-3.5 font-mono font-bold text-[#18392B]">{c.code}</td>

@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { AdmissionDocumentsPanel, toStudentRequirementItems, useStudentAdmissionDocuments } from '@/components/enrollment/AdmissionDocumentsPanel';
+import { EnrollmentStandingPanel } from './EnrollmentStandingPanel';
 import { EditStudentInfoForm } from '@/components/portal/enrollment/EditStudentInfoForm';
 import { ledgerPayments } from '@/lib/studentLedger';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
@@ -597,6 +598,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
           {/* ========================================================================= */}
           {activeTab === 'academics' && (
             <div className="space-y-4">
+              <EnrollmentStandingPanel student={student} />
               <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                 <div>
                   <h4 className="font-serif text-base font-bold text-slate-900">

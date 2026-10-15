@@ -13,6 +13,7 @@ import {
   AddDropRequest,
   FeeStructureItem,
   EnrollmentStatus,
+  AcademicPeriod,
 } from '@/lib/types';
 import { AdminStudentDetailModal } from './AdminStudentDetailModal';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
@@ -21,6 +22,9 @@ import { AcademicTermModal } from './AcademicTermModal';
 import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
 import { AdmissionRequirementsCard } from './AdmissionRequirementsCard';
+import { ReenrollmentRulesCard } from './ReenrollmentRulesCard';
+import { CloseTermModal } from './CloseTermModal';
+import { ReenrollmentReviewPanel } from './ReenrollmentReviewPanel';
 import { ClassListModal, classListFor } from './ClassListModal';
 import { AdminCurriculumPanel } from './AdminCurriculumPanel';
 import { AcademicCourseModal } from './AcademicCourseModal';
@@ -121,7 +125,10 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
     programs,
     faculty,
     exportDatabaseJson,
+    canManageTerms,
   } = usePCM();
+  // Term being closed (Academic Terms → Close Term).
+  const [closingTerm, setClosingTerm] = useState<AcademicPeriod | null>(null);
 
   // Active Subtab
   const [activeSubTab, setActiveSubTab] = useState<EnrollmentAdminSubTab>('dashboard');
@@ -233,8 +240,8 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
 
   // KPIs
   const totalEnrollments = enrollments.length;
-  const pendingEnrollments = enrollments.filter(
-    (e) => e.status === 'Submitted' || e.status === 'Under Review'
+  const pendingEnrollments = enrollments.filter((e) =>
+    ['Submitted', 'Under Review', 'For Verification', 'Pending Requirements'].includes(String(e.status))
   ).length;
   const approvedEnrollments = enrollments.filter((e) => e.status === 'Approved').length;
   const returnedEnrollments = enrollments.filter((e) => e.status === 'Returned for Correction').length;
@@ -913,7 +920,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           {/* Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
             <div className="flex flex-wrap items-center gap-2">
-              {['all', 'Submitted', 'Under Review', 'Approved', 'Returned for Correction', 'Rejected'].map((status) => (
+              {['all', 'Pending Requirements', 'For Verification', 'Submitted', 'Under Review', 'Approved', 'Returned for Correction', 'Not Eligible', 'Rejected'].map((status) => (
                 <button
                   key={status}
                   onClick={() => setStatusFilter(status)}
@@ -965,7 +972,12 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                     </td>
                     <td className="p-3.5">
                       <div>{enr.programTitle || enr.programName}</div>
-                      <div className="text-[11px] text-slate-500">{enr.yearLevel}</div>
+                      <div className="text-[11px] text-slate-500">
+                        {enr.yearLevel} • {enr.semester}, AY {enr.schoolYear}
+                      </div>
+                      {enr.reenrollment && (
+                        <span className="mt-0.5 inline-block rounded bg-[#18392B]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#18392B]">Returning student</span>
+                      )}
                     </td>
                     <td className="p-3.5">
                       <span className="font-bold text-slate-900">{enr.totalUnits} units</span>
@@ -989,9 +1001,11 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
                         enr.status === 'Approved'
                           ? 'bg-emerald-100 text-emerald-800'
-                          : enr.status === 'Submitted'
+                          : enr.status === 'Submitted' || enr.status === 'Pending Requirements'
                           ? 'bg-amber-100 text-amber-800'
-                          : enr.status === 'Returned for Correction'
+                          : enr.status === 'For Verification'
+                          ? 'bg-sky-100 text-sky-800'
+                          : enr.status === 'Returned for Correction' || enr.status === 'Not Eligible'
                           ? 'bg-rose-100 text-rose-800'
                           : 'bg-slate-100 text-slate-700'
                       }`}>
@@ -1006,7 +1020,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                         >
                           Review
                         </button>
-                        {enr.status !== 'Approved' && (
+                        {!enr.reenrollment && !['Approved', 'Rejected', 'Not Eligible'].includes(String(enr.status)) && (
                           <button
                             disabled={!canManageEnrollment}
                             title={canManageEnrollment ? undefined : 'Only the Registrar, Academic Admin, Finance or an Admin can do this'}
@@ -1241,7 +1255,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
-                      {!period.isCurrent && (
+                      {!period.isCurrent && !period.closedAt && (
                         <button
                           onClick={() =>
                             setPendingDelete({
@@ -1285,19 +1299,48 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                         {period.enrollmentStatus === 'Open' ? 'Accepting Applications' : 'Closed'}
                       </span>
                     </div>
+                    <div className="flex justify-between gap-2">
+                      <span className="text-slate-400">Enrolled:</span>
+                      <span className="font-medium font-mono">
+                        {period.enrolledCount || 0}
+                        {period.capacity ? ` / ${period.capacity}` : ' (no limit)'}
+                      </span>
+                    </div>
+                    {period.closedAt && (
+                      <p className="rounded-lg bg-slate-100 p-2 text-[11px] text-slate-600">
+                        Closed {period.closedAt.slice(0, 10)}{period.closedBy ? ` by ${period.closedBy}` : ''}
+                        {period.closingSummary ? ` • ${period.closingSummary.students} students, ${period.closingSummary.subjects} subjects recorded` : ''}
+                      </p>
+                    )}
                   </div>
 
-                  <button
-                    onClick={() => setCurrentAcademicPeriod(period.id)}
-                    disabled={period.isCurrent}
-                    className={`w-full text-xs font-semibold py-2 rounded-xl transition cursor-pointer ${
-                      period.isCurrent
-                        ? 'bg-emerald-100 text-emerald-800 cursor-default'
-                        : 'bg-slate-100 hover:bg-[#18392B] hover:text-white text-slate-700'
-                    }`}
-                  >
-                    {period.isCurrent ? 'Currently Active Term' : 'Set as Active Term'}
-                  </button>
+                  {period.closedAt ? (
+                    <p className="w-full rounded-xl bg-slate-100 py-2 text-center text-xs font-semibold text-slate-500">Term closed — records kept</p>
+                  ) : (
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <button
+                        onClick={() => setCurrentAcademicPeriod(period.id)}
+                        disabled={period.isCurrent}
+                        className={`flex-1 text-xs font-semibold py-2 rounded-xl transition cursor-pointer ${
+                          period.isCurrent
+                            ? 'bg-emerald-100 text-emerald-800 cursor-default'
+                            : 'bg-slate-100 hover:bg-[#18392B] hover:text-white text-slate-700'
+                        }`}
+                      >
+                        {period.isCurrent ? 'Currently Active Term' : 'Set as Active Term'}
+                      </button>
+                      {(period.isCurrent || period.status === 'Active') && (
+                        <button
+                          onClick={() => setClosingTerm(period)}
+                          disabled={!canManageTerms}
+                          title={canManageTerms ? 'Close this term and keep its records' : 'Only the Registrar or an Administrator can close a term'}
+                          className="flex-1 rounded-xl border border-rose-300 py-2 text-xs font-semibold text-rose-700 transition hover:bg-rose-50 disabled:opacity-40"
+                        >
+                          Close Term
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -1624,6 +1667,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       {activeSubTab === 'settings' && (
         <div className="space-y-6">
           <AdmissionRequirementsCard />
+          <ReenrollmentRulesCard />
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <h4 className="font-serif text-lg font-bold text-[#18392B] flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-[#588B76]" />
@@ -1767,6 +1811,18 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
               </button>
             </div>
 
+            {selectedEnrollment.reenrollment ? (
+              <ReenrollmentReviewPanel
+                enrollment={selectedEnrollment}
+                onClose={() => setSelectedEnrollment(null)}
+                onReturn={() => {
+                  setReturnTargetId(selectedEnrollment.id);
+                  setReturnFeedback('');
+                  setIsReturnModalOpen(true);
+                }}
+              />
+            ) : (
+            <>
             <div className="p-6 overflow-y-auto space-y-4 text-xs text-slate-700 flex-1">
               <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3 rounded-xl">
                 <div>
@@ -1828,6 +1884,8 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                 </button>
               </div>
             </div>
+            </>
+            )}
           </div>
         </div>
       )}
@@ -2041,6 +2099,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           }}
         />
       )}
+      {closingTerm && <CloseTermModal period={closingTerm} onClose={() => setClosingTerm(null)} />}
       <ConfirmDeleteModal
         isOpen={!!pendingDelete}
         title={pendingDelete?.title || 'Delete this record?'}

@@ -1,17 +1,17 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { StudentAvatar } from '@/components/common/StudentAvatar';
 import { Emblem } from '@/components/common/Emblem';
 import {
   OnlineEnrollment,
   StudentDocument,
-  SelectedSubject,
 } from '@/lib/types';
 import { EnrollmentNavbar } from '@/components/portal/enrollment/EnrollmentNavbar';
 import { StudentProfileModule } from '@/components/portal/enrollment/StudentProfileModule';
 import { PreEnlistmentModule } from '@/components/portal/enrollment/PreEnlistmentModule';
+import { ReEnrollmentWizard } from '@/components/portal/enrollment/ReEnrollmentWizard';
 import { EnrollmentModule } from '@/components/portal/enrollment/EnrollmentModule';
 import { AddDropModule } from '@/components/portal/enrollment/AddDropModule';
 import { AssessmentModule } from '@/components/portal/enrollment/AssessmentModule';
@@ -19,7 +19,6 @@ import { AmountDueModule } from '@/components/portal/enrollment/AmountDueModule'
 import { CurriculumModule } from '@/components/portal/enrollment/CurriculumModule';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { PaymentInstructions } from '@/components/enrollment/PaymentInstructions';
-import { termFees } from '@/lib/studentLedger';
 import { MyApplicationPanel } from '@/components/enrollment/MyApplicationPanel';
 import { AdmittedStudentPortal } from '@/components/portal/AdmittedStudentPortal';
 import { ADMITTED_PORTAL_STATUSES, normalizeStatus } from '@/lib/enrollmentWorkflow';
@@ -48,10 +47,7 @@ import {
   Download,
   Bell,
   Check,
-  Send,
   Printer,
-  ChevronRight,
-  ChevronLeft,
   X,
   Shield,
   HelpCircle,
@@ -74,12 +70,6 @@ export const PortalView: React.FC = () => {
     addPracticumEntry,
     enrollments,
     currentEnrollmentDraft,
-    saveEnrollmentDraft,
-    submitEnrollment,
-    enrollmentSystemConfig,
-    feeStructure,
-    academicPeriods,
-    academicSubjects,
     uploadStudentDocument,
     studentNotifications,
     markNotificationRead,
@@ -129,73 +119,15 @@ export const PortalView: React.FC = () => {
   // Certificate of Registration (COR) Modal
   const [isCORModalOpen, setIsCORModalOpen] = useState(false);
 
-  // --- ONLINE ENROLLMENT WIZARD STATE ---
+  // --- RE-ENROLLMENT WIZARD (returning students) ---
   const [isEnrollmentWizardOpen, setIsEnrollmentWizardOpen] = useState(false);
-  const [wizardStep, setWizardStep] = useState<number>(1);
-  const [wizardProgram, setWizardProgram] = useState(studentProfile?.degreeProgram || studentProfile?.program || '');
-  const [wizardYearLevel, setWizardYearLevel] = useState(studentProfile?.yearLevel || '');
-  // Program and year level are official (Registrar) fields: always the student's current record.
-  useEffect(() => {
-    if (!isEnrollmentWizardOpen) return;
-    setWizardProgram(studentProfile?.degreeProgram || studentProfile?.program || '');
-    setWizardYearLevel(studentProfile?.yearLevel || '');
-  }, [isEnrollmentWizardOpen, studentProfile?.degreeProgram, studentProfile?.program, studentProfile?.yearLevel]);
-  // Terms come from Enrollment & Records → Academic Terms; the current (or first open) term is the default.
-  const enrollableTerms = useMemo(() => {
-    const list = (academicPeriods || []).filter((p) => p.status !== 'Archived');
-    const open = list.filter((p) => p.enrollmentStatus === 'Open');
-    return (open.length ? open : list).sort((a, b) => Number(b.isCurrent) - Number(a.isCurrent));
-  }, [academicPeriods]);
-  const defaultTerm = enrollableTerms[0];
-  const [wizardSemester, setWizardSemester] = useState(defaultTerm?.semester || '');
-  const [wizardSchoolYear, setWizardSchoolYear] = useState((defaultTerm?.academicYear || '').replace('–', '-'));
-  useEffect(() => {
-    if (!wizardSchoolYear && defaultTerm) {
-      setWizardSemester(defaultTerm.semester);
-      setWizardSchoolYear(defaultTerm.academicYear.replace('–', '-'));
-    }
-  }, [defaultTerm, wizardSchoolYear]);
-  const [wizardPaymentMethod, setWizardPaymentMethod] = useState('GCash');
-  const downpaymentPercent = enrollmentSystemConfig?.downpaymentPercent ?? 40;
-  const [wizardPaymentOption, setWizardPaymentOption] = useState(`Installment (${downpaymentPercent}% Downpayment)`);
-  const [wizardPaymentRef, setWizardPaymentRef] = useState('');
-  const [wizardNotes, setWizardNotes] = useState('');
-
-  // Subjects offered for the chosen term, from Enrollment & Records → Academic Course Catalog.
-  const AVAILABLE_CATALOG_SUBJECTS: SelectedSubject[] = useMemo(() => {
-    const live = (academicSubjects || []).filter((c) => !c.isArchived && c.status !== 'Closed');
-    const ay = wizardSchoolYear.replace('-', '–');
-    const forTerm = live.filter((c) => (!c.semester || c.semester === wizardSemester) && (!c.academicYear || c.academicYear.replace('-', '–') === ay));
-    return (forTerm.length ? forTerm : live).map((c) => ({
-      id: c.id,
-      code: c.code,
-      title: c.title,
-      units: Number(c.units) || 0,
-      schedule: c.schedule || 'TBA',
-      room: c.room || 'TBA',
-      instructor: c.instructor || 'TBA',
-    }));
-  }, [academicSubjects, wizardSemester, wizardSchoolYear]);
-
-  const [selectedSubjects, setSelectedSubjects] = useState<SelectedSubject[]>([]);
-
-  const toggleSubjectSelection = (subj: SelectedSubject) => {
-    if (selectedSubjects.some((s) => s.code === subj.code)) {
-      setSelectedSubjects((prev) => prev.filter((s) => s.code !== subj.code));
-    } else {
-      setSelectedSubjects((prev) => [...prev, subj]);
-    }
-  };
-
-  const totalWizardUnits = selectedSubjects.reduce((sum, s) => sum + s.units, 0);
-  // Same formula the Registrar uses on approval (Fee Structure).
-  const wizardFees = termFees(totalWizardUnits, feeStructure || [], enrollmentSystemConfig);
-  const estimatedTuitionTotal = wizardFees.total;
 
   // Active student's latest enrollment record
+  // The student's most recent enrollment request (each term has its own).
   const latestEnrollment =
-    enrollments.find((e) => e.studentId === studentProfile.studentId || e.studentId === studentProfile.id) ||
-    currentEnrollmentDraft;
+    enrollments
+      .filter((e) => e.studentId === studentProfile.studentId || e.studentId === studentProfile.id || e.studentRecordId === studentProfile.id)
+      .sort((a, b) => String(b.submittedAt || b.lastSavedAt || '').localeCompare(String(a.submittedAt || a.lastSavedAt || '')))[0] || currentEnrollmentDraft;
 
   // Unread notifications for current student
   const studentNotifs = studentNotifications.filter(
@@ -238,59 +170,6 @@ export const PortalView: React.FC = () => {
     });
     setIsDocModalOpen(false);
     setDocName('');
-  };
-
-  // Enrollment Wizard handlers
-  const handleSaveDraft = async () => {
-    await saveEnrollmentDraft({
-      studentId: studentProfile.studentId,
-      studentName: studentProfile.fullName || studentProfile.name,
-      studentEmail: studentProfile.email,
-      studentContact: studentProfile.phone,
-      programTitle: wizardProgram,
-      yearLevel: wizardYearLevel,
-      semester: wizardSemester,
-      schoolYear: wizardSchoolYear,
-      selectedSubjects,
-      totalUnits: totalWizardUnits,
-      estimatedTuition: estimatedTuitionTotal,
-      paymentMethod: wizardPaymentMethod,
-      paymentOption: wizardPaymentOption,
-      paymentReference: wizardPaymentRef,
-      notes: wizardNotes,
-    });
-  };
-
-  const handleSubmitEnrollment = async () => {
-    if (!wizardSemester || !wizardSchoolYear) {
-      addToast('warning', 'No term selected', 'No academic term is open for enrollment. Please check with the Registrar.');
-      return;
-    }
-    if (selectedSubjects.length === 0) {
-      addToast('warning', 'Subject Required', 'Please select at least 1 course subject to enroll.');
-      return;
-    }
-    const result = await submitEnrollment({
-      studentId: studentProfile.studentId,
-      studentName: studentProfile.fullName || studentProfile.name,
-      studentEmail: studentProfile.email,
-      studentContact: studentProfile.phone,
-      programTitle: wizardProgram,
-      yearLevel: wizardYearLevel,
-      semester: wizardSemester,
-      schoolYear: wizardSchoolYear,
-      selectedSubjects,
-      totalUnits: totalWizardUnits,
-      estimatedTuition: estimatedTuitionTotal,
-      paymentMethod: wizardPaymentMethod,
-      paymentOption: wizardPaymentOption,
-      paymentReference: wizardPaymentRef,
-      notes: wizardNotes,
-    });
-
-    if (result.success) {
-      setIsEnrollmentWizardOpen(false);
-    }
   };
 
   // --- NOT YET A LINKED STUDENT ---
@@ -405,8 +284,11 @@ export const PortalView: React.FC = () => {
       : Math.max(0, (studentProfile.tuitionTotal || 0) - (studentProfile.tuitionPaid || 0));
   const totalPracticumHours = (studentProfile.practicumEntries || []).reduce((acc, curr) => acc + curr.hours, 0);
 
-  const isEnrolled = studentProfile.enrollmentStatus === 'Enrolled' || latestEnrollment?.status === 'Approved';
-  const isPendingEnrollment = studentProfile.enrollmentStatus === 'Submitted' || latestEnrollment?.status === 'Submitted' || latestEnrollment?.status === 'Under Review';
+  // Enrolled comes from the student record (closing a term sets it to Not Enrolled until the next approval).
+  const isEnrolled = studentProfile.enrollmentStatus === 'Enrolled';
+  const isPendingEnrollment =
+    studentProfile.enrollmentStatus === 'Submitted' ||
+    ['Submitted', 'Under Review', 'For Verification', 'Pending Requirements'].includes(String(latestEnrollment?.status || ''));
   const isReturnedEnrollment = studentProfile.enrollmentStatus === 'Returned for Correction' || latestEnrollment?.status === 'Returned for Correction';
 
   return (
@@ -961,275 +843,13 @@ export const PortalView: React.FC = () => {
 
       {/* --- MODAL 1: ONLINE ENROLLMENT WIZARD --- */}
       {isEnrollmentWizardOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[92vh] overflow-y-auto p-6 space-y-6 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between border-b border-slate-200 pb-4">
-              <div>
-                <span className="text-[10px] font-mono font-bold text-[#588B76] uppercase block">Step {wizardStep} of 4</span>
-                <h3 className="font-serif text-2xl font-bold text-[#18392B]">
-                  {wizardStep === 1 && '1. Program & Academic Term Selection'}
-                  {wizardStep === 2 && '2. Course Load & Subject Selection'}
-                  {wizardStep === 3 && '3. Tuition Assessment & Payment Plan'}
-                  {wizardStep === 4 && '4. Review & Submit Application'}
-                </h3>
-              </div>
-              <button onClick={() => setIsEnrollmentWizardOpen(false)} className="text-slate-400 hover:text-slate-600 cursor-pointer">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* STEP 1: PROGRAM & TERM */}
-            {wizardStep === 1 && (
-              <div className="space-y-4 text-xs">
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-semibold">Degree Program</label>
-                  <p className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 font-semibold text-slate-800">{wizardProgram || '—'}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-slate-700 font-semibold">Year Level</label>
-                    <p className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 font-semibold text-slate-800">{wizardYearLevel || '—'}</p>
-                    <p className="text-[10px] text-slate-500">From your student record. Ask the Registrar to change your program or year level.</p>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-slate-700 font-semibold">Academic Term</label>
-                    {enrollableTerms.length > 0 ? (
-                      <select
-                        value={`${wizardSemester}|${wizardSchoolYear}`}
-                        onChange={(e) => {
-                          const [sem, ay] = e.target.value.split('|');
-                          setWizardSemester(sem);
-                          setWizardSchoolYear(ay);
-                        }}
-                        className="w-full p-2.5 rounded-lg border border-slate-300 bg-white"
-                      >
-                        {enrollableTerms.map((p) => (
-                          <option key={p.id} value={`${p.semester}|${p.academicYear.replace('–', '-')}`}>
-                            {p.semester}, AY {p.academicYear}
-                            {p.enrollmentStatus === 'Open' ? '' : ' (enrollment closed)'}
-                          </option>
-                        ))}
-                      </select>
-                    ) : (
-                      <p className="rounded-lg border border-amber-200 bg-amber-50 p-2.5 text-amber-900">
-                        No academic term is open for enrollment yet. Please check with the Registrar.
-                      </p>
-                    )}
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-semibold">Student Contact Phone</label>
-                  <input
-                    type="text"
-                    defaultValue={studentProfile.mobileNumber || studentProfile.phone || ''}
-                    placeholder="0917 123 4567"
-                    className="w-full p-2.5 rounded-lg border border-slate-300"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* STEP 2: SUBJECTS SELECTION */}
-            {wizardStep === 2 && (
-              <div className="space-y-4 text-xs">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-600">Select course offerings for {wizardSemester}:</span>
-                  <span className="font-mono font-bold text-[#18392B]">
-                    Selected: {selectedSubjects.length} Courses ({totalWizardUnits} Units)
-                  </span>
-                </div>
-
-                <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                  {AVAILABLE_CATALOG_SUBJECTS.length === 0 && (
-                    <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900">
-                      No subjects are offered for this term yet. Please check with the Registrar.
-                    </p>
-                  )}
-                  {AVAILABLE_CATALOG_SUBJECTS.map((subj) => {
-                    const isSelected = selectedSubjects.some((s) => s.code === subj.code);
-                    return (
-                      <div
-                        key={subj.code}
-                        onClick={() => toggleSubjectSelection(subj)}
-                        className={`p-3 rounded-xl border flex items-center justify-between gap-3 transition cursor-pointer ${
-                          isSelected ? 'bg-emerald-50/70 border-emerald-300 text-emerald-950' : 'bg-white border-slate-200 text-slate-700'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {}}
-                            className="w-4 h-4 text-emerald-600 rounded cursor-pointer"
-                          />
-                          <div>
-                            <span className="font-mono font-bold text-[#18392B] mr-2">{subj.code}</span>
-                            <span className="font-semibold">{subj.title}</span>
-                            <div className="text-[11px] text-slate-500 font-sans">
-                              {subj.schedule} • {subj.room} • {subj.instructor}
-                            </div>
-                          </div>
-                        </div>
-                        <span className="font-mono font-bold shrink-0">{subj.units} Units</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* STEP 3: TUITION & PAYMENT OPTION */}
-            {wizardStep === 3 && (
-              <div className="space-y-4 text-xs">
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2">
-                  {wizardFees.lines.length === 0 ? (
-                    <p className="text-amber-900">The fee schedule has not been published yet. The Registrar will assess your fees when your enrollment is approved.</p>
-                  ) : (
-                    wizardFees.lines.map((l) => (
-                      <div key={l.name} className="flex justify-between gap-3">
-                        <span>{l.name}</span>
-                        <span className="font-mono font-bold">₱{l.amount.toLocaleString()}</span>
-                      </div>
-                    ))
-                  )}
-                  <div className="pt-2 border-t border-slate-200 flex justify-between font-serif text-sm font-bold text-[#18392B]">
-                    <span>Estimated total (final amount set by the Registrar):</span>
-                    <span className="font-mono text-base">₱{estimatedTuitionTotal.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <label className="text-slate-700 font-semibold">Payment Scheme</label>
-                    <select
-                      value={wizardPaymentOption}
-                      onChange={(e) => setWizardPaymentOption(e.target.value)}
-                      className="w-full p-2.5 rounded-lg border border-slate-300 bg-white"
-                    >
-                      <option value="Full Payment (5% Discount)">Full Payment (5% Discount)</option>
-                      <option value={`Installment (${downpaymentPercent}% Downpayment)`}>Installment ({downpaymentPercent}% Downpayment)</option>
-                      <option value="Monthly Installment Plan">Monthly Installment Plan</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-slate-700 font-semibold">Payment Channel</label>
-                    <select
-                      value={wizardPaymentMethod}
-                      onChange={(e) => setWizardPaymentMethod(e.target.value)}
-                      className="w-full p-2.5 rounded-lg border border-slate-300 bg-white"
-                    >
-                      <option value="GCash">GCash</option>
-                      <option value="Maya">Maya</option>
-                      <option value="Bank Transfer (BDO)">Bank Transfer (BDO)</option>
-                      <option value="Bank Transfer (BPI)">Bank Transfer (BPI)</option>
-                      <option value="Cash / Campus Cashier">Cash / Campus Cashier</option>
-                    </select>
-                  </div>
-                </div>
-
-                <PaymentInstructions compact reportHint={false} />
-                <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">
-                  Pay through any of the channels above. If you pay now, enter the reference number below. You can also pay after the Registrar
-                  approves your enrollment and report it in <strong>Amount Due &amp; Payment</strong>; the Finance Office verifies every payment.
-                </p>
-
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-semibold">Proof of Payment Reference (Optional)</label>
-                  <input
-                    type="text"
-                    value={wizardPaymentRef}
-                    onChange={(e) => setWizardPaymentRef(e.target.value)}
-                    placeholder="e.g. GC-8912381"
-                    className="w-full p-2.5 rounded-lg border border-slate-300 font-mono"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* STEP 4: REVIEW & SUBMIT */}
-            {wizardStep === 4 && (
-              <div className="space-y-4 text-xs">
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 font-sans">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Student Name</span>
-                      <strong>{studentProfile.fullName || studentProfile.name}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Student ID</span>
-                      <strong className="font-mono text-[#588B76]">{studentProfile.studentId}</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Enrolling In</span>
-                      <strong>{wizardProgram} ({wizardYearLevel})</strong>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px]">Total Course Load</span>
-                      <strong className="font-mono">{selectedSubjects.length} Courses • {totalWizardUnits} Units</strong>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-slate-700 font-semibold">Additional Remarks / Requests to Registrar</label>
-                  <textarea
-                    rows={2}
-                    value={wizardNotes}
-                    onChange={(e) => setWizardNotes(e.target.value)}
-                    placeholder="Any special requests or scheduling notes..."
-                    className="w-full p-2.5 border border-slate-300 rounded-lg"
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* Wizard Navigation Bar */}
-            <div className="pt-4 border-t border-slate-200 flex items-center justify-between text-xs">
-              {wizardStep > 1 ? (
-                <button
-                  type="button"
-                  onClick={() => setWizardStep((prev) => prev - 1)}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                  <span>Back</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSaveDraft}
-                  className="px-4 py-2 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 cursor-pointer"
-                >
-                  Save as Draft
-                </button>
-              )}
-
-              {wizardStep < 4 ? (
-                <button
-                  type="button"
-                  onClick={() => setWizardStep((prev) => prev + 1)}
-                  className="bg-[#18392B] hover:bg-[#588B76] hover:text-[#18392B] text-white font-bold px-5 py-2.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer"
-                >
-                  <span>Continue</span>
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={handleSubmitEnrollment}
-                  className="bg-emerald-700 hover:bg-emerald-800 text-white font-bold px-6 py-2.5 rounded-lg flex items-center gap-1.5 transition cursor-pointer shadow-md"
-                >
-                  <Send className="w-4 h-4" />
-                  <span>Submit Enrollment Application</span>
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+        <ReEnrollmentWizard
+          onClose={() => setIsEnrollmentWizardOpen(false)}
+          onSubmitted={() => {
+            setActiveTab('enrollment');
+            setEnrollmentActiveSubTab('enrollment');
+          }}
+        />
       )}
 
       {/* --- MODAL 2: OFFICIAL CERTIFICATE OF REGISTRATION (COR) --- */}

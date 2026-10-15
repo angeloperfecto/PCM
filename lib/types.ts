@@ -323,7 +323,9 @@ export type EnrollmentStatus =
   | 'Rejected'
   | 'Returned for Correction'
   | 'Cancelled'
-  | 'Not Enrolled';
+  | 'Not Enrolled'
+  | 'Pending Requirements'
+  | 'Not Eligible';
 
 export type DocumentVerificationStatus =
   | 'Pending Verification'
@@ -401,6 +403,33 @@ export interface StudentSubjectHistory {
   midtermGrade?: number | string;
   finalGrade?: number | string;
   instructor?: string;
+}
+
+export interface StudentTermRecord {
+  term: string; // "1st Semester, AY 2026–2027"
+  semester: string;
+  academicYear: string;
+  yearLevel: string;
+  units: number;
+  subjects: number;
+  assessment?: number;
+  closedAt: string;
+  closedBy?: string;
+}
+
+/** A re-enrollment requirement: a clearance verified by staff, or a document the student uploads. */
+export interface ReenrollmentRequirementTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  required: boolean;
+}
+
+export interface ReenrollmentClearance {
+  status: 'Pending' | 'Cleared' | 'Not Cleared';
+  by?: string;
+  at?: string;
+  remarks?: string;
 }
 
 export interface StudentRequirementItem {
@@ -572,6 +601,12 @@ export interface StudentProfile {
   totalUnitsEarned: number;
   courses: StudentCourse[];
   subjectHistory?: StudentSubjectHistory[];
+  /** One entry per closed term the student was enrolled in. */
+  termHistory?: StudentTermRecord[];
+  /** Last term the student was officially enrolled in (e.g. "1st Semester, AY 2026–2027"). */
+  lastEnrolledTerm?: string;
+  /** Set by the Registrar to stop re-enrollment until it is lifted (e.g. on leave, disciplinary hold). */
+  enrollmentHold?: { active: boolean; reason: string; setBy?: string; setAt?: string };
   practicumEntries: PracticumEntry[];
   attendanceAverage?: string | number;
 
@@ -668,6 +703,16 @@ export interface AcademicPeriod {
   addDropStartDate?: string;
   addDropEndDate?: string;
   status: 'Active' | 'Upcoming' | 'Archived';
+  /** Maximum number of students who may be enrolled in this term (empty = no limit). */
+  capacity?: number;
+  /** Students officially enrolled in this term (kept up to date when enrollments are approved). */
+  enrolledCount?: number;
+  /** Notice shown to students in the Student Portal for this term. */
+  announcement?: string;
+  /** Set when the term is officially closed (records moved to each student's academic history). */
+  closedAt?: string;
+  closedBy?: string;
+  closingSummary?: { students: number; subjects: number; withoutGrade: number };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -732,6 +777,16 @@ export interface EnrollmentSystemConfig {
   paymentInstructions?: PaymentInstructions;
   /** Default downpayment (percent of the assessment) required before enrollment. */
   downpaymentPercent?: number;
+  /** Highest passing final grade on the 1.00–5.00 scale (e.g. 3.00). Required before a term can be closed. */
+  passingGrade?: number;
+  /** Percent of a year level's curriculum units a student must pass to be suggested for the next year level. */
+  progressionMinPercent?: number;
+  /** Returning-student re-enrollment: clearances and documents required each term. */
+  reenrollment?: {
+    requireAcademicClearance: boolean;
+    requireFinancialClearance: boolean;
+    documents: ReenrollmentRequirementTemplate[];
+  };
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -926,6 +981,21 @@ export interface OnlineEnrollment {
   approvedBy?: string;
   adminRemarks?: string;
   notes?: string;
+  /** Returning-student re-enrollment (Student Portal). */
+  reenrollment?: boolean;
+  /** "2026-2027|1st Semester" — one request per student per term. */
+  termKey?: string;
+  studentRecordId?: string;
+  /** Year level suggested from completed subjects, and the one the Registrar approved. */
+  suggestedYearLevel?: string;
+  approvedYearLevel?: string;
+  /** Points the Registrar should check (returning after a gap, irregular load, balance, …). */
+  eligibilityFlags?: string[];
+  /** Staff-verified clearances (academic, financial). */
+  clearances?: { academic?: ReenrollmentClearance; financial?: ReenrollmentClearance };
+  /** Required documents and their state, mirrored from the requirements subcollection for listing. */
+  documentsRequired?: number;
+  documentsVerified?: number;
   createdAt?: string;
   updatedAt?: string;
 }
