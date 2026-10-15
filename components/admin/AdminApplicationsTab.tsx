@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import { usePCM } from '@/lib/store';
+import { StudentAvatar } from '@/components/common/StudentAvatar';
 import { StudentAccountPayments } from './StudentAccountPayments';
 import type { StudentProfile } from '@/lib/types';
 import { accountSummary } from '@/lib/studentLedger';
@@ -402,15 +403,13 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
                     className="flex min-w-0 flex-1 flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3.5 text-left shadow-xs transition hover:border-[#588B76] hover:shadow-sm sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="flex min-w-0 items-center gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#18392B]/10 font-serif text-sm font-bold text-[#18392B]" aria-hidden="true">
-                        {(liveName(a) || '?')
-                          .split(/\s+/)
-                          .filter(Boolean)
-                          .slice(0, 2)
-                          .map((w: string) => w[0])
-                          .join('')
-                          .toUpperCase()}
-                      </span>
+                      <StudentAvatar
+                        photo={linkedStudent(a as any, students)?.avatarUrl}
+                        altPhoto={linkedStudent(a as any, students)?.profilePhoto}
+                        name={liveName(a)}
+                        letters={2}
+                        className="h-10 w-10 rounded-full bg-[#18392B]/10 font-serif text-sm font-bold text-[#18392B]"
+                      />
                       <div className="min-w-0">
                         <p className={`truncate text-sm font-bold ${liveName(a) ? 'text-slate-900' : 'italic text-slate-400'}`}>{liveName(a) || 'Unnamed application'}</p>
                         <p className="truncate text-[11px] text-slate-500">

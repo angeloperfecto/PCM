@@ -2,6 +2,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { usePCM } from '@/lib/store';
+import { StudentAvatar } from '@/components/common/StudentAvatar';
 import { Emblem } from '@/components/common/Emblem';
 import {
   OnlineEnrollment,
@@ -414,9 +415,12 @@ export const PortalView: React.FC = () => {
       <div className="bg-[#18392B] text-white border-b border-[#588B76]/40 py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-full bg-[#588B76] text-[#18392B] font-serif font-black text-2xl flex items-center justify-center shadow-lg border-2 border-amber-300 shrink-0">
-              {(studentProfile.fullName || studentProfile.name || 'S').charAt(0)}
-            </div>
+            <StudentAvatar
+              photo={studentProfile.avatarUrl}
+              altPhoto={studentProfile.profilePhoto}
+              name={studentProfile.fullName || studentProfile.name || 'Student'}
+              className="w-16 h-16 rounded-full bg-[#588B76] text-[#18392B] font-serif font-black text-2xl shadow-lg border-2 border-amber-300"
+            />
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-[#85AA9B] bg-white/10 px-2.5 py-0.5 rounded border border-white/10">
