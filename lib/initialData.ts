@@ -255,7 +255,7 @@ export const INITIAL_NEWS: NewsArticle[] = [
       'PCM expands its formal church partnership network to 80+ evangelical congregations across Metro Manila, Bulacan, Cavite, and Laguna, ensuring every student receives direct pastoral mentorship.',
     content:
       'PCM firmly believes that the seminary exists to serve the local church. Under the enhanced Pastoral Apprenticeship Program, every third and fourth-year student is placed under the direct supervision of an experienced senior pastor for weekly hands-on ministry, pulpit preaching, counseling observation, and elder board meeting immersion.',
-    imageUrl: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=1200&auto=format&fit=crop',
+    imageUrl: '/images/pcm-students-prayer.jpg',
     featured: false,
     tags: ['Church Partnerships', 'Apprenticeship', 'Pastoral Training'],
   },
@@ -2614,7 +2614,7 @@ export const INITIAL_LIFE_AT_PCM_CONFIG: LifeAtPCMConfig = {
       title: 'Ministry Practicum',
       desc: 'Direct weekly pulpit preaching, youth leadership, and pastoral counseling in 85+ partner evangelical churches.',
       iconName: 'Compass',
-      image: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=600&auto=format&fit=crop',
+      image: '/images/pcm-students-prayer.jpg',
       active: true,
       order: 4,
     },

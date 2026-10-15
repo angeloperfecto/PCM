@@ -93,8 +93,8 @@ export const MinistryView: React.FC = () => {
 
           <div className="relative w-full h-80 rounded-sm overflow-hidden shadow-md border border-slate-200">
             <Image
-              src="https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=800&auto=format&fit=crop"
-              alt="Pastoral Practicum in Action"
+              src="/images/pcm-students-prayer.jpg"
+              alt="PCM students praying together during a campus fellowship"
               fill
               className="object-cover"
               sizes="(max-width: 1024px) 100vw, 50vw"
