@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { collection, doc, limit, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import { usePCM } from '@/lib/store';
+import { StudentAccountPayments } from './StudentAccountPayments';
 import type { StudentProfile } from '@/lib/types';
 import { accountSummary } from '@/lib/studentLedger';
 import { db } from '@/lib/firebase';
@@ -1071,6 +1072,9 @@ const ApplicationDetail: React.FC<DetailProps> = ({
             onWaive={(reason) => waivePayment(db, actor(), app as any, requirements, reason)}
             onReviewPayment={(p, verdict, remarks) => reviewPayment(db, actor(), app as any, payments, p, verdict, remarks)}
           />
+
+          {/* Enrolled: every payment, including balance payments and cashier receipts after enrollment */}
+          {student && <StudentAccountPayments student={student} applicationPayments={payments} />}
 
           {/* Applicant details */}
           <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
