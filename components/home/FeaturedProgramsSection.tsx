@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
+import { programDescription, programUnits } from '@/lib/programFacts';
 import { AcademicProgram, ProgramLevel } from '@/lib/types';
 import {
   GraduationCap,
@@ -88,22 +89,22 @@ export const FeaturedProgramsSection: React.FC = () => {
                 </h3>
 
                 <p className="text-xs text-[#18392B]/75 line-clamp-3 leading-relaxed mb-3">
-                  {prog.shortDescription}
+                  {programDescription(prog)}
                 </p>
 
                 {/* Key Metrics */}
                 <div className="space-y-1.5 py-2.5 border-y border-[#D0DED8]/60 text-xs text-[#18392B]/75">
                   <div className="flex items-center justify-between">
                     <span className="text-[#18392B]/60">Duration:</span>
-                    <strong className="text-[#18392B]">{prog.duration}</strong>
+                    <strong className="text-[#18392B]">{prog.duration || '—'}</strong>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[#18392B]/60">Units:</span>
-                    <strong className="text-[#18392B]">{prog.credits} Units</strong>
+                    <strong className="text-[#18392B]">{programUnits(prog) ? `${programUnits(prog)} Units` : '—'}</strong>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-[#18392B]/60">Format:</span>
-                    <strong className="text-[#18392B]">{prog.studyMode}</strong>
+                    <strong className="text-[#18392B]">{prog.studyMode || '—'}</strong>
                   </div>
                 </div>
               </div>

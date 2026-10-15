@@ -3,6 +3,7 @@
 import React from 'react';
 import { usePCM } from '@/lib/store';
 import { groupByYearAndSemester, subjectsForProgram } from '@/lib/curriculum';
+import { programDescription, programOutcomes, programUnits, tuitionRateLabel } from '@/lib/programFacts';
 import {
   X,
   GraduationCap,
@@ -16,16 +17,17 @@ import {
 } from 'lucide-react';
 
 export const ProgramDetailModal: React.FC = () => {
-  const { selectedProgram, setSelectedProgram, navigateTo, curriculumSubjects } = usePCM();
+  const { selectedProgram: picked, setSelectedProgram, navigateTo, curriculumSubjects, programs, feeStructure, enrollmentSystemConfig } = usePCM();
 
-  if (!selectedProgram) return null;
+  if (!picked) return null;
+  // The live program record, so changes made in Academic Programs show while this is open.
+  const selectedProgram = programs.find((p) => p.id === picked.id) || picked;
 
-  const tuitionDisplay = selectedProgram.tuitionPerUnit
-    ? `₱${(Number(selectedProgram.tuitionPerUnit) || 0).toLocaleString()}/unit`
-    : 'Inquire with Admissions';
-
-  const creditsDisplay = selectedProgram.credits || selectedProgram.totalUnits || selectedProgram.units || 0;
-  const descriptionDisplay = selectedProgram.fullDescription || selectedProgram.description || selectedProgram.shortDescription || '';
+  // The tuition rate students are charged (Tuition & Fee Policy), else the program's public estimate.
+  const tuitionDisplay = tuitionRateLabel(feeStructure, enrollmentSystemConfig) || (selectedProgram as any).tuitionEst || 'Inquire with Admissions';
+  const creditsDisplay = programUnits(selectedProgram);
+  const descriptionDisplay = programDescription(selectedProgram);
+  const outcomes = programOutcomes(selectedProgram);
   // The program's curriculum from Enrollment & Records → Subjects per Year Level (live). The list
   // stored on the program is only shown until that curriculum has been set up.
   const curriculumGroups = groupByYearAndSemester(subjectsForProgram(curriculumSubjects, selectedProgram).filter((s) => s.status !== 'Inactive'));
@@ -68,15 +70,15 @@ export const ProgramDetailModal: React.FC = () => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 bg-[#FFFFFF] p-4 rounded-xl border border-slate-200 text-xs">
             <div>
               <span className="text-slate-500 block text-[11px]">Duration</span>
-              <strong className="text-[#18392B] font-bold text-sm">{selectedProgram.duration}</strong>
+              <strong className="text-[#18392B] font-bold text-sm">{selectedProgram.duration || '—'}</strong>
             </div>
             <div>
               <span className="text-slate-500 block text-[11px]">Total Units</span>
-              <strong className="text-[#18392B] font-bold text-sm">{creditsDisplay} Units</strong>
+              <strong className="text-[#18392B] font-bold text-sm">{creditsDisplay ? `${creditsDisplay} Units` : '—'}</strong>
             </div>
             <div>
               <span className="text-slate-500 block text-[11px]">Study Mode</span>
-              <strong className="text-[#18392B] font-bold text-sm">{selectedProgram.studyMode || 'Full-time / Residential'}</strong>
+              <strong className="text-[#18392B] font-bold text-sm">{selectedProgram.studyMode || '—'}</strong>
             </div>
             <div>
               <span className="text-slate-500 block text-[11px]">Tuition Rate</span>
@@ -170,14 +172,14 @@ export const ProgramDetailModal: React.FC = () => {
           )}
 
           {/* Career & Ministry Opportunities */}
-          {selectedProgram.careerOpportunities && selectedProgram.careerOpportunities.length > 0 && (
+          {outcomes.length > 0 && (
             <div className="space-y-3">
               <h4 className="font-serif text-base font-bold text-[#18392B] flex items-center gap-2">
                 <Briefcase className="w-4 h-4 text-[#588B76]" />
                 <span>Ministry & Vocational Opportunities</span>
               </h4>
               <div className="flex flex-wrap gap-2">
-                {selectedProgram.careerOpportunities.map((career, idx) => (
+                {outcomes.map((career, idx) => (
                   <span
                     key={idx}
                     className="bg-[#18392B]/5 text-[#18392B] border border-slate-300 text-xs px-3 py-1 rounded-full font-medium"
