@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
+import { programDescription, programUnits } from '@/lib/programFacts';
 import { ProgramLevel } from '@/lib/types';
 import {
   GraduationCap,
@@ -167,21 +168,21 @@ export const AcademicsView: React.FC = () => {
                 </h3>
 
                 <p className="text-xs text-slate-600 mt-2 leading-relaxed line-clamp-3">
-                  {prog.shortDescription}
+                  {programDescription(prog)}
                 </p>
 
                 <div className="mt-4 pt-4 border-t border-slate-100 space-y-1.5 text-xs text-slate-600">
                   <div className="flex justify-between">
                     <span className="text-slate-500">Duration:</span>
-                    <strong className="text-[#18392B]">{prog.duration}</strong>
+                    <strong className="text-[#18392B]">{prog.duration || '—'}</strong>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Curriculum Units:</span>
-                    <strong className="text-[#18392B]">{prog.credits} Units</strong>
+                    <strong className="text-[#18392B]">{programUnits(prog) ? `${programUnits(prog)} Units` : '—'}</strong>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-500">Delivery Mode:</span>
-                    <strong className="text-[#18392B]">{prog.studyMode}</strong>
+                    <strong className="text-[#18392B]">{prog.studyMode || '—'}</strong>
                   </div>
                 </div>
               </div>

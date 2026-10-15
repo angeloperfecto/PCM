@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
+import { programUnits, tuitionRateLabel } from '@/lib/programFacts';
 import { Program } from '@/lib/types';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
@@ -24,7 +25,10 @@ export const AdminProgramsTab: React.FC = () => {
     deleteProgram,
     addToast,
     canPerformAction,
+    feeStructure,
+    enrollmentSystemConfig,
   } = usePCM();
+  const chargedRate = tuitionRateLabel(feeStructure, enrollmentSystemConfig);
 
   const [search, setSearch] = useState('');
   const [levelFilter, setLevelFilter] = useState('all');
@@ -40,6 +44,7 @@ export const AdminProgramsTab: React.FC = () => {
   const [formDuration, setFormDuration] = useState('4 Years (8 Semesters)');
   const [formUnits, setFormUnits] = useState(132);
   const [formTuition, setFormTuition] = useState('₱14,500 / semester');
+  const [formStudyMode, setFormStudyMode] = useState('');
   const [formDescription, setFormDescription] = useState('');
   const [formOutcomes, setFormOutcomes] = useState('');
   const [formFeatured, setFormFeatured] = useState(false);
@@ -52,6 +57,7 @@ export const AdminProgramsTab: React.FC = () => {
     setFormDuration('4 Years (8 Semesters)');
     setFormUnits(132);
     setFormTuition('₱14,500 / semester');
+    setFormStudyMode('On-Campus Full-Time');
     setFormDescription('');
     setFormOutcomes('Senior Pastor\nAssociate Minister\nChurch Planter\nChaplain');
     setFormFeatured(false);
@@ -64,8 +70,9 @@ export const AdminProgramsTab: React.FC = () => {
     setFormCode(prog.code || '');
     setFormDegreeLevel((prog.degreeLevel as any) || 'Undergraduate');
     setFormDuration(prog.duration);
-    setFormUnits(prog.totalUnits || prog.credits || 120);
-    setFormTuition(prog.tuitionEst || '₱14,500 / semester');
+    setFormUnits(programUnits(prog as any) || 120);
+    setFormTuition(prog.tuitionEst || '');
+    setFormStudyMode((prog as any).studyMode || '');
     setFormDescription(prog.description || prog.shortDescription || prog.fullDescription || '');
     setFormOutcomes((prog.careerOutcomes || prog.careerOpportunities || []).join('\n'));
     setFormFeatured(prog.featured || false);
@@ -100,11 +107,16 @@ export const AdminProgramsTab: React.FC = () => {
         degreeLevel: formDegreeLevel,
         duration: formDuration.trim(),
         totalUnits: Number(formUnits),
+        credits: Number(formUnits),
+        studyMode: formStudyMode.trim(),
         tuitionEst: formTuition.trim(),
         description: formDescription.trim(),
+        shortDescription: formDescription.trim(),
+        fullDescription: formDescription.trim(),
         careerOutcomes: outcomesArray,
+        careerOpportunities: [...outcomesArray],
         featured: formFeatured,
-      });
+      } as any);
       addToast({ title: 'Program Updated', message: `${formName} has been updated.`, type: 'success' });
     } else {
       addProgram({
@@ -113,10 +125,15 @@ export const AdminProgramsTab: React.FC = () => {
         degreeLevel: formDegreeLevel,
         duration: formDuration.trim(),
         totalUnits: Number(formUnits),
+        credits: Number(formUnits),
+        studyMode: formStudyMode.trim(),
         tuitionEst: formTuition.trim(),
         description: formDescription.trim(),
-        curriculum: [],
+        shortDescription: formDescription.trim(),
+        fullDescription: formDescription.trim(),
         careerOutcomes: outcomesArray,
+        careerOpportunities: [...outcomesArray],
+        curriculum: [],
         admissionReqs: ['Official Form 138/137 or Transcript of Records', 'Pastor Recommendation Letter', 'Personal Christian Testimony Statement'],
         featured: formFeatured,
       });
@@ -269,11 +286,13 @@ export const AdminProgramsTab: React.FC = () => {
                 Duration: <strong className="text-slate-800">{prog.duration}</strong>
               </div>
               <div>
-                Total Units: <strong className="text-slate-800">{prog.totalUnits || 'N/A'}</strong>
+                Total Units: <strong className="text-slate-800">{programUnits(prog as any) || 'N/A'}</strong>
               </div>
-              <div className="col-span-2">
-                Tuition Est:{' '}
-                <strong className="text-slate-800">{prog.tuitionEst || 'Standard Rates'}</strong>
+              <div>
+                Study Mode: <strong className="text-slate-800">{(prog as any).studyMode || '—'}</strong>
+              </div>
+              <div>
+                Tuition Rate: <strong className="text-slate-800">{chargedRate || prog.tuitionEst || '—'}</strong>
               </div>
             </div>
           </div>
@@ -362,17 +381,48 @@ export const AdminProgramsTab: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="block text-slate-700 font-bold mb-1">
-                  Tuition Estimate (Public Display)
-                </label>
-                <input
-                  type="text"
-                  value={formTuition}
-                  onChange={(e) => setFormTuition(e.target.value)}
-                  placeholder="e.g. ₱14,500 / semester"
-                  className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Study Mode</label>
+                  <input
+                    type="text"
+                    list="program-study-modes"
+                    value={formStudyMode}
+                    onChange={(e) => setFormStudyMode(e.target.value)}
+                    placeholder="e.g. On-Campus Full-Time"
+                    className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                  />
+                  <datalist id="program-study-modes">
+                    <option value="On-Campus Full-Time" />
+                    <option value="Modular / Hybrid" />
+                    <option value="Evening & Weekend" />
+                    <option value="Online & Modular" />
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Tuition Rate (Public Display)</label>
+                  {chargedRate ? (
+                    <div className="w-full p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs">
+                      <strong className="text-emerald-800">{chargedRate}</strong>
+                      <span className="block text-[10px] text-slate-500">
+                        From Enrollment &amp; Records → Tuition &amp; Fee Policy (the rate students are charged). Change it there.
+                      </span>
+                    </div>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={formTuition}
+                        onChange={(e) => setFormTuition(e.target.value)}
+                        placeholder="e.g. ₱850/unit"
+                        className="w-full p-2.5 rounded-lg border border-slate-200 focus:border-[#588B76] text-xs focus:outline-none"
+                      />
+                      <span className="block text-[10px] text-slate-500 mt-1">
+                        Shown until a Tuition item is set in Enrollment &amp; Records → Tuition &amp; Fee Policy.
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
 
               <div>
