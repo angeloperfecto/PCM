@@ -5,6 +5,7 @@ import { Emblem } from '@/components/common/Emblem';
 import { usePCM } from '@/lib/store';
 import type { StudentProfile } from '@/lib/types';
 import { accountSummary } from '@/lib/studentLedger';
+import { assessedLines } from '@/components/enrollment/AssessmentSlip';
 
 const peso = (n: number) => `₱${(Number(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const OFFICIAL = ['Enrolled', 'Officially Enrolled', 'Approved'];
@@ -20,7 +21,7 @@ function corNumber(student: StudentProfile): string {
 // The official Certificate of Registration, shared by the Student Portal and the Admin Workspace.
 // Print it with printCertificate(), which prints only the certificate on an A4/Letter page.
 export const CertificateOfRegistration: React.FC<{ student: StudentProfile; id?: string }> = ({ student, id = 'pcm-cor-document' }) => {
-  const { siteConfig } = usePCM();
+  const { siteConfig, calculateStudentAssessment } = usePCM();
   const contact = (siteConfig as any)?.contactInfo || {};
   const address = [contact.addressLine1, contact.addressLine2].filter(Boolean).join(', ') || contact.address || '';
   const contactLine = [contact.phonePrimary || contact.phone, contact.emailGeneral].filter(Boolean).join(' • ');
@@ -28,6 +29,16 @@ export const CertificateOfRegistration: React.FC<{ student: StudentProfile; id?:
   const courses = (student.courses || []).filter((c) => c.status !== 'Dropped');
   const totalUnits = courses.reduce((s, c) => s + (Number(c.units) || 0), 0);
   const account = accountSummary(student as any);
+  // The same itemized assessment as the Statement of Assessment (Registrar's official lines when on file).
+  const fees = assessedLines(calculateStudentAssessment(student.id || student.studentId));
+  const hasRecord = account.totalCharges > 0;
+  const balance = hasRecord ? account.balance : fees.total;
+  const groups = fees.lines.reduce<{ group: string; lines: typeof fees.lines }[]>((out, l) => {
+    const last = out[out.length - 1];
+    if (last && last.group === l.group) last.lines.push(l);
+    else out.push({ group: l.group, lines: [l] });
+    return out;
+  }, []);
   const isOfficial = OFFICIAL.includes(String(student.enrollmentStatus || ''));
   const issued = new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' });
   const name = student.fullName || student.name || '';
@@ -154,7 +165,61 @@ export const CertificateOfRegistration: React.FC<{ student: StudentProfile; id?:
           </div>
         </section>
 
-        {/* Certification and fees */}
+        {/* Tuition & institutional fee assessment */}
+        <section>
+          <div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-[#18392B]">Tuition &amp; institutional fee assessment</div>
+          <div className="overflow-hidden rounded-lg border border-slate-300">
+            <table className="w-full border-collapse text-left text-[11px]">
+              <thead className="bg-slate-100 text-[10px] uppercase tracking-wider text-slate-700">
+                <tr>
+                  <th className="border-b border-slate-300 px-2 py-2">Particulars</th>
+                  <th className="w-36 border-b border-slate-300 px-2 py-2 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                {groups.length === 0 ? (
+                  <tr>
+                    <td colSpan={2} className="px-2 py-5 text-center text-slate-500">No fees have been assessed for this term yet.</td>
+                  </tr>
+                ) : (
+                  groups.map((g) => {
+                    const subtotal = Math.round(g.lines.reduce((t, l) => t + l.amount, 0) * 100) / 100;
+                    const money = (n: number) => (n < 0 ? `−${peso(Math.abs(n))}` : peso(n));
+                    return (
+                      <React.Fragment key={g.group}>
+                        <tr className="bg-[#18392B]/[0.04]">
+                          <td className="border-b border-slate-200 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-[#18392B]">{g.group}</td>
+                          <td className="border-b border-slate-200 px-2 py-1 text-right font-mono text-[10px] font-bold text-[#18392B]">
+                            {g.lines.length > 1 ? money(subtotal) : ''}
+                          </td>
+                        </tr>
+                        {g.lines.map((l, i) => (
+                          <tr key={`${g.group}-${i}`}>
+                            <td className="border-b border-slate-200 py-1 pl-5 pr-2">
+                              <span className={l.kind === 'discount' ? 'text-emerald-800' : ''}>{l.name}</span>
+                              {l.detail && <span className="ml-1.5 text-[10px] text-slate-500">({l.detail})</span>}
+                            </td>
+                            <td className={`border-b border-slate-200 px-2 py-1 text-right font-mono ${l.amount < 0 ? 'text-emerald-800' : ''}`}>{money(l.amount)}</td>
+                          </tr>
+                        ))}
+                      </React.Fragment>
+                    );
+                  })
+                )}
+              </tbody>
+              <tfoot>
+                <tr className="bg-slate-100">
+                  <td className="px-2 py-2 text-right text-[10px] font-bold uppercase tracking-wider">
+                    Total assessment this term{totalUnits ? ` (${totalUnits} units)` : ''}
+                  </td>
+                  <td className="px-2 py-2 text-right font-mono text-[12px] font-bold text-[#18392B]">{peso(fees.total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+
+        {/* Certification and account summary */}
         <section className="grid grid-cols-1 gap-4 sm:grid-cols-[1.4fr_1fr]">
           <p className="rounded-lg border border-slate-300 p-3 text-[11px] leading-relaxed text-slate-700">
             This is to certify that <strong>{name || 'the student named above'}</strong> is{' '}
@@ -163,11 +228,11 @@ export const CertificateOfRegistration: React.FC<{ student: StudentProfile; id?:
             regulations of the College.
           </p>
           <table className="w-full self-start rounded-lg border border-slate-300 text-[11px]">
-            <caption className="bg-[#18392B] px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-white">Assessment summary</caption>
+            <caption className="bg-[#18392B] px-3 py-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-white">Account summary</caption>
             <tbody>
               <tr className="border-b border-slate-200">
                 <td className="px-3 py-1.5 text-slate-600">Assessment this term</td>
-                <td className="px-3 py-1.5 text-right font-mono font-semibold">{peso(account.termAssessment)}</td>
+                <td className="px-3 py-1.5 text-right font-mono font-semibold">{peso(fees.total)}</td>
               </tr>
               {account.previousBalance > 0 && (
                 <tr className="border-b border-slate-200">
@@ -176,12 +241,12 @@ export const CertificateOfRegistration: React.FC<{ student: StudentProfile; id?:
                 </tr>
               )}
               <tr className="border-b border-slate-200">
-                <td className="px-3 py-1.5 text-slate-600">Payments received</td>
-                <td className="px-3 py-1.5 text-right font-mono font-semibold">{peso(account.paymentsThisTerm)}</td>
+                <td className="px-3 py-1.5 text-slate-600">Less: payments received</td>
+                <td className="px-3 py-1.5 text-right font-mono font-semibold">−{peso(hasRecord ? account.paymentsThisTerm : 0)}</td>
               </tr>
               <tr>
-                <td className="px-3 py-1.5 font-bold">Balance</td>
-                <td className="px-3 py-1.5 text-right font-mono font-bold text-[#18392B]">{peso(account.balance)}</td>
+                <td className="px-3 py-1.5 font-bold">Balance due</td>
+                <td className="px-3 py-1.5 text-right font-mono font-bold text-[#18392B]">{peso(balance)}</td>
               </tr>
             </tbody>
           </table>
