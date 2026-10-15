@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, FileSpreadsheet, Printer, RefreshCcw, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileEdit, FileSpreadsheet, Printer, RefreshCcw, X } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import {
   classListFor,
@@ -20,14 +20,14 @@ import {
   setSheetStatus,
   sheetIssues,
   sheetStageLabel,
-  subjectsWithoutSection,
-  instructorForSection,
   useGradeAmendments,
   useGradeSheets,
   type SheetIssues,
 } from '@/lib/grades';
 import { termKeyOf, termLabel } from '@/lib/reenrollment';
 import { GradeSheetDocument } from '@/components/grades/GradeSheetDocument';
+import { GradeSheetEditor } from '@/components/grades/GradeSheetEditor';
+import { GradeSetupPanel } from './GradeSetupPanel';
 import { printDocument } from '@/components/enrollment/CertificateOfRegistration';
 import type { AcademicPeriod, GradeAmendment, GradeSheet, GradingScale } from '@/lib/types';
 
@@ -47,7 +47,7 @@ const STAGE_STYLE: Record<string, string> = {
 
 // Admin → Grade Management: every class's grade sheet for a term, from preparation to publication.
 export const AdminGradesTab: React.FC = () => {
-  const { academicPeriods, classSections, instructors, students, enrollmentSystemConfig, canManageCurriculum, currentAdminUser, addToast } = usePCM();
+  const { academicPeriods, classSections, instructors, students, enrollmentSystemConfig, canManageCurriculum, currentAdminUser, addToast, navigateTo } = usePCM();
   const scale = gradingScaleOf(enrollmentSystemConfig);
   const sortedTerms = useMemo(
     // Current term first, then active, then closed (most recent first); upcoming terms last.
@@ -60,17 +60,17 @@ export const AdminGradesTab: React.FC = () => {
   const [termId, setTermId] = useState('');
   const term = sortedTerms.find((p) => p.id === termId) || sortedTerms[0];
   const termKey = term ? termKeyOf(term.semester, term.academicYear) : '';
-  const { sheets, loaded, error } = useGradeSheets({ termKey: termKey || undefined });
+  const { sheets, loaded, error, errorCode } = useGradeSheets({ termKey: termKey || undefined });
   const amendments = useGradeAmendments({ termKey: termKey || undefined });
   const [filters, setFilters] = useState({ professor: '', subject: '', program: '', yearLevel: '', stage: '' });
   const [reviewId, setReviewId] = useState<string | null>(null);
+  // Sheet the Registrar is entering grades for, on the professor's behalf.
+  const [editId, setEditId] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [prepareNote, setPrepareNote] = useState<string[]>([]);
   const actor = currentAdminUser?.name || 'Registrar';
 
   const termSections = term ? sectionsForTerm(classSections, term) : [];
-  const unsheeted = termSections.filter((s) => !sheets.some((x) => x.sectionId === s.id));
-  const noSection = term ? subjectsWithoutSection(students, term, termSections) : [];
   const professors = Array.from(new Set(sheets.map((s) => s.instructorName))).sort();
   const programs = Array.from(new Set(sheets.flatMap((s) => s.students.map((x) => x.program)).filter(Boolean))).sort();
   const yearLevels = Array.from(new Set(sheets.flatMap((s) => s.students.map((x) => x.yearLevel)).filter(Boolean))).sort();
@@ -110,6 +110,14 @@ export const AdminGradesTab: React.FC = () => {
 
   const review = sheets.find((s) => s.id === reviewId) || null;
   const select = 'rounded-lg border border-slate-300 bg-white p-2 text-xs';
+  const editing = sheets.find((s) => s.id === editId) || null;
+  if (editing) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <GradeSheetEditor sheet={editing} scale={scale} period={term} staff={{ name: actor }} backLabel="Grade Management" onBack={() => setEditId(null)} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
@@ -117,7 +125,10 @@ export const AdminGradesTab: React.FC = () => {
         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="flex items-center gap-2 font-serif text-lg font-bold text-[#18392B]"><ClipboardCheck className="h-5 w-5 text-[#588B76]" /> Grade Management</h2>
-            <p className="text-xs text-slate-500">Professors enter grades in the Faculty Portal; grades become official only when finalized here.</p>
+            <p className="text-xs text-slate-500">
+              Professors enter grades in the Faculty Portal (top bar → Faculty) and submit them; you review, approve, finalize and publish them here. You can
+              also enter grades for a professor with “Enter grades”.
+            </p>
           </div>
           <div className="flex flex-wrap items-end gap-2">
             <label className="text-xs">
@@ -129,13 +140,22 @@ export const AdminGradesTab: React.FC = () => {
               </select>
             </label>
             {canManageCurriculum && term && !term.closedAt && (
-              <button type="button" onClick={prepare} disabled={preparing} className="inline-flex items-center gap-1.5 rounded-lg bg-[#18392B] px-3 py-2 text-xs font-bold text-white hover:bg-[#588B76] disabled:opacity-50">
+              <button type="button" onClick={prepare} disabled={preparing} className="inline-flex items-center gap-1.5 rounded-lg border border-[#18392B] px-3 py-2 text-xs font-bold text-[#18392B] hover:bg-emerald-50 disabled:opacity-50">
                 <RefreshCcw className="h-3.5 w-3.5" /> {preparing ? 'Preparing…' : 'Prepare / refresh grade sheets'}
               </button>
             )}
+            <button type="button" onClick={() => navigateTo('faculty-portal')} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200">
+              <ExternalLink className="h-3.5 w-3.5" /> Faculty Portal
+            </button>
           </div>
         </div>
 
+        {errorCode === 'permission-denied' && (
+          <p className="flex gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+            <AlertTriangle className="h-4 w-4 shrink-0" /> Grade sheets are blocked by the database security rules. The updated Firestore rules (from the
+            grade submission update) still need to be published to Firebase; until then no one can create or open grade sheets.
+          </p>
+        )}
         {!scale && (
           <p className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
             <AlertTriangle className="h-4 w-4 shrink-0" /> Set PCM&apos;s grading scale first (Enrollment &amp; Records → System Governance → Grading Scale). Professors cannot enter grades until then.
@@ -166,27 +186,17 @@ export const AdminGradesTab: React.FC = () => {
           </button>
         )}
 
-        {(unsheeted.length > 0 || noSection.length > 0 || prepareNote.length > 0) && (
+        {prepareNote.length > 0 && (
           <div className="space-y-1 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950">
             <p className="font-bold">Needs attention</p>
             <ul className="list-disc space-y-0.5 pl-5">
-              {unsheeted.map((s) => {
-                const ins = instructorForSection(s, instructors);
-                return (
-                  <li key={s.id}>
-                    {s.subjectCode} {s.sectionName}: no grade sheet yet
-                    {!ins ? ' — no professor assigned' : !ins.email ? ` — ${ins.fullName} has no email in Faculty Load` : ' — press Prepare'}
-                  </li>
-                );
-              })}
-              {noSection.map((x) => (
-                <li key={x.code}>{x.code} {x.title}: {x.students} student{x.students === 1 ? '' : 's'} enrolled but no class section (add one in Class Schedules).</li>
-              ))}
               {prepareNote.map((n) => <li key={n}>{n}</li>)}
             </ul>
           </div>
         )}
       </div>
+
+      {term && !term.closedAt && canManageCurriculum && <GradeSetupPanel term={term} sheets={sheets} onPrepare={prepare} preparing={preparing} />}
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
         <div className="flex flex-wrap gap-2">
@@ -250,7 +260,14 @@ export const AdminGradesTab: React.FC = () => {
                     </td>
                     <td className="p-2.5 text-slate-500">{fmt(s.updatedAt || s.savedAt || s.createdAt)}</td>
                     <td className="p-2.5 text-right">
-                      <button type="button" onClick={() => setReviewId(s.id)} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold hover:bg-slate-200">Review</button>
+                      <span className="inline-flex gap-1.5">
+                        {canManageCurriculum && scale && ['Draft', 'Returned for Correction'].includes(s.status) && (
+                          <button type="button" onClick={() => setEditId(s.id)} className="inline-flex items-center gap-1 rounded-lg bg-[#18392B] px-2.5 py-1 font-semibold text-white hover:bg-[#588B76]">
+                            <FileEdit className="h-3.5 w-3.5" /> Enter grades
+                          </button>
+                        )}
+                        <button type="button" onClick={() => setReviewId(s.id)} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold hover:bg-slate-200">Review</button>
+                      </span>
                     </td>
                   </tr>
                 );

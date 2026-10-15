@@ -208,10 +208,11 @@ export function subjectsWithoutSection(students: StudentProfile[], term: Academi
 // ---------------------------------------------------------------------------
 
 /** Grade sheets of a term (staff) or of a professor (by verified email). */
-export function useGradeSheets(filter: { termKey?: string; instructorEmail?: string; all?: boolean }): { sheets: GradeSheet[]; loaded: boolean; error: string } {
+export function useGradeSheets(filter: { termKey?: string; instructorEmail?: string; all?: boolean }): { sheets: GradeSheet[]; loaded: boolean; error: string; errorCode: string } {
   const [sheets, setSheets] = useState<GradeSheet[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState('');
+  const [errorCode, setErrorCode] = useState('');
   const { termKey, instructorEmail, all } = filter;
   useEffect(() => {
     setLoaded(false);
@@ -229,15 +230,17 @@ export function useGradeSheets(filter: { termKey?: string; instructorEmail?: str
         setSheets(snap.docs.map((d) => ({ ...(d.data() as GradeSheet), id: d.id })).sort((a, b) => a.subjectCode.localeCompare(b.subjectCode) || a.sectionName.localeCompare(b.sectionName)));
         setLoaded(true);
         setError('');
+        setErrorCode('');
       },
       (err) => {
         console.warn('gradeSheets', err);
         setError('Grade sheets could not be loaded.');
+        setErrorCode(String((err as { code?: string })?.code || ''));
         setLoaded(true);
       }
     );
   }, [termKey, instructorEmail, all]);
-  return { sheets, loaded, error };
+  return { sheets, loaded, error, errorCode };
 }
 
 export function useGradeAmendments(filter: { termKey?: string; requestedByUid?: string }): GradeAmendment[] {
