@@ -65,6 +65,7 @@ export const AcademicTermModal: React.FC<Props> = ({ term, existing, onCancel, o
       ['Enrollment', draft.enrollmentStartDate, draft.enrollmentEndDate],
       ['Pre-enlistment', draft.preEnlistmentStartDate, draft.preEnlistmentEndDate],
       ['Add/Drop', draft.addDropStartDate, draft.addDropEndDate],
+      ['Grade submission', draft.gradeSubmissionStart, draft.gradeSubmissionDeadline],
     ];
     for (const [label, start, end] of ranges) {
       if (start && end && end < start) return `${label} end date must be on or after its start date.`;
@@ -170,6 +171,21 @@ export const AcademicTermModal: React.FC<Props> = ({ term, existing, onCancel, o
         {windowRow('Enrollment window', 'enrollmentStatus', 'enrollmentStartDate', 'enrollmentEndDate')}
         {windowRow('Pre-enlistment window', 'preEnlistmentStatus', 'preEnlistmentStartDate', 'preEnlistmentEndDate')}
         {windowRow('Adding & dropping window', 'addDropStatus', 'addDropStartDate', 'addDropEndDate')}
+
+        <fieldset className="rounded-xl border border-slate-200 p-3 space-y-2">
+          <legend className="px-1 text-xs font-bold text-[#18392B]">Grade submission (Faculty Portal)</legend>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <label className="block">
+              <span className={label}>Opens</span>
+              <input type="date" value={draft.gradeSubmissionStart || ''} onChange={(e) => set('gradeSubmissionStart', e.target.value)} className={input} />
+            </label>
+            <label className="block">
+              <span className={label}>Deadline</span>
+              <input type="date" value={draft.gradeSubmissionDeadline || ''} onChange={(e) => set('gradeSubmissionDeadline', e.target.value)} className={input} />
+            </label>
+          </div>
+          <p className="text-[11px] text-slate-500">Sheets not submitted by the deadline are marked overdue. The term is never closed automatically.</p>
+        </fieldset>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <label className="block">

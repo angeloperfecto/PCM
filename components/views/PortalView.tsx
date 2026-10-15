@@ -536,31 +536,64 @@ export const PortalView: React.FC = () => {
                 <h3 className="font-serif text-xl font-bold text-[#18392B]">
                   Term Grades & Academic Evaluation
                 </h3>
-                <p className="text-xs text-slate-500">Official grades posted by the Dean of Academic Affairs.</p>
+                <p className="text-xs text-slate-500">Grades appear once the Registrar finalizes and publishes your professor&apos;s grade sheet.</p>
               </div>
-              <span className="text-xs font-mono font-bold text-[#18392B] bg-amber-100 px-3 py-1 rounded border border-amber-300">
-                Dean&apos;s Honor List Standing
-              </span>
+              {studentProfile.academicStatus && (
+                <span className="text-xs font-mono font-bold text-[#18392B] bg-amber-100 px-3 py-1 rounded border border-amber-300">
+                  {studentProfile.academicStatus}
+                </span>
+              )}
             </div>
+            {(studentProfile.courses || []).length === 0 && (
+              <p className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">No subjects for the current term.</p>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {(studentProfile.courses || []).map((c) => (
                 <div key={c.id || c.code} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
                   <div className="flex justify-between items-center">
                     <span className="font-mono text-xs font-bold text-[#588B76]">{c.code}</span>
-                    <span className="font-mono font-extrabold text-base text-[#18392B] bg-slate-100 px-2 py-0.5 rounded">
-                      {c.finalGrade || 'In Progress'}
+                    <span className={`font-mono font-extrabold px-2 py-0.5 rounded ${c.finalGrade ? 'text-base text-[#18392B] bg-slate-100' : 'text-[11px] text-slate-500 bg-slate-50'}`}>
+                      {c.finalGrade || 'Not yet released'}
                     </span>
                   </div>
                   <h4 className="font-serif text-sm font-bold text-[#18392B]">{c.title}</h4>
                   <div className="pt-2 border-t border-slate-100 flex justify-between text-xs text-slate-500 font-mono">
-                    <span>Midterm: {c.midtermGrade || '1.25'}</span>
                     <span>Units: {c.units}</span>
-                    <span className="text-emerald-700 font-bold">{c.status || 'Completed'}</span>
+                    <span className={c.finalGrade ? 'text-emerald-700 font-bold' : 'text-slate-500'}>
+                      {c.finalGrade ? `${c.gradeRemark || c.status}${c.gradeStatus === 'Published' ? ' • Published' : ''}` : 'Pending'}
+                    </span>
                   </div>
                 </div>
               ))}
             </div>
+
+            {(studentProfile.subjectHistory || []).length > 0 && (
+              <div className="bg-white rounded-xl border border-slate-200 shadow-xs p-5 space-y-2">
+                <h4 className="font-serif text-base font-bold text-[#18392B]">Academic history</h4>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[560px] text-left text-xs">
+                    <thead className="bg-slate-50 text-[10px] uppercase text-slate-500">
+                      <tr><th className="p-2">Term</th><th className="p-2">Code</th><th className="p-2">Subject</th><th className="p-2">Units</th><th className="p-2">Grade</th><th className="p-2">Status</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {[...(studentProfile.subjectHistory || [])]
+                        .sort((a, b) => String(b.academicYear).localeCompare(String(a.academicYear)) || String(b.semester).localeCompare(String(a.semester)))
+                        .map((h, i) => (
+                          <tr key={`${h.code}-${i}`}>
+                            <td className="p-2 text-slate-600">{h.semester}, AY {h.academicYear}</td>
+                            <td className="p-2 font-mono font-bold text-[#18392B]">{h.code}</td>
+                            <td className="p-2">{h.title}</td>
+                            <td className="p-2 font-mono">{h.units}</td>
+                            <td className="p-2 font-mono font-bold">{h.grade !== '' && h.grade != null ? String(h.grade) : '—'}</td>
+                            <td className="p-2">{h.status}</td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
           </div>
         )}
 

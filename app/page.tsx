@@ -23,6 +23,7 @@ import { ContactView } from '@/components/views/ContactView';
 import { ApplicationView } from '@/components/views/ApplicationView';
 import { PortalView } from '@/components/views/PortalView';
 import { AdminView } from '@/components/views/AdminView';
+import { FacultyPortalView } from '@/components/views/FacultyPortalView';
 import { DonationView } from '@/components/views/DonationView';
 
 // Modals
@@ -64,6 +65,7 @@ const AppContent: React.FC = () => {
         {currentSection === 'donation' && <DonationView />}
         {currentSection === 'portal' && <PortalView />}
         {currentSection === 'admin' && <AdminView />}
+        {currentSection === 'faculty-portal' && <FacultyPortalView />}
       </main>
 
       {/* Institutional Footer (hidden on Admin CMS) */}

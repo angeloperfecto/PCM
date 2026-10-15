@@ -4,12 +4,21 @@ import React, { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, Lock, X } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import { planTermClose, reenrollmentRules, termKeyOf, termLabel } from '@/lib/reenrollment';
+import {
+  gradingScaleOf,
+  sectionsForTerm,
+  sheetIssues,
+  sheetStageLabel,
+  subjectsWithoutSection,
+  useGradeAmendments,
+  useGradeSheets,
+} from '@/lib/grades';
 import type { AcademicPeriod } from '@/lib/types';
 
 // Closing a term: preview what moves into each student's academic history, confirm, then
 // activate the next term so returning students can re-enroll.
 export const CloseTermModal: React.FC<{ period: AcademicPeriod; onClose: () => void }> = ({ period, onClose }) => {
-  const { students, enrollments, academicPeriods, enrollmentSystemConfig, closeAcademicTerm, setCurrentAcademicPeriod, updateAcademicPeriod, canManageTerms } = usePCM();
+  const { students, enrollments, academicPeriods, enrollmentSystemConfig, classSections, closeAcademicTerm, setCurrentAcademicPeriod, updateAcademicPeriod, canManageTerms } = usePCM();
   const rules = reenrollmentRules(enrollmentSystemConfig);
   const label = termLabel(period.semester, period.academicYear);
   const [confirmed, setConfirmed] = useState(false);
@@ -18,6 +27,27 @@ export const CloseTermModal: React.FC<{ period: AcademicPeriod; onClose: () => v
   const [nextId, setNextId] = useState('');
   const [openEnrollment, setOpenEnrollment] = useState(true);
   const [activated, setActivated] = useState('');
+  const [useException, setUseException] = useState(false);
+  const [exceptionReason, setExceptionReason] = useState('');
+
+  // Grade checklist: every class's grades must be finalized and published before the term closes,
+  // unless an exception is documented (the open items are kept with the term for follow-up).
+  const termKeyForGrades = termKeyOf(period.semester, period.academicYear);
+  const { sheets: termSheets, loaded: sheetsLoaded } = useGradeSheets({ termKey: termKeyForGrades });
+  const termAmendments = useGradeAmendments({ termKey: termKeyForGrades });
+  const gradeScale = gradingScaleOf(enrollmentSystemConfig);
+  const termSections = sectionsForTerm(classSections, period);
+  const gradeItems: string[] = [
+    ...termSheets.filter((x) => !(x.status === 'Finalized' && x.publishedAt)).map((x) => `${x.subjectCode} ${x.sectionName} (${x.instructorName}): ${sheetStageLabel(x)}`),
+    ...termSections.filter((x) => !termSheets.some((g) => g.sectionId === x.id)).map((x) => `${x.subjectCode} ${x.sectionName}: no grade sheet`),
+    ...subjectsWithoutSection(students, period, termSections).map((x) => `${x.code}: ${x.students} student(s) with no class section or grade sheet`),
+    ...termAmendments.filter((a) => a.status === 'Pending').map((a) => `Pending grade change: ${a.studentName}, ${a.subjectCode}`),
+  ];
+  const incompleteGrades = termSheets.flatMap((x) => {
+    const i = sheetIssues(x, gradeScale);
+    return [...i.missing, ...i.incomplete].map((id) => `${x.students.find((r) => r.studentRecordId === id)?.name || id} — ${x.subjectCode}: ${x.grades?.[id]?.grade || 'no grade'}`);
+  });
+  const gradeBlocked = gradeItems.length > 0 && (!useException || exceptionReason.trim().length < 10);
 
   const preview = useMemo(() => {
     if (rules.passingGrade == null) return null;
@@ -45,7 +75,10 @@ export const CloseTermModal: React.FC<{ period: AcademicPeriod; onClose: () => v
   const close = async () => {
     setBusy(true);
     try {
-      const result = await closeAcademicTerm(period.id);
+      const result = await closeAcademicTerm(
+        period.id,
+        gradeItems.length ? { reason: exceptionReason, unresolved: [...gradeItems, ...incompleteGrades.map((x) => `Incomplete grade: ${x}`)] } : undefined
+      );
       if (result) {
         setDone(result);
         setNextId(nextTerms.find((p) => p.status === 'Upcoming')?.id || nextTerms[0]?.id || '');
@@ -148,6 +181,38 @@ export const CloseTermModal: React.FC<{ period: AcademicPeriod; onClose: () => v
                         Queue for you to approve or decline.
                       </p>
                     )}
+                    <div className={`space-y-2 rounded-xl border p-3 ${gradeItems.length ? 'border-rose-200 bg-rose-50' : 'border-emerald-200 bg-emerald-50'}`} data-testid="grade-checklist">
+                      <p className="font-bold text-slate-900">Grade checklist</p>
+                      {!sheetsLoaded ? (
+                        <p>Checking grade sheets…</p>
+                      ) : gradeItems.length === 0 ? (
+                        <p className="text-emerald-900">All {termSheets.length} grade sheet{termSheets.length === 1 ? ' is' : 's are'} finalized and published.</p>
+                      ) : (
+                        <>
+                          <p className="text-rose-900">Not finished — closing now would leave these grades unofficial:</p>
+                          <ul className="max-h-32 list-disc overflow-y-auto pl-5 text-rose-900">
+                            {gradeItems.map((x) => <li key={x}>{x}</li>)}
+                          </ul>
+                          <label className="flex items-start gap-2 font-semibold text-slate-800">
+                            <input type="checkbox" className="mt-0.5" checked={useException} onChange={(e) => setUseException(e.target.checked)} />
+                            Close anyway under a documented exception (the open items are kept with the term for follow-up)
+                          </label>
+                          {useException && (
+                            <textarea
+                              rows={2}
+                              value={exceptionReason}
+                              onChange={(e) => setExceptionReason(e.target.value)}
+                              placeholder="Authorization and reason (e.g. approved by the Academic Dean on …)"
+                              aria-label="Exception authorization"
+                              className="w-full rounded-lg border border-rose-300 p-2"
+                            />
+                          )}
+                        </>
+                      )}
+                      {incompleteGrades.length > 0 && (
+                        <p className="text-slate-700">Incomplete grades to follow up ({incompleteGrades.length}): {incompleteGrades.slice(0, 6).join('; ')}{incompleteGrades.length > 6 ? '…' : ''}</p>
+                      )}
+                    </div>
                     <label className="flex items-start gap-2 font-semibold text-slate-800">
                       <input type="checkbox" checked={confirmed} onChange={(e) => setConfirmed(e.target.checked)} className="mt-0.5" />
                       I have reviewed this and want to close {label}. This cannot be undone.
@@ -201,7 +266,7 @@ export const CloseTermModal: React.FC<{ period: AcademicPeriod; onClose: () => v
             <button
               type="button"
               onClick={close}
-              disabled={!canManageTerms || !confirmed || busy || rules.passingGrade == null}
+              disabled={!canManageTerms || !confirmed || busy || rules.passingGrade == null || !sheetsLoaded || gradeBlocked}
               title={canManageTerms ? undefined : 'Only the Registrar or an Administrator can close a term'}
               className="rounded-lg bg-rose-700 px-4 py-2 text-xs font-bold text-white hover:bg-rose-800 disabled:opacity-50"
             >

@@ -33,6 +33,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { programForStudent, subjectsForProgram } from '@/lib/curriculum';
 import { AdmissionDocumentsPanel, toStudentRequirementItems, useStudentAdmissionDocuments } from '@/components/enrollment/AdmissionDocumentsPanel';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { EditStudentInfoForm } from './EditStudentInfoForm';
@@ -51,6 +52,8 @@ export const StudentProfileModule: React.FC = () => {
     updateStudentProfile,
     updateStudentRequirementStatus,
     addToast,
+    programs,
+    curriculumSubjects,
   } = usePCM();
 
   const [activeSubView, setActiveSubView] = useState<
@@ -114,12 +117,12 @@ export const StudentProfileModule: React.FC = () => {
   const subjectsList = studentProfile.subjectHistory || [];
 
   // Completed units calculation
-  const completedUnits = (studentProfile.courses || [])
-    .filter((c) => c.status === 'Completed' || c.finalGrade)
-    .reduce((sum, c) => sum + (c.units || 0), 64);
-
-  const totalCurriculumUnits = 128;
-  const progressPercent = Math.min(100, Math.round((completedUnits / totalCurriculumUnits) * 100));
+  // Units earned (passed subjects in the academic history) against the program's curriculum.
+  const completedUnits = Number(studentProfile.totalUnitsEarned) || 0;
+  const totalCurriculumUnits = subjectsForProgram(curriculumSubjects, programForStudent(programs, studentProfile))
+    .filter((s) => s.status !== 'Inactive')
+    .reduce((t, s) => t + (Number(s.units) || 0), 0);
+  const progressPercent = totalCurriculumUnits ? Math.min(100, Math.round((completedUnits / totalCurriculumUnits) * 100)) : 0;
 
   // Payment numbers
   const account = accountSummary(studentProfile as any);
@@ -274,7 +277,7 @@ export const StudentProfileModule: React.FC = () => {
               Curriculum Progress — {studentProfile.degreeProgram || studentProfile.program}
             </span>
             <span className="font-mono font-bold text-[#18392B]">
-              {completedUnits} / {totalCurriculumUnits} Units Completed ({progressPercent}%)
+              {totalCurriculumUnits ? `${completedUnits} / ${totalCurriculumUnits} Units Completed (${progressPercent}%)` : `${completedUnits} Units Completed`}
             </span>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
@@ -854,15 +857,15 @@ export const StudentProfileModule: React.FC = () => {
                     <td className="p-3.5 font-semibold text-slate-900">{c.title}</td>
                     <td className="p-3.5 font-mono text-center">{c.units}u</td>
                     <td className="p-3.5 font-mono text-center font-bold text-slate-700">
-                      {c.midtermGrade || '1.25'}
+                      {c.midtermGrade || '—'}
                     </td>
                     <td className="p-3.5 font-mono text-center font-bold text-emerald-700 text-sm">
-                      {c.finalGrade || '1.25'}
+                      {c.finalGrade || <span className="text-[11px] font-semibold text-slate-400">Not yet released</span>}
                     </td>
-                    <td className="p-3.5 text-slate-600">{c.instructor || 'Dr. Benjamin Villanueva'}</td>
+                    <td className="p-3.5 text-slate-600">{c.instructor || 'TBA'}</td>
                     <td className="p-3.5 text-center">
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        {c.status || 'Passed'}
+                        {c.finalGrade ? c.gradeRemark || c.status : 'Pending'}
                       </span>
                     </td>
                   </tr>

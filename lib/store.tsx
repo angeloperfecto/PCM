@@ -135,6 +135,7 @@ export const ALL_VALID_SECTIONS: NavSection[] = [
   'apply',
   'portal',
   'admin',
+  'faculty-portal',
   'migration-report',
 ];
 import {
@@ -522,7 +523,10 @@ interface PCMContextType {
 
   // Academic term closing and returning-student re-enrollment
   canManageTerms: boolean;
-  closeAcademicTerm: (periodId: string) => Promise<{ students: number; subjects: number; withoutGrade: number } | null>;
+  closeAcademicTerm: (
+    periodId: string,
+    exception?: { reason: string; unresolved: string[] }
+  ) => Promise<{ students: number; subjects: number; withoutGrade: number } | null>;
   submitReenrollment: (input: {
     term: AcademicPeriod;
     yearLevel: string;
@@ -5727,7 +5731,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Closes a term: each enrolled student's subjects and grades go into their academic history
   // (nothing is deleted), their term is recorded, and they become eligible to re-enroll.
-  const closeAcademicTerm = async (periodId: string): Promise<{ students: number; subjects: number; withoutGrade: number } | null> => {
+  const closeAcademicTerm = async (
+    periodId: string,
+    exception?: { reason: string; unresolved: string[] }
+  ): Promise<{ students: number; subjects: number; withoutGrade: number } | null> => {
     if (!canManageTerms) {
       addToast('error', 'Permission denied', 'Only the Registrar or an Administrator can close an academic term.');
       return null;
@@ -5768,7 +5775,10 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addDropStatus: 'Closed',
       closedAt: now,
       closedBy: actor,
-      closingSummary: summary,
+      // Unresolved grade items closed under a documented exception are kept for follow-up.
+      closingSummary: exception
+        ? { ...summary, exception: { reason: exception.reason.trim(), authorizedBy: actor, at: now, unresolved: exception.unresolved } }
+        : summary,
       updatedAt: now,
     };
     if (!(await safeSetDoc(doc(db, 'academicPeriods', periodId), cleanFirestoreData(periodUpdates), { merge: true }))) return null;
@@ -6552,6 +6562,20 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!target) {
       studentNotFound();
       return false;
+    }
+    // Subjects with a grade sheet get their grades only through the professor's sheet (review,
+    // approval, finalization) or an approved amendment — never by direct encoding.
+    try {
+      const t = parseTerm(target.currentSemester);
+      if (t.semester && t.academicYear) {
+        const found = await getDocs(query(collection(db, 'gradeSheets'), where('termKey', '==', termKeyOf(t.semester, t.academicYear)), where('subjectCode', '==', courseCode)));
+        if (found.docs.some((d) => ((d.data().roster as string[]) || []).includes(target.id))) {
+          addToast('error', 'Grade comes from the grade sheet', `${courseCode} has a professor's grade sheet this term. Enter or correct the grade in Grade Management (review, or a grade change request once finalized).`);
+          return false;
+        }
+      }
+    } catch (e) {
+      console.warn('grade sheet check', e);
     }
     const updatedCourses = (target.courses || []).map((c) =>
       c.code === courseCode

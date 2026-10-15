@@ -342,7 +342,11 @@ export function planTermClose(
     const raw = String(c.finalGrade ?? '').trim();
     const num = Number(raw);
     let status: StudentSubjectHistory['status'];
-    if (raw && !Number.isNaN(num) && num > 0) status = num <= passingGrade ? 'Passed' : 'Failed';
+    const remark = String(c.gradeRemark || '').trim().toLowerCase();
+    if (raw && remark) {
+      // A published grade carries its remark from PCM's grading scale.
+      status = remark === 'passed' ? 'Passed' : remark === 'failed' ? 'Failed' : 'Incomplete';
+    } else if (raw && !Number.isNaN(num) && num > 0) status = num <= passingGrade ? 'Passed' : 'Failed';
     else {
       status = 'Incomplete';
       if (!raw) withoutGrade += 1;
