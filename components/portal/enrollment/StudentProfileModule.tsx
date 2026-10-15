@@ -40,7 +40,7 @@ import { EditStudentInfoForm } from './EditStudentInfoForm';
 import { accountSummary, ledgerPayments, parseTerm } from '@/lib/studentLedger';
 import { StudentProfile, StudentRequirementItem } from '@/lib/types';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
-import { studentRequirementsView, calculateGPAFromGrades } from '@/lib/studentDefaults';
+import { studentRequirementsView, academicStanding } from '@/lib/studentDefaults';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { uploadStudentFile } from '@/lib/storageService';
 import { isValidImageSrc } from '@/lib/utils';
@@ -118,7 +118,8 @@ export const StudentProfileModule: React.FC = () => {
 
   // Completed units calculation
   // Units earned (passed subjects in the academic history) against the program's curriculum.
-  const completedUnits = Number(studentProfile.totalUnitsEarned) || 0;
+  const standing = academicStanding(studentProfile);
+  const completedUnits = standing.unitsEarned;
   const totalCurriculumUnits = subjectsForProgram(curriculumSubjects, programForStudent(programs, studentProfile))
     .filter((s) => s.status !== 'Inactive')
     .reduce((t, s) => t + (Number(s.units) || 0), 0);
@@ -241,7 +242,7 @@ export const StudentProfileModule: React.FC = () => {
 
                 <span className="text-xs font-mono font-bold text-emerald-900 bg-emerald-100/70 px-2.5 py-1 rounded-lg border border-emerald-300 flex items-center gap-1">
                   <Award className="w-3.5 h-3.5 text-emerald-700" />
-                  GPA: {studentProfile.gpa ? studentProfile.gpa.toFixed(2) : '1.25'}
+                  GPA: {standing.gpa ? standing.gpa.toFixed(2) : '—'}
                 </span>
               </div>
             </div>
@@ -831,7 +832,7 @@ export const StudentProfileModule: React.FC = () => {
               <div className="bg-slate-100 px-3 py-1.5 rounded-xl text-center">
                 <span className="text-[10px] text-slate-500 block">Scholastic Average</span>
                 <strong className="font-mono text-base text-[#18392B]">
-                  {studentProfile.gpa ? studentProfile.gpa.toFixed(2) : calculateGPAFromGrades(subjectsList).toFixed(2)}
+                  {standing.gpa ? standing.gpa.toFixed(2) : '—'}
                 </strong>
               </div>
             </div>
