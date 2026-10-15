@@ -34,6 +34,7 @@ import {
   Flame,
   Quote,
   Contact,
+  ClipboardCheck,
 } from 'lucide-react';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 import { isValidImageSrc } from '@/lib/utils';
@@ -56,6 +57,7 @@ export type AdminTabType =
   | 'youtube'
   | 'applications'
   | 'admissionDirectory'
+  | 'grades'
   | 'enrollments'
   | 'donations'
   | 'users';
@@ -154,6 +156,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           // Official student records (includes students enrolled through Admissions Review).
           count: students.length,
           highlight: true,
+        },
+        {
+          id: 'grades',
+          label: 'Grade Management',
+          icon: ClipboardCheck,
         },
         {
           id: 'programs',

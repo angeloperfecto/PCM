@@ -461,6 +461,66 @@ service cloud.firestore {
       allow update, delete: if isEnrollmentOffice();
     }
 
+    // ---------------------------------------------------------------------------
+    // Grades: professors' grade sheets and grade amendments.
+    // ---------------------------------------------------------------------------
+
+    // Registrar, Academic Admin and Admins review, approve, finalize and publish grades.
+    function isGradeStaff() {
+      return adminRole() in ['Super Admin', 'Admin', 'Registrar', 'Academic Admin'];
+    }
+
+    // The professor assigned to a grade sheet (verified Google email = the sheet's instructor email).
+    function teachesSheet(data) {
+      return verifiedEmail() != '' && data.get('instructorEmail', '') == verifiedEmail();
+    }
+
+    function gradeSheetPath(sheetId) {
+      return /databases/$(database)/documents/gradeSheets/$(sheetId);
+    }
+
+    match /gradeSheets/{id} {
+      allow read: if isGradeStaff() || isAdmin() || teachesSheet(resource.data) || (isSignedIn() && resource == null);
+      allow create, delete: if isGradeStaff();
+      allow update: if
+        // Staff run the workflow. A finalized sheet is locked: it is only published, or changed by an
+        // approved amendment (the grade change and its audit entry, written together).
+        (isGradeStaff()
+          && (resource.data.get('status', '') != 'Finalized'
+            || changedKeys().hasOnly(['publishedAt', 'publishedBy', 'updatedAt'])
+            || (changedKeys().hasOnly(['grades', 'amendmentLog', 'updatedAt'])
+              && request.resource.data.amendmentLog.size() == resource.data.get('amendmentLog', []).size() + 1
+              && getAfter(/databases/$(database)/documents/gradeAmendments/$(request.resource.data.amendmentLog[request.resource.data.amendmentLog.size() - 1].amendmentId)).data.status == 'Approved')))
+        // The assigned professor enters grades while the sheet is a draft or returned, for students on the
+        // official class list only; each save must build on the latest version.
+        || (teachesSheet(resource.data)
+          && resource.data.get('status', '') in ['Draft', 'Returned for Correction']
+          && request.resource.data.get('status', '') in ['Draft', 'Submitted']
+          && changedKeys().hasOnly(['grades', 'facultyNote', 'status', 'version', 'savedAt', 'savedBy', 'savedByUid', 'submittedAt', 'submittedBy', 'submittedByUid'])
+          && request.resource.data.version == resource.data.get('version', 0) + 1
+          && request.resource.data.grades.keys().hasOnly(resource.data.roster)
+          && request.resource.data.get('savedByUid', '') == request.auth.uid);
+    }
+
+    // Changes to finalized grades. Requested by the class's professor or grade staff with a reason;
+    // decided once by grade staff; never edited afterwards or deleted (audit trail).
+    match /gradeAmendments/{id} {
+      allow read: if isGradeStaff() || isAdmin() || (isSignedIn() && resource.data.get('requestedByUid', '') == request.auth.uid);
+      allow create: if isSignedIn()
+        && request.resource.data.get('status', '') == 'Pending'
+        && request.resource.data.get('requestedByUid', '') == request.auth.uid
+        && request.resource.data.get('reason', '').size() >= 5
+        && !request.resource.data.keys().hasAny(['decidedBy', 'decidedByUid', 'decidedAt', 'decisionRemarks'])
+        && get(gradeSheetPath(request.resource.data.sheetId)).data.get('status', '') == 'Finalized'
+        && (isGradeStaff() || teachesSheet(get(gradeSheetPath(request.resource.data.sheetId)).data));
+      allow update: if isGradeStaff()
+        && resource.data.get('status', '') == 'Pending'
+        && request.resource.data.get('status', '') in ['Approved', 'Rejected']
+        && changedKeys().hasOnly(['status', 'decidedBy', 'decidedByUid', 'decidedAt', 'decisionRemarks'])
+        && request.resource.data.get('decidedByUid', '') == request.auth.uid;
+      allow delete: if false;
+    }
+
     // Notifications to an applicant or student (recipientUid). Students may mark them read.
     match /studentNotifications/{id} {
       allow read: if isAdmin() || (isSignedIn() && resource.data.get('recipientUid', '') == request.auth.uid);

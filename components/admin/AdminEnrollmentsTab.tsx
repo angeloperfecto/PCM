@@ -23,6 +23,7 @@ import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
 import { AdmissionRequirementsCard } from './AdmissionRequirementsCard';
 import { ReenrollmentRulesCard } from './ReenrollmentRulesCard';
+import { GradingScaleCard } from './GradingScaleCard';
 import { CloseTermModal } from './CloseTermModal';
 import { ReenrollmentReviewPanel } from './ReenrollmentReviewPanel';
 import { ClassListModal, classListFor } from './ClassListModal';
@@ -1312,6 +1313,15 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                         {period.closingSummary ? ` • ${period.closingSummary.students} students, ${period.closingSummary.subjects} subjects recorded` : ''}
                       </p>
                     )}
+                    {period.closingSummary?.exception && (
+                      <details className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-900">
+                        <summary className="cursor-pointer font-semibold">Closed under an exception • {period.closingSummary.exception.unresolved.length} open item(s)</summary>
+                        <p className="mt-1">{period.closingSummary.exception.reason} — {period.closingSummary.exception.authorizedBy}</p>
+                        <ul className="mt-1 list-disc pl-4">
+                          {period.closingSummary.exception.unresolved.map((x) => <li key={x}>{x}</li>)}
+                        </ul>
+                      </details>
+                    )}
                   </div>
 
                   {period.closedAt ? (
@@ -1668,6 +1678,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
         <div className="space-y-6">
           <AdmissionRequirementsCard />
           <ReenrollmentRulesCard />
+          <GradingScaleCard />
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs space-y-4">
             <h4 className="font-serif text-lg font-bold text-[#18392B] flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-[#588B76]" />

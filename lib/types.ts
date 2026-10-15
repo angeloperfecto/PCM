@@ -14,6 +14,7 @@ export type NavSection =
   | 'apply'
   | 'portal'
   | 'admin'
+  | 'faculty-portal'
   | 'migration-report';
 
 export type ContentStatus = 'Published' | 'Draft' | 'Scheduled' | 'Unpublished' | 'Archived';
@@ -293,6 +294,10 @@ export interface StudentCourse {
   midtermGrade?: number | string;
   finalGrade?: number | string;
   status: 'In Progress' | 'Completed' | 'Enrolled' | 'Dropped';
+  /** Set when the grade comes from a finalized grade sheet (Published = visible to the student). */
+  gradeStatus?: 'Published';
+  gradeRemark?: string;
+  gradeSheetId?: string;
 }
 
 export interface PracticumEntry {
@@ -430,6 +435,127 @@ export interface ReenrollmentClearance {
   by?: string;
   at?: string;
   remarks?: string;
+}
+
+export interface GradeScaleValue {
+  /** The grade as recorded, e.g. "1.00". */
+  value: string;
+  /** Equivalent, e.g. "97–100". */
+  equivalent?: string;
+  description?: string;
+  /** Passed / Failed (from the scale). */
+  remark: string;
+}
+
+export interface GradeSpecialCode {
+  /** e.g. "INC", "DRP". */
+  code: string;
+  meaning: string;
+  /** Remark recorded with the code, e.g. "Incomplete". */
+  remark: string;
+  /** True when the code means the subject is not yet complete. */
+  incomplete: boolean;
+}
+
+export interface GradingScale {
+  values: GradeScaleValue[];
+  specialCodes: GradeSpecialCode[];
+  /** Professors may submit a sheet with blank grades (each must be explained). */
+  allowIncompleteSubmission: boolean;
+  /** Finalizing a grade sheet also publishes the grades to students. */
+  publishOnFinalize: boolean;
+}
+
+export type GradeSheetStatus = 'Draft' | 'Submitted' | 'Under Review' | 'Approved' | 'Returned for Correction' | 'Finalized';
+
+export interface GradeRosterStudent {
+  studentRecordId: string;
+  studentId: string;
+  name: string;
+  yearLevel: string;
+  program: string;
+}
+
+export interface GradeEntry {
+  grade: string;
+  note?: string;
+}
+
+export interface GradeAmendmentLogEntry {
+  amendmentId: string;
+  studentRecordId: string;
+  studentId: string;
+  previousGrade: string;
+  newGrade: string;
+  reason: string;
+  requestedBy: string;
+  approvedBy: string;
+  approvedAt: string;
+}
+
+/** One class (section) of one term: its roster and grades. gradeSheets/{termKey}__{sectionId}. */
+export interface GradeSheet {
+  id: string;
+  termKey: string;
+  academicYear: string;
+  semester: string;
+  sectionId: string;
+  sectionName: string;
+  subjectCode: string;
+  subjectTitle: string;
+  units: number;
+  instructorId: string;
+  instructorName: string;
+  instructorEmail: string;
+  /** studentRecordIds on the official class list (grades are keyed by these). */
+  roster: string[];
+  students: GradeRosterStudent[];
+  grades: Record<string, GradeEntry>;
+  status: GradeSheetStatus;
+  /** Increases on every professor save; a stale save is refused. */
+  version: number;
+  facultyNote?: string;
+  savedAt?: string;
+  savedBy?: string;
+  savedByUid?: string;
+  submittedAt?: string;
+  submittedBy?: string;
+  submittedByUid?: string;
+  reviewStartedAt?: string;
+  reviewedBy?: string;
+  reviewRemarks?: string;
+  returnedAt?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  finalizedAt?: string;
+  finalizedBy?: string;
+  publishedAt?: string;
+  publishedBy?: string;
+  amendmentLog?: GradeAmendmentLogEntry[];
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+/** A change to a finalized grade: requested with a reason, approved by grade staff. Never deleted. */
+export interface GradeAmendment {
+  id: string;
+  sheetId: string;
+  termKey: string;
+  subjectCode: string;
+  studentRecordId: string;
+  studentId: string;
+  studentName: string;
+  previousGrade: string;
+  newGrade: string;
+  reason: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  requestedBy: string;
+  requestedByUid: string;
+  requestedAt: string;
+  decidedBy?: string;
+  decidedByUid?: string;
+  decidedAt?: string;
+  decisionRemarks?: string;
 }
 
 export interface StudentRequirementItem {
@@ -709,10 +835,19 @@ export interface AcademicPeriod {
   enrolledCount?: number;
   /** Notice shown to students in the Student Portal for this term. */
   announcement?: string;
+  /** Grade submission window for professors (YYYY-MM-DD). */
+  gradeSubmissionStart?: string;
+  gradeSubmissionDeadline?: string;
   /** Set when the term is officially closed (records moved to each student's academic history). */
   closedAt?: string;
   closedBy?: string;
-  closingSummary?: { students: number; subjects: number; withoutGrade: number };
+  closingSummary?: {
+    students: number;
+    subjects: number;
+    withoutGrade: number;
+    /** Closed with unresolved grade items under a documented exception. */
+    exception?: { reason: string; authorizedBy: string; at: string; unresolved: string[] };
+  };
   createdAt?: string;
   updatedAt?: string;
 }
@@ -781,6 +916,8 @@ export interface EnrollmentSystemConfig {
   passingGrade?: number;
   /** Percent of a year level's curriculum units a student must pass to be suggested for the next year level. */
   progressionMinPercent?: number;
+  /** PCM's grading scale: the only grades professors can enter. Set in System Governance. */
+  gradingScale?: GradingScale;
   /** Returning-student re-enrollment: clearances and documents required each term. */
   reenrollment?: {
     requireAcademicClearance: boolean;

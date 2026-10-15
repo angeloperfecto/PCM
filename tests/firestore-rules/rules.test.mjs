@@ -502,6 +502,58 @@ await check('Registrar places an enrollment hold', true, () => setDoc(doc(regist
 await check('Registrar archives the closed term', true, () => setDoc(doc(registrar, 'academicPeriods/p-closed'), { status: 'Archived', closedAt: '2026-10-15' }, { merge: true }));
 await check('student cannot close a term', false, () => setDoc(doc(studentUser, 'academicPeriods/p-closed'), { status: 'Active' }, { merge: true }));
 
+section('Grades: grade sheets and amendments');
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const sdb = ctx.firestore();
+  await setDoc(doc(sdb, 'gradeSheets/gs-1'), { id: 'gs-1', termKey: '2026-2027|1st Semester', subjectCode: 'THE-301', instructorEmail: 'prof1@pcm.edu.ph', status: 'Draft', roster: ['std-linked', 'std-taken'], students: [], grades: {}, version: 0 });
+  await setDoc(doc(sdb, 'gradeSheets/gs-other'), { id: 'gs-other', termKey: '2026-2027|1st Semester', subjectCode: 'BIB-301', instructorEmail: 'prof2@pcm.edu.ph', status: 'Finalized', roster: ['std-linked'], students: [], grades: { 'std-linked': { grade: '2.00' } }, version: 3 });
+});
+const prof = as('prof1uid', 'prof1@pcm.edu.ph');
+const profUnverified = as('prof1x', 'prof1@pcm.edu.ph', false);
+const save = (extra = {}) => ({ grades: { 'std-linked': { grade: '1.50' } }, status: 'Draft', version: 1, savedAt: 'now', savedBy: 'Prof', savedByUid: 'prof1uid', ...extra });
+await check('professor reads own grade sheet', true, () => getDoc(doc(prof, 'gradeSheets/gs-1')));
+await check('professor lists own grade sheets', true, () => getDocs(query(collection(prof, 'gradeSheets'), where('instructorEmail', '==', 'prof1@pcm.edu.ph'))));
+await check("professor cannot read another professor's sheet", false, () => getDoc(doc(prof, 'gradeSheets/gs-other')));
+await check('unverified email cannot read the sheet', false, () => getDoc(doc(profUnverified, 'gradeSheets/gs-1')));
+await check('student cannot read a grade sheet', false, () => getDoc(doc(studentUser, 'gradeSheets/gs-1')));
+await check('professor cannot create a grade sheet', false, () => setDoc(doc(prof, 'gradeSheets/gs-new'), { instructorEmail: 'prof1@pcm.edu.ph', status: 'Draft', roster: [], grades: {}, version: 0 }));
+await check('professor saves a draft', true, () => updateDoc(doc(prof, 'gradeSheets/gs-1'), save()));
+await check('stale save is refused (version)', false, () => updateDoc(doc(prof, 'gradeSheets/gs-1'), save({ version: 1 })));
+await check('professor cannot grade a student not on the class list', false, () => updateDoc(doc(prof, 'gradeSheets/gs-1'), save({ version: 2, grades: { 'std-x': { grade: '1.00' } } })));
+await check('professor cannot change the class list', false, () => updateDoc(doc(prof, 'gradeSheets/gs-1'), { ...save({ version: 2 }), roster: ['std-linked', 'std-taken', 'std-x'] }));
+await check('professor cannot approve own sheet', false, () => updateDoc(doc(prof, 'gradeSheets/gs-1'), save({ version: 2, status: 'Approved' })));
+await check("professor cannot grade another professor's class", false, () => updateDoc(doc(prof, 'gradeSheets/gs-other'), save({ version: 4 })));
+await check('professor submits for review', true, () => updateDoc(doc(prof, 'gradeSheets/gs-1'), save({ version: 2, status: 'Submitted', submittedAt: 'now', submittedBy: 'Prof', submittedByUid: 'prof1uid' })));
+await check('professor cannot edit after submitting', false, () => updateDoc(doc(prof, 'gradeSheets/gs-1'), save({ version: 3, status: 'Draft' })));
+await check('Editor cannot review grades', false, () => updateDoc(doc(approvedEditor, 'gradeSheets/gs-1'), { status: 'Under Review' }));
+await check('Finance cannot approve grades', false, () => updateDoc(doc(finance, 'gradeSheets/gs-1'), { status: 'Approved' }));
+await check('Registrar starts the review', true, () => updateDoc(doc(registrar, 'gradeSheets/gs-1'), { status: 'Under Review', reviewedBy: 'Reg' }));
+await check('Registrar approves', true, () => updateDoc(doc(registrar, 'gradeSheets/gs-1'), { status: 'Approved', approvedBy: 'Reg' }));
+await check('Registrar finalizes', true, () => updateDoc(doc(registrar, 'gradeSheets/gs-1'), { status: 'Finalized', finalizedBy: 'Reg', finalizedAt: 'now' }));
+await check('finalized grades cannot be edited directly', false, () => updateDoc(doc(registrar, 'gradeSheets/gs-1'), { grades: { 'std-linked': { grade: '1.00' } } }));
+await check('finalized sheet cannot be reopened', false, () => updateDoc(doc(registrar, 'gradeSheets/gs-1'), { status: 'Draft' }));
+await check('Registrar publishes the finalized sheet', true, () => updateDoc(doc(registrar, 'gradeSheets/gs-1'), { publishedAt: 'now', publishedBy: 'Reg', updatedAt: 'now' }));
+const amend = (id, extra = {}) => ({ id, sheetId: 'gs-1', termKey: '2026-2027|1st Semester', subjectCode: 'THE-301', studentRecordId: 'std-linked', studentId: '2026-PCM-0001', studentName: 'Linked Student', previousGrade: '1.50', newGrade: '1.25', reason: 'Recomputation error on the final exam', status: 'Pending', requestedBy: 'Prof', requestedByUid: 'prof1uid', requestedAt: 'now', ...extra });
+await check('student cannot request a grade change', false, () => setDoc(doc(studentUser, 'gradeAmendments/am-0'), amend('am-0', { requestedByUid: 'stu1' })));
+await check('professor requests a grade change with a reason', true, () => setDoc(doc(prof, 'gradeAmendments/am-1'), amend('am-1')));
+await check('a grade change needs a reason', false, () => setDoc(doc(prof, 'gradeAmendments/am-2'), amend('am-2', { reason: '' })));
+await check("professor cannot request changes to another professor's class", false, () => setDoc(doc(prof, 'gradeAmendments/am-3'), amend('am-3', { sheetId: 'gs-other' })));
+await check('professor cannot approve own grade change', false, () => updateDoc(doc(prof, 'gradeAmendments/am-1'), { status: 'Approved', decidedBy: 'Prof', decidedByUid: 'prof1uid', decidedAt: 'now' }));
+await check('grade change cannot be applied before it is approved', false, () =>
+  updateDoc(doc(registrar, 'gradeSheets/gs-1'), { grades: { 'std-linked': { grade: '1.25' } }, amendmentLog: [{ amendmentId: 'am-1', previousGrade: '1.50', newGrade: '1.25' }], updatedAt: 'now' })
+);
+await check('Registrar approves and applies the grade change (with audit entry)', true, () => {
+  const b = writeBatch(registrar);
+  b.update(doc(registrar, 'gradeAmendments/am-1'), { status: 'Approved', decidedBy: 'Reg', decidedByUid: 'reg1', decidedAt: 'now', decisionRemarks: '' });
+  b.update(doc(registrar, 'gradeSheets/gs-1'), { grades: { 'std-linked': { grade: '1.25' } }, amendmentLog: [{ amendmentId: 'am-1', previousGrade: '1.50', newGrade: '1.25' }], updatedAt: 'now' });
+  return b.commit();
+});
+await check('a decided grade change cannot be changed', false, () => updateDoc(doc(registrar, 'gradeAmendments/am-1'), { status: 'Rejected', decidedBy: 'Reg', decidedByUid: 'reg1', decidedAt: 'later' }));
+await check('grade changes cannot be deleted', false, () => deleteDoc(doc(registrar, 'gradeAmendments/am-1')));
+await check('professor reads own grade change requests', true, () => getDocs(query(collection(prof, 'gradeAmendments'), where('requestedByUid', '==', 'prof1uid'))));
+await check('Registrar notifies the professor', true, () => setDoc(doc(registrar, 'studentNotifications/n-prof'), { recipientUid: 'prof1uid', title: 'Grades approved', read: false }));
+await check('professor reads own notification', true, () => getDoc(doc(prof, 'studentNotifications/n-prof')));
+
 section('Batch writes stay within Firestore limits');
 await check('Editor commits a 40-document batch', true, () => {
   const b = writeBatch(editor);

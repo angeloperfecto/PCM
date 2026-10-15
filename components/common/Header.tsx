@@ -309,8 +309,8 @@ export const Header: React.FC = () => {
           <span className="text-[#588B76]/40 hidden sm:inline select-none">|</span>
           <button
             id="btn-top-faculty-portal"
-            onClick={() => navigateTo('about', 'faculty')}
-            className="hover:text-white transition-colors cursor-pointer text-[#D0DED8] hidden sm:inline whitespace-nowrap"
+            onClick={() => navigateTo('faculty-portal')}
+            className="hover:text-white transition-colors cursor-pointer text-[#D0DED8] inline whitespace-nowrap"
           >
             Faculty
           </button>
