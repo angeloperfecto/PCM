@@ -1,5 +1,6 @@
 'use client';
 
+import { academicStanding } from '@/lib/studentDefaults';
 import React from 'react';
 import { StudentAvatar } from '@/components/common/StudentAvatar';
 import {
@@ -403,7 +404,7 @@ export const StudentPortalSidebar: React.FC<StudentPortalSidebarProps> = ({
               <div className="flex items-center justify-between text-slate-500 pt-0.5">
                 <span>{studentProfile.yearLevel}</span>
                 <span className="font-mono text-[#588B76] font-bold">
-                  GPA: {(studentProfile.gpa || 1.0).toFixed(2)}
+                  GPA: {academicStanding(studentProfile).gpa ? academicStanding(studentProfile).gpa.toFixed(2) : '—'}
                 </span>
               </div>
             </div>

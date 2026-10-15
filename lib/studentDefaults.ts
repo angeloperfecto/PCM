@@ -97,6 +97,16 @@ export function calculateGPAFromGrades(subjects: StudentSubjectHistory[] = []): 
   return parseFloat((weightedSum / totalUnits).toFixed(2));
 }
 
+/** GPA and units earned as every screen should show them: from the academic history. */
+export function academicStanding(p: Partial<StudentProfile>): { gpa: number; unitsEarned: number } {
+  const history = p.subjectHistory || [];
+  if (history.length === 0) return { gpa: Number(p.gpa) || 0, unitsEarned: Number(p.totalUnitsEarned) || 0 };
+  return {
+    gpa: calculateGPAFromGrades(history),
+    unitsEarned: history.filter((h) => ['Passed', 'Credited'].includes(String(h.status))).reduce((t, h) => t + (Number(h.units) || 0), 0),
+  };
+}
+
 export function normalizeStudentProfile(raw: Partial<StudentProfile>): StudentProfile {
   const fallbackId = raw.id || `stu-${Date.now()}`;
   const studentId = raw.studentId || generateStudentId(raw.academicYear);
@@ -246,7 +256,8 @@ export function normalizeStudentProfile(raw: Partial<StudentProfile>): StudentPr
     paymentRemarks: raw.paymentRemarks || '',
 
     // Academic
-    gpa: raw.gpa || 3.75,
+    // From the academic history when not stored (never a made-up value).
+    gpa: typeof raw.gpa === 'number' && raw.gpa > 0 ? raw.gpa : calculateGPAFromGrades(raw.subjectHistory || []),
     totalUnitsEarned: raw.totalUnitsEarned || 0,
     courses: raw.courses || [],
     subjectHistory: raw.subjectHistory || [],
