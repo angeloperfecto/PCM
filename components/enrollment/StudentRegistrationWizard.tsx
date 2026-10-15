@@ -1845,6 +1845,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   <option value="Intercultural & Missiology">Intercultural Studies & Missions</option>
                   <option value="Youth & Campus Ministry">Youth & Campus Ministry</option>
                   <option value="Institutional Chaplaincy">Institutional Chaplaincy</option>
+                  <option value="No Major">No major (not applicable)</option>
                 </select>
               </div>
 
