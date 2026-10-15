@@ -4,6 +4,7 @@ import React from 'react';
 import { usePCM } from '@/lib/store';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { PaymentGuide } from '@/components/enrollment/PaymentInstructions';
+import { useAdmissionContacts } from '@/lib/admissionContacts';
 import {
   FileText,
   PhilippinePeso,
@@ -55,60 +56,9 @@ export const AdmissionsView: React.FC = () => {
     }
   }, [activeSubSection, currentSubSection, navigateTo]);
 
-  const ADMISSION_OFFICERS = [
-    {
-      role: 'Director of Admissions & Church Relations',
-      name: 'Rev. Nathan Valdez, M.Div.',
-      department: 'Office of Admissions & Student Recruitment',
-      email: 'admissions@pcm.ph',
-      phone: '+63 917 582 1992',
-      landline: '+63 74 422 2577 ext. 104',
-      office: 'Room 102, Administration Building, Lamtang Campus',
-      hours: 'Mon – Fri: 8:00 AM – 5:00 PM PHT',
-      scope: 'Inquiries, student recruitment, provincial church endorsements, and admissions counseling.',
-    },
-    {
-      role: 'Admissions Registrar & Document Evaluator',
-      name: 'Sis. Grace Morales',
-      department: 'Office of the College Registrar',
-      email: 'registrar@pcm.ph',
-      phone: '+63 74 422 2577 ext. 103',
-      office: 'Room 101, Records & Registration Hall, Lamtang Campus',
-      hours: 'Mon – Fri: 8:00 AM – 4:30 PM PHT',
-      scope: 'Transcript evaluations, Form 138 verification, honorable dismissal, and enrollment clearance.',
-    },
-    {
-      role: 'Admissions Committee Chair & Academic Dean',
-      name: 'Rev. Dr. Emmanuel Santos',
-      department: 'Office of the Academic Dean',
-      email: 'dean@pcm.edu.ph',
-      phone: '+63 74 422 2577 ext. 102',
-      office: 'Dean\'s Office, 2nd Floor, Academic Wing',
-      hours: 'Tue & Thu: 1:30 PM – 4:30 PM (By appointment)',
-      scope: 'Formal ministerial calling interviews, academic assessment results, and admission approvals.',
-    },
-    {
-      role: 'Financial Aid & Scholarship Coordinator',
-      name: 'Ptr. Joshua Dela Cruz, B.Th.',
-      department: 'Student Financial Aid Desk',
-      email: 'scholarships@pcm.ph',
-      phone: '+63 920 945 8812',
-      landline: '+63 74 422 2577 ext. 105',
-      office: 'Financial Aid Office, Administration Wing',
-      hours: 'Mon – Fri: 9:00 AM – 4:00 PM PHT',
-      scope: 'Ministerial scholarship grants, work-study assistantships, and local church matching funds.',
-    },
-    {
-      role: 'Lamtang Campus Admissions Receptionist',
-      name: 'Sis. Loida Batnag',
-      department: 'Information & Visitor Center',
-      email: 'info@pcm.ph',
-      phone: '+63 74 422 2577',
-      office: 'Main Reception Lobby, Lamtang Campus, La Trinidad, Benguet',
-      hours: 'Mon – Sat: 8:00 AM – 12:00 PM & 1:00 PM – 5:00 PM PHT',
-      scope: 'Campus visit check-in, brochure pickup, in-person test scheduling, and general directions.',
-    },
-  ];
+  // Official Admission Directory, managed in Admin → Admission Directory (live).
+  const { contacts: directory, loaded: directoryLoaded } = useAdmissionContacts();
+  const ADMISSION_OFFICERS = directory.filter((c) => c.visible);
 
   return (
     <div className="w-full bg-[#FFFFFF] font-sans pb-20">
@@ -377,18 +327,25 @@ export const AdmissionsView: React.FC = () => {
           </div>
 
           {/* Directory Personnel Cards */}
+          {directoryLoaded && ADMISSION_OFFICERS.length === 0 && (
+            <p className="rounded-sm border border-slate-200 bg-slate-50 p-6 text-center text-xs text-slate-600">
+              The admissions directory is being updated. Please contact the General Admissions Help Desk below.
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {ADMISSION_OFFICERS.map((officer, idx) => (
+            {ADMISSION_OFFICERS.map((officer) => (
               <div
-                key={idx}
+                key={officer.id}
                 className="bg-white border border-slate-200 rounded-sm p-6 shadow-xs flex flex-col justify-between hover:border-[#588B76] transition space-y-4"
               >
                 <div className="space-y-3">
                   <div className="flex items-start justify-between gap-2 border-b border-slate-100 pb-3">
                     <div>
-                      <span className="text-[10px] font-mono font-bold uppercase text-[#588B76] tracking-wider block">
-                        {officer.department}
-                      </span>
+                      {officer.department && (
+                        <span className="text-[10px] font-mono font-bold uppercase text-[#588B76] tracking-wider block">
+                          {officer.department}
+                        </span>
+                      )}
                       <h3 className="font-serif font-bold text-base text-[#18392B] mt-0.5">
                         {officer.name}
                       </h3>
@@ -401,11 +358,14 @@ export const AdmissionsView: React.FC = () => {
                     </div>
                   </div>
 
-                  <p className="text-xs text-slate-600 leading-relaxed font-light">
-                    {officer.scope}
-                  </p>
+                  {officer.scope && (
+                    <p className="text-xs text-slate-600 leading-relaxed font-light">
+                      {officer.scope}
+                    </p>
+                  )}
 
                   <div className="space-y-2 text-xs text-slate-700 pt-1">
+                    {officer.email && (
                     <div className="flex items-center gap-2">
                       <Mail className="w-3.5 h-3.5 text-[#588B76] shrink-0" />
                       <a
@@ -415,37 +375,46 @@ export const AdmissionsView: React.FC = () => {
                         {officer.email}
                       </a>
                     </div>
+                    )}
 
+                    {officer.phone && (
                     <div className="flex items-center gap-2">
                       <Phone className="w-3.5 h-3.5 text-[#588B76] shrink-0" />
-                      <span className="font-mono text-[11px] text-slate-600">
-                        {officer.phone || officer.landline}
-                      </span>
+                      <a href={`tel:${officer.phone.replace(/[^+\d]/g, '')}`} className="font-mono text-[11px] text-slate-600 hover:text-[#588B76] hover:underline">
+                        {officer.phone}
+                      </a>
                     </div>
+                    )}
 
+                    {officer.office && (
                     <div className="flex items-start gap-2">
                       <MapPin className="w-3.5 h-3.5 text-[#588B76] shrink-0 mt-0.5" />
                       <span className="text-[11px] text-slate-600">
                         {officer.office}
                       </span>
                     </div>
+                    )}
 
+                    {officer.hours && (
                     <div className="flex items-start gap-2">
                       <Clock className="w-3.5 h-3.5 text-[#588B76] shrink-0 mt-0.5" />
                       <span className="text-[11px] text-slate-600">
                         {officer.hours}
                       </span>
                     </div>
+                    )}
                   </div>
                 </div>
 
                 <div className="pt-3 border-t border-slate-100 flex items-center gap-2">
+                  {officer.email && (
                   <a
-                    href={`mailto:${officer.email}?subject=PCM%20Admissions%20Inquiry%20AY%202026-2027`}
+                    href={`mailto:${officer.email}?subject=PCM%20Admissions%20Inquiry`}
                     className="flex-1 text-center bg-slate-100 hover:bg-[#18392B] hover:text-white text-slate-700 text-[11px] font-bold py-1.5 px-2 rounded-sm transition cursor-pointer"
                   >
                     Email Officer
                   </a>
+                  )}
                   <button
                     type="button"
                     onClick={() => setRequestInfoModalOpen(true)}

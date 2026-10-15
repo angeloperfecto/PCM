@@ -459,6 +459,16 @@ await check('Finance cannot change the curriculum', false, () => updateDoc(doc(f
 await check('Registrar updates a subject', true, () => updateDoc(doc(registrar, 'curriculumSubjects/cur-1'), { units: 2, title: 'OT Survey' }));
 await check('Registrar deletes a subject', true, () => deleteDoc(doc(registrar, 'curriculumSubjects/cur-1')));
 
+section('Official Admission Directory');
+const contact = { id: 'contact-1', name: 'Rev. Test Officer', role: 'Director of Admissions', email: 'admissions@pcm.test', order: 1, visible: true };
+await check('Admin adds a directory contact', true, () => setDoc(doc(admin, 'admissionContacts/contact-1'), contact));
+await check('Registrar edits a directory contact', true, () => updateDoc(doc(registrar, 'admissionContacts/contact-1'), { hours: 'Mon to Fri' }));
+await check('anyone can read the directory (public Admissions page)', true, () => getDoc(doc(anon, 'admissionContacts/contact-1')));
+await check('anonymous cannot add a contact', false, () => setDoc(doc(anon, 'admissionContacts/contact-x'), { ...contact, id: 'contact-x' }));
+await check('student cannot edit a contact', false, () => updateDoc(doc(studentUser, 'admissionContacts/contact-1'), { name: 'Hacked' }));
+await check('student cannot delete a contact', false, () => deleteDoc(doc(studentUser, 'admissionContacts/contact-1')));
+await check('Admin deletes a directory contact', true, () => deleteDoc(doc(admin, 'admissionContacts/contact-1')));
+
 section('Batch writes stay within Firestore limits');
 await check('Editor commits a 40-document batch', true, () => {
   const b = writeBatch(editor);

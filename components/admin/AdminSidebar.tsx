@@ -33,6 +33,7 @@ import {
   Compass,
   Flame,
   Quote,
+  Contact,
 } from 'lucide-react';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
 import { isValidImageSrc } from '@/lib/utils';
@@ -54,6 +55,7 @@ export type AdminTabType =
   | 'downloads'
   | 'youtube'
   | 'applications'
+  | 'admissionDirectory'
   | 'enrollments'
   | 'donations'
   | 'users';
@@ -139,6 +141,11 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
           icon: FileCheck,
           count: applications.length,
           highlight: pendingApps > 0,
+        },
+        {
+          id: 'admissionDirectory',
+          label: 'Admission Directory',
+          icon: Contact,
         },
         {
           id: 'enrollments',
