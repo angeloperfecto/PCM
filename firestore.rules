@@ -363,7 +363,7 @@ service cloud.firestore {
         'tuitionTotal', 'tuitionPaid', 'tuitionBalance', 'paymentStatus', 'paymentRecords', 'paymentHistory',
         'termAssessment', 'previousBalance', 'termAssessmentLines',
         'verificationStatus', 'accountStatus', 'portalAccess', 'admissionRequirementsVerified',
-        'verifiedAdmissionDocuments', 'enrolledAt', 'enrolledBy'];
+        'verifiedAdmissionDocuments', 'enrolledAt', 'enrolledBy', 'termHistory', 'lastEnrolledTerm', 'enrollmentHold'];
     }
 
     function ownsStudentRecord(data) {
@@ -395,15 +395,52 @@ service cloud.firestore {
       return isSignedIn() && data.get('studentUid', '') == request.auth.uid;
     }
 
+    // Fields only staff set on an enrollment request (clearances, approved year level, decisions).
+    function enrollmentStaffFields() {
+      return ['clearances', 'approvedYearLevel', 'approvedBy', 'approvedAt', 'adminRemarks', 'reviewedBy', 'reviewedAt'];
+    }
+
+    // A re-enrollment request must name the student's own record.
+    function namesOwnStudentRecord(data) {
+      return !('studentRecordId' in data)
+        || get(/databases/$(database)/documents/studentProfiles/$(data.studentRecordId)).data.get('authUid', '') == request.auth.uid;
+    }
+
     match /enrollments/{id} {
-      allow read: if isAdmin() || ownsRequest(resource.data);
+      // resource == null: a student checking (in a transaction) whether their request for a term exists.
+      allow read: if isAdmin() || (isSignedIn() && resource == null) || ownsRequest(resource.data);
       allow create: if isEnrollmentOffice()
-        || (ownsRequest(request.resource.data) && request.resource.data.get('status', '') in ['Draft', 'Submitted']);
+        || (ownsRequest(request.resource.data)
+          && request.resource.data.get('status', '') in ['Draft', 'Submitted', 'Pending Requirements', 'For Verification']
+          && !request.resource.data.keys().hasAny(enrollmentStaffFields())
+          && namesOwnStudentRecord(request.resource.data));
       allow update: if isEnrollmentOffice()
         || (ownsRequest(resource.data) && ownsRequest(request.resource.data)
-          && resource.data.get('status', '') in ['Draft', 'Submitted', 'Returned for Correction']
-          && request.resource.data.get('status', '') in ['Draft', 'Submitted']);
+          && resource.data.get('status', '') in ['Draft', 'Submitted', 'Returned for Correction', 'Pending Requirements']
+          && request.resource.data.get('status', '') in ['Draft', 'Submitted', 'Pending Requirements', 'For Verification']
+          && !changedKeys().hasAny(enrollmentStaffFields())
+          && request.resource.data.get('studentRecordId', '') == resource.data.get('studentRecordId', ''));
       allow delete: if isEnrollmentOffice();
+
+      // Documents a returning student uploads for a re-enrollment request. Students upload or replace
+      // them while the request is open; only staff verify or return them.
+      match /requirements/{reqId} {
+        allow read: if isAdmin() || (isSignedIn() && resource == null) || (isSignedIn() && resource.data.get('studentUid', '') == request.auth.uid);
+        allow create: if isEnrollmentOffice()
+          || (ownsRequest(get(/databases/$(database)/documents/enrollments/$(id)).data)
+            && get(/databases/$(database)/documents/enrollments/$(id)).data.get('status', '') in ['Draft', 'Submitted', 'Pending Requirements', 'Returned for Correction']
+            && request.resource.data.get('studentUid', '') == request.auth.uid
+            && request.resource.data.get('status', '') == 'Submitted'
+            && !request.resource.data.keys().hasAny(['reviewedBy', 'reviewedAt', 'remarks']));
+        allow update: if isEnrollmentOffice()
+          || (ownsRequest(get(/databases/$(database)/documents/enrollments/$(id)).data)
+            && get(/databases/$(database)/documents/enrollments/$(id)).data.get('status', '') in ['Draft', 'Submitted', 'Pending Requirements', 'Returned for Correction']
+            && resource.data.get('studentUid', '') == request.auth.uid
+            && resource.data.get('status', '') != 'Verified'
+            && request.resource.data.get('status', '') == 'Submitted'
+            && changedKeys().hasOnly(['status', 'fileName', 'fileType', 'fileSize', 'fileDataUrl', 'uploadedAt']));
+        allow delete: if isEnrollmentOffice();
+      }
     }
 
     match /preEnlistments/{id} {

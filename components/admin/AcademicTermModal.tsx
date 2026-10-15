@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Calendar, X } from 'lucide-react';
 import type { AcademicPeriod } from '@/lib/types';
 
-export type AcademicTermDraft = Omit<AcademicPeriod, 'id' | 'isCurrent' | 'createdAt' | 'updatedAt'>;
+export type AcademicTermDraft = Omit<AcademicPeriod, 'id' | 'isCurrent' | 'createdAt' | 'updatedAt' | 'enrolledCount' | 'closedAt' | 'closedBy' | 'closingSummary'>;
 
 const SEMESTERS = ['1st Semester', '2nd Semester', 'Summer Term'];
 const STATUSES: AcademicPeriod['status'][] = ['Upcoming', 'Active', 'Archived'];
@@ -43,7 +43,7 @@ interface Props {
 export const AcademicTermModal: React.FC<Props> = ({ term, existing, onCancel, onSave }) => {
   const [draft, setDraft] = useState<AcademicTermDraft>(() => {
     if (!term) return emptyDraft();
-    const { id: _id, isCurrent: _cur, createdAt: _c, updatedAt: _u, ...rest } = term;
+    const { id: _id, isCurrent: _cur, createdAt: _c, updatedAt: _u, enrolledCount: _n, closedAt: _ca, closedBy: _cb, closingSummary: _cs, ...rest } = term;
     return { ...emptyDraft(), ...rest };
   });
   const [error, setError] = useState('');
@@ -71,6 +71,8 @@ export const AcademicTermModal: React.FC<Props> = ({ term, existing, onCancel, o
     }
     if (draft.enrollmentStatus === 'Open' && (!draft.enrollmentStartDate || !draft.enrollmentEndDate))
       return 'Set the enrollment start and end dates before opening enrollment.';
+    if (draft.capacity != null && String(draft.capacity) !== '' && !(Number(draft.capacity) >= 1)) return 'Capacity must be at least 1, or left empty for no limit.';
+    if (term?.closedAt && draft.status !== 'Archived') return 'This term is closed; it stays archived.';
     return '';
   };
 
@@ -81,7 +83,14 @@ export const AcademicTermModal: React.FC<Props> = ({ term, existing, onCancel, o
     if (problem) return;
     setSaving(true);
     try {
-      const ok = await onSave({ ...draft, academicYear: normaliseYear(draft.academicYear), semester: draft.semester.trim() });
+      const capacity = draft.capacity != null && String(draft.capacity) !== '' ? Math.floor(Number(draft.capacity)) : 0; // 0 = no limit
+      const ok = await onSave({
+        ...draft,
+        academicYear: normaliseYear(draft.academicYear),
+        semester: draft.semester.trim(),
+        capacity,
+        announcement: (draft.announcement || '').trim(),
+      });
       if (!ok) setError('The term was not saved. Check your permissions or connection and try again.');
     } finally {
       setSaving(false);
@@ -161,6 +170,30 @@ export const AcademicTermModal: React.FC<Props> = ({ term, existing, onCancel, o
         {windowRow('Enrollment window', 'enrollmentStatus', 'enrollmentStartDate', 'enrollmentEndDate')}
         {windowRow('Pre-enlistment window', 'preEnlistmentStatus', 'preEnlistmentStartDate', 'preEnlistmentEndDate')}
         {windowRow('Adding & dropping window', 'addDropStatus', 'addDropStartDate', 'addDropEndDate')}
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <label className="block">
+            <span className={label}>Enrollment capacity (students)</span>
+            <input
+              type="number"
+              min={1}
+              value={draft.capacity ? draft.capacity : ''}
+              onChange={(e) => set('capacity', e.target.value === '' ? undefined : (Number(e.target.value) as any))}
+              placeholder="No limit"
+              className={input}
+            />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className={label}>Announcement for students (shown in the Student Portal)</span>
+            <textarea
+              rows={2}
+              value={draft.announcement || ''}
+              onChange={(e) => set('announcement', e.target.value)}
+              placeholder="e.g. Re-enrollment for returning students runs until June 15. Clear your balance with the Finance Office first."
+              className={input}
+            />
+          </label>
+        </div>
 
         <p className="text-[11px] text-slate-500">
           The current term is chosen with <strong>Set as Active Term</strong> on the term card.

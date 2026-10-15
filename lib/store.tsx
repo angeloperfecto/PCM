@@ -15,6 +15,7 @@ import {
   StudentProfile,
   StudentCourse,
   OnlineEnrollment,
+  ReenrollmentClearance,
   StudentDocument,
   StudentNotification,
   StudentPaymentRecord,
@@ -181,7 +182,21 @@ import {
 import { firebaseConfig } from './firebaseConfig';
 import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, admissionRequirementTemplates } from './enrollmentWorkflow';
 import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflow';
+import { increment, runTransaction, type Transaction } from 'firebase/firestore';
 import { termFees, accountSummary, parseTerm, officialAssessmentLines, applyOfficialLines } from './studentLedger';
+import {
+  approvalBlockers,
+  documentChecklist,
+  normAY,
+  planTermClose,
+  reenrollmentRules,
+  requestForTerm,
+  termKeyOf,
+  termLabel,
+  termStillOpen,
+  type ReenrollmentDocument,
+  type TermClosePlan,
+} from './reenrollment';
 import { curriculumToImport, validateCurriculumSubject } from './curriculum';
 import { submitAdmissionApplication, transitionApplication } from './admissionsService';
 
@@ -504,6 +519,23 @@ interface PCMContextType {
   returnEnrollmentForCorrection: (enrollmentId: string, adminFeedback: string) => Promise<boolean>;
   rejectEnrollment: (enrollmentId: string, reason: string) => Promise<boolean>;
   deleteEnrollment: (enrollmentId: string) => Promise<boolean>;
+
+  // Academic term closing and returning-student re-enrollment
+  canManageTerms: boolean;
+  closeAcademicTerm: (periodId: string) => Promise<{ students: number; subjects: number; withoutGrade: number } | null>;
+  submitReenrollment: (input: {
+    term: AcademicPeriod;
+    yearLevel: string;
+    suggestedYearLevel: string;
+    subjects: SelectedSubject[];
+    flags: string[];
+    notes?: string;
+  }) => Promise<OnlineEnrollment | null>;
+  sendReenrollmentForVerification: (enrollmentId: string) => Promise<boolean>;
+  setReenrollmentClearance: (enrollmentId: string, kind: 'academic' | 'financial', status: ReenrollmentClearance['status'], remarks?: string) => Promise<boolean>;
+  setReenrollmentYearLevel: (enrollmentId: string, yearLevel: string) => Promise<boolean>;
+  markReenrollmentNotEligible: (enrollmentId: string, reason: string) => Promise<boolean>;
+  setEnrollmentHold: (studentId: string, active: boolean, reason: string) => Promise<boolean>;
 
   // Student Documents Vault & Verification
   uploadStudentDocument: (studentId: string, docData: Omit<StudentDocument, 'id' | 'uploadDate' | 'verificationStatus'>) => Promise<StudentDocument | null>;
@@ -5493,10 +5525,52 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('info', 'Already approved', `${target.referenceNumber} was already approved.`);
       return true;
     }
-    const student = findStudentRecord(target.studentId);
+    const student = findStudentRecord(target.studentRecordId || target.studentId);
     if (!student) {
       studentNotFound();
       return false;
+    }
+    const newTerm = termLabel(target.semester, target.schoolYear);
+    // The earlier term's subjects must be in the academic history before they are replaced.
+    if (termStillOpen(student, newTerm)) {
+      addToast('error', 'Close the current term first', `${student.fullName || student.name} is still enrolled in ${student.currentSemester}. Close that term in Academic Terms so its subjects and grades are kept in the student's academic history, then approve.`);
+      return false;
+    }
+    // Only requests that name a term can be matched to one (older requests may not).
+    const targetKey = target.semester && target.schoolYear ? termKeyOf(target.semester, target.schoolYear) : '';
+    const duplicate = targetKey
+      ? enrollments.find(
+          (e) => e.id !== target.id && e.status === 'Approved' && (e.studentRecordId === student.id || e.studentId === student.studentId) && termKeyOf(e.semester, e.schoolYear) === targetKey
+        )
+      : undefined;
+    if (duplicate) {
+      addToast('error', 'Already enrolled', `${target.studentName} already has an approved enrollment for ${newTerm} (${duplicate.referenceNumber}).`);
+      return false;
+    }
+    const period = targetKey ? academicPeriods.find((p) => termKeyOf(p.semester, p.academicYear) === targetKey) : undefined;
+    if (period?.capacity && (period.enrolledCount || 0) >= period.capacity) {
+      addToast('error', 'Term is full', `${newTerm} has reached its capacity of ${period.capacity} students. Raise the capacity in Academic Terms to approve more.`);
+      return false;
+    }
+    if (target.reenrollment && target.studentUid && student.authUid && target.studentUid !== student.authUid) {
+      addToast('error', 'Request does not match the student', 'This request was not made from the student’s own account. Decline it and ask the student to re-enroll from their portal.');
+      return false;
+    }
+    if (target.reenrollment) {
+      const rules = reenrollmentRules(enrollmentSystemConfig);
+      let uploaded: ReenrollmentDocument[] = [];
+      try {
+        uploaded = (await getDocs(collection(db, 'enrollments', target.id, 'requirements'))).docs.map((d) => ({ id: d.id, ...(d.data() as any) }));
+      } catch (e) {
+        console.warn(e);
+        addToast('error', 'Could not check documents', 'The required documents could not be loaded. Please try again.');
+        return false;
+      }
+      const blockers = approvalBlockers(target, rules, documentChecklist(rules.documents, uploaded));
+      if (blockers.length) {
+        addToast('error', 'Requirements incomplete', blockers.join(' '));
+        return false;
+      }
     }
 
     // Term assessment from the Fee Structure for the approved subjects.
@@ -5539,6 +5613,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     const studentFields = {
       enrollmentStatus: 'Enrolled' as const,
+      ...(target.approvedYearLevel ? { yearLevel: target.approvedYearLevel } : {}),
+      enrollmentDate: now,
       courses: enrolledCourses,
       currentSemester: term,
       termAssessment: fees.total,
@@ -5554,11 +5630,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const batch = writeBatch(db);
     batch.set(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updatedEnrollment), { merge: true });
     batch.set(doc(db, 'studentProfiles', student.id), cleanFirestoreData(studentFields), { merge: true });
+    // Count the student toward the term's capacity (once; re-approving the same term does not count again).
+    if (period && !sameTerm) batch.update(doc(db, 'academicPeriods', period.id), { enrolledCount: increment(1) });
     if (!(await commitBatch(batch, `enrollments/${enrollmentId}`))) return false;
 
     const updatedStudent = { ...student, ...studentFields } as StudentProfile;
     setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updatedEnrollment : e)));
     setStudents((prev) => prev.map((s) => (s.id === student.id ? updatedStudent : s)));
+    if (period && !sameTerm) {
+      setAcademicPeriods((prev) => prev.map((p) => (p.id === period.id ? { ...p, enrolledCount: (p.enrolledCount || 0) + 1 } : p)));
+    }
 
     await addStudentNotification(student.id, {
       type: 'enrollment',
@@ -5582,17 +5663,21 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       adminRemarks: adminFeedback,
     };
 
-    const student = findStudentRecord(target.studentId);
+    const student = findStudentRecord(target.studentRecordId || target.studentId);
     if (!student) {
       studentNotFound();
       return false;
     }
+    // A re-enrollment request carries its own status; the student's record (possibly still enrolled
+    // in the current term) is not changed.
     const batch = writeBatch(db);
     batch.set(doc(db, 'enrollments', enrollmentId), cleanFirestoreData(updated), { merge: true });
-    batch.set(doc(db, 'studentProfiles', student.id), { enrollmentStatus: 'Returned for Correction', updatedAt: new Date().toISOString() }, { merge: true });
+    if (!target.reenrollment) {
+      batch.set(doc(db, 'studentProfiles', student.id), { enrollmentStatus: 'Returned for Correction', updatedAt: new Date().toISOString() }, { merge: true });
+    }
     if (!(await commitBatch(batch, `enrollments/${enrollmentId}`))) return false;
 
-    const updatedStudent: StudentProfile = { ...student, enrollmentStatus: 'Returned for Correction' };
+    const updatedStudent: StudentProfile = target.reenrollment ? student : { ...student, enrollmentStatus: 'Returned for Correction' };
     setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? updated : e)));
     setStudents((prev) => prev.map((s) => (s.id === updatedStudent.id ? updatedStudent : s)));
 
@@ -5632,6 +5717,242 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setEnrollments((prev) => prev.filter((e) => e.id !== enrollmentId));
     logActivity('DELETE', 'Online Enrollment', enrollmentId, target?.studentName || 'Enrollment', 'Deleted enrollment record.');
     addToast('info', 'Enrollment Deleted', 'Application record removed.');
+    return true;
+  };
+
+  // ---------------------------------------------------------------------------
+  // Academic term closing and returning-student re-enrollment (see lib/reenrollment.ts)
+  // ---------------------------------------------------------------------------
+  const canManageTerms = isAdminLoggedIn && ['Super Admin', 'Admin', 'Registrar'].includes(currentAdminUser?.role || '');
+
+  // Closes a term: each enrolled student's subjects and grades go into their academic history
+  // (nothing is deleted), their term is recorded, and they become eligible to re-enroll.
+  const closeAcademicTerm = async (periodId: string): Promise<{ students: number; subjects: number; withoutGrade: number } | null> => {
+    if (!canManageTerms) {
+      addToast('error', 'Permission denied', 'Only the Registrar or an Administrator can close an academic term.');
+      return null;
+    }
+    const period = academicPeriods.find((p) => p.id === periodId);
+    if (!period) return null;
+    if (period.closedAt) {
+      addToast('info', 'Term already closed', `${termLabel(period.semester, period.academicYear)} was closed on ${period.closedAt.slice(0, 10)}.`);
+      return null;
+    }
+    const rules = reenrollmentRules(enrollmentSystemConfig);
+    if (rules.passingGrade == null) {
+      addToast('error', 'Set the passing grade first', 'Enrollment & Records → System Governance → Re-enrollment & Term Closing.');
+      return null;
+    }
+    const actor = currentAdminUser?.name || 'Registrar';
+    const now = new Date().toISOString();
+    const plans = students
+      .map((st) => ({ st, plan: planTermClose(st, period, rules.passingGrade as number, actor, now) }))
+      .filter((x): x is { st: StudentProfile; plan: TermClosePlan } => !!x.plan);
+    const summary = {
+      students: plans.length,
+      subjects: plans.reduce((t, x) => t + x.plan.entries.length, 0),
+      withoutGrade: plans.reduce((t, x) => t + x.plan.withoutGrade, 0),
+    };
+    // Student records first, in batches; the term is marked closed last, so an interrupted run can
+    // be repeated safely (subjects already in a student's history are skipped).
+    for (let i = 0; i < plans.length; i += 400) {
+      const batch = writeBatch(db);
+      plans.slice(i, i + 400).forEach(({ st, plan }) => batch.set(doc(db, 'studentProfiles', st.id), cleanFirestoreData(plan.updates), { merge: true }));
+      if (!(await commitBatch(batch, 'studentProfiles'))) return null;
+    }
+    const periodUpdates: Partial<AcademicPeriod> = {
+      status: 'Archived',
+      isCurrent: false,
+      enrollmentStatus: 'Closed',
+      preEnlistmentStatus: 'Closed',
+      addDropStatus: 'Closed',
+      closedAt: now,
+      closedBy: actor,
+      closingSummary: summary,
+      updatedAt: now,
+    };
+    if (!(await safeSetDoc(doc(db, 'academicPeriods', periodId), cleanFirestoreData(periodUpdates), { merge: true }))) return null;
+    setStudents((prev) =>
+      prev.map((st) => {
+        const x = plans.find((p) => p.st.id === st.id);
+        return x ? ({ ...st, ...x.plan.updates } as StudentProfile) : st;
+      })
+    );
+    setAcademicPeriods((prev) => {
+      const next = prev.map((p) => (p.id === periodId ? ({ ...p, ...periodUpdates } as AcademicPeriod) : p));
+      setCachedData('academicPeriods', next);
+      return next;
+    });
+    const label = termLabel(period.semester, period.academicYear);
+    logActivity('UPDATE', 'Academic Term', periodId, label, `Closed the term: ${summary.students} students, ${summary.subjects} subjects recorded in academic history (${summary.withoutGrade} without a final grade).`);
+    addToast('success', 'Term closed', `${label} is closed. ${summary.students} student records and ${summary.subjects} subjects were moved to academic history.`);
+    return summary;
+  };
+
+  // A returning student's enrollment request for an open term. One request per student per term:
+  // the document id is fixed for the student and term, and a transaction refuses a second one.
+  const submitReenrollment = async (input: {
+    term: AcademicPeriod;
+    yearLevel: string;
+    suggestedYearLevel: string;
+    subjects: SelectedSubject[];
+    flags: string[];
+    notes?: string;
+  }): Promise<OnlineEnrollment | null> => {
+    const student = studentProfile;
+    const uid = auth.currentUser?.uid || '';
+    if (!isStudentLoggedIn || !student?.id || !uid) {
+      addToast('error', 'Sign in required', 'Sign in to your Student Portal to re-enroll.');
+      return null;
+    }
+    if (!input.subjects.length) {
+      addToast('warning', 'Choose your subjects', 'Select at least one subject for the term.');
+      return null;
+    }
+    const key = termKeyOf(input.term.semester, input.term.academicYear);
+    const id = `enr-${student.id}-${key}`.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const other = requestForTerm(enrollments, student, input.term);
+    if (other && other.id !== id) {
+      addToast('info', 'Already applied', `You already have an enrollment request for this term (${other.referenceNumber}).`);
+      return null;
+    }
+    const rules = reenrollmentRules(enrollmentSystemConfig);
+    const units = input.subjects.reduce((t, x) => t + (Number(x.units) || 0), 0);
+    const now = new Date().toISOString();
+    const record: OnlineEnrollment = {
+      id,
+      referenceNumber: `ENR-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`,
+      reenrollment: true,
+      enrollmentType: 'Returning',
+      termKey: key,
+      studentRecordId: student.id,
+      studentUid: uid,
+      studentId: student.studentId,
+      studentName: student.fullName || student.name || 'Student',
+      studentEmail: student.email || '',
+      studentContact: student.mobileNumber || student.phone || '',
+      programId: student.programId || '',
+      programTitle: student.degreeProgram || student.program || '',
+      yearLevel: input.yearLevel,
+      suggestedYearLevel: input.suggestedYearLevel,
+      semester: input.term.semester,
+      schoolYear: normAY(input.term.academicYear),
+      selectedSubjects: input.subjects,
+      totalUnits: units,
+      estimatedTuition: termFees(units, feeStructure, enrollmentSystemConfig).total,
+      eligibilityFlags: input.flags,
+      documentsRequired: rules.documents.filter((d) => d.required).length,
+      status: rules.documents.some((d) => d.required) ? 'Pending Requirements' : 'For Verification',
+      submittedAt: now,
+      submissionDate: now.slice(0, 10),
+      lastSavedAt: now,
+      notes: input.notes || '',
+    };
+    let saved = record;
+    try {
+      await runTransaction(db, async (tx: Transaction) => {
+        const ref = doc(db, 'enrollments', id);
+        const snap = await tx.get(ref);
+        if (snap.exists()) {
+          const cur = snap.data() as OnlineEnrollment;
+          if (!['Draft', 'Returned for Correction', 'Pending Requirements'].includes(String(cur.status))) throw new Error('duplicate');
+          saved = { ...record, referenceNumber: cur.referenceNumber || record.referenceNumber, submittedAt: cur.submittedAt || now };
+          tx.set(ref, cleanFirestoreData(saved), { merge: true });
+        } else {
+          tx.set(ref, cleanFirestoreData(record));
+        }
+      });
+    } catch (e: any) {
+      if (e?.message === 'duplicate') addToast('info', 'Already submitted', 'Your enrollment request for this term is already with the Registrar.');
+      else {
+        console.warn(e);
+        addToast('error', 'Not submitted', 'Your enrollment request could not be saved. Please check your connection and try again.');
+      }
+      return null;
+    }
+    setEnrollments((prev) => [saved, ...prev.filter((e) => e.id !== id)]);
+    await addStudentNotification(student.id, {
+      type: 'enrollment',
+      title: 'Re-enrollment request received',
+      message: `Your enrollment request for ${termLabel(record.semester, record.schoolYear)} (${saved.referenceNumber}) was received. ${record.status === 'Pending Requirements' ? 'Upload the required documents to send it for verification.' : 'The Registrar will verify it.'}`,
+      linkSection: 'portal',
+    });
+    logActivity('CREATE', 'Re-enrollment', id, saved.studentName, `Submitted re-enrollment for ${termLabel(record.semester, record.schoolYear)} (${units} units).`);
+    addToast('success', 'Request submitted', record.status === 'Pending Requirements' ? 'Next, upload your required documents.' : 'Your request was sent to the Registrar for verification.');
+    return saved;
+  };
+
+  const sendReenrollmentForVerification = async (enrollmentId: string): Promise<boolean> => {
+    const now = new Date().toISOString();
+    if (!(await safeSetDoc(doc(db, 'enrollments', enrollmentId), { status: 'For Verification', lastSavedAt: now }, { merge: true }))) return false;
+    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? { ...e, status: 'For Verification', lastSavedAt: now } : e)));
+    addToast('success', 'Sent for verification', 'The Registrar will review your documents and clearances.');
+    return true;
+  };
+
+  const setReenrollmentClearance = async (
+    enrollmentId: string,
+    kind: 'academic' | 'financial',
+    status: ReenrollmentClearance['status'],
+    remarks = ''
+  ): Promise<boolean> => {
+    const target = enrollments.find((e) => e.id === enrollmentId);
+    const now = new Date().toISOString();
+    const value: ReenrollmentClearance = { status, by: currentAdminUser?.name || 'Registrar', at: now, remarks };
+    if (!(await safeSetDoc(doc(db, 'enrollments', enrollmentId), { clearances: { [kind]: value }, reviewedBy: value.by, reviewedAt: now }, { merge: true }))) return false;
+    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? { ...e, clearances: { ...(e.clearances || {}), [kind]: value } } : e)));
+    logActivity('UPDATE', 'Re-enrollment', enrollmentId, target?.studentName || 'Student', `${kind === 'academic' ? 'Academic' : 'Financial'} clearance: ${status}${remarks ? ` (${remarks})` : ''}.`);
+    if (target && status === 'Not Cleared') {
+      const st = findStudentRecord(target.studentRecordId || target.studentId);
+      if (st) {
+        await addStudentNotification(st.id, {
+          type: 'alert',
+          title: `${kind === 'academic' ? 'Academic' : 'Financial'} clearance needed`,
+          message: remarks || 'Please see the Registrar about your clearance for re-enrollment.',
+          linkSection: 'portal',
+        });
+      }
+    }
+    return true;
+  };
+
+  const setReenrollmentYearLevel = async (enrollmentId: string, yearLevel: string): Promise<boolean> => {
+    if (!(await safeSetDoc(doc(db, 'enrollments', enrollmentId), { approvedYearLevel: yearLevel }, { merge: true }))) return false;
+    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? { ...e, approvedYearLevel: yearLevel } : e)));
+    return true;
+  };
+
+  const markReenrollmentNotEligible = async (enrollmentId: string, reason: string): Promise<boolean> => {
+    const target = enrollments.find((e) => e.id === enrollmentId);
+    if (!target) return false;
+    const now = new Date().toISOString();
+    const changes = { status: 'Not Eligible' as EnrollmentStatus, adminRemarks: reason, reviewedBy: currentAdminUser?.name || 'Registrar', reviewedAt: now };
+    if (!(await safeSetDoc(doc(db, 'enrollments', enrollmentId), changes, { merge: true }))) return false;
+    setEnrollments((prev) => prev.map((e) => (e.id === enrollmentId ? { ...e, ...changes } : e)));
+    const st = findStudentRecord(target.studentRecordId || target.studentId);
+    if (st) {
+      await addStudentNotification(st.id, {
+        type: 'alert',
+        title: 'Re-enrollment not approved',
+        message: `Your enrollment request for ${termLabel(target.semester, target.schoolYear)} was marked not eligible: "${reason}".`,
+        linkSection: 'portal',
+      });
+    }
+    logActivity('UPDATE', 'Re-enrollment', enrollmentId, target.studentName, `Marked not eligible: ${reason}`);
+    addToast('info', 'Marked not eligible', `${target.studentName} has been notified.`);
+    return true;
+  };
+
+  const setEnrollmentHold = async (studentId: string, active: boolean, reason: string): Promise<boolean> => {
+    const st = findStudentRecord(studentId);
+    if (!st) {
+      studentNotFound();
+      return false;
+    }
+    const hold = { active, reason: reason.trim(), setBy: currentAdminUser?.name || 'Registrar', setAt: new Date().toISOString() };
+    if (!(await saveStudentFields(st.id, { enrollmentHold: hold } as any))) return false;
+    logActivity('UPDATE', 'Enrollment Hold', st.id, st.fullName || st.name || 'Student', active ? `Hold placed: ${hold.reason}` : 'Hold lifted.');
+    addToast('success', active ? 'Enrollment hold placed' : 'Enrollment hold lifted', st.fullName || st.name || '');
     return true;
   };
 
@@ -6517,20 +6838,26 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setCurrentAcademicPeriod = async (id: string): Promise<boolean> => {
+    const target = academicPeriods.find((p) => p.id === id);
+    if (target?.closedAt) {
+      addToast('error', 'Term is closed', 'A closed term cannot be made active again. Add or choose the next term.');
+      return false;
+    }
+    const now = new Date().toISOString();
+    const batch = writeBatch(db);
+    academicPeriods.forEach((p) => {
+      batch.update(doc(db, 'academicPeriods', p.id), {
+        isCurrent: p.id === id,
+        ...(p.id === id && p.status !== 'Active' ? { status: 'Active' } : {}),
+        updatedAt: now,
+      });
+    });
+    if (!(await commitBatch(batch, 'academicPeriods'))) return false;
     setAcademicPeriods((prev) => {
-      const next = prev.map((p) => ({ ...p, isCurrent: p.id === id }));
+      const next = prev.map((p) => ({ ...p, isCurrent: p.id === id, ...(p.id === id ? { status: 'Active' as const } : {}) }));
       setCachedData('academicPeriods', next);
       return next;
     });
-    try {
-      const batch = writeBatch(db);
-      academicPeriods.forEach((p) => {
-        batch.update(doc(db, 'academicPeriods', p.id), { isCurrent: p.id === id, updatedAt: new Date().toISOString() });
-      });
-      await batch.commit();
-    } catch (e) {
-      console.warn(e);
-    }
     logActivity('UPDATE', 'Current Academic Term', id, 'Academic Calendar', 'Changed active academic term.');
     addToast('success', 'Active Period Set', 'Current academic term updated.');
     return true;
@@ -9337,6 +9664,14 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveEnrollment,
         returnEnrollmentForCorrection,
         rejectEnrollment,
+        canManageTerms,
+        closeAcademicTerm,
+        submitReenrollment,
+        sendReenrollmentForVerification,
+        setReenrollmentClearance,
+        setReenrollmentYearLevel,
+        markReenrollmentNotEligible,
+        setEnrollmentHold,
         deleteEnrollment,
 
         // Student Document Vault & Verification

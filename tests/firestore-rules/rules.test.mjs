@@ -469,6 +469,39 @@ await check('student cannot edit a contact', false, () => updateDoc(doc(studentU
 await check('student cannot delete a contact', false, () => deleteDoc(doc(studentUser, 'admissionContacts/contact-1')));
 await check('Admin deletes a directory contact', true, () => deleteDoc(doc(admin, 'admissionContacts/contact-1')));
 
+section('Term closing and re-enrollment (returning students)');
+const reenr = (extra = {}) => ({
+  studentUid: 'stu1', studentId: '2026-PCM-0001', studentRecordId: 'std-linked', reenrollment: true,
+  termKey: '2027-2028|1st Semester', semester: '1st Semester', schoolYear: '2027–2028',
+  status: 'Pending Requirements', selectedSubjects: [], totalUnits: 0, ...extra,
+});
+await check('student checks whether a request for the term exists', true, () => getDoc(doc(studentUser, 'enrollments/enr-none')));
+await check('student files a re-enrollment for own record', true, () => setDoc(doc(studentUser, 'enrollments/enr-r1'), reenr({ id: 'enr-r1' })));
+await check("student cannot file for another student's record", false, () => setDoc(doc(studentUser, 'enrollments/enr-r2'), reenr({ id: 'enr-r2', studentRecordId: 'std-taken' })));
+await check('student cannot set their own clearance', false, () => setDoc(doc(studentUser, 'enrollments/enr-r3'), reenr({ id: 'enr-r3', clearances: { academic: { status: 'Cleared' } } })));
+await check('student cannot confirm their own year level', false, () => setDoc(doc(studentUser, 'enrollments/enr-r5'), reenr({ id: 'enr-r5', approvedYearLevel: '4th Year' })));
+await check('student cannot file an approved request', false, () => setDoc(doc(studentUser, 'enrollments/enr-r4'), reenr({ id: 'enr-r4', status: 'Approved' })));
+await check('student uploads a required document', true, () => setDoc(doc(studentUser, 'enrollments/enr-r1/requirements/doc-1'), { id: 'doc-1', name: 'Clearance form', required: true, studentUid: 'stu1', status: 'Submitted', fileName: 'a.pdf' }));
+await check('student cannot mark own document verified', false, () => updateDoc(doc(studentUser, 'enrollments/enr-r1/requirements/doc-1'), { status: 'Verified' }));
+await check('student replaces a document', true, () => updateDoc(doc(studentUser, 'enrollments/enr-r1/requirements/doc-1'), { fileName: 'b.pdf', status: 'Submitted' }));
+await check('student cannot move the request to another record', false, () => updateDoc(doc(studentUser, 'enrollments/enr-r1'), { studentRecordId: 'std-taken' }));
+await check('student sends the request for verification', true, () => updateDoc(doc(studentUser, 'enrollments/enr-r1'), { status: 'For Verification' }));
+await check('student cannot change the request once it is for verification', false, () => updateDoc(doc(studentUser, 'enrollments/enr-r1'), { notes: 'more subjects' }));
+await check('student cannot upload after sending for verification', false, () => updateDoc(doc(studentUser, 'enrollments/enr-r1/requirements/doc-1'), { fileName: 'c.pdf', status: 'Submitted' }));
+await check('student cannot approve their own request', false, () => updateDoc(doc(studentUser, 'enrollments/enr-r1'), { status: 'Approved' }));
+await check('Finance clears the financial clearance', true, () => setDoc(doc(finance, 'enrollments/enr-r1'), { clearances: { financial: { status: 'Cleared', by: 'Fin' } } }, { merge: true }));
+await check('Registrar confirms the year level', true, () => setDoc(doc(registrar, 'enrollments/enr-r1'), { approvedYearLevel: '2nd Year' }, { merge: true }));
+await check('Registrar verifies the document', true, () => updateDoc(doc(registrar, 'enrollments/enr-r1/requirements/doc-1'), { status: 'Verified', reviewedBy: 'Reg' }));
+await check("another signed-in user cannot read the request's documents", false, () => getDoc(doc(as('stranger', 'stranger@gmail.com'), 'enrollments/enr-r1/requirements/doc-1')));
+await check('student reads own documents', true, () => getDoc(doc(studentUser, 'enrollments/enr-r1/requirements/doc-1')));
+await check('student lists own requests', true, () => getDocs(query(collection(studentUser, 'enrollments'), where('studentUid', '==', 'stu1'))));
+await check('student cannot change own term history', false, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { termHistory: [] }));
+await check('student cannot lift own enrollment hold', false, () => updateDoc(doc(studentUser, 'studentProfiles/std-linked'), { enrollmentHold: { active: false, reason: '' } }));
+await check('Registrar records closed-term history', true, () => setDoc(doc(registrar, 'studentProfiles/std-linked'), { termHistory: [{ term: '1st Semester, AY 2026–2027' }], lastEnrolledTerm: '1st Semester, AY 2026–2027', enrollmentStatus: 'Not Enrolled' }, { merge: true }));
+await check('Registrar places an enrollment hold', true, () => setDoc(doc(registrar, 'studentProfiles/std-linked'), { enrollmentHold: { active: true, reason: 'On leave' } }, { merge: true }));
+await check('Registrar archives the closed term', true, () => setDoc(doc(registrar, 'academicPeriods/p-closed'), { status: 'Archived', closedAt: '2026-10-15' }, { merge: true }));
+await check('student cannot close a term', false, () => setDoc(doc(studentUser, 'academicPeriods/p-closed'), { status: 'Active' }, { merge: true }));
+
 section('Batch writes stay within Firestore limits');
 await check('Editor commits a 40-document batch', true, () => {
   const b = writeBatch(editor);
