@@ -17,6 +17,30 @@ function slipNumber(student: StudentProfile, a: StudentAssessment): string {
   return `ASM-${id}${sem || ay ? `-${sem}S${ay ? ay[1] + ay[2] : ''}` : ''}`;
 }
 
+export interface AssessedLine {
+  name: string;
+  detail?: string;
+  amount: number;
+  group: 'Tuition' | 'Miscellaneous fees' | 'Laboratory fees' | 'Other fees' | 'Less: discounts & scholarships' | 'Adjustments';
+  kind?: 'discount' | 'adjustment';
+}
+
+// The assessed fee lines of a term, in printing order. Shared by the Statement of Assessment and
+// the Certificate of Registration so both always list the same fees and total.
+export function assessedLines(a: StudentAssessment): { lines: AssessedLine[]; total: number } {
+  const lines: AssessedLine[] = [
+    ...(a.tuitionTotal
+      ? [{ name: 'Tuition', detail: a.totalUnits ? `${a.totalUnits} units × ${peso(a.tuitionPerUnit)}` : undefined, amount: a.tuitionTotal, group: 'Tuition' as const }]
+      : []),
+    ...a.miscBreakdown.map((l) => ({ name: l.name, amount: l.amount, group: 'Miscellaneous fees' as const })),
+    ...a.labBreakdown.map((l) => ({ name: l.name, amount: l.amount, group: 'Laboratory fees' as const })),
+    ...a.otherBreakdown.map((l) => ({ name: l.name, amount: l.amount, group: 'Other fees' as const })),
+    ...a.discountsBreakdown.map((l) => ({ name: l.name, amount: -Math.abs(l.amount), kind: 'discount' as const, group: 'Less: discounts & scholarships' as const })),
+    ...a.adjustmentsBreakdown.map((l) => ({ name: l.name, detail: l.note, amount: l.amount, kind: 'adjustment' as const, group: 'Adjustments' as const })),
+  ].filter((l) => Math.abs(l.amount) >= 0.005);
+  return { lines, total: Math.round(lines.reduce((s, l) => s + l.amount, 0) * 100) / 100 };
+}
+
 // The official Statement of Assessment for the student's current term. Every line comes from the
 // assessment the store computes (the Registrar's itemized assessment when known), so the lines
 // always add up to the total. Print it with printDocument(id, title).
@@ -34,17 +58,7 @@ export const AssessmentSlip: React.FC<{ student: StudentProfile; assessment: Stu
   const name = student.fullName || student.name || '';
   const term = [a.semester, a.academicYear ? `AY ${a.academicYear}` : ''].filter(Boolean).join(', ') || student.currentSemester || 'Current term';
 
-  const lines: { name: string; detail?: string; amount: number; kind?: 'discount' | 'adjustment' }[] = [
-    ...(a.tuitionTotal
-      ? [{ name: 'Tuition', detail: a.totalUnits ? `${a.totalUnits} units × ${peso(a.tuitionPerUnit)}` : undefined, amount: a.tuitionTotal }]
-      : []),
-    ...a.miscBreakdown.map((l) => ({ name: l.name, amount: l.amount })),
-    ...a.labBreakdown.map((l) => ({ name: l.name, amount: l.amount })),
-    ...a.otherBreakdown.map((l) => ({ name: l.name, amount: l.amount })),
-    ...a.discountsBreakdown.map((l) => ({ name: l.name, amount: -Math.abs(l.amount), kind: 'discount' as const })),
-    ...a.adjustmentsBreakdown.map((l) => ({ name: l.name, detail: l.note, amount: l.amount, kind: 'adjustment' as const })),
-  ].filter((l) => Math.abs(l.amount) >= 0.005);
-  const total = Math.round(lines.reduce((s, l) => s + l.amount, 0) * 100) / 100;
+  const { lines, total } = assessedLines(a);
   const hasRecord = account.totalCharges > 0;
   const balance = account.totalCharges > 0 ? account.balance : total;
 
