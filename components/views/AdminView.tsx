@@ -14,6 +14,7 @@ import { AdminNewsTab } from '@/components/admin/AdminNewsTab';
 import { AdminEventsTab } from '@/components/admin/AdminEventsTab';
 import { AdminAnnouncementsTab } from '@/components/admin/AdminAnnouncementsTab';
 import { AdminTestimonialsTab } from '@/components/admin/AdminTestimonialsTab';
+import { AdminAdmissionDirectoryTab } from '@/components/admin/AdminAdmissionDirectoryTab';
 import { AdminMediaTab } from '@/components/admin/AdminMediaTab';
 import { AdminDownloadsTab } from '@/components/admin/AdminDownloadsTab';
 import { AdminYouTubeTab } from '@/components/admin/AdminYouTubeTab';
@@ -81,6 +82,7 @@ export const AdminView: React.FC = () => {
     'downloads',
     'youtube',
     'applications',
+    'admissionDirectory',
     'enrollments',
     'donations',
     'users',
@@ -378,6 +380,7 @@ export const AdminView: React.FC = () => {
             {activeTab === 'downloads' && <AdminDownloadsTab />}
             {activeTab === 'youtube' && <AdminYouTubeTab />}
             {activeTab === 'applications' && <AdminApplicationsTab onOpenEnrollment={() => setActiveTab('enrollments')} />}
+            {activeTab === 'admissionDirectory' && <AdminAdmissionDirectoryTab />}
             {activeTab === 'enrollments' && <AdminEnrollmentsTab onOpenAdmissions={() => setActiveTab('applications')} />}
             {activeTab === 'donations' && <AdminDonationsTab />}
             {activeTab === 'studentLife' && <AdminStudentLifeTab />}

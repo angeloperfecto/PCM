@@ -140,6 +140,7 @@ service cloud.firestore {
     match /events/{id}                  { allow read: if true; allow write: if isAdmin(); }
     match /downloads/{id}               { allow read: if true; allow write: if isAdmin(); }
     match /testimonials/{id}            { allow read: if true; allow write: if isAdmin(); }
+    match /admissionContacts/{id}       { allow read: if true; allow write: if isAdmin(); }
     match /stats/{id}                   { allow read: if true; allow write: if isAdmin(); }
     match /faqs/{id}                    { allow read: if true; allow write: if isAdmin(); }
     match /sermons/{id}                 { allow read: if true; allow write: if isAdmin(); }

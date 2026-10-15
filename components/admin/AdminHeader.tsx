@@ -94,6 +94,10 @@ export const AdminHeader: React.FC<AdminHeaderProps> = ({
       title: 'Hero Slideshow & Carousel',
       subtitle: 'Homepage visual slides, headline announcements, and admissions promotional banners.',
     },
+    admissionDirectory: {
+      title: 'Official Admission Directory',
+      subtitle: 'Admissions officers and offices listed on the Admissions page: names, roles, emails, phones, offices and hours.',
+    },
     programs: {
       title: 'Academic Programs & Curriculum',
       subtitle: 'Degree offerings, unit requirements, curriculum syllabi, and theological disciplines.',
