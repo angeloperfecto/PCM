@@ -63,8 +63,8 @@ const PRESET_PHOTOS = [
     url: 'https://images.unsplash.com/photo-1529156069898-49953e39b3ac?q=80&w=600&auto=format&fit=crop',
   },
   {
-    name: 'Pulpit / Preaching',
-    url: 'https://images.unsplash.com/photo-1438232992991-995b7058bbb3?q=80&w=600&auto=format&fit=crop',
+    name: 'Prayer / Fellowship (PCM)',
+    url: '/images/pcm-students-prayer.jpg',
   },
   {
     name: 'Missions / Tribal',
