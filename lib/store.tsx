@@ -5833,7 +5833,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id,
       referenceNumber: `ENR-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase()}`,
       reenrollment: true,
-      enrollmentType: 'Returning',
+      // Continuing (enrolled last term) or Returnee (back after a gap of a year or more).
+      enrollmentType: input.flags.some((x) => /returning after a gap/i.test(x)) ? 'Returnee' : 'Continuing',
       termKey: key,
       studentRecordId: student.id,
       studentUid: uid,

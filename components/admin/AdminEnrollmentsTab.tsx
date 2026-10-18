@@ -26,6 +26,7 @@ import { ReenrollmentRulesCard } from './ReenrollmentRulesCard';
 import { GradingScaleCard } from './GradingScaleCard';
 import { CloseTermModal } from './CloseTermModal';
 import { ReenrollmentReviewPanel } from './ReenrollmentReviewPanel';
+import { TermEnrollmentOverview } from './TermEnrollmentOverview';
 import { ClassListModal, classListFor } from './ClassListModal';
 import { AdminCurriculumPanel } from './AdminCurriculumPanel';
 import { AcademicCourseModal } from './AcademicCourseModal';
@@ -918,6 +919,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       {/* ========================================================================= */}
       {activeSubTab === 'enrollments' && (
         <div className="space-y-4">
+          <TermEnrollmentOverview />
           {/* Filter Bar */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
             <div className="flex flex-wrap items-center gap-2">

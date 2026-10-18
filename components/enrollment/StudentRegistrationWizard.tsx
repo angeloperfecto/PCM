@@ -83,6 +83,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     logActivity,
     firebaseAuthUser,
     enrollmentSystemConfig,
+    isStudentLoggedIn,
   } = usePCM();
   // The admission requirements list (Enrollment & Records → System Governance).
   const admissionTemplates = admissionRequirementTemplates(enrollmentSystemConfig);
@@ -915,6 +916,22 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
 
               {formData.applicantType === 'Returning Student' && (
                 <div className="mt-4 pt-3 border-t border-slate-200">
+                  <div className={`mb-3 rounded-lg border p-3 text-xs ${isStudentLoggedIn ? 'border-emerald-300 bg-emerald-50 text-emerald-950' : 'border-sky-200 bg-sky-50 text-sky-950'}`}>
+                    {isStudentLoggedIn ? (
+                      <p>
+                        <strong>You already have a MyPCM student account.</strong> Re-enroll for the next term in the Student Portal (Enrollment → Re-enrollment)
+                        instead of sending a new application. Your Student ID and records stay the same.
+                      </p>
+                    ) : (
+                      <p>
+                        If you can sign in to the MyPCM Student Portal, re-enroll there instead of applying again. Otherwise continue: the Registrar will
+                        link this application to your existing student record so you keep your Student ID, grades and balance.
+                      </p>
+                    )}
+                    <button type="button" onClick={() => navigateTo('portal')} className="mt-2 rounded-lg bg-[#18392B] px-3 py-1.5 font-bold text-white hover:bg-[#588B76]">
+                      Go to the Student Portal
+                    </button>
+                  </div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     Existing Permanent PCM Student ID Number *
                   </label>

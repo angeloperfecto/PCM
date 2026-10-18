@@ -302,7 +302,8 @@ service cloud.firestore {
         && request.resource.data.get('applicantUid', '') == request.auth.uid
         && request.resource.data.get('status', '') == 'Submitted'
         && !request.resource.data.keys().hasAny(['studentId', 'studentRecordId', 'enrolledAt', 'lastDecisionBy', 'lastDecisionAt',
-          'applicantMessage', 'assessment', 'paymentStatus', 'amountPaidVerified', 'paymentVerifiedBy', 'paymentVerifiedAt']);
+          'applicantMessage', 'assessment', 'paymentStatus', 'amountPaidVerified', 'paymentVerifiedBy', 'paymentVerifiedAt',
+          'linkedStudentRecordId', 'noPriorRecordConfirmed', 'recordLinkedBy', 'creditedSubjects', 'creditsEvaluatedBy']);
       allow update: if applicationUpdateAllowed(adminRole());
       allow delete: if isEnrollmentStaff();
 
