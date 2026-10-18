@@ -554,6 +554,18 @@ await check('professor reads own grade change requests', true, () => getDocs(que
 await check('Registrar notifies the professor', true, () => setDoc(doc(registrar, 'studentNotifications/n-prof'), { recipientUid: 'prof1uid', title: 'Grades approved', read: false }));
 await check('professor reads own notification', true, () => getDoc(doc(prof, 'studentNotifications/n-prof')));
 
+section('Student categories: returnee record link and transfer credits');
+const catApp = (extra = {}) => ({ applicantUid: 'appl9', email: 'appl9@gmail.com', fullName: 'Applicant Nine', status: 'Submitted', applicantType: 'Returning Student', ...extra });
+const applicant9 = as('appl9', 'appl9@gmail.com');
+await check('applicant applies as a returning student', true, () => setDoc(doc(applicant9, 'applications/cat-1'), catApp()));
+await check('applicant cannot link themselves to a student record', false, () => setDoc(doc(applicant9, 'applications/cat-2'), catApp({ linkedStudentRecordId: 'std-linked' })));
+await check('applicant cannot claim transfer credits', false, () => setDoc(doc(applicant9, 'applications/cat-3'), catApp({ applicantType: 'Transfer Student', creditedSubjects: [{ code: 'BIB-101', units: 3 }] })));
+await check('applicant cannot skip the record check', false, () => setDoc(doc(applicant9, 'applications/cat-4'), catApp({ noPriorRecordConfirmed: true })));
+await check('applicant cannot add a record link later', false, () => updateDoc(doc(applicant9, 'applications/cat-1'), { linkedStudentRecordId: 'std-linked' }));
+await check('Registrar links the returnee to their record', true, () => updateDoc(doc(registrar, 'applications/cat-1'), { linkedStudentRecordId: 'std-legacy', recordLinkedBy: 'Reg', updatedAt: 'now' }));
+await check('Registrar records transfer credits', true, () => updateDoc(doc(registrar, 'applications/cat-1'), { creditedSubjects: [{ code: 'BIB-101', title: 'OT Survey', units: 3, sourceSchool: 'Other College' }], creditsEvaluatedBy: 'Reg' }));
+await check('Finance cannot link student records', false, () => updateDoc(doc(finance, 'applications/cat-1'), { linkedStudentRecordId: 'std-x' }));
+
 section('Batch writes stay within Firestore limits');
 await check('Editor commits a 40-document batch', true, () => {
   const b = writeBatch(editor);

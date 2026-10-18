@@ -5,6 +5,7 @@ import { collection, doc, limit, onSnapshot, orderBy, query, updateDoc } from 'f
 import { usePCM } from '@/lib/store';
 import { StudentAvatar } from '@/components/common/StudentAvatar';
 import { StudentAccountPayments } from './StudentAccountPayments';
+import { StudentRecordPanel } from './StudentRecordPanel';
 import type { StudentProfile } from '@/lib/types';
 import { accountSummary } from '@/lib/studentLedger';
 import { db } from '@/lib/firebase';
@@ -630,7 +631,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   onOpenEnrollment,
 }) => {
   const { requirements, history, payments, loading } = useApplicationDetails(app.id);
-  const { enrollmentSystemConfig: paymentConfig, students } = usePCM();
+  const { enrollmentSystemConfig: paymentConfig, students, currentAcademicPeriod } = usePCM();
   const student = normalizeStatus(app.status) === 'Enrolled' ? linkedStudent(app as any, students) : null;
   const account = student ? accountSummary(student as any) : null;
   const [editingDetails, setEditingDetails] = useState(false);
@@ -649,8 +650,8 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   const [showFinalize, setShowFinalize] = useState(false);
   // Term and year level come from the student's registration; staff can adjust them.
   const [finalize, setFinalize] = useState(() => ({
-    academicYear: app.registration?.academicYear || '2026–2027',
-    semester: app.registration?.semester || '1st Semester',
+    academicYear: app.registration?.academicYear || currentAcademicPeriod?.academicYear || '',
+    semester: app.registration?.semester || currentAcademicPeriod?.semester || '',
     yearLevel: app.registration?.yearLevel || '1st Year',
   }));
   const [verifiedConfirm, setVerifiedConfirm] = useState(false);
@@ -1008,6 +1009,9 @@ const ApplicationDetail: React.FC<DetailProps> = ({
               </button>
             </form>
           )}
+
+          {/* Existing student record (returnees) and transfer credits (transferees) */}
+          <StudentRecordPanel app={app as any} canDecide={canDecide} />
 
           {/* Academic registration (step 5) */}
           {(status === 'For Registration' || (app as any).registration) && (

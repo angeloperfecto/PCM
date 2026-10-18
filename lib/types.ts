@@ -1085,7 +1085,7 @@ export interface OnlineEnrollment {
   programTitle?: string;
   programCode?: string;
   yearLevel: string;
-  enrollmentType?: 'Regular' | 'Irregular' | 'Returning' | 'Cross-Enrollee' | 'New / Transferee';
+  enrollmentType?: 'Regular' | 'Irregular' | 'Returning' | 'Continuing' | 'Returnee' | 'Cross-Enrollee' | 'New / Transferee';
   selectedSubjects: SelectedSubject[];
   totalUnits: number;
   tuitionPerUnit?: number;

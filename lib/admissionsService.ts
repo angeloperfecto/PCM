@@ -19,6 +19,7 @@ import {
   WriteBatch,
 } from 'firebase/firestore';
 import { blobToDataUrl, compressImageFile } from './firebase';
+import { normCode, termKeyOf, termLabel, termStillOpen } from './reenrollment';
 import {
   ApplicationPayment,
   ApplicationRequirement,
@@ -52,6 +53,16 @@ export interface Actor {
   name: string;
   email?: string | null;
   role?: string;
+}
+
+/** A subject credited from a transferee's previous school (set by the Registrar in Admissions Review). */
+export interface CreditedSubject {
+  code: string;
+  title: string;
+  units: number;
+  sourceSchool: string;
+  sourceSubject?: string;
+  sourceGrade?: string;
 }
 
 export interface ApplicationRecord {
@@ -1047,6 +1058,11 @@ async function allocateStudentId(db: Firestore, year: number): Promise<string> {
 // Finds an existing student record for this applicant so enrollment updates it instead of
 // creating a duplicate.
 async function findExistingStudentRecord(db: Firestore, app: ApplicationRecord): Promise<{ id: string; data: any } | null> {
+  // A returnee's record, linked by the Registrar in Admissions Review.
+  if (app.linkedStudentRecordId) {
+    const snap = await getDoc(doc(db, 'studentProfiles', app.linkedStudentRecordId));
+    if (snap.exists()) return { id: snap.id, data: snap.data() };
+  }
   const lookups: [string, string | undefined][] = [
     ['applicationNumber', app.referenceNumber],
     ['authUid', app.applicantUid],
@@ -1058,6 +1074,31 @@ async function findExistingStudentRecord(db: Firestore, app: ApplicationRecord):
     if (!snap.empty) return { id: snap.docs[0].id, data: snap.docs[0].data() };
   }
   return null;
+}
+
+/** Links an application to a returnee's existing student record (or records that there is none). Staff only. */
+export async function linkApplicationToStudentRecord(db: Firestore, app: ApplicationRecord, recordId: string | null, staffName: string): Promise<void> {
+  await setDoc(
+    doc(db, 'applications', app.id),
+    recordId
+      ? { linkedStudentRecordId: recordId, noPriorRecordConfirmed: false, recordLinkedBy: staffName, recordLinkedAt: now(), updatedAt: now() }
+      : { linkedStudentRecordId: '', noPriorRecordConfirmed: true, recordLinkedBy: staffName, recordLinkedAt: now(), updatedAt: now() },
+    { merge: true }
+  );
+}
+
+/** Removes the link (the Registrar chooses again). Staff only. */
+export async function unlinkApplicationRecord(db: Firestore, app: ApplicationRecord, staffName: string): Promise<void> {
+  await setDoc(doc(db, 'applications', app.id), { linkedStudentRecordId: '', noPriorRecordConfirmed: false, recordLinkedBy: staffName, recordLinkedAt: now(), updatedAt: now() }, { merge: true });
+}
+
+/** Saves the Registrar's transfer credit evaluation (subjects credited from the previous school). Staff only. */
+export async function saveCreditedSubjects(db: Firestore, app: ApplicationRecord, credits: CreditedSubject[], staffName: string): Promise<void> {
+  await setDoc(
+    doc(db, 'applications', app.id),
+    { creditedSubjects: credits, creditsEvaluatedBy: staffName, creditsEvaluatedAt: now(), updatedAt: now() },
+    { merge: true }
+  );
 }
 
 export async function finalizeEnrollment(
@@ -1079,6 +1120,27 @@ export async function finalizeEnrollment(
   }
 
   const existing = await findExistingStudentRecord(db, app);
+  const newTermLabel = termLabel(options.semester, options.academicYear);
+  if (String(app.applicantType || '') === 'Returning Student' && !existing && !app.noPriorRecordConfirmed) {
+    return {
+      ok: false,
+      message: 'This applicant is a returning student. Link their existing student record (Admissions Review → Student record), or confirm that they have no earlier record.',
+    };
+  }
+  if (existing && termStillOpen(existing.data, newTermLabel)) {
+    return {
+      ok: false,
+      message: `The student is still enrolled in ${existing.data.currentSemester}. Close that term first so its subjects and grades are kept in the academic history.`,
+    };
+  }
+  // Term capacity (Academic Terms) and the term record to count this enrollment in.
+  const termKey = termKeyOf(options.semester, options.academicYear);
+  const periodDoc = (await getDocs(collection(db, 'academicPeriods'))).docs.find((d) => termKeyOf(d.data().semester, d.data().academicYear) === termKey);
+  const period = periodDoc?.data();
+  const alreadyThisTerm = !!existing && String(existing.data.currentSemester || '') !== '' && termKeyOf(existing.data.semester, existing.data.academicYear) === termKey && existing.data.enrollmentStatus === 'Enrolled';
+  if (period?.capacity && (Number(period.enrolledCount) || 0) >= Number(period.capacity) && !alreadyThisTerm) {
+    return { ok: false, message: `${newTermLabel} has reached its enrollment capacity (${period.capacity}). Raise it in Academic Terms to enroll more students.` };
+  }
   const studentId: string =
     existing?.data?.studentId || (await allocateStudentId(db, parseInt(options.academicYear, 10) || new Date().getFullYear()));
   const recordId = existing?.id || `std-${studentId}`;
@@ -1088,8 +1150,53 @@ export async function finalizeEnrollment(
     .filter((r) => r.status === 'Verified')
     .map((r) => ({ id: r.id, name: r.name, verifiedBy: r.reviewedBy || '', verifiedAt: r.reviewedAt || '' }));
 
+  // Charges, payments and balance carry forward for an existing record (returnee); a new record starts with this assessment.
+  const prev = existing?.data || {};
+  const assessmentTotal = Number(app.assessment?.total) || 0;
+  const newPaid = verifiedPaymentTotal(payments);
+  const prevCharges = Number(prev.tuitionTotal) || 0;
+  const prevPaid = Number(prev.tuitionPaid) || 0;
+  const prevBalance = Math.max(0, typeof prev.tuitionBalance === 'number' ? prev.tuitionBalance : prevCharges - prevPaid);
+  const tuitionTotal = Math.round((prevCharges + assessmentTotal) * 100) / 100;
+  const tuitionPaid = Math.round((prevPaid + newPaid) * 100) / 100;
+  const tuitionBalance = Math.max(0, Math.round((tuitionTotal - tuitionPaid) * 100) / 100);
+  const newPaymentRecords = payments
+    .filter((p) => p.status === 'Verified')
+    .map((p) => ({
+      id: p.id,
+      amount: Number(p.amount),
+      method: p.method,
+      referenceNo: p.referenceNo,
+      paymentDate: p.paidOn,
+      status: 'Verified',
+      verifiedBy: p.reviewedBy || '',
+      verifiedAt: p.reviewedAt || '',
+      description: 'Enrollment payment',
+    }));
+  const priorRecords: any[] = Array.isArray(prev.paymentRecords) ? prev.paymentRecords : [];
+  const paymentRecords = [...priorRecords, ...newPaymentRecords.filter((p) => !priorRecords.some((r) => r?.id === p.id))];
+  // Transfer credits go into the academic history as Credited (once per subject code).
+  const priorHistory: any[] = Array.isArray(prev.subjectHistory) ? prev.subjectHistory : [];
+  const credits: CreditedSubject[] = Array.isArray(app.creditedSubjects) ? app.creditedSubjects : [];
+  const creditEntries = credits
+    .filter((c) => c && c.code && !priorHistory.some((h) => normCode(h.code) === normCode(c.code) && ['Passed', 'Credited'].includes(String(h.status))))
+    .map((c) => ({
+      code: c.code,
+      title: c.title,
+      units: Number(c.units) || 0,
+      grade: '',
+      semester: 'Transfer credit',
+      academicYear: options.academicYear,
+      status: 'Credited',
+      creditedFrom: c.sourceSchool || '',
+      creditedSubject: c.sourceSubject || '',
+      sourceGrade: c.sourceGrade || '',
+    }));
+  const subjectHistory = [...priorHistory, ...creditEntries];
+
   const profile = {
     id: recordId,
+    applicantType: app.applicantType || prev.applicantType || 'New Student',
     studentId,
     applicationNumber: app.referenceNumber,
     referenceNumber: app.referenceNumber,
@@ -1133,30 +1240,16 @@ export async function finalizeEnrollment(
     admissionRequirementsVerified: true,
     verifiedAdmissionDocuments: verifiedDocs,
     // Fees and verified payments from the assessment and payment steps.
-    tuitionTotal: Number(app.assessment?.total) || 0,
+    tuitionTotal,
     // The Registrar's itemized assessment, shown on the assessment slip and COR.
-    termAssessment: Number(app.assessment?.total) || 0,
-    previousBalance: 0,
+    termAssessment: assessmentTotal,
+    previousBalance: prevBalance,
     termAssessmentLines: (app.assessment?.items || []).map((l: { name: string; amount: number }) => ({ name: l.name, amount: Number(l.amount) || 0 })),
-    tuitionPaid: verifiedPaymentTotal(payments),
-    tuitionBalance: Math.max(0, (Number(app.assessment?.total) || 0) - verifiedPaymentTotal(payments)),
-    paymentStatus:
-      app.paymentStatus === 'Waived' || (Number(app.assessment?.total) || 0) <= verifiedPaymentTotal(payments)
-        ? 'Paid'
-        : 'Partially Paid',
-    paymentRecords: payments
-      .filter((p) => p.status === 'Verified')
-      .map((p) => ({
-        id: p.id,
-        amount: Number(p.amount),
-        method: p.method,
-        referenceNo: p.referenceNo,
-        paymentDate: p.paidOn,
-        status: 'Verified',
-        verifiedBy: p.reviewedBy || '',
-        verifiedAt: p.reviewedAt || '',
-        description: 'Enrollment payment',
-      })),
+    tuitionPaid,
+    tuitionBalance,
+    paymentStatus: app.paymentStatus === 'Waived' || tuitionBalance <= 0 ? 'Paid' : tuitionPaid > 0 ? 'Partially Paid' : 'Unpaid',
+    paymentRecords,
+    subjectHistory,
     // Step 8: Student Portal activation.
     portalAccess: true,
     accountStatus: 'Active',
@@ -1164,7 +1257,7 @@ export async function finalizeEnrollment(
     enrolledAt: timestamp,
     enrolledBy: staff.name,
     updatedAt: timestamp,
-    ...(existing ? {} : { createdAt: timestamp, subjectHistory: [], practicumEntries: [], documents: [] }),
+    ...(existing ? {} : { createdAt: timestamp, practicumEntries: [], documents: [] }),
   };
 
   const appWithRecord = { ...app, studentRecordId: recordId };
@@ -1174,6 +1267,7 @@ export async function finalizeEnrollment(
   const subjectIds: string[] = Array.from(new Set<string>((app.registration?.subjects || []).map((sub: RegisteredSubject) => sub.subjectId).filter(Boolean)));
   const existingSubjects = await Promise.all(subjectIds.map((id) => getDoc(doc(db, 'academicSubjects', id)).then((snap) => (snap.exists() ? id : null)).catch(() => null)));
   existingSubjects.filter(Boolean).forEach((id) => batch.update(doc(db, 'academicSubjects', id as string), { enrolledCount: increment(1) }));
+  if (periodDoc && !alreadyThisTerm) batch.update(doc(db, 'academicPeriods', periodDoc.id), { enrolledCount: increment(1) });
   batch.update(doc(db, 'applications', app.id), {
     status: 'Enrolled',
     studentId,

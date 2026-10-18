@@ -3,6 +3,8 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, ClipboardList, Printer, Undo2 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { normAY, normCode, offeredSubjects, openEnrollmentTerm, semesterKind } from '@/lib/reenrollment';
+import { subjectsForProgram } from '@/lib/curriculum';
 import { db, auth } from '@/lib/firebase';
 import {
   APPLICANT_CORRECTION_FIELDS,
@@ -36,9 +38,12 @@ const ResultNote: React.FC<{ result: Result | null }> = ({ result }) =>
 
 // Step 5: the admitted student chooses program, year level and subjects for the open term.
 export const RegistrationForm: React.FC<{ app: App }> = ({ app }) => {
-  const { academicSubjects, currentAcademicPeriod, programs, enrollmentSystemConfig } = usePCM();
-  const term = currentAcademicPeriod;
-  const termOpen = !!term && term.enrollmentStatus === 'Open';
+  const { academicSubjects, academicPeriods, programs, enrollmentSystemConfig, curriculumSubjects } = usePCM();
+  // The term open for enrollment now (status, dates and capacity from Academic Terms).
+  const openTerm = openEnrollmentTerm(academicPeriods);
+  const term = openTerm;
+  const termFull = !!openTerm?.capacity && (openTerm.enrolledCount || 0) >= openTerm.capacity;
+  const termOpen = !!openTerm && !termFull;
   const programNames = useMemo(
     () => Array.from(new Set([app.programName || app.program, ...programs.map((p: any) => p.name || p.title)].filter(Boolean))) as string[],
     [programs, app.programName, app.program]
@@ -49,14 +54,34 @@ export const RegistrationForm: React.FC<{ app: App }> = ({ app }) => {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
 
-  const offered = useMemo(
+  const catalogForTerm = useMemo(
     () =>
       academicSubjects
         .filter((s: any) => !s.isArchived && (s.status || 'Open') === 'Open')
-        .filter((s: any) => !term || ((!s.semester || s.semester === term.semester) && (!s.academicYear || s.academicYear === term.academicYear)))
+        .filter((s: any) => !term || ((!s.semester || semesterKind(s.semester) === semesterKind(term.semester)) && (!s.academicYear || normAY(s.academicYear) === normAY(term.academicYear))))
         .sort((a: any, b: any) => a.code.localeCompare(b.code)),
     [academicSubjects, term]
   );
+  // The program's curriculum (Subjects per Year Level) decides which offerings apply: subjects of the
+  // chosen year level and earlier ones not yet taken, minus subjects credited from a previous school.
+  const credits: { code: string; title: string; units: number }[] = Array.isArray(app.creditedSubjects) ? app.creditedSubjects : [];
+  const selectedProgram = programs.find((p: any) => (p.name || p.title) === programName) || null;
+  const programSubjects = useMemo(() => subjectsForProgram(curriculumSubjects, selectedProgram).filter((s) => s.status !== 'Inactive'), [curriculumSubjects, selectedProgram]);
+  const curriculumOffered = useMemo(
+    () =>
+      programSubjects.length && yearLevel && term
+        ? offeredSubjects(programSubjects, academicSubjects, yearLevel, term.semester, { subjectHistory: credits.map((c) => ({ code: c.code, title: c.title, units: c.units, grade: '', semester: '', academicYear: '', status: 'Credited' })) } as any)
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [programSubjects, academicSubjects, yearLevel, term, JSON.stringify(credits)]
+  );
+  const offered = useMemo(
+    () => (curriculumOffered ? catalogForTerm.filter((s: any) => curriculumOffered.some((c) => normCode(c.code) === normCode(s.code))) : catalogForTerm),
+    [catalogForTerm, curriculumOffered]
+  );
+  const notOfferedThisTerm = (curriculumOffered || []).filter((c) => !catalogForTerm.some((s: any) => normCode(s.code) === normCode(c.code)));
+  const enforcePrereq = !!enrollmentSystemConfig?.enforcePrerequisites;
+  const curriculumInfo = (code: string) => (curriculumOffered || []).find((c) => normCode(c.code) === normCode(code));
   const policy = {
     minUnits: Number(enrollmentSystemConfig?.minUnitsAllowed) || 0,
     maxUnits: Number(enrollmentSystemConfig?.maxUnitsAllowed) || 0,
@@ -78,13 +103,20 @@ export const RegistrationForm: React.FC<{ app: App }> = ({ app }) => {
     }));
   const totalUnits = subjects.reduce((sum, s) => sum + s.units, 0);
   const draft = { programName, yearLevel, academicYear: term?.academicYear || '', semester: term?.semester || '', subjects };
-  const problem = validateRegistration(draft, policy, offered as CatalogSubject[]);
+  const prereqBlocked = enforcePrereq ? subjects.filter((x) => curriculumInfo(x.code)?.prerequisitesMet === false) : [];
+  const problem =
+    validateRegistration(draft, policy, offered as CatalogSubject[]) ||
+    (prereqBlocked.length ? `Prerequisites not yet passed: ${prereqBlocked.map((x) => x.code).join(', ')}.` : '');
 
   if (!termOpen) {
     return (
       <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-xs text-amber-950">
         <h4 className="font-serif text-lg font-bold text-[#18392B]">Choose your subjects</h4>
-        <p className="mt-1">Enrollment for the current term is not open yet. You will be able to choose your subjects once the Registrar opens it.</p>
+        <p className="mt-1">
+          {termFull
+            ? `Enrollment for ${openTerm!.semester}, AY ${openTerm!.academicYear} has reached its capacity. Please contact the Registrar.`
+            : 'Enrollment for the current term is not open yet. You will be able to choose your subjects once the Registrar opens it.'}
+        </p>
       </section>
     );
   }
@@ -121,6 +153,17 @@ export const RegistrationForm: React.FC<{ app: App }> = ({ app }) => {
         </label>
       </div>
 
+      {credits.length > 0 && (
+        <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-[11px] text-emerald-950">
+          Credited from your previous school: {credits.map((c) => c.code).join(', ')} ({credits.reduce((t, c) => t + (Number(c.units) || 0), 0)} units). These are not offered again.
+        </p>
+      )}
+      {!yearLevel && <p className="text-[11px] text-amber-800">Choose your year level to see the subjects of your curriculum.</p>}
+      {curriculumOffered && notOfferedThisTerm.length > 0 && (
+        <p className="text-[11px] text-slate-500">
+          In your curriculum but not offered this term: {notOfferedThisTerm.map((c) => c.code).join(', ')}.
+        </p>
+      )}
       {offered.length === 0 ? (
         <p className="text-xs text-slate-600">No subjects are offered for this term yet. Please check back or contact the Registrar.</p>
       ) : (
@@ -139,6 +182,8 @@ export const RegistrationForm: React.FC<{ app: App }> = ({ app }) => {
               {offered.map((s: any) => {
                 const full = Number(s.capacity) > 0 && Number(s.enrolledCount || 0) >= Number(s.capacity);
                 const checked = selected.includes(s.id);
+                const info = curriculumInfo(s.code);
+                const blocked = enforcePrereq && info?.prerequisitesMet === false;
                 return (
                   <tr key={s.id} className={`border-t border-slate-100 ${checked ? 'bg-emerald-50/60' : ''}`}>
                     <td className="p-2">
@@ -146,13 +191,17 @@ export const RegistrationForm: React.FC<{ app: App }> = ({ app }) => {
                         type="checkbox"
                         aria-label={`Select ${s.code}`}
                         checked={checked}
-                        disabled={full && !checked}
+                        disabled={(full || blocked) && !checked}
                         onChange={(e) => setSelected((cur) => (e.target.checked ? [...cur, s.id] : cur.filter((x) => x !== s.id)))}
                       />
                     </td>
                     <td className="p-2">
                       <span className="font-mono font-bold text-[#18392B]">{s.code}</span> {s.title}
                       {s.section ? <span className="text-slate-400"> · {s.section}</span> : null}
+                      {info?.backSubject && <span className="ml-1 rounded bg-amber-100 px-1 text-[10px] font-bold text-amber-900">{info.yearLevel}</span>}
+                      {info && !info.prerequisitesMet && (
+                        <span className="ml-1 rounded bg-rose-100 px-1 text-[10px] font-bold text-rose-800">Prerequisite: {info.prerequisites}</span>
+                      )}
                     </td>
                     <td className="p-2 text-slate-600">{s.schedule || '—'}</td>
                     <td className="p-2 text-right font-mono">{s.units}</td>
