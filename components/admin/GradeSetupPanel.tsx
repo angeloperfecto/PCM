@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, Circle } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { assignableProfessors, facultyForInstructor, instructorForFaculty, professorDisplayName } from '@/lib/professors';
 import { gradingScaleOf, instructorForSection, normEmail, subjectsWithoutSection } from '@/lib/grades';
 import { termLabel } from '@/lib/reenrollment';
 import { GradingScaleCard } from './GradingScaleCard';
@@ -31,10 +32,15 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
   onPrepare,
   preparing,
 }) => {
-  const { enrollmentSystemConfig, instructors, students, updateClassSection, updateAcademicSubject, updateInstructor, updateAcademicPeriod, canManageCurriculum, addToast } = usePCM();
+  const { enrollmentSystemConfig, instructors, faculty, students, updateClassSection, updateAcademicSubject, updateInstructor, addInstructor, updateAcademicPeriod, canManageCurriculum, addToast } = usePCM();
+  // Professors come from Faculty & Trustees, as the Admin set them up.
+  const { teaching, others } = assignableProfessors(faculty || []);
   const scale = gradingScaleOf(enrollmentSystemConfig);
   const noSection = subjectsWithoutSection(students, term, termSections);
-  const rows = termSections.map((s) => ({ section: s, instructor: instructorForSection(s, instructors) }));
+  const rows = termSections.map((s) => {
+    const instructor = instructorForSection(s, instructors);
+    return { section: s, instructor, member: facultyForInstructor(instructor, faculty || []) };
+  });
   const readySections = rows.filter((r) => r.instructor && normEmail(r.instructor.email));
   const toCreate = readySections.filter((r) => !sheets.some((x) => x.sectionId === r.section.id)).length;
 
@@ -72,10 +78,29 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
       await updateAcademicPeriod(term.id, { gradeSubmissionStart: dates.start, gradeSubmissionDeadline: dates.end });
     });
 
-  const assign = (sectionId: string, instructorId: string) =>
+  // Assign a Faculty & Trustees member to a class. Their instructor record (sign-in email, grade sheets)
+  // is reused when it exists, otherwise created and linked to them.
+  const assign = (sectionId: string, facultyId: string) =>
     run(`sec-${sectionId}`, async () => {
-      const ins = instructors.find((i) => i.id === instructorId);
-      const name = ins ? [ins.title, ins.fullName].filter(Boolean).join(' ') : '';
+      if (facultyId.startsWith('ins:')) return; // the current, unlisted professor: nothing to change
+      const member = (faculty || []).find((m) => m.id === facultyId);
+      let ins = member ? instructorForFaculty(member, instructors) : undefined;
+      if (member && !ins) {
+        ins =
+          (await addInstructor({
+            employeeId: '',
+            fullName: member.name,
+            title: '',
+            email: (member.email || '').trim().toLowerCase(),
+            department: member.department || '',
+            status: 'Active',
+            facultyId: member.id,
+          })) || undefined;
+        if (!ins) return;
+      } else if (member && ins && (ins.facultyId !== member.id || (!ins.email && member.email))) {
+        await updateInstructor(ins.id, { facultyId: member.id, ...(!ins.email && member.email ? { email: member.email.trim().toLowerCase() } : {}) });
+      }
+      const name = member ? member.name : '';
       const section = termSections.find((s) => s.id === sectionId);
       // A Term Subjects class is updated in Term Subjects, so Enrollment & Records shows the same professor.
       if (section?.offeringId) await updateAcademicSubject(section.offeringId, { instructorId: ins?.id || '', instructor: name });
@@ -144,21 +169,35 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
                     <tr><th className="p-1.5">Class</th><th className="p-1.5">Professor</th><th className="p-1.5">Sign-in email</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {rows.map(({ section, instructor }) => (
+                    {rows.map(({ section, instructor, member }) => (
                       <tr key={section.id}>
                         <td className="p-1.5"><strong className="font-mono">{section.subjectCode}</strong> {section.sectionName}</td>
                         <td className="p-1.5">
                           <select
                             aria-label={`Professor for ${section.subjectCode} ${section.sectionName}`}
-                            value={instructor?.id || ''}
+                            value={member?.id || (instructor ? `ins:${instructor.id}` : '')}
                             disabled={ro || busy === `sec-${section.id}`}
                             onChange={(e) => assign(section.id, e.target.value)}
                             className="w-full rounded-lg border border-slate-300 bg-white p-1.5"
                           >
                             <option value="">Choose professor…</option>
-                            {instructors.filter((i) => i.status !== 'Inactive').map((i) => (
-                              <option key={i.id} value={i.id}>{[i.title, i.fullName].filter(Boolean).join(' ')}</option>
-                            ))}
+                            {instructor && !member && (
+                              <option value={`ins:${instructor.id}`}>{professorDisplayName(instructor)} (not in Faculty &amp; Trustees)</option>
+                            )}
+                            {teaching.length > 0 && (
+                              <optgroup label="Faculty">
+                                {teaching.map((m) => (
+                                  <option key={m.id} value={m.id}>{m.name}{m.title ? ` — ${m.title}` : ''}</option>
+                                ))}
+                              </optgroup>
+                            )}
+                            {others.length > 0 && (
+                              <optgroup label="Administration & others">
+                                {others.map((m) => (
+                                  <option key={m.id} value={m.id}>{m.name}{m.title ? ` — ${m.title}` : ''}</option>
+                                ))}
+                              </optgroup>
+                            )}
                           </select>
                         </td>
                         <td className="p-1.5">
@@ -170,7 +209,7 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
                             <span className="flex gap-1">
                               <input
                                 type="email"
-                                aria-label={`Email for ${instructor.fullName}`}
+                                aria-label={`Email for ${professorDisplayName(instructor)}`}
                                 value={emails[instructor.id] || ''}
                                 disabled={ro}
                                 onChange={(e) => setEmails((m) => ({ ...m, [instructor.id]: e.target.value }))}
@@ -191,7 +230,7 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
                 </table>
               </div>
             )}
-            {instructors.length === 0 && <p>No professors yet. Add them in Enrollment &amp; Records → Faculty Load.</p>}
+            {teaching.length + others.length === 0 && <p>No professors yet. Add them in Faculty &amp; Trustees.</p>}
             {noSection.length > 0 && (
               <p className="text-amber-900">
                 Students are enrolled in subjects without a class: {noSection.map((x) => `${x.code} (${x.students})`).join(', ')}. Add a class for each in
