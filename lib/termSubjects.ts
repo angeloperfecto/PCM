@@ -430,8 +430,15 @@ export function studentsEnrolledInTerm(students: Partial<StudentProfile>[], term
  */
 export function termEnrollmentCounts(students: Partial<StudentProfile>[], catalog: AcademicSubject[], term: TermRef): Map<string, number> {
   const counts = new Map<string, number>();
+  termEnrollmentRosters(students, catalog, term).forEach((ids, id) => counts.set(id, ids.length));
+  return counts;
+}
+
+/** The student record ids enrolled in each offering of a term (same matching as the counts). */
+export function termEnrollmentRosters(students: Partial<StudentProfile>[], catalog: AcademicSubject[], term: TermRef): Map<string, string[]> {
+  const rosters = new Map<string, string[]>();
   const inTerm = termOfferings(catalog, term);
-  for (const o of inTerm) counts.set(o.id, 0);
+  for (const o of inTerm) rosters.set(o.id, []);
   for (const s of studentsEnrolledInTerm(students, term)) {
     const seen = new Set<string>();
     for (const c of s.courses || []) {
@@ -440,8 +447,8 @@ export function termEnrollmentCounts(students: Partial<StudentProfile>[], catalo
       const offering = byId || offeringForCode(catalog, term, c.code);
       if (!offering || seen.has(offering.id)) continue;
       seen.add(offering.id);
-      counts.set(offering.id, (counts.get(offering.id) || 0) + 1);
+      rosters.set(offering.id, [...(rosters.get(offering.id) || []), String(s.id || s.studentId || '')]);
     }
   }
-  return counts;
+  return rosters;
 }

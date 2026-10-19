@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileEdit, FileSpreadsheet, Printer, RefreshCcw, X } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import {
@@ -11,12 +11,14 @@ import {
   finalizeGradeSheet,
   gradesCsv,
   gradingScaleOf,
+  instructorForSection,
+  normEmail,
   isOverdue,
   lookupGrade,
   prepareGradeSheets,
   publishGradeSheet,
   requestGradeAmendment,
-  sectionsForTerm,
+  termClassSections,
   setSheetStatus,
   sheetIssues,
   sheetStageLabel,
@@ -47,7 +49,7 @@ const STAGE_STYLE: Record<string, string> = {
 
 // Admin → Grade Management: every class's grade sheet for a term, from preparation to publication.
 export const AdminGradesTab: React.FC = () => {
-  const { academicPeriods, classSections, instructors, students, enrollmentSystemConfig, canManageCurriculum, currentAdminUser, addToast, navigateTo } = usePCM();
+  const { academicPeriods, academicSubjects, classSections, instructors, students, enrollmentSystemConfig, canManageCurriculum, currentAdminUser, addToast, navigateTo } = usePCM();
   const scale = gradingScaleOf(enrollmentSystemConfig);
   const sortedTerms = useMemo(
     // Current term first, then active, then closed (most recent first); upcoming terms last.
@@ -70,7 +72,8 @@ export const AdminGradesTab: React.FC = () => {
   const [prepareNote, setPrepareNote] = useState<string[]>([]);
   const actor = currentAdminUser?.name || 'Registrar';
 
-  const termSections = term ? sectionsForTerm(classSections, term) : [];
+  // Classes from Enrollment & Records → Term Subjects (and any stored class sections), with their enrolled students.
+  const termSections = useMemo(() => (term ? termClassSections(term, classSections, academicSubjects, students) : []), [term, classSections, academicSubjects, students]);
   const professors = Array.from(new Set(sheets.map((s) => s.instructorName))).sort();
   const programs = Array.from(new Set(sheets.flatMap((s) => s.students.map((x) => x.program)).filter(Boolean))).sort();
   const yearLevels = Array.from(new Set(sheets.flatMap((s) => s.students.map((x) => x.yearLevel)).filter(Boolean))).sort();
@@ -94,19 +97,58 @@ export const AdminGradesTab: React.FC = () => {
     return [...i.missing.map((id) => ({ s, id, issue: 'No grade' })), ...i.incomplete.map((id) => ({ s, id, issue: `Incomplete (${s.grades[id]?.grade})` })), ...i.invalid.map((id) => ({ s, id, issue: 'Not on the scale' }))];
   });
 
-  const prepare = async () => {
+  const prepare = async (auto = false) => {
     if (!term) return;
     setPreparing(true);
     try {
-      const r = await prepareGradeSheets(term, classSections, instructors, students, sheets, actor);
+      const r = await prepareGradeSheets(term, termSections, instructors, students, sheets, actor);
       setPrepareNote([...r.skipped.map((x) => `${x.section}: ${x.reason}`), ...Array.from(new Set(r.warnings))]);
-      addToast('success', 'Grade sheets prepared', `${r.created} created, ${r.updated} class lists refreshed${r.skipped.length ? `, ${r.skipped.length} skipped` : ''}.`);
+      if (!auto || r.created || r.updated)
+        addToast(
+          'success',
+          auto ? 'Grade sheets updated' : 'Grade sheets prepared',
+          `${auto ? 'From Enrollment & Records: ' : ''}${r.created} created, ${r.updated} refreshed${r.skipped.length ? `, ${r.skipped.length} skipped` : ''}.`
+        );
     } catch (e: any) {
       addToast('error', 'Not prepared', e?.code === 'permission-denied' ? 'Only the Registrar, Academic Admin or an Admin can prepare grade sheets.' : 'Please try again.');
     } finally {
       setPreparing(false);
     }
   };
+
+  // What Enrollment & Records changed since the sheets were prepared: classes with a professor but no sheet, and
+  // draft sheets whose class list, subject details or professor differ. Refreshed automatically for staff.
+  const syncSignature = useMemo(() => {
+    if (!term || term.closedAt || !loaded || !canManageCurriculum) return '';
+    const parts: string[] = [];
+    for (const section of termSections) {
+      const ins = instructorForSection(section, instructors);
+      if (!ins || !normEmail(ins.email)) continue;
+      const sheet = sheets.find((x) => x.sectionId === section.id);
+      if (!sheet) {
+        parts.push(`new:${section.id}`);
+        continue;
+      }
+      if (!['Draft', 'Returned for Correction'].includes(sheet.status)) continue;
+      const roster = classListFor(section, termSections, students, term).students.map((s) => s.id).sort().join(',');
+      const same =
+        [...sheet.roster].sort().join(',') === roster &&
+        sheet.subjectTitle === section.subjectTitle &&
+        Number(sheet.units) === (Number(section.units) || 0) &&
+        (sheet.sectionName || '') === (section.sectionName || section.sectionCode || '') &&
+        sheet.instructorEmail === normEmail(ins.email);
+      if (!same) parts.push([section.id, roster, section.subjectTitle, section.units, section.sectionName, normEmail(ins.email)].join(':'));
+    }
+    return parts.join('|');
+  }, [term, loaded, canManageCurriculum, termSections, instructors, sheets, students]);
+  const lastSync = useRef('');
+  useEffect(() => {
+    if (!syncSignature || preparing || syncSignature === lastSync.current) return;
+    lastSync.current = syncSignature;
+    void prepare(true);
+    // Re-checked when a refresh finishes, so a change that arrived during it is not missed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncSignature, preparing]);
 
   const review = sheets.find((s) => s.id === reviewId) || null;
   const select = 'rounded-lg border border-slate-300 bg-white p-2 text-xs';
@@ -140,7 +182,7 @@ export const AdminGradesTab: React.FC = () => {
               </select>
             </label>
             {canManageCurriculum && term && !term.closedAt && (
-              <button type="button" onClick={prepare} disabled={preparing} className="inline-flex items-center gap-1.5 rounded-lg border border-[#18392B] px-3 py-2 text-xs font-bold text-[#18392B] hover:bg-emerald-50 disabled:opacity-50">
+              <button type="button" onClick={() => prepare()} disabled={preparing} className="inline-flex items-center gap-1.5 rounded-lg border border-[#18392B] px-3 py-2 text-xs font-bold text-[#18392B] hover:bg-emerald-50 disabled:opacity-50">
                 <RefreshCcw className="h-3.5 w-3.5" /> {preparing ? 'Preparing…' : 'Prepare / refresh grade sheets'}
               </button>
             )}
@@ -196,7 +238,7 @@ export const AdminGradesTab: React.FC = () => {
         )}
       </div>
 
-      {term && !term.closedAt && canManageCurriculum && <GradeSetupPanel term={term} sheets={sheets} onPrepare={prepare} preparing={preparing} />}
+      {term && !term.closedAt && canManageCurriculum && <GradeSetupPanel term={term} sheets={sheets} termSections={termSections} onPrepare={() => prepare()} preparing={preparing} />}
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
         <div className="flex flex-wrap gap-2">
@@ -355,10 +397,11 @@ const AmendmentQueue: React.FC<{ amendments: GradeAmendment[]; sheets: GradeShee
 
 // Review of one grade sheet: issues, approve / return, finalize, publish, print, amendments.
 const GradeReviewModal: React.FC<{ sheet: GradeSheet; term: AcademicPeriod; scale: GradingScale | null; amendments: GradeAmendment[]; onClose: () => void }> = ({ sheet, term, scale, amendments, onClose }) => {
-  const { classSections, students, canManageCurriculum, currentAdminUser, firebaseAuthUser, addToast } = usePCM();
+  const { classSections, academicSubjects, students, canManageCurriculum, currentAdminUser, firebaseAuthUser, addToast } = usePCM();
   const actor = currentAdminUser?.name || 'Registrar';
-  const section = classSections.find((s) => s.id === sheet.sectionId);
-  const enrolledIds = section ? classListFor(section, sectionsForTerm(classSections, term), students, term).students.map((s) => s.id) : undefined;
+  const termSections = termClassSections(term, classSections, academicSubjects, students);
+  const section = termSections.find((s) => s.id === sheet.sectionId);
+  const enrolledIds = section ? classListFor(section, termSections, students, term).students.map((s) => s.id) : undefined;
   const issues: SheetIssues = sheetIssues(sheet, scale, enrolledIds);
   const [remarks, setRemarks] = useState('');
   const [busy, setBusy] = useState(false);
