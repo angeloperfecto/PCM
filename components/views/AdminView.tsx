@@ -29,14 +29,12 @@ import { AdminScrapbookTab } from '@/components/admin/AdminScrapbookTab';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import {
   ShieldAlert,
-  Lock,
 } from 'lucide-react';
 
 export const AdminView: React.FC = () => {
   const {
     isAdminAuthenticated,
     isStudentLoggedIn,
-    adminLogin,
     signInWithGoogle,
     signOutUser,
     navigateTo,
@@ -61,9 +59,6 @@ export const AdminView: React.FC = () => {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
-  const [loginUser, setLoginUser] = useState('');
-  const [loginPass, setLoginPass] = useState('');
-  const [isPasswordSigningIn, setIsPasswordSigningIn] = useState(false);
   const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
 
   const VALID_ADMIN_TABS: AdminTabType[] = [
@@ -143,18 +138,6 @@ export const AdminView: React.FC = () => {
 
   const handleResetClick = () => {
     setShowResetConfirm(true);
-  };
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsPasswordSigningIn(true);
-    try {
-      // adminLogin reports its own errors (wrong password, pending, not an admin).
-      const success = await adminLogin(loginUser, loginPass);
-      if (success) setLoginPass('');
-    } finally {
-      setIsPasswordSigningIn(false);
-    }
   };
 
   const handleGoogleAdminLogin = async () => {
@@ -270,54 +253,7 @@ export const AdminView: React.FC = () => {
               </svg>
               <span>{isGoogleSigningIn ? 'Authenticating with Google...' : 'Sign in with Google / Gmail'}</span>
             </button>
-
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-px bg-slate-700"></div>
-              <span className="text-[11px] text-slate-400 font-mono">OR USE CREDENTIALS</span>
-              <div className="flex-1 h-px bg-slate-700"></div>
-            </div>
           </div>
-
-          <form onSubmit={handleLogin} className="space-y-4 text-xs">
-            <div>
-              <label className="block text-slate-300 font-bold mb-1">
-                Admin Email or Username
-              </label>
-              <input
-                type="text"
-                required
-                autoComplete="username"
-                value={loginUser}
-                onChange={(e) => setLoginUser(e.target.value)}
-                placeholder="name@pcm.edu.ph"
-                className="w-full p-3 rounded-lg border border-slate-700 bg-[#070e1c] text-white focus:border-[#588B76] text-sm focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-slate-300 font-bold mb-1">
-                Security Password
-              </label>
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={loginPass}
-                onChange={(e) => setLoginPass(e.target.value)}
-                placeholder="••••••••"
-                className="w-full p-3 rounded-lg border border-slate-700 bg-[#070e1c] text-white focus:border-[#588B76] text-sm focus:outline-none"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={isPasswordSigningIn}
-              className="w-full bg-[#588B76] hover:bg-[#85AA9B] text-[#18392B] font-bold py-3 rounded-lg text-xs uppercase tracking-wider transition cursor-pointer shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <Lock className="w-4 h-4" />
-              <span>{isPasswordSigningIn ? 'Verifying...' : 'Authenticate & Access CMS'}</span>
-            </button>
-          </form>
         </div>
       </div>
     );
