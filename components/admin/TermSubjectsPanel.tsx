@@ -5,6 +5,7 @@ import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { AlertTriangle, BookOpen, CheckCircle2, Copy, Eye, ListPlus, Lock, Pencil, Plus, RotateCcw, Trash2, Unlock, Wand2, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { usePCM } from '@/lib/store';
+import { assignableProfessors, linkFacultyMember, resolveSectionProfessor } from '@/lib/professors';
 import { YEAR_LEVELS, normalizeYearLevel, programForStudent, subjectsForProgram } from '@/lib/curriculum';
 import { displayTerm, normCode, semesterKind, termKeyOf, termLabel } from '@/lib/reenrollment';
 import {
@@ -35,18 +36,23 @@ type FormState = {
   schedule: string;
   room: string;
   instructor: string;
+  /** Professor from Faculty & Trustees (member id), 'keep' for an unlisted name already saved, '' for none. */
+  professor: string;
   capacity: string;
   prerequisites: string;
   status: AcademicSubject['status'];
 };
 const emptyForm = (yearLevel = ''): FormState => ({
-  code: '', title: '', units: '', yearLevel, section: '', schedule: '', room: '', instructor: '', capacity: '', prerequisites: '', status: 'Open',
+  code: '', title: '', units: '', yearLevel, section: '', schedule: '', room: '', instructor: '', professor: '', capacity: '', prerequisites: '', status: 'Open',
 });
 
 // Enrollment & Records → Term Subjects: the subjects offered in each term, per program and year level.
 // Students see exactly these (lib/termSubjects.ts) when they register, re-enroll, pre-enlist and add subjects.
 export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initialTermId }) => {
-  const { academicPeriods, academicSubjects, programs, curriculumSubjects, faculty, currentAdminUser, addToast, logActivity, students, autoSetupTermSubjects } = usePCM();
+  const { academicPeriods, academicSubjects, programs, curriculumSubjects, faculty, currentAdminUser, addToast, logActivity, students, autoSetupTermSubjects, instructors, addInstructor, updateInstructor } = usePCM();
+  // Professors from Faculty & Trustees — the same list and the same link as Grade Management.
+  const { teaching: teachingProfs, others: otherProfs } = assignableProfessors(faculty || []);
+  const professorOf = (o: { instructorId?: string; instructor?: string }) => resolveSectionProfessor({ instructorId: o.instructorId, instructorName: o.instructor }, instructors || [], faculty || []);
   const by = currentAdminUser?.name || currentAdminUser?.email || "Admin";
 
   const openTerm = displayTerm(academicPeriods);
@@ -235,7 +241,14 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
         section: form.section.trim(),
         schedule: form.schedule.trim(),
         room: form.room.trim(),
-        instructor: form.instructor.trim(),
+        // The professor and the link Grade Management uses (cleared when the professor changes).
+        ...(await (async () => {
+          if (form.professor === 'keep') return { instructor: editing?.instructor || form.instructor, instructorId: editing?.instructorId || '' };
+          const member = (faculty || []).find((m) => m.id === form.professor);
+          if (!member) return { instructor: '', instructorId: '' };
+          const ins = await linkFacultyMember(member, instructors || [], { addInstructor, updateInstructor });
+          return { instructor: member.name, instructorId: ins?.id || '' };
+        })()),
         capacity: cap,
         status: form.status,
         prerequisites: form.prerequisites.split(/[,;]/).map((x) => x.trim()).filter(Boolean),
@@ -586,7 +599,6 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                 ['section', 'Section', 'optional'],
                 ['schedule', 'Schedule', 'e.g. MWF 9:00–10:00'],
                 ['room', 'Room', ''],
-                ['instructor', 'Instructor', ''],
                 ['capacity', 'Capacity *', ''],
               ] as [keyof FormState, string, string][]
             ).map(([k, label, ph]) => (
@@ -595,13 +607,30 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                 <input
                   value={String(form[k] ?? '')}
                   placeholder={ph}
-                  list={k === 'instructor' ? 'pcm-term-instructors' : undefined}
                   type={k === 'units' || k === 'capacity' ? 'number' : 'text'}
                   onChange={(e) => setForm((f) => ({ ...f, [k]: e.target.value }))}
                   className={input}
                 />
               </label>
             ))}
+            <label className="text-[11px] font-bold text-slate-600 sm:col-span-2">
+              Instructor (Faculty &amp; Trustees)
+              <select aria-label="Instructor" value={form.professor} onChange={(e) => setForm((f) => ({ ...f, professor: e.target.value }))} className={input}>
+                <option value="">Not assigned yet</option>
+                {form.professor === 'keep' && <option value="keep">Keep: {form.instructor} (not in Faculty &amp; Trustees)</option>}
+                {teachingProfs.length > 0 && (
+                  <optgroup label="Faculty">
+                    {teachingProfs.map((m) => <option key={m.id} value={m.id}>{m.name}{m.title ? ` — ${m.title}` : ''}</option>)}
+                  </optgroup>
+                )}
+                {otherProfs.length > 0 && (
+                  <optgroup label="Administration & others">
+                    {otherProfs.map((m) => <option key={m.id} value={m.id}>{m.name}{m.title ? ` — ${m.title}` : ''}</option>)}
+                  </optgroup>
+                )}
+              </select>
+              <span className="mt-0.5 block font-normal text-slate-500">Shown in Grade Management; the professor enters grades for this class in the Faculty Portal.</span>
+            </label>
             <label className="text-[11px] font-bold text-slate-600">
               Year level
               <select value={form.yearLevel} onChange={(e) => setForm((f) => ({ ...f, yearLevel: e.target.value }))} className={input}>
@@ -622,9 +651,6 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
               </select>
             </label>
           </div>
-          <datalist id="pcm-term-instructors">
-            {[...new Set((faculty || []).map((m: any) => m.name).filter(Boolean))].map((n) => <option key={n as string} value={n as string} />)}
-          </datalist>
           <button type="button" disabled={busy} onClick={saveOne} className={`${btn} bg-[#18392B] text-white`}>
             {busy ? 'Saving…' : editing ? 'Save changes' : 'Add subject'}
           </button>
@@ -695,7 +721,21 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                   <td className="p-2.5 font-mono">{o.units}</td>
                   <td className="p-2.5">{o.section || '—'}</td>
                   <td className="p-2.5">{[o.schedule, o.room].filter(Boolean).join(' · ') || <span className="text-amber-700">Not set</span>}</td>
-                  <td className="p-2.5">{o.instructor || <span className="text-amber-700">Not set</span>}</td>
+                  <td className="p-2.5">
+                    {o.instructor ? (
+                      (() => {
+                        const p = professorOf(o);
+                        return (
+                          <>
+                            {p.name || o.instructor}
+                            {!p.email && <span className="block text-[10px] text-amber-700">No sign-in email (needed for grading)</span>}
+                          </>
+                        );
+                      })()
+                    ) : (
+                      <span className="text-amber-700">Not set</span>
+                    )}
+                  </td>
                   <td className="p-2.5 font-mono">{o.capacity ? `${enrolledIn(o)}/${o.capacity}` : `${enrolledIn(o)} (no limit)`}</td>
                   <td className="p-2.5">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${o.status === 'Closed' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>{o.status || 'Open'}</span>
@@ -718,6 +758,7 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                               schedule: o.schedule || '',
                               room: o.room || '',
                               instructor: o.instructor || '',
+                              professor: professorOf(o).member?.id || (o.instructor ? 'keep' : ''),
                               capacity: String(o.capacity ?? ''),
                               prerequisites: (o.prerequisites || []).join(', '),
                               status: o.status || 'Open',

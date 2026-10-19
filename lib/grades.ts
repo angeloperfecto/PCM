@@ -28,7 +28,7 @@ import { db } from './firebase';
 import { calculateGPAFromGrades } from './studentDefaults';
 import { normAY, normCode, sameTerm, termKeyOf, termLabel } from './reenrollment';
 import { termEnrollmentRosters, termOfferings } from './termSubjects';
-import { professorDisplayName } from './professors';
+import { professorDisplayName, resolveSectionProfessor } from './professors';
 import type {
   AcademicPeriod,
   AcademicSubject,
@@ -43,6 +43,7 @@ import type {
   InstructorRecord,
   StudentProfile,
   StudentSubjectHistory,
+  FacultyMember,
 } from './types';
 
 export const normEmail = (e?: string) => String(e || '').trim().toLowerCase();
@@ -176,12 +177,9 @@ export function termClassSections(term: AcademicPeriod, sections: ClassSection[]
   return [...stored, ...fromOfferings];
 }
 
+/** The grading record of a class's professor (stale links ignored, names matched with or without titles). */
 export function instructorForSection(section: ClassSection, instructors: InstructorRecord[]): InstructorRecord | undefined {
-  return (
-    (section.instructorId && instructors.find((i) => i.id === section.instructorId)) ||
-    instructors.find((i) => squash(i.fullName) && squash(i.fullName) === squash(section.instructorName)) ||
-    undefined
-  );
+  return resolveSectionProfessor(section, instructors).instructor;
 }
 
 /** Students officially enrolled in a subject for a term: in their current subjects, or — once the term
@@ -320,7 +318,9 @@ export async function prepareGradeSheets(
   instructors: InstructorRecord[],
   students: StudentProfile[],
   existing: GradeSheet[],
-  actor: string
+  actor: string,
+  /** Faculty & Trustees, so professors set by name in Enrollment & Records are recognised. */
+  faculty: FacultyMember[] = []
 ): Promise<PrepareResult> {
   const termSections = sectionsForTerm(sections, term);
   const key = termKeyOf(term.semester, term.academicYear);
@@ -330,9 +330,18 @@ export async function prepareGradeSheets(
   let writes = 0;
   for (const section of termSections) {
     const label = `${section.subjectCode} ${section.sectionName || ''}`.trim();
-    const instructor = instructorForSection(section, instructors);
+    const professor = resolveSectionProfessor(section, instructors, faculty);
+    const instructor = professor.instructor;
     if (!instructor || !normEmail(instructor.email)) {
-      result.skipped.push({ section: label, reason: instructor ? `${instructor.fullName} has no email address in Faculty Load.` : 'No professor is assigned (or the professor is not in Faculty Load).' });
+      // The class's professor changed (in Enrollment & Records) to someone without a sign-in email yet, or was
+      // removed: a sheet still being filled in moves to them, so the previous professor no longer has it.
+      const open = existing.find((s) => s.id === gradeSheetId(key, section.id));
+      if (open && ['Draft', 'Returned for Correction'].includes(open.status) && (open.instructorEmail || (open.instructorName || '') !== professor.name)) {
+        batch.update(doc(db, 'gradeSheets', open.id), { instructorId: instructor?.id || '', instructorName: professor.name, instructorEmail: '', updatedAt: now, refreshedBy: actor });
+        result.updated += 1;
+        writes += 1;
+      }
+      result.skipped.push({ section: label, reason: instructor ? `${professorDisplayName(instructor)} has no sign-in email (add it in Grade Management → set up, or in Faculty & Trustees).` : 'No professor is assigned in Enrollment & Records → Term Subjects.' });
       continue;
     }
     const list = classListFor(section, termSections, students, term);
