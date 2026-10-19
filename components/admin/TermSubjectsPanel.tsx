@@ -2,10 +2,10 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import { doc, updateDoc } from 'firebase/firestore';
-import { BookOpen, Copy, Eye, ListPlus, Lock, Pencil, Plus, RotateCcw, Trash2, Unlock, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, CheckCircle2, Copy, Eye, ListPlus, Lock, Pencil, Plus, RotateCcw, Trash2, Unlock, Wand2, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { usePCM } from '@/lib/store';
-import { YEAR_LEVELS, normalizeYearLevel, subjectsForProgram } from '@/lib/curriculum';
+import { YEAR_LEVELS, normalizeYearLevel, programForStudent, subjectsForProgram } from '@/lib/curriculum';
 import { displayTerm, normCode, semesterKind, termKeyOf, termLabel } from '@/lib/reenrollment';
 import {
   createOfferings,
@@ -15,6 +15,7 @@ import {
   offeringForProgram,
   studentTermSubjects,
   termOfferings,
+  termReadiness,
   type OfferingDraft,
 } from '@/lib/termSubjects';
 import type { AcademicPeriod, AcademicProgram, AcademicSubject } from '@/lib/types';
@@ -43,7 +44,7 @@ const emptyForm = (yearLevel = ''): FormState => ({
 // Enrollment & Records → Term Subjects: the subjects offered in each term, per program and year level.
 // Students see exactly these (lib/termSubjects.ts) when they register, re-enroll, pre-enlist and add subjects.
 export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initialTermId }) => {
-  const { academicPeriods, academicSubjects, programs, curriculumSubjects, faculty, currentAdminUser, addToast, logActivity } = usePCM();
+  const { academicPeriods, academicSubjects, programs, curriculumSubjects, faculty, currentAdminUser, addToast, logActivity, students, autoSetupTermSubjects } = usePCM();
   const by = currentAdminUser?.name || currentAdminUser?.email || "Admin";
 
   const openTerm = displayTerm(academicPeriods);
@@ -89,6 +90,19 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
       }))
       .filter((g) => g.rows.length);
   }, [forProgram]);
+
+  // Readiness: program/year levels with no subjects, and active students who would see an empty list.
+  const readiness = useMemo(() => (term ? termReadiness({ term, programs: programList, curriculumSubjects, catalog: academicSubjects }) : []), [term, programList, curriculumSubjects, academicSubjects]);
+  const gaps = readiness.filter((r) => r.offered === 0);
+  const studentsWithout = useMemo(() => {
+    if (!term || term.closedAt) return [];
+    return (students || [])
+      .filter((st) => st && !st.isArchived && !/alumni|graduat/i.test(String(st.academicStatus || '')))
+      .filter((st) => {
+        const p = programForStudent(programs || [], st);
+        return studentTermSubjects({ catalog: academicSubjects, term, programSubjects: subjectsForProgram(curriculumSubjects, p), program: p, student: st }).subjects.length === 0;
+      });
+  }, [term, students, programs, academicSubjects, curriculumSubjects]);
 
   if (!term) {
     return <p className="rounded-xl border border-slate-200 bg-white p-4 text-xs text-slate-600">Create an academic term first (Academic Terms), then set up its subjects here.</p>;
@@ -335,6 +349,47 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
             </button>
           </div>
         )}
+        {!closed && (
+          <div className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3" data-testid="term-readiness">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="flex items-center gap-1.5 text-xs font-bold text-[#18392B]">
+                {gaps.length === 0 && studentsWithout.length === 0 ? <CheckCircle2 className="h-4 w-4 text-emerald-600" /> : <AlertTriangle className="h-4 w-4 text-amber-600" />}
+                Ready for students: {readiness.length - gaps.length} of {readiness.length} program/year level{readiness.length === 1 ? '' : 's'} have subjects in {tLabel}
+              </p>
+              {gaps.length > 0 && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  onClick={() => run(async () => { await autoSetupTermSubjects(term); })}
+                  className={`${btn} bg-[#18392B] text-white hover:bg-[#588B76]`}
+                >
+                  <Wand2 className="h-3.5 w-3.5" /> Set up missing subjects for all programs
+                </button>
+              )}
+            </div>
+            {gaps.length > 0 && (
+              <p className="text-xs text-slate-700">
+                No subjects yet: {gaps.map((g) => `${g.program} · ${g.yearLevel || 'no year level'}`).join('; ')}. The button copies last year’s {term.semester} subjects
+                (sections, schedules, instructors) for each of these, or uses the curriculum when there’s nothing to copy. Subjects you already added or removed are not touched.
+              </p>
+            )}
+            {studentsWithout.length > 0 && (
+              <details className="text-xs text-amber-950">
+                <summary className="cursor-pointer font-semibold">
+                  {studentsWithout.length} student{studentsWithout.length === 1 ? '' : 's'} would see no subjects in {tLabel}
+                </summary>
+                <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                  {studentsWithout.slice(0, 50).map((st) => (
+                    <li key={st.id}>
+                      {st.fullName || st.name || st.studentId} — {programForStudent(programs || [], st) ? programLabel(programForStudent(programs || [], st)) : `program not found (“${st.degreeProgram || st.program || 'blank'}”)`}
+                      {` · ${st.yearLevel || 'no year level'}`}
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        )}
         {error && <p className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800" role="alert">{error}</p>}
       </div>
 
@@ -571,7 +626,7 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                   <td className="p-2.5">{o.section || '—'}</td>
                   <td className="p-2.5">{[o.schedule, o.room].filter(Boolean).join(' · ') || <span className="text-amber-700">Not set</span>}</td>
                   <td className="p-2.5">{o.instructor || <span className="text-amber-700">Not set</span>}</td>
-                  <td className="p-2.5 font-mono">{o.enrolledCount || 0}/{o.capacity}</td>
+                  <td className="p-2.5 font-mono">{o.capacity ? `${o.enrolledCount || 0}/${o.capacity}` : `${o.enrolledCount || 0} (no limit)`}</td>
                   <td className="p-2.5">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${o.status === 'Closed' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>{o.status || 'Open'}</span>
                   </td>

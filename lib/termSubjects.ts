@@ -11,7 +11,7 @@
 
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
-import { YEAR_LEVELS, normalizeYearLevel } from './curriculum';
+import { YEAR_LEVELS, normalizeYearLevel, subjectsForProgram } from './curriculum';
 import { normAY, normCode, offeredSubjects, passedCodes, prerequisiteCodes, semesterKind, termKeyOf, type OfferedSubject } from './reenrollment';
 import type { AcademicProgram, AcademicSubject, CurriculumSubject, StudentProfile } from './types';
 
@@ -241,4 +241,147 @@ export async function createOfferings(drafts: OfferingDraft[], existing: Academi
     await batch.commit();
   }
   return { created: fresh.length, skipped };
+}
+
+// ---------------------------------------------------------------------------
+// Automatic setup of a new term
+// ---------------------------------------------------------------------------
+
+const programName = (p?: Partial<AcademicProgram> | null) => (p ? p.name || (p as any).title || p.code || '' : '');
+const levelOf = (o: { yearLevel?: string }) => normalizeYearLevel(o.yearLevel) || '';
+
+/** The same semester one academic year earlier (2nd Semester 2025–2026 for 2nd Semester 2026–2027). */
+export function previousYearTerm(term: TermRef): TermRef | null {
+  const m = normAY(term.academicYear).match(/^(\d{4})–(\d{4})$/);
+  return m ? { semester: term.semester, academicYear: `${Number(m[1]) - 1}–${Number(m[2]) - 1}` } : null;
+}
+
+const copyOffering = (o: AcademicSubject & { programId?: string }, term: TermRef): OfferingDraft => ({
+  semester: term.semester || '',
+  academicYear: normAY(term.academicYear),
+  program: o.program || '',
+  programId: o.programId || '',
+  yearLevel: o.yearLevel || '',
+  code: o.code,
+  title: o.title,
+  description: o.description || '',
+  category: o.category || '',
+  units: Number(o.units) || 0,
+  prerequisites: o.prerequisites || [],
+  ...(o.prerequisite ? { prerequisite: o.prerequisite } : {}),
+  ...(o.subjectType ? { subjectType: o.subjectType } : {}),
+  section: o.section || '',
+  schedule: o.schedule || '',
+  room: o.room || '',
+  instructor: o.instructor || '',
+  instructorId: o.instructorId || '',
+  capacity: Number(o.capacity) || 0,
+  status: 'Open',
+});
+
+// Schedule, room and instructor stay blank (shown as TBA) and capacity 0 (no limit) until the Registrar sets them.
+const curriculumOffering = (s: CurriculumSubject, program: AcademicProgram, term: TermRef): OfferingDraft => ({
+  semester: term.semester || '',
+  academicYear: normAY(term.academicYear),
+  program: programName(program),
+  programId: program.id,
+  yearLevel: normalizeYearLevel(s.yearLevel) || s.yearLevel || '',
+  code: s.code,
+  title: s.title,
+  description: s.description || '',
+  category: s.type || '',
+  units: Number(s.units) || 0,
+  prerequisites: s.prerequisites && !/^(none|n\/a|-)$/i.test(s.prerequisites.trim()) ? s.prerequisites.split(/[,;]/).map((x) => x.trim()).filter(Boolean) : [],
+  section: '',
+  schedule: '',
+  room: '',
+  instructor: '',
+  capacity: 0,
+  status: 'Open',
+});
+
+export interface AutoTermSetup {
+  drafts: OfferingDraft[];
+  /** What each draft group fills: program (blank: every program), year level, where it came from. */
+  filled: { program: string; yearLevel: string; source: 'previous' | 'curriculum'; count: number }[];
+}
+
+/**
+ * Subjects for a term the Registrar hasn't set up yet, per program and year level: last year's offerings
+ * for the same semester (sections, schedules, rooms, instructors, capacity), else the program's curriculum
+ * for that semester. Only program/year-level groups with no subjects in the term yet are filled, so
+ * anything the Registrar already added or removed is left alone.
+ */
+export function autoTermOfferings(input: { term: TermRef; programs: AcademicProgram[]; curriculumSubjects: CurriculumSubject[]; catalog: AcademicSubject[] }): AutoTermSetup {
+  const { term, catalog } = input;
+  const drafts: OfferingDraft[] = [];
+  const filled: AutoTermSetup['filled'] = [];
+  // Removed subjects count too: the Registrar removed them on purpose.
+  const inTerm = (catalog || []).filter((o) => o && isTermOffering(o, term)) as (AcademicSubject & { programId?: string })[];
+  const prevRef = previousYearTerm(term);
+  const prev = (prevRef ? termOfferings(catalog, prevRef) : []) as (AcademicSubject & { programId?: string })[];
+  const forAll = (o: { programId?: string; program?: string }) => !o.programId && !o.program;
+
+  // Subjects for every program (no program set).
+  const generalHave = new Set(inTerm.filter(forAll).map(levelOf));
+  const generalCopied = new Set<string>();
+  for (const level of Array.from(new Set(prev.filter(forAll).map(levelOf)))) {
+    if (generalHave.has(level)) continue;
+    const rows = prev.filter((o) => forAll(o) && levelOf(o) === level).map((o) => copyOffering(o, term));
+    drafts.push(...rows);
+    generalCopied.add(level);
+    filled.push({ program: '', yearLevel: level, source: 'previous', count: rows.length });
+  }
+
+  for (const program of (input.programs || []).filter((p) => p && p.id && programName(p))) {
+    const mine = (o: AcademicSubject & { programId?: string }) => !forAll(o) && offeringForProgram(o, program);
+    const have = new Set([...inTerm.filter((o) => mine(o) || forAll(o)).map(levelOf), ...Array.from(generalCopied)]);
+    const prevMine = prev.filter(mine);
+    const curriculum = curriculumForTerm(subjectsForProgram(input.curriculumSubjects || [], program), term);
+    const levels = Array.from(new Set([...prevMine.map(levelOf), ...curriculum.map((s) => normalizeYearLevel(s.yearLevel) || '')]));
+    for (const level of levels) {
+      if (have.has(level)) continue;
+      const fromPrev = prevMine.filter((o) => levelOf(o) === level);
+      const rows = fromPrev.length
+        ? fromPrev.map((o) => ({ ...copyOffering(o, term), program: programName(program), programId: program.id }))
+        : curriculum.filter((s) => (normalizeYearLevel(s.yearLevel) || '') === level).map((s) => curriculumOffering(s, program, term));
+      if (!rows.length) continue;
+      drafts.push(...rows);
+      filled.push({ program: programName(program), yearLevel: level, source: fromPrev.length ? 'previous' : 'curriculum', count: rows.length });
+    }
+  }
+  return { drafts, filled };
+}
+
+export interface TermReadinessRow {
+  programId: string;
+  program: string;
+  yearLevel: string;
+  /** Subjects offered in the term for this program and year level (including ones for every program). */
+  offered: number;
+  /** Curriculum subjects for this semester and year level. */
+  inCurriculum: number;
+}
+
+/** Per program and year level (from the curriculum and the term's subjects): how many subjects are offered. */
+export function termReadiness(input: { term: TermRef; programs: AcademicProgram[]; curriculumSubjects: CurriculumSubject[]; catalog: AcademicSubject[] }): TermReadinessRow[] {
+  const all = termOfferings(input.catalog, input.term);
+  const rows: TermReadinessRow[] = [];
+  for (const program of (input.programs || []).filter((p) => p && p.id && programName(p))) {
+    const offerings = all.filter((o) => offeringForProgram(o, program));
+    const curriculum = curriculumForTerm(subjectsForProgram(input.curriculumSubjects || [], program), input.term);
+    const levels = Array.from(new Set([...curriculum.map((s) => normalizeYearLevel(s.yearLevel) || ''), ...offerings.map(levelOf).filter(Boolean)])).sort(
+      (a, b) => yearIdx(a) - yearIdx(b)
+    );
+    for (const level of levels) {
+      rows.push({
+        programId: program.id,
+        program: programName(program),
+        yearLevel: level,
+        offered: offerings.filter((o) => !levelOf(o) || levelOf(o) === level).length,
+        inCurriculum: curriculum.filter((s) => (normalizeYearLevel(s.yearLevel) || '') === level).length,
+      });
+    }
+  }
+  return rows;
 }

@@ -185,7 +185,7 @@ import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, admission
 import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflow';
 import { increment, runTransaction, type Transaction } from 'firebase/firestore';
 import { termFees, accountSummary, parseTerm, officialAssessmentLines, applyOfficialLines } from './studentLedger';
-import { offeringForCode } from './termSubjects';
+import { autoTermOfferings, createOfferings, offeringForCode, type AutoTermSetup } from './termSubjects';
 import { checkTermBeforeSubmit } from './termGuard';
 import {
   approvalBlockers,
@@ -572,6 +572,8 @@ interface PCMContextType {
   setAcademicPeriods: React.Dispatch<React.SetStateAction<AcademicPeriod[]>>;
   currentAcademicPeriod: AcademicPeriod | undefined;
   addAcademicPeriod: (period: Omit<AcademicPeriod, 'id'>) => Promise<AcademicPeriod | null>;
+  /** Sets up a term's subjects for every program and year level that has none yet (last year's, else the curriculum). */
+  autoSetupTermSubjects: (period: Pick<AcademicPeriod, 'id' | 'semester' | 'academicYear'>) => Promise<{ created: number; skipped: number; filled: AutoTermSetup['filled'] } | null>;
   updateAcademicPeriod: (id: string, updates: Partial<AcademicPeriod>) => Promise<boolean>;
   setCurrentAcademicPeriod: (id: string) => Promise<boolean>;
   deleteAcademicPeriod: (id: string) => Promise<boolean>;
@@ -6889,7 +6891,37 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
     logActivity('CREATE', 'Academic Period', id, `${newPeriod.academicYear} ${newPeriod.semester}`, 'Created academic period.');
     addToast('success', 'Academic Term Added', `${newPeriod.semester}, AY ${newPeriod.academicYear} was added.`);
+    // Subjects are set up right away, so students see them as soon as a window opens.
+    await autoSetupTermSubjects(newPeriod);
     return newPeriod;
+  };
+
+  const autoSetupTermSubjects = async (
+    period: Pick<AcademicPeriod, 'id' | 'semester' | 'academicYear'>
+  ): Promise<{ created: number; skipped: number; filled: AutoTermSetup['filled'] } | null> => {
+    const label = `${period.semester}, AY ${period.academicYear}`;
+    const plan = autoTermOfferings({ term: period, programs, curriculumSubjects, catalog: academicSubjects });
+    if (plan.drafts.length === 0) {
+      addToast('info', 'Term Subjects', `Every program and year level in the curriculum already has subjects in ${label}.`);
+      return { created: 0, skipped: 0, filled: [] };
+    }
+    try {
+      const by = currentAdminUser?.name || currentAdminUser?.email || 'Admin';
+      const r = await createOfferings(plan.drafts, academicSubjects, by);
+      const prev = plan.filled.filter((g) => g.source === 'previous').length;
+      const curr = plan.filled.length - prev;
+      logActivity('CREATE', 'Term Subjects', period.id, label, `Set up ${r.created} subject(s) automatically (${prev} group(s) from last year, ${curr} from the curriculum).`);
+      addToast(
+        'success',
+        'Term Subjects set up',
+        `${r.created} subject(s) added to ${label}: ${prev ? `${prev} program/year level(s) copied from last year` : ''}${prev && curr ? ', ' : ''}${curr ? `${curr} from the curriculum (schedule TBA)` : ''}. Review them in Term Subjects.`
+      );
+      return { ...r, filled: plan.filled };
+    } catch (e) {
+      console.warn('Automatic term subject setup failed:', e);
+      addToast('warning', 'Term Subjects not set up', `Set up the subjects for ${label} in Enrollment & Records → Term Subjects.`);
+      return null;
+    }
   };
 
   const updateAcademicPeriod = async (id: string, updates: Partial<AcademicPeriod>): Promise<boolean> => {
@@ -9775,6 +9807,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setAcademicPeriods,
         currentAcademicPeriod,
         addAcademicPeriod,
+        autoSetupTermSubjects,
         updateAcademicPeriod,
         setCurrentAcademicPeriod,
         deleteAcademicPeriod,
