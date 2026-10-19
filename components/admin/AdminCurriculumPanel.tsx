@@ -5,10 +5,11 @@ import { Download, Edit3, Plus, Search, Trash2, X } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import {
   SEMESTERS,
+  SEMESTER_SECTIONS,
   SUBJECT_TYPES,
   YEAR_LEVELS,
   curriculumToImport,
-  groupByYearAndSemester,
+  groupByYearAndTerm,
   subjectsForProgram,
   validateCurriculumSubject,
 } from '@/lib/curriculum';
@@ -50,14 +51,29 @@ export const AdminCurriculumPanel: React.FC = () => {
       (s) => (year === 'all' || s.yearLevel === year) && (!needle || [s.code, s.title, s.description, s.prerequisites].some((v) => String(v || '').toLowerCase().includes(needle)))
     );
   }, [forProgram, year, q]);
-  const groups = groupByYearAndSemester(filtered);
+  // Each year level → 1st Semester, 2nd Semester, Summer Class (and subjects with no semester yet).
+  const groups = groupByYearAndTerm(filtered);
   const toImport = useMemo(() => curriculumToImport(programs, curriculumSubjects).length, [programs, curriculumSubjects]);
   const totalUnits = forProgram.filter((s) => s.status === 'Active').reduce((t, s) => t + (Number(s.units) || 0), 0);
 
-  const startAdd = () => {
+  const startAdd = (yearLevel?: string, semester?: string) => {
     if (!program) return;
     setFormError('');
-    setEditing({ ...empty(program.id, program.name || program.title || program.code), yearLevel: year !== 'all' ? year : '1st Year' });
+    setEditing({
+      ...empty(program.id, program.name || program.title || program.code),
+      yearLevel: yearLevel || (year !== 'all' ? year : '1st Year'),
+      ...(semester !== undefined ? { semester } : {}),
+    });
+  };
+  // Puts a subject that has no semester into one (saved like an edit).
+  const setSemester = async (subject: CurriculumSubject, semester: string) => {
+    if (!semester) return;
+    setBusy(true);
+    try {
+      await saveCurriculumSubject({ ...subject, semester });
+    } finally {
+      setBusy(false);
+    }
   };
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,6 +89,77 @@ export const AdminCurriculumPanel: React.FC = () => {
   };
 
   const input = 'mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-xs';
+  const subjectTable = (list: CurriculumSubject[], pickSemester = false) => (
+    <table className="w-full min-w-[640px] text-left text-xs">
+      <thead className="text-[10px] uppercase tracking-wider text-slate-500">
+        <tr className="border-b border-slate-200">
+          <th className="px-3 py-1.5">Code</th>
+          <th className="px-3 py-1.5">Descriptive title</th>
+          <th className="px-3 py-1.5 text-center">Units</th>
+          <th className="px-3 py-1.5">Type</th>
+          <th className="px-3 py-1.5">Prerequisite</th>
+          <th className="px-3 py-1.5">Status</th>
+          {canManageCurriculum && <th className="px-3 py-1.5 text-right">{pickSemester ? 'Semester / actions' : 'Actions'}</th>}
+        </tr>
+      </thead>
+      <tbody>
+        {list.map((s) => (
+          <tr key={s.id} className={`border-b border-slate-100 ${s.status === 'Inactive' ? 'text-slate-400' : ''}`}>
+            <td className="whitespace-nowrap px-3 py-2 font-mono font-bold">{s.code}</td>
+            <td className="px-3 py-2">
+              <span className="font-semibold">{s.title}</span>
+              {s.description && <span className="block text-[11px] text-slate-500">{s.description}</span>}
+            </td>
+            <td className="px-3 py-2 text-center font-mono">{s.units}</td>
+            <td className="px-3 py-2">{s.type || '—'}</td>
+            <td className="px-3 py-2">{s.prerequisites || '—'}</td>
+            <td className="px-3 py-2">
+              <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${s.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{s.status}</span>
+            </td>
+            {canManageCurriculum && (
+              <td className="whitespace-nowrap px-3 py-2 text-right">
+                {pickSemester && (
+                  <select
+                    aria-label={`Semester for ${s.code}`}
+                    value=""
+                    disabled={busy}
+                    onChange={(e) => setSemester(s, e.target.value)}
+                    className="mr-1 rounded border border-amber-300 bg-white p-1 text-[11px]"
+                  >
+                    <option value="">Set semester…</option>
+                    {SEMESTER_SECTIONS.map((x) => (
+                      <option key={x.key} value={x.key}>{x.label}</option>
+                    ))}
+                  </select>
+                )}
+                <button
+                  type="button"
+                  aria-label={`Edit ${s.code}`}
+                  onClick={() => {
+                    setFormError('');
+                    setEditing({ ...s });
+                  }}
+                  className="rounded p-1.5 text-slate-600 hover:bg-slate-100"
+                >
+                  <Edit3 className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  aria-label={`Delete ${s.code}`}
+                  onClick={() => {
+                    if (window.confirm(`Remove ${s.code} — ${s.title} from ${s.yearLevel}${s.semester ? `, ${s.semester}` : ''}?`)) deleteCurriculumSubject(s.id);
+                  }}
+                  className="rounded p-1.5 text-rose-600 hover:bg-rose-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </td>
+            )}
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
   return (
     <div className="space-y-4" data-testid="curriculum-admin">
       <div className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 lg:flex-row lg:items-center lg:justify-between">
@@ -103,7 +190,7 @@ export const AdminCurriculumPanel: React.FC = () => {
                 <Download className="h-3.5 w-3.5" /> Import from Academic Programs ({toImport})
               </button>
             )}
-            <button type="button" onClick={startAdd} disabled={!program} className="inline-flex items-center gap-1.5 rounded-lg bg-[#18392B] px-3 py-2 text-xs font-bold text-white hover:bg-[#588B76] disabled:opacity-50">
+            <button type="button" onClick={() => startAdd()} disabled={!program} className="inline-flex items-center gap-1.5 rounded-lg bg-[#18392B] px-3 py-2 text-xs font-bold text-white hover:bg-[#588B76] disabled:opacity-50">
               <Plus className="h-3.5 w-3.5" /> Add subject
             </button>
           </div>
@@ -150,74 +237,49 @@ export const AdminCurriculumPanel: React.FC = () => {
         </p>
       ) : (
         groups.map((g) => (
-          <section key={g.yearLevel} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+          <section key={g.yearLevel} className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4" data-testid="curriculum-year">
             <div className="flex items-center justify-between">
               <h5 className="font-serif text-base font-bold text-[#18392B]">{g.yearLevel || 'No year level'}</h5>
               <span className="text-xs font-semibold text-slate-500">{g.units} units</span>
             </div>
-            {g.semesters.map((sem) => (
-              <div key={sem.semester} className="overflow-x-auto rounded-lg border border-slate-200">
-                <div className="flex items-center justify-between bg-slate-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-600">
-                  <span>{sem.semester || 'Whole year'}</span>
-                  <span>{sem.units} units</span>
+            {g.sections.map((sec) => (
+              <div key={sec.key} className="overflow-x-auto rounded-lg border border-slate-200" data-testid="curriculum-semester">
+                <div className="flex items-center justify-between gap-2 bg-slate-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                  <span>{sec.label}</span>
+                  <span className="flex items-center gap-3">
+                    <span>{sec.subjects.length} subject{sec.subjects.length === 1 ? '' : 's'} · {sec.units} units</span>
+                    {canManageCurriculum && (
+                      <button
+                        type="button"
+                        onClick={() => startAdd(g.yearLevel, sec.key)}
+                        aria-label={`Add a subject to ${g.yearLevel}, ${sec.label}`}
+                        className="inline-flex items-center gap-1 normal-case tracking-normal text-[#18392B] hover:underline"
+                      >
+                        <Plus className="h-3 w-3" /> Add
+                      </button>
+                    )}
+                  </span>
                 </div>
-                <table className="w-full min-w-[640px] text-left text-xs">
-                  <thead className="text-[10px] uppercase tracking-wider text-slate-500">
-                    <tr className="border-b border-slate-200">
-                      <th className="px-3 py-1.5">Code</th>
-                      <th className="px-3 py-1.5">Descriptive title</th>
-                      <th className="px-3 py-1.5 text-center">Units</th>
-                      <th className="px-3 py-1.5">Type</th>
-                      <th className="px-3 py-1.5">Prerequisite</th>
-                      <th className="px-3 py-1.5">Status</th>
-                      {canManageCurriculum && <th className="px-3 py-1.5 text-right">Actions</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sem.subjects.map((s) => (
-                      <tr key={s.id} className={`border-b border-slate-100 ${s.status === 'Inactive' ? 'text-slate-400' : ''}`}>
-                        <td className="whitespace-nowrap px-3 py-2 font-mono font-bold">{s.code}</td>
-                        <td className="px-3 py-2">
-                          <span className="font-semibold">{s.title}</span>
-                          {s.description && <span className="block text-[11px] text-slate-500">{s.description}</span>}
-                        </td>
-                        <td className="px-3 py-2 text-center font-mono">{s.units}</td>
-                        <td className="px-3 py-2">{s.type || '—'}</td>
-                        <td className="px-3 py-2">{s.prerequisites || '—'}</td>
-                        <td className="px-3 py-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${s.status === 'Active' ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>{s.status}</span>
-                        </td>
-                        {canManageCurriculum && (
-                          <td className="whitespace-nowrap px-3 py-2 text-right">
-                            <button
-                              type="button"
-                              aria-label={`Edit ${s.code}`}
-                              onClick={() => {
-                                setFormError('');
-                                setEditing({ ...s });
-                              }}
-                              className="rounded p-1.5 text-slate-600 hover:bg-slate-100"
-                            >
-                              <Edit3 className="h-3.5 w-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              aria-label={`Delete ${s.code}`}
-                              onClick={() => {
-                                if (window.confirm(`Remove ${s.code} — ${s.title} from ${s.yearLevel}${s.semester ? `, ${s.semester}` : ''}?`)) deleteCurriculumSubject(s.id);
-                              }}
-                              className="rounded p-1.5 text-rose-600 hover:bg-rose-50"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {sec.subjects.length === 0 ? (
+                  <p className="px-3 py-2.5 text-[11px] text-slate-400">No subjects in {sec.label} for {g.yearLevel}.</p>
+                ) : (
+                  subjectTable(sec.subjects)
+                )}
               </div>
             ))}
+            {g.unassigned.subjects.length > 0 && (
+              <div className="overflow-x-auto rounded-lg border border-amber-200" data-testid="curriculum-unassigned">
+                <div className="flex items-center justify-between gap-2 bg-amber-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-amber-900">
+                  <span>No semester set</span>
+                  <span>{g.unassigned.subjects.length} subject{g.unassigned.subjects.length === 1 ? '' : 's'} · {g.unassigned.units} units</span>
+                </div>
+                <p className="px-3 pt-2 text-[11px] text-amber-900">
+                  These subjects aren’t in a semester yet, so they aren’t offered in any term’s semester list.
+                  {canManageCurriculum ? ' Choose the semester for each one.' : ''}
+                </p>
+                {subjectTable(g.unassigned.subjects, true)}
+              </div>
+            )}
           </section>
         ))
       )}
@@ -261,10 +323,11 @@ export const AdminCurriculumPanel: React.FC = () => {
               <label className="text-[11px] font-semibold text-slate-600">
                 Semester
                 <select value={editing.semester || ''} onChange={(e) => setEditing({ ...editing, semester: e.target.value })} className={input}>
-                  {SEMESTERS.map((s) => (
-                    <option key={s}>{s}</option>
+                  {SEMESTER_SECTIONS.map((x) => (
+                    <option key={x.key} value={x.key}>{x.label}</option>
                   ))}
-                  <option value="">Whole year</option>
+                  {editing.semester && !SEMESTERS.includes(editing.semester) && <option value={editing.semester}>{editing.semester}</option>}
+                  <option value="">Not set</option>
                 </select>
               </label>
               <label className="text-[11px] font-semibold text-slate-600">

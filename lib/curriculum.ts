@@ -124,3 +124,37 @@ export function curriculumToImport(programs: AcademicProgram[], existing: Curric
   });
   return out;
 }
+
+// The semesters every year level is organised into (stored value → heading).
+export const SEMESTER_SECTIONS: { key: string; label: string }[] = [
+  { key: '1st Semester', label: '1st Semester' },
+  { key: '2nd Semester', label: '2nd Semester' },
+  { key: 'Summer', label: 'Summer Class' },
+];
+
+export interface YearTermGroup {
+  yearLevel: string;
+  units: number;
+  /** Always the three semesters, in order (empty ones included). */
+  sections: { key: string; label: string; subjects: CurriculumSubject[]; units: number }[];
+  /** Subjects with no semester set yet. */
+  unassigned: { subjects: CurriculumSubject[]; units: number };
+}
+
+const byOrder = (a: CurriculumSubject, b: CurriculumSubject) => (a.order ?? 999) - (b.order ?? 999) || a.code.localeCompare(b.code);
+const unitsOf = (list: CurriculumSubject[]) => list.reduce((t, s) => t + (Number(s.units) || 0), 0);
+
+// Year level → 1st Semester / 2nd Semester / Summer Class (spelling variants such as "1st Sem" or
+// "Summer Term" are recognised), plus the subjects whose semester isn't set.
+export function groupByYearAndTerm(subjects: CurriculumSubject[]): YearTermGroup[] {
+  const years = Array.from(new Set(subjects.map((s) => normalizeYearLevel(s.yearLevel) || s.yearLevel || ''))).sort((a, b) => yearIndex(a) - yearIndex(b) || a.localeCompare(b));
+  return years.map((yearLevel) => {
+    const inYear = subjects.filter((s) => (normalizeYearLevel(s.yearLevel) || s.yearLevel || '') === yearLevel);
+    const sections = SEMESTER_SECTIONS.map(({ key, label }) => {
+      const list = inYear.filter((s) => normalizeSemester(s.semester) === key).sort(byOrder);
+      return { key, label, subjects: list, units: unitsOf(list) };
+    });
+    const rest = inYear.filter((s) => !normalizeSemester(s.semester)).sort(byOrder);
+    return { yearLevel, units: unitsOf(inYear), sections, unassigned: { subjects: rest, units: unitsOf(rest) } };
+  });
+}
