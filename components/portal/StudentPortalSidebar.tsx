@@ -2,6 +2,9 @@
 
 import { academicStanding } from '@/lib/studentDefaults';
 import React from 'react';
+import { usePCM } from '@/lib/store';
+import { displayTerm, termBadge } from '@/lib/reenrollment';
+import { useToday } from '@/lib/useToday';
 import { StudentAvatar } from '@/components/common/StudentAvatar';
 import {
   GraduationCap,
@@ -96,6 +99,9 @@ export const StudentPortalSidebar: React.FC<StudentPortalSidebarProps> = ({
   setIsMobileOpen,
 }) => {
   const [isEnrollmentSubmenuOpen, setIsEnrollmentSubmenuOpen] = React.useState(true);
+  const { academicPeriods } = usePCM();
+  const today = useToday();
+  const termTag = termBadge(displayTerm(academicPeriods || [], today));
 
   const navGroups: NavGroup[] = [
     {
@@ -105,7 +111,7 @@ export const StudentPortalSidebar: React.FC<StudentPortalSidebarProps> = ({
           id: 'enrollment',
           label: 'Online Enrollment Hub',
           icon: GraduationCap,
-          badge: isEnrolled ? 'Enrolled' : isPendingEnrollment ? 'Pending' : 'AY 26–27',
+          badge: isEnrolled ? 'Enrolled' : isPendingEnrollment ? 'Pending' : termTag || undefined,
           highlight: !isEnrolled,
           hasSubItems: true,
         },

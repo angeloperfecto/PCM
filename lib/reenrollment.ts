@@ -59,13 +59,61 @@ export function semesterKind(semester?: string): string {
   return '';
 }
 
-const today = () => new Date().toISOString().slice(0, 10);
+/** Today's date (YYYY-MM-DD) in the Philippines, where window start/end dates are set. */
+export function todayPH(at: Date = new Date()): string {
+  try {
+    return at.toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
+  } catch {
+    return new Date(at.getTime() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  }
+}
+const today = () => todayPH();
+
+/** A window set in Academic Terms: its status is Open and today is within its dates (when set). */
+export function windowOpen(status: string | undefined, start?: string, end?: string, on = today()): boolean {
+  if (status !== 'Open') return false;
+  if (start && on < start) return false;
+  if (end && on > end) return false;
+  return true;
+}
+
+/** Why a window is not open (for students): not opened yet, opens on a date, or ended. */
+export function windowNote(status: string | undefined, start?: string, end?: string, on = today()): string {
+  const fmt = (d: string) => new Date(`${d}T00:00:00`).toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' });
+  if (status !== 'Open') return 'Closed by the Registrar.';
+  if (start && on < start) return `Opens ${fmt(start)}.`;
+  if (end && on > end) return `Ended ${fmt(end)}.`;
+  return end ? `Open until ${fmt(end)}.` : 'Open.';
+}
+
+const usable = (p: AcademicPeriod) => !!p && !p.closedAt && p.status !== 'Archived';
 
 export function enrollmentWindowOpen(p: AcademicPeriod, on = today()): boolean {
-  if (p.enrollmentStatus !== 'Open' || p.status === 'Archived') return false;
-  if (p.enrollmentStartDate && on < p.enrollmentStartDate) return false;
-  if (p.enrollmentEndDate && on > p.enrollmentEndDate) return false;
-  return true;
+  return usable(p) && windowOpen(p.enrollmentStatus, p.enrollmentStartDate, p.enrollmentEndDate, on);
+}
+
+export function preEnlistmentWindowOpen(p: AcademicPeriod | null | undefined, on = today()): boolean {
+  return !!p && usable(p) && windowOpen(p.preEnlistmentStatus, p.preEnlistmentStartDate, p.preEnlistmentEndDate, on);
+}
+
+export function addDropWindowOpen(p: AcademicPeriod | null | undefined, on = today()): boolean {
+  return !!p && usable(p) && windowOpen(p.addDropStatus, p.addDropStartDate, p.addDropEndDate, on);
+}
+
+/** The term students pre-enlist for: one whose pre-enlistment window is open (an upcoming term first), else the current term. */
+export function preEnlistmentTerm(periods: AcademicPeriod[], on = today()): AcademicPeriod | null {
+  const open = (periods || []).filter((p) => preEnlistmentWindowOpen(p, on));
+  return open.find((p) => p.status === 'Upcoming') || open.find((p) => !p.isCurrent) || open[0] || (periods || []).find((p) => p.isCurrent) || null;
+}
+
+/** Short label for badges: "AY 26–27 · 2nd Sem" for the term shown to students ('' when none is set). */
+export function termBadge(p: AcademicPeriod | null | undefined): string {
+  if (!p) return '';
+  const m = normAY(p.academicYear).match(/^(\d{4})–(\d{4})$/);
+  const ay = m ? `AY ${m[1].slice(2)}–${m[2].slice(2)}` : `AY ${normAY(p.academicYear)}`;
+  const k = semesterKind(p.semester);
+  const sem = k === '1' ? '1st Sem' : k === '2' ? '2nd Sem' : k === 'summer' ? 'Summer' : String(p.semester || '').trim();
+  return sem ? `${ay} · ${sem}` : ay;
 }
 
 /** The term students can enroll in now: the active term when its window is open, else another open term. */
@@ -75,8 +123,8 @@ export function openEnrollmentTerm(periods: AcademicPeriod[], on = today()): Aca
 }
 
 /** The term to show to students: the open term, else the current term. */
-export function displayTerm(periods: AcademicPeriod[]): AcademicPeriod | null {
-  return openEnrollmentTerm(periods) || (periods || []).find((p) => p.isCurrent) || null;
+export function displayTerm(periods: AcademicPeriod[], on = today()): AcademicPeriod | null {
+  return openEnrollmentTerm(periods, on) || (periods || []).find((p) => p.isCurrent) || null;
 }
 
 // ---------------------------------------------------------------------------
