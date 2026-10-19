@@ -21,6 +21,7 @@ import {
 import { blobToDataUrl, compressImageFile } from './firebase';
 import { normCode, termKeyOf, termLabel, termStillOpen } from './reenrollment';
 import { profileDetailsFromApplication } from './profileFromApplication';
+import { checkTermBeforeSubmit } from './termGuard';
 import {
   ApplicationPayment,
   ApplicationRequirement,
@@ -779,6 +780,9 @@ export async function submitRegistration(
   }
   const problem = validateRegistration(input, policy, catalog);
   if (problem) return { ok: false, message: problem };
+  // The enrollment window and the chosen subjects, checked against the Registrar's latest settings.
+  const termProblem = await checkTermBeforeSubmit(db, input, 'enrollment', input.subjects.map((s) => s.subjectId));
+  if (termProblem) return { ok: false, message: termProblem };
   const timestamp = now();
   const subjects = input.subjects.map((sub) => ({
     subjectId: sub.subjectId,

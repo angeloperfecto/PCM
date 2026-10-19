@@ -21,6 +21,8 @@ import { usePCM } from '@/lib/store';
 import { PreEnlistmentRecord } from '@/lib/types';
 import { programForStudent, subjectsForProgram } from '@/lib/curriculum';
 import { studentTermSubjects } from '@/lib/termSubjects';
+import { preEnlistmentTerm, preEnlistmentWindowOpen, windowNote } from '@/lib/reenrollment';
+import { useToday } from '@/lib/useToday';
 
 export const PreEnlistmentModule: React.FC = () => {
   const {
@@ -37,13 +39,11 @@ export const PreEnlistmentModule: React.FC = () => {
 
   // Pre-enlistment is for the term whose pre-enlistment is open (else the current term),
   // from Enrollment & Records → Academic Terms.
-  const openTerms = (academicPeriods || []).filter((p) => p.preEnlistmentStatus === 'Open' && p.status !== 'Archived');
-  const preTerm =
-    openTerms.find((p) => p.status === 'Upcoming') ||
-    openTerms.find((p) => !p.isCurrent) ||
-    openTerms[0] ||
-    (academicPeriods || []).find((p) => p.isCurrent);
-  const preOpen = preTerm?.preEnlistmentStatus === 'Open';
+  // Live from Academic Terms: status and dates (Philippine time), updated without a reload.
+  const today = useToday();
+  const preTerm = preEnlistmentTerm(academicPeriods || [], today);
+  const preOpen = preEnlistmentWindowOpen(preTerm, today);
+  const preNote = preTerm ? windowNote(preTerm.preEnlistmentStatus, preTerm.preEnlistmentStartDate, preTerm.preEnlistmentEndDate, today) : '';
   const termLabel = preTerm ? `AY ${preTerm.academicYear} • ${preTerm.semester}` : 'No term open for pre-enlistment';
 
   // Find student's pre-enlistment for that term, if any
@@ -60,6 +60,18 @@ export const PreEnlistmentModule: React.FC = () => {
     [academicSubjects, preTerm, programSubjects, program, studentProfile]
   );
   const offeredList = termSubjects.subjects;
+
+  // A different pre-enlistment term (set by the Registrar) starts the selection over.
+  const preTermId = preTerm?.id || '';
+  useEffect(() => {
+    setSelectedSubjectIds([]);
+  }, [preTermId]);
+  // Subjects closed, filled or removed by the Registrar drop out of the selection.
+  const offeredKey = offeredList.filter((s) => !s.closed && !s.full).map((s) => s.id).join('|');
+  useEffect(() => {
+    const ok = new Set(offeredKey.split('|'));
+    setSelectedSubjectIds((cur) => (cur.every((id) => ok.has(id)) ? cur : cur.filter((id) => ok.has(id))));
+  }, [offeredKey]);
 
   // Selected subjects: the student's saved pre-enlistment for this term (the chosen sections), otherwise none.
   const savedIds = (existingRecord?.selectedSubjects || []).map((x) => x.id || '').join('|');
@@ -207,6 +219,14 @@ export const PreEnlistmentModule: React.FC = () => {
               <span className="text-xs font-semibold text-slate-600">
                 Course Selection & Advising
               </span>
+              {preTerm && (
+                <span
+                  data-testid="pre-enlistment-window"
+                  className={`text-[11px] font-bold px-2 py-0.5 rounded-md border ${preOpen ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-slate-100 text-slate-600 border-slate-200'}`}
+                >
+                  {preOpen ? preNote : `Pre-enlistment closed — ${preNote}`}
+                </span>
+              )}
             </div>
             <h3 className="font-serif text-2xl font-bold text-[#18392B] mt-1">
               Online Pre-enlistment Portal
@@ -227,9 +247,9 @@ export const PreEnlistmentModule: React.FC = () => {
 
             <button
               onClick={handleSubmit}
-              disabled={isSubmitting || selectedSubjects.length === 0}
+              disabled={isSubmitting || selectedSubjects.length === 0 || !preOpen}
               className={`font-bold px-5 py-2.5 rounded-xl text-xs flex items-center gap-2 transition shadow-sm cursor-pointer ${
-                selectedSubjects.length === 0
+                selectedSubjects.length === 0 || !preOpen
                   ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
                   : 'bg-[#6D28D9] hover:bg-purple-800 text-white'
               }`}

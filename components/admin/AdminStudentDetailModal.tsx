@@ -12,6 +12,7 @@ import { ledgerPayments } from '@/lib/studentLedger';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { isValidImageSrc } from '@/lib/utils';
+import { normAY, termLabel } from '@/lib/reenrollment';
 import {
   StudentProfile,
   StudentRequirementItem,
@@ -77,7 +78,9 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
     logActivity,
     programs,
     faculty,
+    academicPeriods,
   } = usePCM();
+  const activeTerm = (academicPeriods || []).find((p) => p.isCurrent) || null;
   // Always show the live record (real-time list), not the copy taken when the dossier was opened.
   const student = selectedStudent ? liveStudents.find((s) => s.id === selectedStudent.id) || selectedStudent : null;
   // Admission documents, live from the student's admission application (same as Admissions Review).
@@ -96,8 +99,8 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
     code: 'THEO 101',
     title: 'Biblical Hermeneutics & Exegesis',
     units: 3,
-    semester: '1st Semester, AY 2026–2027',
-    academicYear: '2026–2027',
+    semester: activeTerm ? termLabel(activeTerm.semester, activeTerm.academicYear) : '',
+    academicYear: activeTerm ? normAY(activeTerm.academicYear) : '',
     midtermGrade: '1.25',
     finalGrade: '1.25',
     grade: '1.25',

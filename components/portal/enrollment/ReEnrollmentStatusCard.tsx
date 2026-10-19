@@ -3,9 +3,11 @@
 import React, { useRef, useState } from 'react';
 import { AlertCircle, CalendarClock, CheckCircle2, Clock, FileUp, Info, RefreshCcw, XCircle } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { useToday } from '@/lib/useToday';
 import { prepareRequirementFile } from '@/lib/admissionsService';
 import {
   displayTerm,
+  windowNote,
   documentChecklist,
   enrollmentWindowOpen,
   reenrollmentEligibility,
@@ -31,8 +33,10 @@ const STATUS_STYLE: Record<string, string> = {
 // The next term and the student's re-enrollment for it: status, requirements and uploads.
 export const ReEnrollmentStatusCard: React.FC<{ onStart: () => void }> = ({ onStart }) => {
   const { studentProfile, academicPeriods, enrollments, enrollmentSystemConfig, firebaseAuthUser, sendReenrollmentForVerification, addToast } = usePCM();
-  const term = displayTerm(academicPeriods);
-  const open = term ? enrollmentWindowOpen(term) : false;
+  // Live from Academic Terms; the date check follows Philippine time and updates at midnight.
+  const today = useToday();
+  const term = displayTerm(academicPeriods, today);
+  const open = term ? enrollmentWindowOpen(term, today) : false;
   const eligibility = reenrollmentEligibility(studentProfile, open ? term : null, enrollments);
   const request = eligibility.request || (term ? requestForTerm(enrollments, studentProfile, term) : undefined);
   const rules = reenrollmentRules(enrollmentSystemConfig);
@@ -123,7 +127,12 @@ export const ReEnrollmentStatusCard: React.FC<{ onStart: () => void }> = ({ onSt
         </p>
       )}
 
-      {!open && !request && <p className="text-xs text-slate-600">Re-enrollment opens when the Registrar opens enrollment for this term.</p>}
+      {!open && !request && (
+        <p className="text-xs text-slate-600">
+          Enrollment for this term is not open: {windowNote(term.enrollmentStatus, term.enrollmentStartDate, term.enrollmentEndDate, today)} This page updates
+          automatically when the Registrar opens it.
+        </p>
+      )}
 
       {eligibility.state === 'Not Eligible' && (
         <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">

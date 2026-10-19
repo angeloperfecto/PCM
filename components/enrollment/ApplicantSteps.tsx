@@ -5,6 +5,7 @@ import { CheckCircle2, ClipboardList, Printer, Undo2 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import { normCode, openEnrollmentTerm } from '@/lib/reenrollment';
 import { studentTermSubjects } from '@/lib/termSubjects';
+import { useToday } from '@/lib/useToday';
 import { subjectsForProgram } from '@/lib/curriculum';
 import { db, auth } from '@/lib/firebase';
 import {
@@ -41,7 +42,8 @@ const ResultNote: React.FC<{ result: Result | null }> = ({ result }) =>
 export const RegistrationForm: React.FC<{ app: App }> = ({ app }) => {
   const { academicSubjects, academicPeriods, programs, enrollmentSystemConfig, curriculumSubjects } = usePCM();
   // The term open for enrollment now (status, dates and capacity from Academic Terms).
-  const openTerm = openEnrollmentTerm(academicPeriods);
+  const today = useToday();
+  const openTerm = openEnrollmentTerm(academicPeriods, today);
   const term = openTerm;
   const termFull = !!openTerm?.capacity && (openTerm.enrolledCount || 0) >= openTerm.capacity;
   const termOpen = !!openTerm && !termFull;

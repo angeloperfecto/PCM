@@ -5,6 +5,8 @@ import { db } from '@/lib/firebase';
 import { deleteApplicationDraft, loadApplicationDraft, saveApplicationDraft } from '@/lib/admissionsService';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { displayTerm, enrollmentWindowOpen, normAY, termLabel } from '@/lib/reenrollment';
+import { useToday } from '@/lib/useToday';
 import { admissionRequirementTemplates, sameRequirement } from '@/lib/enrollmentWorkflow';
 import { isValidImageSrc } from '@/lib/utils';
 import {
@@ -84,7 +86,15 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     firebaseAuthUser,
     enrollmentSystemConfig,
     isStudentLoggedIn,
+    academicPeriods,
   } = usePCM();
+  // The term applicants register for: the term open for enrollment (else the active term), live from
+  // Enrollment & Records → Academic Terms.
+  const today = useToday();
+  const regTerm = displayTerm(academicPeriods || [], today);
+  const regTermOpen = !!regTerm && enrollmentWindowOpen(regTerm, today);
+  const regAY = regTerm ? normAY(regTerm.academicYear) : '';
+  const regSemester = regTerm?.semester || '';
   // The admission requirements list (Enrollment & Records → System Governance).
   const admissionTemplates = admissionRequirementTemplates(enrollmentSystemConfig);
   const templatesKey = admissionTemplates.map((t) => t.id).join('|');
@@ -188,9 +198,9 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   const [formData, setFormData] = useState({
     // Step 1: Personal Information
     applicantType: 'New Student' as 'New Student' | 'Returning Student' | 'Transfer Student',
-    studentIdNumber: generateStudentId('2026-2027'),
+    studentIdNumber: generateStudentId(regAY.replace('–', '-')),
     existingStudentId: '',
-    applicationNumber: initialFields?.applicationNumber || generateApplicationNumber('2026-2027'),
+    applicationNumber: initialFields?.applicationNumber || generateApplicationNumber(regAY.replace('–', '-')),
     firstName: initialFields?.firstName || '',
     middleName: initialFields?.middleName || '',
     lastName: initialFields?.lastName || '',
@@ -252,8 +262,8 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     callingTestimony: initialFields?.callingTestimony || '',
 
     // Step 6: PCM Program & Enrollment
-    academicYear: '2026–2027',
-    semester: '1st Semester',
+    academicYear: regAY,
+    semester: regSemester,
     programId: initialFields?.programId || programs[0]?.id || 'prog-bth',
     programTitle: initialFields?.programTitle || programs[0]?.name || 'Bachelor of Arts in Theology',
     major: '',
@@ -622,6 +632,9 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   // can be finished later or on another device. Uploaded files are not part of the draft.
   const [draftInfo, setDraftInfo] = useState<{ resumedFrom?: string; savedAt?: string }>({});
   const [draftReady, setDraftReady] = useState(false);
+  useEffect(() => {
+    setFormData((prev) => (prev.academicYear === regAY && prev.semester === regSemester ? prev : { ...prev, academicYear: regAY, semester: regSemester }));
+  }, [regAY, regSemester, draftReady]);
   const draftRequestedRef = useRef(false);
   useEffect(() => {
     const uid = firebaseAuthUser?.uid;
@@ -681,7 +694,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
           <div>
             <div className="flex items-center gap-2 mb-1">
               <span className="text-[10px] uppercase font-mono tracking-widest bg-[#588B76]/30 text-[#85AA9B] px-2.5 py-0.5 rounded-full font-bold">
-                Academic Year {formData.academicYear}
+                {formData.academicYear ? `Academic Year ${formData.academicYear}` : 'Academic year to be announced'}
               </span>
               <span className="text-[10px] uppercase font-mono tracking-widest bg-amber-400/20 text-amber-200 px-2.5 py-0.5 rounded-full font-bold">
                 Online Admission & Enrollment
@@ -1773,7 +1786,9 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                 Section 6: Degree Program & Academic Enlistment
               </h3>
               <p className="text-xs text-slate-500 mt-1">
-                Select your intended degree track and academic enrollment standing for Academic Year 2026–2027.
+                {regTerm
+                  ? `Select your intended degree track and year level for ${termLabel(regTerm.semester, regTerm.academicYear)}.`
+                  : 'Select your intended degree track and year level. The Registrar has not set the enrollment term yet.'}
               </p>
             </div>
 
@@ -1794,15 +1809,15 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Semester / Term
                 </label>
-                <select
-                  value={formData.semester}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, semester: e.target.value }))}
-                  className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76] bg-white"
-                >
-                  <option value="1st Semester">1st Semester (August – December)</option>
-                  <option value="2nd Semester">2nd Semester (January – May)</option>
-                  <option value="Summer Term">Summer Intensive Term (June – July)</option>
-                </select>
+                <input
+                  type="text"
+                  readOnly
+                  value={formData.semester || 'To be announced'}
+                  className="w-full px-3 py-2 text-xs border border-slate-200 bg-slate-100 rounded-lg font-mono text-slate-700"
+                />
+                <p className="mt-1 text-[11px] text-slate-500" data-testid="registration-term-note">
+                  {regTermOpen ? 'Enrollment for this term is open.' : 'Enrollment for this term is not open yet; you can still submit your application.'} Set by the Registrar.
+                </p>
               </div>
             </div>
 

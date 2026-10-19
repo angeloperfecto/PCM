@@ -21,6 +21,7 @@ import { normalizeStatus } from '@/lib/enrollmentWorkflow';
 import { AcademicTermModal } from './AcademicTermModal';
 import { TermSubjectsPanel } from './TermSubjectsPanel';
 import { isTermOffering } from '@/lib/termSubjects';
+import { normAY, termLabel } from '@/lib/reenrollment';
 import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
 import { AdmissionRequirementsCard } from './AdmissionRequirementsCard';
@@ -370,8 +371,9 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       program: newStudentForm.program,
       yearLevel: newStudentForm.yearLevel,
       academicStatus: 'Regular',
-      academicYear: '2026–2027',
-      currentSemester: '1st Semester, AY 2026–2027',
+      // The active term from Academic Terms.
+      academicYear: currentPeriod ? normAY(currentPeriod.academicYear) : '',
+      currentSemester: currentPeriod ? termLabel(currentPeriod.semester, currentPeriod.academicYear) : '',
       enrollmentStatus: 'Draft',
       gpa: 1.0,
       totalUnitsEarned: 0,
