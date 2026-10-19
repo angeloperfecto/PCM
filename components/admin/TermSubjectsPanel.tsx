@@ -17,6 +17,7 @@ import {
   termOfferings,
   termEnrollmentCounts,
   termReadiness,
+  unassignedOfferings,
   studentsEnrolledInTerm,
   type OfferingDraft,
 } from '@/lib/termSubjects';
@@ -280,6 +281,46 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
     run(async () => {
       await updateDoc(doc(db, 'academicSubjects', o.id), { isArchived: false, removedAt: '', removedBy: '' });
       logActivity('UPDATE', 'Term Subjects', o.id, o.code, `Restored ${o.code} to ${tLabel}.`);
+    });
+
+  // ---------------------------------------------------------------- older entries without a term
+  // From the old all-terms course catalog: used only for terms with no subjects set up.
+  const olderEntries = unassignedOfferings(academicSubjects).filter((o) => offeringForProgram(o, program));
+  const addOlderToTerm = (o: AcademicSubject) =>
+    run(async () => {
+      const r = await createOfferings(
+        [
+          {
+            ...base(o.yearLevel || ''),
+            program: o.program || '',
+            programId: o.programId || '',
+            code: o.code,
+            title: o.title,
+            description: o.description || '',
+            category: o.category || '',
+            units: Number(o.units) || 0,
+            prerequisites: o.prerequisites || [],
+            subjectType: o.subjectType,
+            section: o.section || '',
+            schedule: o.schedule || '',
+            room: o.room || '',
+            instructor: o.instructor || '',
+            instructorId: o.instructorId || '',
+            capacity: Number(o.capacity) || 0,
+            status: 'Open',
+          },
+        ],
+        academicSubjects,
+        by
+      );
+      if (!r.created) throw new Error(`${o.code}${o.section ? ` section ${o.section}` : ''} is already offered (or was removed) in ${tLabel}.`);
+      logActivity('CREATE', 'Term Subjects', term.id, o.code, `Added ${o.code} to ${tLabel} from the older course catalog.`);
+      addToast('success', 'Subject added', `${o.code} added to ${tLabel}.`);
+    });
+  const removeOlder = (o: AcademicSubject) =>
+    run(async () => {
+      await updateDoc(doc(db, 'academicSubjects', o.id), { isArchived: true, removedAt: new Date().toISOString(), removedBy: by });
+      logActivity('UPDATE', 'Term Subjects', o.id, o.code, `Removed ${o.code} from the older course catalog (no term).`);
     });
 
   // ---------------------------------------------------------------- preview
@@ -730,6 +771,39 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                     <RotateCcw className="h-3.5 w-3.5" /> Restore
                   </button>
                 )}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      {olderEntries.length > 0 && (
+        <details className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 text-xs" data-testid="older-entries">
+          <summary className="cursor-pointer font-bold text-slate-700">
+            Older subjects without a term ({olderEntries.length}) — {programLabel(program) || 'this program'}
+          </summary>
+          <p className="mt-2 text-slate-600">
+            From the old all-terms course catalog. Students see these only in a term that has no subjects set up yet. Add the ones you still
+            offer to {tLabel}, and remove the rest.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {olderEntries.map((o) => (
+              <li key={o.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-white p-2">
+                <span>
+                  <span className="font-mono font-bold">{o.code}</span> {o.title} · {o.units} units
+                  {o.semester ? ` · ${o.semester}` : ''}{o.yearLevel ? ` · ${o.yearLevel}` : ''}{o.section ? ` · ${o.section}` : ''}
+                  {!o.programId && !o.program ? ' · all programs' : ''}
+                </span>
+                <span className="flex gap-3">
+                  {!closed && (
+                    <button type="button" disabled={busy} onClick={() => addOlderToTerm(o)} className="flex items-center gap-1 font-bold text-[#18392B] hover:underline">
+                      <Plus className="h-3.5 w-3.5" /> Add to {term.semester}
+                    </button>
+                  )}
+                  <button type="button" disabled={busy} onClick={() => removeOlder(o)} className="flex items-center gap-1 font-bold text-rose-700 hover:underline">
+                    <Trash2 className="h-3.5 w-3.5" /> Remove
+                  </button>
+                </span>
               </li>
             ))}
           </ul>
