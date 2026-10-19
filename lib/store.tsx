@@ -189,8 +189,10 @@ import { autoTermOfferings, createOfferings, offeringForCode, type AutoTermSetup
 import { checkTermBeforeSubmit } from './termGuard';
 import {
   approvalBlockers,
+  completedSubjects,
   documentChecklist,
   normAY,
+  normCode,
   planTermClose,
   reenrollmentRules,
   requestForTerm,
@@ -6036,6 +6038,22 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Pre-Enlistment Workflow
   const submitPreEnlistment = async (recordData: Omit<PreEnlistmentRecord, 'id' | 'createdAt'>): Promise<PreEnlistmentRecord | null> => {
+    // Each subject only once, and never one the student has already completed (academic history and published grades).
+    const sectionCodes = (recordData.selectedSubjects || []).map((x) => normCode(x.code)).filter(Boolean);
+    if (sectionCodes.length !== new Set(sectionCodes).size) {
+      addToast('warning', 'Pre-enlistment not submitted', 'Each subject can be selected only once.');
+      return null;
+    }
+    const owner = students.find((s) => s.studentId === recordData.studentId) || (studentProfile?.studentId === recordData.studentId ? studentProfile : null);
+    if (owner) {
+      const done = completedSubjects(owner);
+      const picked = Array.from(new Set([...sectionCodes, ...(recordData.selectedSubjectCodes || []).map(normCode)]));
+      const again = picked.filter((c) => done.has(c)).map((c) => done.get(c)!.code);
+      if (again.length) {
+        addToast('warning', 'Already completed', `${again.join(', ')} ${again.length === 1 ? 'is' : 'are'} already in the academic record and can’t be pre-enlisted again.`);
+        return null;
+      }
+    }
     if (!isAdminLoggedIn) {
       const problem = await checkTermBeforeSubmit(
         db,
