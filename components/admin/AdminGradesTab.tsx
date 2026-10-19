@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileEdit, FileSpreadsheet, Printer, RefreshCcw, X } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { linkFacultyMember, resolveSectionProfessor } from '@/lib/professors';
 import {
   classListFor,
   decideGradeAmendment,
@@ -11,7 +12,6 @@ import {
   finalizeGradeSheet,
   gradesCsv,
   gradingScaleOf,
-  instructorForSection,
   normEmail,
   isOverdue,
   lookupGrade,
@@ -49,7 +49,7 @@ const STAGE_STYLE: Record<string, string> = {
 
 // Admin → Grade Management: every class's grade sheet for a term, from preparation to publication.
 export const AdminGradesTab: React.FC = () => {
-  const { academicPeriods, academicSubjects, classSections, instructors, students, enrollmentSystemConfig, canManageCurriculum, currentAdminUser, addToast, navigateTo } = usePCM();
+  const { academicPeriods, academicSubjects, classSections, instructors, students, enrollmentSystemConfig, canManageCurriculum, currentAdminUser, addToast, navigateTo, faculty, addInstructor, updateInstructor } = usePCM();
   const scale = gradingScaleOf(enrollmentSystemConfig);
   const sortedTerms = useMemo(
     // Current term first, then active, then closed (most recent first); upcoming terms last.
@@ -101,7 +101,17 @@ export const AdminGradesTab: React.FC = () => {
     if (!term) return;
     setPreparing(true);
     try {
-      const r = await prepareGradeSheets(term, termSections, instructors, students, sheets, actor);
+      // Professors set in Enrollment & Records from Faculty & Trustees get their grading record (sign-in
+      // email) linked first, so their classes get sheets.
+      let roster = [...instructors];
+      for (const section of termSections) {
+        const p = resolveSectionProfessor(section, roster, faculty || []);
+        if (!p.member || (p.instructor && p.instructor.facultyId === p.member.id && normEmail(p.instructor.email))) continue;
+        if (!p.email) continue; // no email anywhere yet: it is asked for in the setup panel
+        const linked = await linkFacultyMember(p.member, roster, { addInstructor, updateInstructor });
+        if (linked) roster = [...roster.filter((i) => i.id !== linked.id), linked];
+      }
+      const r = await prepareGradeSheets(term, termSections, roster, students, sheets, actor, faculty || []);
       setPrepareNote([...r.skipped.map((x) => `${x.section}: ${x.reason}`), ...Array.from(new Set(r.warnings))]);
       if (!auto || r.created || r.updated)
         addToast(
@@ -122,9 +132,16 @@ export const AdminGradesTab: React.FC = () => {
     if (!term || term.closedAt || !loaded || !canManageCurriculum) return '';
     const parts: string[] = [];
     for (const section of termSections) {
-      const ins = instructorForSection(section, instructors);
-      if (!ins || !normEmail(ins.email)) continue;
+      // Same professor lookup as Enrollment & Records; a Faculty & Trustees email counts (linked on refresh).
+      const p = resolveSectionProfessor(section, instructors, faculty || []);
       const sheet = sheets.find((x) => x.sectionId === section.id);
+      if (!p.email) {
+        // Professor changed to someone without a sign-in email (or removed): hand the draft sheet over.
+        if (sheet && ['Draft', 'Returned for Correction'].includes(sheet.status) && (sheet.instructorEmail || (sheet.instructorName || '') !== p.name))
+          parts.push(`reassign:${section.id}:${p.name}`);
+        continue;
+      }
+      const ins = { email: p.email };
       if (!sheet) {
         parts.push(`new:${section.id}`);
         continue;
@@ -140,7 +157,7 @@ export const AdminGradesTab: React.FC = () => {
       if (!same) parts.push([section.id, roster, section.subjectTitle, section.units, section.sectionName, normEmail(ins.email)].join(':'));
     }
     return parts.join('|');
-  }, [term, loaded, canManageCurriculum, termSections, instructors, sheets, students]);
+  }, [term, loaded, canManageCurriculum, termSections, instructors, faculty, sheets, students]);
   const lastSync = useRef('');
   useEffect(() => {
     if (!syncSignature || preparing || syncSignature === lastSync.current) return;

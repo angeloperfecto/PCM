@@ -3,8 +3,8 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, Circle } from 'lucide-react';
 import { usePCM } from '@/lib/store';
-import { assignableProfessors, facultyForInstructor, instructorForFaculty, professorDisplayName } from '@/lib/professors';
-import { gradingScaleOf, instructorForSection, normEmail, subjectsWithoutSection } from '@/lib/grades';
+import { assignableProfessors, linkFacultyMember, resolveSectionProfessor } from '@/lib/professors';
+import { gradingScaleOf, normEmail, subjectsWithoutSection } from '@/lib/grades';
 import { termLabel } from '@/lib/reenrollment';
 import { GradingScaleCard } from './GradingScaleCard';
 import type { AcademicPeriod, ClassSection, GradeSheet } from '@/lib/types';
@@ -37,11 +37,11 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
   const { teaching, others } = assignableProfessors(faculty || []);
   const scale = gradingScaleOf(enrollmentSystemConfig);
   const noSection = subjectsWithoutSection(students, term, termSections);
-  const rows = termSections.map((s) => {
-    const instructor = instructorForSection(s, instructors);
-    return { section: s, instructor, member: facultyForInstructor(instructor, faculty || []) };
-  });
-  const readySections = rows.filter((r) => r.instructor && normEmail(r.instructor.email));
+  // The professor set in Enrollment & Records (Term Subjects) or here, read the same way in both places.
+  const rows = termSections.map((s) => ({ section: s, ...resolveSectionProfessor(s, instructors, faculty || []) }));
+  // Ready when the professor has a sign-in email (their Faculty & Trustees email counts; the grading
+  // record is linked automatically when the grade sheets are prepared).
+  const readySections = rows.filter((r) => (r.instructor || r.member) && r.email);
   const toCreate = readySections.filter((r) => !sheets.some((x) => x.sectionId === r.section.id)).length;
 
   const steps = {
@@ -84,22 +84,8 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
     run(`sec-${sectionId}`, async () => {
       if (facultyId.startsWith('ins:')) return; // the current, unlisted professor: nothing to change
       const member = (faculty || []).find((m) => m.id === facultyId);
-      let ins = member ? instructorForFaculty(member, instructors) : undefined;
-      if (member && !ins) {
-        ins =
-          (await addInstructor({
-            employeeId: '',
-            fullName: member.name,
-            title: '',
-            email: (member.email || '').trim().toLowerCase(),
-            department: member.department || '',
-            status: 'Active',
-            facultyId: member.id,
-          })) || undefined;
-        if (!ins) return;
-      } else if (member && ins && (ins.facultyId !== member.id || (!ins.email && member.email))) {
-        await updateInstructor(ins.id, { facultyId: member.id, ...(!ins.email && member.email ? { email: member.email.trim().toLowerCase() } : {}) });
-      }
+      const ins = member ? (await linkFacultyMember(member, instructors, { addInstructor, updateInstructor })) || undefined : undefined;
+      if (member && !ins) return;
       const name = member ? member.name : '';
       const section = termSections.find((s) => s.id === sectionId);
       // A Term Subjects class is updated in Term Subjects, so Enrollment & Records shows the same professor.
@@ -107,11 +93,13 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
       else await updateClassSection(sectionId, { instructorId: ins?.id || '', instructorName: name });
     });
 
-  const saveEmail = (instructorId: string) =>
-    run(`em-${instructorId}`, async () => {
-      const e = (emails[instructorId] || '').trim();
+  // Save a professor's sign-in email (on their grading record, created from Faculty & Trustees if needed).
+  const saveEmail = (key: string, row: { instructor?: (typeof instructors)[number]; member?: (typeof faculty)[number] }) =>
+    run(`em-${key}`, async () => {
+      const e = (emails[key] || '').trim();
       if (!isEmail(e)) return addToast('warning', 'Check the email', 'Enter the Google email the professor will sign in with.');
-      await updateInstructor(instructorId, { email: e.toLowerCase() });
+      const ins = row.instructor || (row.member ? await linkFacultyMember(row.member, instructors, { addInstructor, updateInstructor }) : null);
+      if (ins) await updateInstructor(ins.id, { email: e.toLowerCase() });
     });
 
   return (
@@ -169,7 +157,7 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
                     <tr><th className="p-1.5">Class</th><th className="p-1.5">Professor</th><th className="p-1.5">Sign-in email</th></tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {rows.map(({ section, instructor, member }) => (
+                    {rows.map(({ section, instructor, member, email, name }) => (
                       <tr key={section.id}>
                         <td className="p-1.5"><strong className="font-mono">{section.subjectCode}</strong> {section.sectionName}</td>
                         <td className="p-1.5">
@@ -182,7 +170,7 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
                           >
                             <option value="">Choose professor…</option>
                             {instructor && !member && (
-                              <option value={`ins:${instructor.id}`}>{professorDisplayName(instructor)} (not in Faculty &amp; Trustees)</option>
+                              <option value={`ins:${instructor.id}`}>{name} (not in Faculty &amp; Trustees)</option>
                             )}
                             {teaching.length > 0 && (
                               <optgroup label="Faculty">
@@ -201,27 +189,35 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
                           </select>
                         </td>
                         <td className="p-1.5">
-                          {!instructor ? (
+                          {!instructor && !member ? (
                             <span className="text-slate-400">—</span>
-                          ) : normEmail(instructor.email) ? (
-                            <span className="text-emerald-800">{instructor.email}</span>
-                          ) : (
-                            <span className="flex gap-1">
-                              <input
-                                type="email"
-                                aria-label={`Email for ${professorDisplayName(instructor)}`}
-                                value={emails[instructor.id] || ''}
-                                disabled={ro}
-                                onChange={(e) => setEmails((m) => ({ ...m, [instructor.id]: e.target.value }))}
-                                placeholder="name@gmail.com"
-                                className="w-44 rounded-lg border border-amber-300 p-1.5"
-                              />
-                              {!ro && (
-                                <button type="button" disabled={busy === `em-${instructor.id}`} onClick={() => saveEmail(instructor.id)} className="rounded-lg bg-[#18392B] px-2 py-1 font-bold text-white disabled:opacity-50">
-                                  Save
-                                </button>
-                              )}
+                          ) : email ? (
+                            <span className="text-emerald-800" data-testid={`email-${section.id}`}>
+                              {email}
+                              {!normEmail(instructor?.email) && <span className="ml-1 text-[10px] text-slate-500">(Faculty &amp; Trustees)</span>}
                             </span>
+                          ) : (
+                            (() => {
+                              const key = instructor?.id || `fac-${member?.id}`;
+                              return (
+                                <span className="flex gap-1">
+                                  <input
+                                    type="email"
+                                    aria-label={`Email for ${name}`}
+                                    value={emails[key] || ''}
+                                    disabled={ro}
+                                    onChange={(e) => setEmails((m) => ({ ...m, [key]: e.target.value }))}
+                                    placeholder="name@gmail.com"
+                                    className="w-44 rounded-lg border border-amber-300 p-1.5"
+                                  />
+                                  {!ro && (
+                                    <button type="button" disabled={busy === `em-${key}`} onClick={() => saveEmail(key, { instructor, member })} className="rounded-lg bg-[#18392B] px-2 py-1 font-bold text-white disabled:opacity-50">
+                                      Save
+                                    </button>
+                                  )}
+                                </span>
+                              );
+                            })()
                           )}
                         </td>
                       </tr>
