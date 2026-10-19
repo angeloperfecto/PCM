@@ -3,10 +3,10 @@
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, Circle } from 'lucide-react';
 import { usePCM } from '@/lib/store';
-import { gradingScaleOf, instructorForSection, normEmail, sectionsForTerm, subjectsWithoutSection } from '@/lib/grades';
+import { gradingScaleOf, instructorForSection, normEmail, subjectsWithoutSection } from '@/lib/grades';
 import { termLabel } from '@/lib/reenrollment';
 import { GradingScaleCard } from './GradingScaleCard';
-import type { AcademicPeriod, GradeSheet } from '@/lib/types';
+import type { AcademicPeriod, ClassSection, GradeSheet } from '@/lib/types';
 
 const isEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
@@ -23,10 +23,16 @@ const Step: React.FC<{ n: number; ok: boolean; title: string; children: React.Re
 
 // Everything a term needs before professors can enter grades, done in one place:
 // grading scale → deadline → a professor (with email) for each class → grade sheets.
-export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeSheet[]; onPrepare: () => void; preparing: boolean }> = ({ term, sheets, onPrepare, preparing }) => {
-  const { enrollmentSystemConfig, classSections, instructors, students, updateClassSection, updateInstructor, updateAcademicPeriod, canManageCurriculum, addToast } = usePCM();
+// termSections: the term's classes (Term Subjects offerings and stored class sections), from Grade Management.
+export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeSheet[]; termSections: ClassSection[]; onPrepare: () => void; preparing: boolean }> = ({
+  term,
+  sheets,
+  termSections,
+  onPrepare,
+  preparing,
+}) => {
+  const { enrollmentSystemConfig, instructors, students, updateClassSection, updateAcademicSubject, updateInstructor, updateAcademicPeriod, canManageCurriculum, addToast } = usePCM();
   const scale = gradingScaleOf(enrollmentSystemConfig);
-  const termSections = sectionsForTerm(classSections, term);
   const noSection = subjectsWithoutSection(students, term, termSections);
   const rows = termSections.map((s) => ({ section: s, instructor: instructorForSection(s, instructors) }));
   const readySections = rows.filter((r) => r.instructor && normEmail(r.instructor.email));
@@ -69,7 +75,11 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
   const assign = (sectionId: string, instructorId: string) =>
     run(`sec-${sectionId}`, async () => {
       const ins = instructors.find((i) => i.id === instructorId);
-      await updateClassSection(sectionId, { instructorId: ins?.id || '', instructorName: ins ? [ins.title, ins.fullName].filter(Boolean).join(' ') : '' });
+      const name = ins ? [ins.title, ins.fullName].filter(Boolean).join(' ') : '';
+      const section = termSections.find((s) => s.id === sectionId);
+      // A Term Subjects class is updated in Term Subjects, so Enrollment & Records shows the same professor.
+      if (section?.offeringId) await updateAcademicSubject(section.offeringId, { instructorId: ins?.id || '', instructor: name });
+      else await updateClassSection(sectionId, { instructorId: ins?.id || '', instructorName: name });
     });
 
   const saveEmail = (instructorId: string) =>

@@ -876,6 +876,8 @@ export interface ClassSection {
   enrolledCount: number;
   status: 'Open' | 'Closed' | 'Waitlist';
   enrolledStudentIds?: string[];
+  /** Set when the class is a Term Subjects offering (academicSubjects) rather than a stored class section. */
+  offeringId?: string;
   remarks?: string;
   createdAt?: string;
   updatedAt?: string;

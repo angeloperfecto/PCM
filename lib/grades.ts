@@ -27,8 +27,10 @@ import {
 import { db } from './firebase';
 import { calculateGPAFromGrades } from './studentDefaults';
 import { normAY, normCode, sameTerm, termKeyOf, termLabel } from './reenrollment';
+import { termEnrollmentRosters, termOfferings } from './termSubjects';
 import type {
   AcademicPeriod,
+  AcademicSubject,
   ClassSection,
   EnrollmentSystemConfig,
   GradeAmendment,
@@ -132,6 +134,45 @@ export function enteredCount(sheet: Pick<GradeSheet, 'roster' | 'grades'>): numb
 export function sectionsForTerm(sections: ClassSection[], term: AcademicPeriod): ClassSection[] {
   const key = termKeyOf(term.semester, term.academicYear);
   return (sections || []).filter((s) => termKeyOf(s.semester, s.academicYear) === key);
+}
+
+/**
+ * The classes of a term for grading: the term's subjects from Enrollment & Records → Term Subjects (each
+ * offering is a class, with the students enrolled in it), plus stored class sections not covered by an offering.
+ * Changes made in Enrollment & Records (subjects, sections, professors, enrollments, drops) show up here.
+ */
+export function termClassSections(term: AcademicPeriod, sections: ClassSection[], offerings: AcademicSubject[], students: StudentProfile[]): ClassSection[] {
+  const stored = sectionsForTerm(sections, term);
+  const rosters = termEnrollmentRosters(students, offerings, term);
+  const fromOfferings = termOfferings(offerings, term)
+    .filter(
+      (o) =>
+        !stored.some(
+          (x) => normCode(x.subjectCode) === normCode(o.code) && [x.sectionName, x.sectionCode].some((n) => squash(n) && squash(n) === squash(o.section || ''))
+        )
+    )
+    .map(
+      (o): ClassSection => ({
+        id: o.id,
+        offeringId: o.id,
+        sectionName: o.section || '',
+        sectionCode: o.section || '',
+        subjectCode: o.code,
+        subjectTitle: o.title,
+        units: Number(o.units) || 0,
+        instructorId: o.instructorId || '',
+        instructorName: o.instructor || '',
+        academicYear: normAY(o.academicYear),
+        semester: o.semester || term.semester,
+        schedule: o.schedule || '',
+        classroom: o.room || '',
+        maxCapacity: Number(o.capacity) || 0,
+        enrolledCount: (rosters.get(o.id) || []).length,
+        status: o.status || 'Open',
+        enrolledStudentIds: rosters.get(o.id) || [],
+      })
+    );
+  return [...stored, ...fromOfferings];
 }
 
 export function instructorForSection(section: ClassSection, instructors: InstructorRecord[]): InstructorRecord | undefined {
@@ -332,12 +373,22 @@ export async function prepareGradeSheets(
       roster.forEach((sid) => {
         if (prev.grades?.[sid]) grades[sid] = prev.grades[sid];
       });
+      // The class details from Enrollment & Records (Term Subjects) as they are now.
+      const details = {
+        sectionName: section.sectionName || section.sectionCode || '',
+        subjectCode: section.subjectCode,
+        subjectTitle: section.subjectTitle,
+        units: Number(section.units) || 0,
+      };
       const changed =
         prev.instructorEmail !== teacher.instructorEmail ||
+        prev.subjectTitle !== details.subjectTitle ||
+        Number(prev.units) !== details.units ||
+        (prev.sectionName || '') !== details.sectionName ||
         prev.roster.length !== roster.length ||
         prev.roster.some((r) => !roster.includes(r));
       if (changed) {
-        batch.update(doc(db, 'gradeSheets', id), { ...teacher, roster, students: list.students.map(rosterEntry), grades, updatedAt: now, refreshedBy: actor });
+        batch.update(doc(db, 'gradeSheets', id), { ...teacher, ...details, roster, students: list.students.map(rosterEntry), grades, updatedAt: now, refreshedBy: actor });
         result.updated += 1;
         writes += 1;
       }

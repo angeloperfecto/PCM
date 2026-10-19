@@ -6,7 +6,7 @@ import { usePCM } from '@/lib/store';
 import { planTermClose, reenrollmentRules, termKeyOf, termLabel } from '@/lib/reenrollment';
 import {
   gradingScaleOf,
-  sectionsForTerm,
+  termClassSections,
   sheetIssues,
   sheetStageLabel,
   subjectsWithoutSection,
@@ -18,7 +18,7 @@ import type { AcademicPeriod } from '@/lib/types';
 // Closing a term: preview what moves into each student's academic history, confirm, then
 // activate the next term so returning students can re-enroll.
 export const CloseTermModal: React.FC<{ period: AcademicPeriod; onClose: () => void }> = ({ period, onClose }) => {
-  const { students, enrollments, academicPeriods, enrollmentSystemConfig, classSections, closeAcademicTerm, setCurrentAcademicPeriod, updateAcademicPeriod, canManageTerms } = usePCM();
+  const { students, enrollments, academicPeriods, academicSubjects, enrollmentSystemConfig, classSections, closeAcademicTerm, setCurrentAcademicPeriod, updateAcademicPeriod, canManageTerms } = usePCM();
   const rules = reenrollmentRules(enrollmentSystemConfig);
   const label = termLabel(period.semester, period.academicYear);
   const [confirmed, setConfirmed] = useState(false);
@@ -36,7 +36,7 @@ export const CloseTermModal: React.FC<{ period: AcademicPeriod; onClose: () => v
   const { sheets: termSheets, loaded: sheetsLoaded } = useGradeSheets({ termKey: termKeyForGrades });
   const termAmendments = useGradeAmendments({ termKey: termKeyForGrades });
   const gradeScale = gradingScaleOf(enrollmentSystemConfig);
-  const termSections = sectionsForTerm(classSections, period);
+  const termSections = termClassSections(period, classSections, academicSubjects, students);
   const gradeItems: string[] = [
     ...termSheets.filter((x) => !(x.status === 'Finalized' && x.publishedAt)).map((x) => `${x.subjectCode} ${x.sectionName} (${x.instructorName}): ${sheetStageLabel(x)}`),
     ...termSections.filter((x) => !termSheets.some((g) => g.sectionId === x.id)).map((x) => `${x.subjectCode} ${x.sectionName}: no grade sheet`),
