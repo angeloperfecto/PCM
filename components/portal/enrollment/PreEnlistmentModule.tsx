@@ -406,7 +406,12 @@ export const PreEnlistmentModule: React.FC = () => {
                 {filteredSubjects.length === 0 && (
                   <tr>
                     <td colSpan={8} className="p-6 text-center text-slate-500">
-                      {preTerm ? `No subjects are offered for your year level in ${preTerm.semester}, AY ${preTerm.academicYear} yet. Please check with the Registrar.` : 'No term is open for pre-enlistment.'}
+                      {!preTerm
+                        ? 'No term is open for pre-enlistment.'
+                        : offeredList.length > 0
+                          ? 'No subjects match your search.'
+                          : // Names the program and year level used, so the Registrar can spot a mismatch with Term Subjects.
+                            `No subjects are offered for ${program?.name || studentProfile?.degreeProgram || studentProfile?.program || 'your program'}${studentProfile?.yearLevel ? `, ${studentProfile.yearLevel}` : ''} in ${preTerm.semester}, AY ${preTerm.academicYear} yet. Please check with the Registrar.`}
                     </td>
                   </tr>
                 )}

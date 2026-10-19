@@ -37,6 +37,8 @@ export function programForStudent(programs: AcademicProgram[], student: Partial<
   const keys = [student.programId, student.degreeProgram, student.program].filter(Boolean).map((x) => norm(String(x)));
   if (keys.length === 0) return null;
   return (
+    // The student's own program id first, so a same-named program record can't take its place.
+    (student.programId ? programs.find((p) => p.id === student.programId) : undefined) ||
     programs.find((p) => programKeys(p).some((k) => keys.includes(k))) ||
     programs.find((p) => programKeys(p).some((k) => k.length > 3 && keys.some((s) => s.includes(k) || k.includes(s)))) ||
     null
