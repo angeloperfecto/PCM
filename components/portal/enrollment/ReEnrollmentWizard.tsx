@@ -5,12 +5,11 @@ import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Info, X } 
 import { usePCM } from '@/lib/store';
 import { programForStudent, subjectsForProgram } from '@/lib/curriculum';
 import { termFees } from '@/lib/studentLedger';
+import { studentTermSubjects, type StudentTermSubject } from '@/lib/termSubjects';
 import {
-  offeredSubjects,
   openEnrollmentTerm,
   reenrollmentEligibility,
   reenrollmentRules,
-  semesterKind,
   suggestYearLevel,
   termLabel,
   yearLevelChoices,
@@ -64,27 +63,14 @@ export const ReEnrollmentWizard: React.FC<{ onClose: () => void; onSubmitted?: (
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
 
-  // Subjects: the program's curriculum when it is set up, otherwise the term's course offerings.
+  // The subjects the Registrar set up for this term (Term Subjects), for the student's program and the
+  // chosen year level, plus back subjects; the same list every enrollment screen uses.
+  const termSubjects = useMemo(
+    () => studentTermSubjects({ catalog: academicSubjects, term, programSubjects, program, student: studentProfile, yearLevel }),
+    [academicSubjects, term, programSubjects, program, studentProfile, yearLevel]
+  );
+  const offered: StudentTermSubject[] = termSubjects.subjects;
   const fromCurriculum = programSubjects.some((s) => s.status !== 'Inactive');
-  const offered: OfferedSubject[] = useMemo(() => {
-    if (!term) return [];
-    if (fromCurriculum) return offeredSubjects(programSubjects, academicSubjects, yearLevel, term.semester, studentProfile);
-    const kind = semesterKind(term.semester);
-    return (academicSubjects || [])
-      .filter((c) => !c.isArchived && c.status !== 'Closed' && (!c.semester || semesterKind(c.semester) === kind))
-      .map((c) => ({
-        id: c.id,
-        code: c.code,
-        title: c.title,
-        units: Number(c.units) || 0,
-        schedule: c.schedule || 'TBA',
-        room: c.room || 'TBA',
-        instructor: c.instructor || 'TBA',
-        yearLevel: '',
-        backSubject: false,
-        prerequisitesMet: true,
-      }));
-  }, [term, fromCurriculum, programSubjects, academicSubjects, yearLevel, studentProfile]);
 
   const units = selected.reduce((t, s) => t + (Number(s.units) || 0), 0);
   const fees = termFees(units, feeStructure || [], enrollmentSystemConfig);
@@ -102,12 +88,13 @@ export const ReEnrollmentWizard: React.FC<{ onClose: () => void; onSubmitted?: (
     ...selected.filter((s) => (s as OfferedSubject).prerequisitesMet === false).map((s) => `Prerequisite not yet passed for ${s.code}.`),
   ];
 
-  const toggle = (s: OfferedSubject) => {
+  const toggle = (s: StudentTermSubject) => {
     setError('');
+    // One section per subject: choosing another section of the same subject replaces it.
     setSelected((cur) =>
-      cur.some((x) => x.code === s.code)
-        ? cur.filter((x) => x.code !== s.code)
-        : [...cur, { id: s.id, code: s.code, title: s.title, units: s.units, schedule: s.schedule, room: s.room, instructor: s.instructor, yearLevel: s.yearLevel, backSubject: s.backSubject, prerequisitesMet: s.prerequisitesMet } as SelectedSubject]
+      cur.some((x) => x.id === s.id)
+        ? cur.filter((x) => x.id !== s.id)
+        : [...cur.filter((x) => x.code !== s.code), { id: s.id, code: s.code, title: s.title, units: s.units, schedule: s.schedule, room: s.room, instructor: s.instructor, section: s.section, yearLevel: s.yearLevel, backSubject: s.backSubject, prerequisitesMet: s.prerequisitesMet } as SelectedSubject]
     );
   };
 
@@ -289,7 +276,11 @@ export const ReEnrollmentWizard: React.FC<{ onClose: () => void; onSubmitted?: (
 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="font-semibold text-slate-700">
-              {fromCurriculum ? `Subjects of your curriculum for ${term?.semester} (not yet passed)` : `Subjects offered for ${term?.semester}`}
+              {termSubjects.configured
+                ? `Subjects offered for ${yearLevel} in ${term?.semester} (not yet passed)`
+                : fromCurriculum
+                  ? `Subjects of your curriculum for ${term?.semester} (not yet passed)`
+                  : `Subjects offered for ${term?.semester}`}
             </span>
             <span className="font-mono font-bold text-[#18392B]">
               {selected.length} selected • {units} units{minUnits || maxUnits ? ` (load ${minUnits || 0}–${maxUnits || 'any'})` : ''}
@@ -300,12 +291,12 @@ export const ReEnrollmentWizard: React.FC<{ onClose: () => void; onSubmitted?: (
               No subjects are available for {yearLevel} in {term?.semester}. Please check with the Registrar.
             </p>
           ) : (
-            <ul className="max-h-80 space-y-2 overflow-y-auto pr-1">
+            <ul className="max-h-80 space-y-2 overflow-y-auto pr-1" data-testid="reenroll-subjects">
               {offered.map((s) => {
-                const on = selected.some((x) => x.code === s.code);
-                const blocked = enforcePrereq && !s.prerequisitesMet;
+                const on = selected.some((x) => x.id === s.id);
+                const blocked = (enforcePrereq && !s.prerequisitesMet) || s.closed || s.full;
                 return (
-                  <li key={s.code}>
+                  <li key={s.id}>
                     <label
                       className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition ${on ? 'border-emerald-300 bg-emerald-50/70' : 'border-slate-200 bg-white hover:border-[#588B76]'} ${blocked ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
@@ -316,6 +307,8 @@ export const ReEnrollmentWizard: React.FC<{ onClose: () => void; onSubmitted?: (
                           <span className="font-semibold text-slate-900">{s.title}</span>
                           {s.backSubject && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-900">Back subject • {s.yearLevel}</span>}
                           {!s.prerequisitesMet && <span className="rounded bg-rose-100 px-1.5 py-0.5 text-[10px] font-bold text-rose-800">Prerequisite: {s.prerequisites}</span>}
+                          {s.section && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">{s.section}</span>}
+                          {(s.closed || s.full) && <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-700">{s.closed ? 'Closed' : 'Full'}</span>}
                         </span>
                         <span className="block text-[11px] text-slate-500">
                           {s.schedule} • {s.room} • {s.instructor}
@@ -329,6 +322,12 @@ export const ReEnrollmentWizard: React.FC<{ onClose: () => void; onSubmitted?: (
             </ul>
           )}
         </div>
+      )}
+
+      {step === 1 && termSubjects.notOffered.length > 0 && (
+        <p className="mt-2 text-[11px] text-slate-500">
+          Not offered this term: {termSubjects.notOffered.map((x) => `${x.code} (${x.yearLevel})`).join(', ')}.
+        </p>
       )}
 
       {step === 2 && (

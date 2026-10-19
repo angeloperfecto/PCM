@@ -185,6 +185,7 @@ import { ENROLLMENT_STAFF_ROLES, PAYMENT_STAFF_ROLES, normalizeStatus, admission
 import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflow';
 import { increment, runTransaction, type Transaction } from 'firebase/firestore';
 import { termFees, accountSummary, parseTerm, officialAssessmentLines, applyOfficialLines } from './studentLedger';
+import { offeringForCode } from './termSubjects';
 import {
   approvalBlockers,
   documentChecklist,
@@ -5636,6 +5637,19 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     batch.set(doc(db, 'studentProfiles', student.id), cleanFirestoreData(studentFields), { merge: true });
     // Count the student toward the term's capacity (once; re-approving the same term does not count again).
     if (period && !sameTerm) batch.update(doc(db, 'academicPeriods', period.id), { enrolledCount: increment(1) });
+    // …and toward each subject's class capacity in that term (Term Subjects).
+    const countedOfferings: string[] = [];
+    if (!sameTerm) {
+      const termRef = { semester: target.semester, academicYear: target.schoolYear };
+      (target.selectedSubjects || []).forEach((sub) => {
+        const byId = academicSubjects.find((o) => o.id === sub.id && !o.isArchived);
+        const offering = byId && byId.code === sub.code ? byId : offeringForCode(academicSubjects, termRef, sub.code);
+        if (offering && !countedOfferings.includes(offering.id)) {
+          countedOfferings.push(offering.id);
+          batch.update(doc(db, 'academicSubjects', offering.id), { enrolledCount: increment(1) });
+        }
+      });
+    }
     if (!(await commitBatch(batch, `enrollments/${enrollmentId}`))) return false;
 
     const updatedStudent = { ...student, ...studentFields } as StudentProfile;
@@ -6177,7 +6191,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let updatedCourses = [...(targetStudent.courses || [])];
 
       if (target.action === 'Add') {
-        const subjectCatalogItem = academicSubjects.find((s) => s.code === target.subjectCode);
+        // The offering in the student's own term (Term Subjects), never another term's.
+        const subjectCatalogItem = offeringForCode(academicSubjects, parseTerm(targetStudent.currentSemester), target.subjectCode);
         const existingIdx = updatedCourses.findIndex((c) => c.code === target.subjectCode);
         if (existingIdx >= 0) {
           updatedCourses[existingIdx] = {
@@ -6203,7 +6218,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updatedCourses = updatedCourses.map((c) =>
           c.code === target.subjectCode ? { ...c, status: 'Dropped' as const } : c
         );
-        const subjectCatalogItem = academicSubjects.find((s) => s.code === target.subjectCode);
+        const subjectCatalogItem = offeringForCode(academicSubjects, parseTerm(targetStudent.currentSemester), target.subjectCode);
         if (subjectCatalogItem) {
           updateAcademicSubject(subjectCatalogItem.id, { enrolledCount: Math.max(0, (subjectCatalogItem.enrolledCount || 1) - 1) });
         }

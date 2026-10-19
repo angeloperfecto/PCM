@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ArrowLeftRight,
   Plus,
@@ -17,7 +17,9 @@ import {
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import { parseTerm } from '@/lib/studentLedger';
-import { AddDropAction, AcademicSubject, StudentCourse } from '@/lib/types';
+import { programForStudent, subjectsForProgram } from '@/lib/curriculum';
+import { studentTermSubjects } from '@/lib/termSubjects';
+import { AddDropAction, StudentCourse } from '@/lib/types';
 
 export const AddDropModule: React.FC = () => {
   const {
@@ -27,6 +29,8 @@ export const AddDropModule: React.FC = () => {
     addDropRequests,
     submitAddDropRequest,
     addToast,
+    programs,
+    curriculumSubjects,
   } = usePCM();
 
   // Active student requests
@@ -39,17 +43,24 @@ export const AddDropModule: React.FC = () => {
     (c) => c.status !== 'Dropped'
   );
 
-  // Courses available to add
-  const enrolledCodes = enrolledCourses.map((c) => c.code);
-  const availableToAdd = academicSubjects.filter(
-    (s) => !enrolledCodes.includes(s.code) && !s.isArchived && s.status !== 'Closed'
-  );
-
   // The add/drop window of the student's current term (or the current term).
   const term = parseTerm(studentProfile.currentSemester);
   const period =
     (academicPeriods || []).find((p) => p.semester === term.semester && p.academicYear.replace('-', '–') === term.academicYear) ||
     (academicPeriods || []).find((p) => p.isCurrent);
+
+  // Subjects that can be added: that term's subjects for the student's program and year level
+  // (Term Subjects), not already taken, still open.
+  const enrolledCodes = enrolledCourses.map((c) => c.code);
+  const program = programForStudent(programs, studentProfile);
+  const programSubjects = useMemo(() => subjectsForProgram(curriculumSubjects, program), [curriculumSubjects, program]);
+  const availableToAdd = useMemo(
+    () =>
+      studentTermSubjects({ catalog: academicSubjects, term: period, programSubjects, program, student: studentProfile })
+        .subjects.filter((x) => x.offeringId && !x.closed && !enrolledCodes.includes(x.code)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [academicSubjects, period, programSubjects, program, studentProfile, enrolledCodes.join('|')]
+  );
   const fmt = (d?: string) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' }) : '');
   const windowOpen = period?.addDropStatus === 'Open';
   const windowDates = period ? [fmt(period.addDropStartDate), fmt(period.addDropEndDate)].filter(Boolean).join(' – ') : '';
@@ -233,7 +244,7 @@ export const AddDropModule: React.FC = () => {
               const hasPendingAdd = studentRequests.some(
                 (r) => r.subjectCode === s.code && r.action === 'Add' && r.status === 'Pending'
               );
-              const isFull = (s.enrolledCount || 0) >= s.capacity;
+              const isFull = s.full;
 
               return (
                 <div
@@ -246,9 +257,13 @@ export const AddDropModule: React.FC = () => {
                       <span className="text-[10px] font-mono text-purple-800 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200">
                         {s.units} Units
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
-                        Slots: {s.enrolledCount || 0}/{s.capacity}
-                      </span>
+                      {s.capacity > 0 && (
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          Slots: {s.enrolledCount || 0}/{s.capacity}
+                        </span>
+                      )}
+                      {s.section && <span className="text-[10px] text-slate-500">{s.section}</span>}
+                      {s.backSubject && <span className="text-[10px] font-bold text-amber-800">Back subject • {s.yearLevel}</span>}
                     </div>
                     <div className="font-semibold text-slate-900">{s.title}</div>
                     <div className="text-[11px] text-slate-500">
