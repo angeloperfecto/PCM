@@ -95,16 +95,17 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
 
   // Add Subject Grade State
   const [isAddSubjectOpen, setIsAddSubjectOpen] = useState(false);
+  // Starts blank: the Registrar enters the real subject and grades (no sample entry).
   const [newSubject, setNewSubject] = useState({
-    code: 'THEO 101',
-    title: 'Biblical Hermeneutics & Exegesis',
-    units: 3,
+    code: '',
+    title: '',
+    units: '' as string | number,
     semester: activeTerm ? termLabel(activeTerm.semester, activeTerm.academicYear) : '',
     academicYear: activeTerm ? normAY(activeTerm.academicYear) : '',
-    midtermGrade: '1.25',
-    finalGrade: '1.25',
-    grade: '1.25',
-    instructor: 'Dr. Benjamin Villanueva',
+    midtermGrade: '',
+    finalGrade: '',
+    grade: '',
+    instructor: '',
     status: 'Passed' as 'Passed' | 'In Progress' | 'Incomplete' | 'Credited' | 'Failed',
   });
 
@@ -576,6 +577,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                       <label className="block text-[10px] font-bold text-slate-600 mb-1">Course Code</label>
                       <input
                         type="text"
+                        required
                         value={newSubject.code}
                         onChange={(e) => setNewSubject({ ...newSubject, code: e.target.value })}
                         className="w-full px-2 py-1.5 border rounded text-xs bg-white font-mono"
@@ -585,6 +587,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                       <label className="block text-[10px] font-bold text-slate-600 mb-1">Subject Title</label>
                       <input
                         type="text"
+                        required
                         value={newSubject.title}
                         onChange={(e) => setNewSubject({ ...newSubject, title: e.target.value })}
                         className="w-full px-2 py-1.5 border rounded text-xs bg-white"
@@ -594,8 +597,10 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                       <label className="block text-[10px] font-bold text-slate-600 mb-1">Units</label>
                       <input
                         type="number"
+                        required
+                        min={0}
                         value={newSubject.units}
-                        onChange={(e) => setNewSubject({ ...newSubject, units: Number(e.target.value) })}
+                        onChange={(e) => setNewSubject({ ...newSubject, units: e.target.value })}
                         className="w-full px-2 py-1.5 border rounded text-xs bg-white font-mono"
                       />
                     </div>
