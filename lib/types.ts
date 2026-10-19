@@ -895,6 +895,8 @@ export interface InstructorRecord {
   specialization?: string;
   assignedSubjectCodes?: string[];
   assignedSectionsCount?: number;
+  /** The Faculty & Trustees member this record belongs to. */
+  facultyId?: string;
   createdAt?: string;
   updatedAt?: string;
 }

@@ -28,6 +28,7 @@ import { db } from './firebase';
 import { calculateGPAFromGrades } from './studentDefaults';
 import { normAY, normCode, sameTerm, termKeyOf, termLabel } from './reenrollment';
 import { termEnrollmentRosters, termOfferings } from './termSubjects';
+import { professorDisplayName } from './professors';
 import type {
   AcademicPeriod,
   AcademicSubject,
@@ -341,7 +342,7 @@ export async function prepareGradeSheets(
     const prev = existing.find((s) => s.id === id);
     const teacher = {
       instructorId: instructor.id,
-      instructorName: [instructor.title, instructor.fullName].filter(Boolean).join(' '),
+      instructorName: professorDisplayName(instructor),
       instructorEmail: normEmail(instructor.email),
     };
     if (!prev) {

@@ -3,6 +3,7 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, Bell, ClipboardCheck, Clock, FileEdit, LogIn, LogOut } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { professorDisplayName } from '@/lib/professors';
 import { enteredCount, gradingScaleOf, isOverdue, normEmail, sheetStageLabel, useGradeSheets } from '@/lib/grades';
 import { termKeyOf, termLabel } from '@/lib/reenrollment';
 import { GRADE_STAGE_STYLE, GradeSheetEditor, fmtGradeDate } from '@/components/grades/GradeSheetEditor';
@@ -39,7 +40,7 @@ export const FacultyPortalView: React.FC = () => {
           <div>
             <h1 className="font-serif text-2xl font-bold">Faculty Portal</h1>
             <p className="text-xs text-slate-300">
-              {instructor ? `${[instructor.title, instructor.fullName].filter(Boolean).join(' ')} • ${instructor.department || 'Faculty'}` : 'Grade submission for PCM professors'}
+              {instructor ? `${professorDisplayName(instructor)} • ${instructor.department || 'Faculty'}` : 'Grade submission for PCM professors'}
             </p>
           </div>
           {firebaseAuthUser && (
