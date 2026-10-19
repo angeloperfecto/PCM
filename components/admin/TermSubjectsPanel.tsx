@@ -11,7 +11,6 @@ import {
   createOfferings,
   curriculumForTerm,
   duplicateOffering,
-  isTermOffering,
   offeringForProgram,
   studentTermSubjects,
   termOfferings,
@@ -78,10 +77,6 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
 
   const allForTerm = useMemo(() => (term ? termOfferings(academicSubjects, term) : []), [academicSubjects, term]);
   const forProgram = useMemo(() => allForTerm.filter((o) => offeringForProgram(o, program)), [allForTerm, program]);
-  const removed = useMemo(
-    () => (term ? academicSubjects.filter((o) => o.isArchived && isTermOffering(o, term) && offeringForProgram(o, program)) : []),
-    [academicSubjects, term, program]
-  );
   const groups = useMemo(() => {
     const levels = [...YEAR_LEVELS, ALL];
     return levels
@@ -255,7 +250,7 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
         addToast('success', 'Subject saved', `${code} updated for ${tLabel}.`);
       } else {
         const r = await createOfferings([{ ...(target as OfferingDraft), description: '', category: '' }], academicSubjects, by);
-        if (!r.created) throw new Error(`${code} was offered in ${tLabel} before and removed. Restore it from “Removed subjects” below.`);
+        if (!r.created) throw new Error(`${code}${fields.section ? ` section ${fields.section}` : ''} is already offered in ${tLabel}.`);
         logActivity('CREATE', 'Term Subjects', term.id, code, `Added ${code} to ${tLabel}.`);
         addToast('success', 'Subject added', `${code} added to ${tLabel}.`);
       }
@@ -273,14 +268,10 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
   const remove = (o: AcademicSubject) =>
     run(async () => {
       if (enrolledIn(o) > 0) throw new Error(`${enrolledIn(o)} student(s) are enrolled in ${o.code}. Close it instead so no one else can enroll.`);
+      if (!window.confirm(`Remove ${o.code}${o.section ? ` (${o.section})` : ''} from ${tLabel}? Students will no longer see it. To offer it again, add it again.`)) return;
       await updateDoc(doc(db, 'academicSubjects', o.id), { isArchived: true, removedAt: new Date().toISOString(), removedBy: by });
-      logActivity('UPDATE', 'Term Subjects', o.id, o.code, `Removed ${o.code} from ${tLabel} (can be restored).`);
-      addToast('info', 'Subject removed', `${o.code} is no longer offered in ${tLabel}. You can restore it below.`);
-    });
-  const restore = (o: AcademicSubject) =>
-    run(async () => {
-      await updateDoc(doc(db, 'academicSubjects', o.id), { isArchived: false, removedAt: '', removedBy: '' });
-      logActivity('UPDATE', 'Term Subjects', o.id, o.code, `Restored ${o.code} to ${tLabel}.`);
+      logActivity('UPDATE', 'Term Subjects', o.id, o.code, `Removed ${o.code} from ${tLabel}.`);
+      addToast('info', 'Subject removed', `${o.code} is no longer offered in ${tLabel}.`);
     });
 
   // ---------------------------------------------------------------- older entries without a term
@@ -313,7 +304,7 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
         academicSubjects,
         by
       );
-      if (!r.created) throw new Error(`${o.code}${o.section ? ` section ${o.section}` : ''} is already offered (or was removed) in ${tLabel}.`);
+      if (!r.created) throw new Error(`${o.code}${o.section ? ` section ${o.section}` : ''} is already offered in ${tLabel}.`);
       logActivity('CREATE', 'Term Subjects', term.id, o.code, `Added ${o.code} to ${tLabel} from the older course catalog.`);
       addToast('success', 'Subject added', `${o.code} added to ${tLabel}.`);
     });
@@ -758,24 +749,6 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
           </table>
         </div>
       ))}
-
-      {removed.length > 0 && (
-        <details className="rounded-xl border border-slate-200 bg-white p-3 text-xs">
-          <summary className="cursor-pointer font-bold text-slate-700">Removed subjects ({removed.length})</summary>
-          <ul className="mt-2 space-y-1">
-            {removed.map((o) => (
-              <li key={o.id} className="flex items-center justify-between rounded-lg bg-slate-50 p-2">
-                <span><span className="font-mono font-bold">{o.code}</span> {o.title}{o.yearLevel ? ` · ${o.yearLevel}` : ''}{o.section ? ` · ${o.section}` : ''}</span>
-                {!closed && (
-                  <button type="button" disabled={busy} onClick={() => restore(o)} className="flex items-center gap-1 font-bold text-[#588B76] hover:underline">
-                    <RotateCcw className="h-3.5 w-3.5" /> Restore
-                  </button>
-                )}
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
 
       {olderEntries.length > 0 && (
         <details className="rounded-xl border border-amber-200 bg-amber-50/40 p-3 text-xs" data-testid="older-entries">
