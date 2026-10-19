@@ -7,6 +7,7 @@ import { isValidImageSrc } from '@/lib/utils';
 import { StudentLifeAlbum, StudentLifePhotoItem } from '@/lib/types';
 import { parsePhotoStory } from '@/lib/galleryStoryParser';
 import { AlbumEditorialHeader } from '@/components/gallery/AlbumEditorialHeader';
+import { ZoomControls, ZoomPanStage, useZoomPan } from '@/components/common/ZoomPanStage';
 import {
   Camera,
   Calendar,
@@ -220,7 +221,11 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
     });
   }, []);
 
-  // Keyboard navigation for Lightbox
+  // Zoom for the photo in the lightbox; back to fit when another photo is shown or the viewer reopens.
+  const zoom = useZoomPan(`${lightboxState.isOpen}-${lightboxState.currentIndex}-${lightboxState.photos[lightboxState.currentIndex]?.id || ''}`);
+  const { zoomIn, zoomOut, reset: resetZoom } = zoom;
+
+  // Keyboard: Esc closes, ←/→ change photo, + / − zoom, 0 fits the photo again.
   useEffect(() => {
     if (!lightboxState.isOpen) return;
 
@@ -228,11 +233,14 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
       if (e.key === 'Escape') closeLightbox();
       if (e.key === 'ArrowRight') nextPhoto();
       if (e.key === 'ArrowLeft') prevPhoto();
+      if (e.key === '+' || e.key === '=') zoomIn();
+      if (e.key === '-' || e.key === '_') zoomOut();
+      if (e.key === '0') resetZoom();
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [lightboxState.isOpen, closeLightbox, nextPhoto, prevPhoto]);
+  }, [lightboxState.isOpen, closeLightbox, nextPhoto, prevPhoto, zoomIn, zoomOut, resetZoom]);
 
   // Lock body scroll when lightbox is open
   useEffect(() => {
@@ -746,17 +754,18 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
       {lightboxState.isOpen && currentPhoto && (
         <div className="fixed inset-0 z-50 bg-black/95 backdrop-blur-md flex flex-col justify-between select-none animate-in fade-in duration-200">
           {/* Top Bar */}
-          <div className="flex items-center justify-between px-4 py-3 bg-black/40 text-white border-b border-white/10 z-20">
-            <div className="flex items-center gap-3">
-              <span className="font-serif font-bold text-sm text-white drop-shadow-xs">
+          <div className="flex items-center justify-between gap-2 px-3 sm:px-4 py-3 bg-black/40 text-white border-b border-white/10 z-20">
+            <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+              <span className="truncate font-serif font-bold text-sm text-white drop-shadow-xs" title={lightboxState.albumTitle || 'Student Life in Pictures'}>
                 {lightboxState.albumTitle || 'Student Life in Pictures'}
               </span>
-              <span className="text-xs font-mono text-slate-300 bg-white/10 px-2 py-0.5 rounded-full">
+              <span className="shrink-0 whitespace-nowrap text-xs font-mono text-slate-300 bg-white/10 px-2 py-0.5 rounded-full">
                 {lightboxState.currentIndex + 1} / {lightboxState.photos.length}
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+              <ZoomControls zoom={zoom} />
               <a
                 href={currentPhoto.imageUrl}
                 target="_blank"
@@ -806,17 +815,17 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
               <ChevronRight className="w-6 h-6" />
             </button>
 
-            {/* Active Image Container */}
-            <div className="relative w-full h-full max-w-6xl max-h-[75vh] flex items-center justify-center">
+            {/* Active Image: scroll, pinch or double-click to zoom; drag to move when zoomed */}
+            <ZoomPanStage zoom={zoom} label={currentPhoto.caption || 'Campus photo'} className="w-full h-full max-w-6xl max-h-[75vh]">
               <SafeGalleryImage
                 src={currentPhoto.imageUrl}
                 alt={currentPhoto.caption || 'Campus photo'}
                 fill
                 priority
-                className="object-contain"
+                className="object-contain pointer-events-none"
                 sizes="(max-width: 1280px) 100vw, 1200px"
               />
-            </div>
+            </ZoomPanStage>
           </div>
 
           {/* Bottom Bar: Caption & Filmstrip Carousel */}
@@ -829,6 +838,7 @@ export const StudentLifeGalleryPublic: React.FC<StudentLifeGalleryPublicProps> =
                 </p>
               )}
               <div className="flex flex-wrap items-center justify-center gap-x-4 text-xs text-slate-400">
+                <span className="hidden sm:inline text-slate-500">Scroll, pinch or double-click to zoom</span>
                 {lightboxState.albumEvent && <span>{lightboxState.albumEvent}</span>}
                 {lightboxState.albumDate && <span>• {lightboxState.albumDate}</span>}
                 {lightboxState.albumLocation && <span>• {lightboxState.albumLocation}</span>}
