@@ -170,11 +170,11 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
 
   // Add Student Profile modal
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
+  // Starts blank: the Registrar types the real student ID (a preset one would be reused).
   const [newStudentForm, setNewStudentForm] = useState({
     name: '',
-    studentId: '2026-PCM-5001',
+    studentId: '',
     email: '',
-    phone: '0917-555-0199',
     program: 'Bachelor of Theology',
     yearLevel: '1st Year',
   });
@@ -364,8 +364,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       studentId: newStudentForm.studentId.trim(),
       name: newStudentForm.name.trim(),
       fullName: newStudentForm.name.trim(),
-      email: newStudentForm.email.trim() || `${newStudentForm.studentId.toLowerCase()}@student.pcm.edu.ph`,
-      phone: newStudentForm.phone,
+      email: newStudentForm.email.trim(),
       degreeProgram: newStudentForm.program,
       program: newStudentForm.program,
       yearLevel: newStudentForm.yearLevel,
@@ -373,13 +372,15 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       academicYear: '2026–2027',
       currentSemester: '1st Semester, AY 2026–2027',
       enrollmentStatus: 'Draft',
-      gpa: 1.0,
+      // No grades, subjects or assessment yet: GPA and fees start at 0 and the church/mentor
+      // stay blank until the student's real records are added.
+      gpa: 0,
       totalUnitsEarned: 0,
-      tuitionTotal: 17800,
+      tuitionTotal: 0,
       tuitionPaid: 0,
-      tuitionBalance: 17800,
-      homeChurch: 'Philippine Church of Christ',
-      mentorName: 'Dr. Benjamin Villanueva',
+      tuitionBalance: 0,
+      homeChurch: '',
+      mentorName: '',
       avatarUrl: '',
       courses: [],
       practicumEntries: [],
@@ -2009,6 +2010,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                 <input
                   type="text"
                   required
+                  placeholder="e.g. 2026-PCM-0001"
                   value={newStudentForm.studentId}
                   onChange={(e) => setNewStudentForm({ ...newStudentForm, studentId: e.target.value })}
                   className="w-full p-2.5 border border-slate-300 rounded-lg font-mono"
