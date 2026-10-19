@@ -60,14 +60,27 @@ export const PreEnlistmentModule: React.FC = () => {
     [academicSubjects, preTerm, programSubjects, program, studentProfile]
   );
   const offeredList = termSubjects.subjects;
+  const completedList = termSubjects.completed;
+  // Prerequisites block selection only when System Governance enforces them (as in re-enrollment).
+  const enforcePrereq = !!enrollmentSystemConfig?.enforcePrerequisites;
+  const blockReason = (s: (typeof offeredList)[number]): string =>
+    s.alreadyEnrolled
+      ? `You are already enrolled in ${s.code} this term.`
+      : enforcePrereq && !s.prerequisitesMet
+        ? `Pass the prerequisite first: ${s.prerequisites}.`
+        : s.closed
+          ? `${s.code}${s.section ? ` (${s.section})` : ''} is closed for this term.`
+          : s.full
+            ? `${s.code}${s.section ? ` (${s.section})` : ''} is full for this term.`
+            : '';
 
   // A different pre-enlistment term (set by the Registrar) starts the selection over.
   const preTermId = preTerm?.id || '';
   useEffect(() => {
     setSelectedSubjectIds([]);
   }, [preTermId]);
-  // Subjects closed, filled or removed by the Registrar drop out of the selection.
-  const offeredKey = offeredList.filter((s) => !s.closed && !s.full).map((s) => s.id).join('|');
+  // Subjects closed, filled or removed by the Registrar, already taken, or completed drop out of the selection.
+  const offeredKey = offeredList.filter((s) => !blockReason(s)).map((s) => s.id).join('|');
   useEffect(() => {
     const ok = new Set(offeredKey.split('|'));
     setSelectedSubjectIds((cur) => (cur.every((id) => ok.has(id)) ? cur : cur.filter((id) => ok.has(id))));
@@ -92,6 +105,10 @@ export const PreEnlistmentModule: React.FC = () => {
   useEffect(() => {
     setSelectedSubjectIds(initialKey ? initialKey.split('|') : []);
   }, [initialKey]);
+  // Subjects in the saved pre-enlistment that the student has since completed (removed from the selection).
+  const squashCode = (c: string) => c.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const completedCodes = new Set(completedList.map((c) => squashCode(c.code)));
+  const nowCompleted = (savedCodes ? savedCodes.split('|') : []).filter((code) => completedCodes.has(squashCode(code)));
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -125,6 +142,11 @@ export const PreEnlistmentModule: React.FC = () => {
       return matchSearch && matchCategory;
     });
   }, [offeredList, searchQuery, selectedCategory]);
+  const filteredCompleted = useMemo(() => {
+    const q = (searchQuery || '').trim().toLowerCase();
+    if (selectedCategory !== 'All') return [];
+    return completedList.filter((c) => !q || c.code.toLowerCase().includes(q) || c.title.toLowerCase().includes(q));
+  }, [completedList, searchQuery, selectedCategory]);
 
   // Selected subjects objects
   const selectedSubjects = useMemo(() => {
@@ -140,8 +162,9 @@ export const PreEnlistmentModule: React.FC = () => {
     const targetSubject = offeredList.find((s) => s && s.id === subjectId);
 
     if (!isSelected && targetSubject) {
-      if (targetSubject.closed || targetSubject.full) {
-        addToast('warning', targetSubject.closed ? 'Subject closed' : 'Subject full', `${targetSubject.code}${targetSubject.section ? ` (${targetSubject.section})` : ''} is ${targetSubject.closed ? 'closed' : 'full'} for this term.`);
+      const reason = blockReason(targetSubject);
+      if (reason) {
+        addToast('warning', 'Not available', reason);
         return;
       }
       if (MAX_UNITS && totalSelectedUnits + (targetSubject.units || 0) > MAX_UNITS) {
@@ -380,6 +403,16 @@ export const PreEnlistmentModule: React.FC = () => {
           </div>
         </div>
 
+        {nowCompleted.length > 0 && (
+          <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-2.5 text-[11px] text-emerald-900">
+            Removed from your saved selection because you have already completed {nowCompleted.length === 1 ? 'it' : 'them'}: {nowCompleted.join(', ')}.
+          </p>
+        )}
+        {completedList.length > 0 && (
+          <p className="text-[11px] text-slate-500">
+            {completedList.length} subject{completedList.length === 1 ? '' : 's'} for this term {completedList.length === 1 ? 'is' : 'are'} already in your academic record, marked “Already Completed”, and can’t be selected again.
+          </p>
+        )}
         {termSubjects.notOffered.length > 0 && (
           <p className="text-[11px] text-slate-500">
             In your curriculum but not offered this term: {termSubjects.notOffered.map((x) => x.code).join(', ')}.
@@ -403,11 +436,13 @@ export const PreEnlistmentModule: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-200 text-slate-700" data-testid="pre-enlistment-subjects">
-                {filteredSubjects.length === 0 && (
+                {filteredSubjects.length === 0 && (filteredCompleted.length === 0 || offeredList.length === 0) && (
                   <tr>
                     <td colSpan={8} className="p-6 text-center text-slate-500">
                       {!preTerm
                         ? 'No term is open for pre-enlistment.'
+                        : offeredList.length === 0 && completedList.length > 0
+                          ? `You have already completed every subject offered for you in ${preTerm.semester}, AY ${preTerm.academicYear}. Please check with the Registrar about your next subjects.`
                         : offeredList.length > 0
                           ? 'No subjects match your search.'
                           : // Names the program and year level used, so the Registrar can spot a mismatch with Term Subjects.
@@ -418,21 +453,27 @@ export const PreEnlistmentModule: React.FC = () => {
                 {filteredSubjects.map((subject) => {
                   const isChecked = selectedSubjectIds.includes(subject.id);
                   const isFull = subject.full || subject.closed;
+                  const blocked = !!blockReason(subject) && !isChecked;
 
                   return (
                     <tr
                       key={subject.id}
                       onClick={() => toggleSubject(subject.id)}
-                      className={`cursor-pointer transition ${
+                      aria-disabled={blocked || undefined}
+                      className={`transition ${
                         isChecked
-                          ? 'bg-purple-50/70 hover:bg-purple-100/50'
-                          : 'hover:bg-slate-50'
+                          ? 'cursor-pointer bg-purple-50/70 hover:bg-purple-100/50'
+                          : blocked
+                            ? 'cursor-not-allowed bg-slate-50/60 text-slate-500'
+                            : 'cursor-pointer hover:bg-slate-50'
                       }`}
                     >
                       <td className="p-3.5 text-center" onClick={(e) => e.stopPropagation()}>
                         <input
                           type="checkbox"
                           checked={isChecked}
+                          disabled={blocked}
+                          title={blocked ? blockReason(subject) : undefined}
                           onChange={() => toggleSubject(subject.id)}
                           className="w-4 h-4 text-purple-600 rounded border-slate-300 focus:ring-purple-500 cursor-pointer"
                         />
@@ -453,6 +494,12 @@ export const PreEnlistmentModule: React.FC = () => {
                           )}
                           {subject.section && <span className="text-[10px] bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">{subject.section}</span>}
                           {subject.closed && <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Closed</span>}
+                          {subject.alreadyEnrolled && <span className="text-[10px] font-bold bg-sky-100 text-sky-800 px-1.5 py-0.5 rounded">Already Enrolled</span>}
+                          {!subject.prerequisitesMet && (
+                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${enforcePrereq ? 'bg-rose-100 text-rose-800' : 'bg-amber-50 text-amber-900 border border-amber-200'}`}>
+                              Prerequisite not yet passed
+                            </span>
+                          )}
                         </span>
                       </td>
                       <td className="p-3.5 font-mono font-bold text-slate-900">
@@ -482,6 +529,26 @@ export const PreEnlistmentModule: React.FC = () => {
                     </tr>
                   );
                 })}
+                {filteredCompleted.map((c) => (
+                  <tr key={`done-${c.code}`} aria-disabled className="cursor-not-allowed bg-emerald-50/40 text-slate-500" data-testid="completed-subject">
+                    <td className="p-3.5 text-center">
+                      <input type="checkbox" checked={false} disabled readOnly aria-label={`${c.code} already completed`} className="w-4 h-4 rounded border-slate-300" />
+                    </td>
+                    <td className="p-3.5 font-mono font-bold text-slate-500">{c.code}</td>
+                    <td className="p-3.5">
+                      <div className="font-semibold text-slate-600">{c.title}</div>
+                      <span className="flex flex-wrap gap-1">
+                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-1.5 py-0.5 rounded">Already Completed</span>
+                        {c.yearLevel && <span className="text-[10px] bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">{c.yearLevel}</span>}
+                      </span>
+                    </td>
+                    <td className="p-3.5 font-mono font-bold">{c.units || 0} Units</td>
+                    <td className="p-3.5 text-[11px]" colSpan={4}>
+                      {c.status === 'Credited' ? 'Credited' : `Passed${c.grade ? ` · Grade ${c.grade}` : ''}`}
+                      {c.term ? ` · ${c.term}` : ''}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

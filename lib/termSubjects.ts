@@ -12,7 +12,7 @@
 import { doc, getDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
 import { YEAR_LEVELS, normalizeYearLevel, subjectsForProgram } from './curriculum';
-import { normAY, normCode, offeredSubjects, passedCodes, prerequisiteCodes, semesterKind, termKeyOf, type OfferedSubject } from './reenrollment';
+import { completedSubjects, normAY, normCode, offeredSubjects, prerequisiteCodes, sameTerm, semesterKind, termKeyOf, termLabel, type CompletedSubject, type OfferedSubject } from './reenrollment';
 import type { AcademicProgram, AcademicSubject, CurriculumSubject, StudentProfile } from './types';
 
 export type TermRef = { semester?: string; academicYear?: string };
@@ -61,6 +61,8 @@ export interface StudentTermSubject extends OfferedSubject {
   closed: boolean;
   category?: string;
   description?: string;
+  /** The student is already enrolled in this subject in this term (can't be taken twice). */
+  alreadyEnrolled?: boolean;
 }
 
 export interface StudentTermSubjects {
@@ -69,6 +71,8 @@ export interface StudentTermSubjects {
   subjects: StudentTermSubject[];
   /** Curriculum subjects for this semester and year level that are not offered this term. */
   notOffered: { code: string; title: string; units: number; yearLevel: string }[];
+  /** Subjects for this term (offered or in the curriculum) the student has already passed or been credited. */
+  completed: (CompletedSubject & { yearLevel: string })[];
 }
 
 const fromOffering = (o: AcademicSubject, extra: Partial<StudentTermSubject>): StudentTermSubject => ({
@@ -107,14 +111,34 @@ export function studentTermSubjects(input: {
   yearLevel?: string;
 }): StudentTermSubjects {
   const { catalog, term, program, student } = input;
-  if (!term) return { configured: false, subjects: [], notOffered: [] };
+  if (!term) return { configured: false, subjects: [], notOffered: [], completed: [] };
   const yearLevel = input.yearLevel || student.yearLevel || '';
   const level = yearIdx(yearLevel);
-  const passed = passedCodes(student);
+  const done = completedSubjects(student);
+  const passed = new Set(done.keys());
   const kind = semesterKind(term.semester);
   const curriculum = (input.programSubjects || []).filter((s) => s.status !== 'Inactive');
   const currByCode = new Map(curriculum.map((s) => [normCode(s.code), s]));
   const all = termOfferings(catalog, term);
+  // Subjects the student is already taking in this same term.
+  const enrolledNow = new Set(
+    sameTerm(student.currentSemester, termLabel(term.semester, term.academicYear))
+      ? (student.courses || []).filter((c) => c.status !== 'Dropped' && !passed.has(normCode(c.code))).map((c) => normCode(c.code))
+      : []
+  );
+  // Completed subjects among this term's offerings and the curriculum for this semester, up to the student's year level.
+  const completedFor = (codes: { code: string; yearLevel?: string }[]) => {
+    const seen = new Map<string, CompletedSubject & { yearLevel: string }>();
+    for (const x of codes) {
+      const c = normCode(x.code);
+      const d = done.get(c);
+      const i = yearIdx(x.yearLevel || '');
+      if (!d || seen.has(c) || (level >= 0 && i > level)) continue;
+      seen.set(c, { ...d, code: x.code, yearLevel: normalizeYearLevel(x.yearLevel) || x.yearLevel || '' });
+    }
+    return Array.from(seen.values()).sort((a, b) => yearIdx(a.yearLevel) - yearIdx(b.yearLevel) || a.code.localeCompare(b.code));
+  };
+  const curriculumThisSem = curriculum.filter((s) => !s.semester || !kind || semesterKind(s.semester) === kind);
 
   if (all.length === 0) {
     // Not set up yet: the curriculum with older unassigned offerings (previous behaviour).
@@ -123,14 +147,16 @@ export function studentTermSubjects(input: {
       const byCode = new Map(legacy.map((o) => [normCode(o.code), o]));
       const subjects = offeredSubjects(curriculum, legacy, yearLevel, term.semester || '', student).map((s) => {
         const o = byCode.get(normCode(s.code));
-        return o ? { ...fromOffering(o, {}), ...s, id: o.id, offeringId: o.id } : { ...s, id: s.id || s.code, offeringId: '', section: '', capacity: 0, enrolledCount: 0, full: false, closed: false };
+        const row = o ? { ...fromOffering(o, {}), ...s, id: o.id, offeringId: o.id } : { ...s, id: s.id || s.code, offeringId: '', section: '', capacity: 0, enrolledCount: 0, full: false, closed: false };
+        return { ...row, alreadyEnrolled: enrolledNow.has(normCode(s.code)) };
       });
-      return { configured: false, subjects, notOffered: [] };
+      return { configured: false, subjects, notOffered: [], completed: completedFor(curriculumThisSem) };
     }
     return {
       configured: false,
-      subjects: legacy.filter((o) => !passed.has(normCode(o.code)) && offeringForProgram(o, program)).map((o) => fromOffering(o, {})),
+      subjects: legacy.filter((o) => !passed.has(normCode(o.code)) && offeringForProgram(o, program)).map((o) => fromOffering(o, { alreadyEnrolled: enrolledNow.has(normCode(o.code)) })),
       notOffered: [],
+      completed: completedFor(legacy.filter((o) => offeringForProgram(o, program))),
     };
   }
 
@@ -150,6 +176,7 @@ export function studentTermSubjects(input: {
         backSubject: level >= 0 && i >= 0 && i < level,
         prerequisites: prereqText,
         prerequisitesMet: prerequisiteCodes(prereqText).every((p) => passed.has(p)),
+        alreadyEnrolled: enrolledNow.has(code),
       })
     );
   }
@@ -164,7 +191,8 @@ export function studentTermSubjects(input: {
       return (level < 0 || (i >= 0 && i <= level)) && !passed.has(normCode(s.code)) && !offeredCodes.has(normCode(s.code));
     })
     .map((s) => ({ code: s.code, title: s.title, units: Number(s.units) || 0, yearLevel: normalizeYearLevel(s.yearLevel) || s.yearLevel }));
-  return { configured: true, subjects, notOffered };
+  const offeredWithLevel = offerings.map((o) => ({ code: o.code, yearLevel: normalizeYearLevel(o.yearLevel) || normalizeYearLevel(currByCode.get(normCode(o.code))?.yearLevel) || '' }));
+  return { configured: true, subjects, notOffered, completed: completedFor([...offeredWithLevel, ...curriculumThisSem]) };
 }
 
 /**

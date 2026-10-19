@@ -157,10 +157,47 @@ export function reenrollmentRules(config?: Partial<EnrollmentSystemConfig> | nul
 
 export const normCode = (c?: string) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+export interface CompletedSubject {
+  code: string;
+  title: string;
+  units: number;
+  grade: string;
+  /** e.g. "1st Semester, AY 2025–2026" (blank for credits without a term). */
+  term: string;
+  status: 'Passed' | 'Credited';
+}
+
+/**
+ * Subjects the student has completed, by code: Passed or Credited in the academic history, and
+ * current-term subjects whose published grade is passing (before the term is closed into the history).
+ */
+export function completedSubjects(student: Partial<StudentProfile>): Map<string, CompletedSubject> {
+  const done = new Map<string, CompletedSubject>();
+  for (const h of student.subjectHistory || []) {
+    const status = String(h.status);
+    if (status !== 'Passed' && status !== 'Credited') continue;
+    const code = normCode(h.code);
+    if (!code || done.has(code)) continue;
+    done.set(code, {
+      code: h.code,
+      title: h.title || '',
+      units: Number(h.units) || 0,
+      grade: String(h.finalGrade ?? h.grade ?? ''),
+      term: h.semester || h.academicYear ? termLabel(h.semester, h.academicYear) : '',
+      status: status as CompletedSubject['status'],
+    });
+  }
+  for (const c of student.courses || []) {
+    const code = normCode(c.code);
+    if (!code || done.has(code)) continue;
+    if (c.status !== 'Completed' || c.gradeStatus !== 'Published' || String(c.gradeRemark || '').trim().toLowerCase() !== 'passed') continue;
+    done.set(code, { code: c.code, title: c.title || '', units: Number(c.units) || 0, grade: String(c.finalGrade ?? ''), term: student.currentSemester || '', status: 'Passed' });
+  }
+  return done;
+}
+
 export function passedCodes(student: Partial<StudentProfile>): Set<string> {
-  return new Set(
-    (student.subjectHistory || []).filter((h) => ['Passed', 'Credited'].includes(String(h.status))).map((h) => normCode(h.code))
-  );
+  return new Set(completedSubjects(student).keys());
 }
 
 const yearIdx = (y: string) => YEAR_LEVELS.indexOf(normalizeYearLevel(y) || y);
