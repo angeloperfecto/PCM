@@ -186,6 +186,7 @@ import type { ApplicationRequirement, WorkflowStatus } from './enrollmentWorkflo
 import { increment, runTransaction, type Transaction } from 'firebase/firestore';
 import { termFees, accountSummary, parseTerm, officialAssessmentLines, applyOfficialLines } from './studentLedger';
 import { offeringForCode } from './termSubjects';
+import { checkTermBeforeSubmit } from './termGuard';
 import {
   approvalBlockers,
   documentChecklist,
@@ -5833,6 +5834,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addToast('warning', 'Choose your subjects', 'Select at least one subject for the term.');
       return null;
     }
+    // The term's enrollment window and the chosen subjects, checked against the Registrar's latest settings.
+    const termProblem = await checkTermBeforeSubmit(db, input.term, 'enrollment', input.subjects.map((x) => String(x.id || '')));
+    if (termProblem) {
+      addToast('warning', 'Not submitted', termProblem);
+      return null;
+    }
     const key = termKeyOf(input.term.semester, input.term.academicYear);
     const id = `enr-${student.id}-${key}`.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const other = requestForTerm(enrollments, student, input.term);
@@ -6027,6 +6034,18 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Pre-Enlistment Workflow
   const submitPreEnlistment = async (recordData: Omit<PreEnlistmentRecord, 'id' | 'createdAt'>): Promise<PreEnlistmentRecord | null> => {
+    if (!isAdminLoggedIn) {
+      const problem = await checkTermBeforeSubmit(
+        db,
+        { semester: recordData.semester, academicYear: recordData.academicYear },
+        'preEnlistment',
+        (recordData.selectedSubjects || []).map((x) => String(x.id || ''))
+      );
+      if (problem) {
+        addToast('warning', 'Pre-enlistment not submitted', problem);
+        return null;
+      }
+    }
     const id = `pre-${recordData.studentId.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}`;
     const now = new Date().toISOString();
     const newRecord: PreEnlistmentRecord = {
@@ -6102,6 +6121,17 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Adding & Dropping Workflow
   const submitAddDropRequest = async (reqData: Omit<AddDropRequest, 'id' | 'createdAt' | 'status' | 'dateSubmitted'>): Promise<AddDropRequest | null> => {
+    // Students: the add/drop window and the subject are checked again against the Registrar's latest settings.
+    if (!isAdminLoggedIn) {
+      const st = students.find((s) => s.studentId === reqData.studentId) || studentProfile;
+      const t = parseTerm(st?.currentSemester);
+      const offering = reqData.action === 'Add' ? offeringForCode(academicSubjects, t, reqData.subjectCode) : undefined;
+      const problem = await checkTermBeforeSubmit(db, t, 'addDrop', offering ? [offering.id] : []);
+      if (problem) {
+        addToast('warning', 'Request not filed', problem);
+        return null;
+      }
+    }
     const id = `ad-${reqData.studentId.replace(/[^a-zA-Z0-9]/g, '-')}-${Date.now()}`;
     const now = new Date().toISOString();
     const newReq: AddDropRequest = {
@@ -8189,6 +8219,12 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // The active term from Academic Terms, for new student records ('' when none is set).
+  const activeTermFields = () => {
+    const p = academicPeriods.find((x) => x.isCurrent);
+    return p ? { currentSemester: termLabel(p.semester, p.academicYear), academicYear: normAY(p.academicYear) } : { currentSemester: '', academicYear: '' };
+  };
+
   const addUserAccount = async (user: NewUserAccountInput): Promise<UserAccount> => {
     const newId = user.uid || `uid-usr-${Date.now()}`;
     const newAcc: UserAccount = cleanFirestoreData({
@@ -8237,8 +8273,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         yearLevel: '',
         academicStatus: 'Regular',
         enrollmentStatus: 'Draft',
-        currentSemester: '1st Semester, AY 2026–2027',
-        academicYear: '2026–2027',
+        ...activeTermFields(),
         gpa: 0,
         totalUnitsEarned: 0,
         mentorName: '',
@@ -8469,8 +8504,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           yearLevel: '',
           academicStatus: 'Regular',
           enrollmentStatus: 'Draft',
-          currentSemester: '1st Semester, AY 2026–2027',
-          academicYear: '2026–2027',
+          ...activeTermFields(),
           totalUnitsEarned: 0,
           gpa: 0,
           courses: [],

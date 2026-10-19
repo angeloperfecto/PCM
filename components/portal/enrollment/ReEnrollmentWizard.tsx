@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Edit3, Info, X } from 'lucide-react';
 import { usePCM } from '@/lib/store';
+import { useToday } from '@/lib/useToday';
 import { programForStudent, subjectsForProgram } from '@/lib/curriculum';
 import { termFees } from '@/lib/studentLedger';
 import { studentTermSubjects, type StudentTermSubject } from '@/lib/termSubjects';
@@ -38,7 +39,9 @@ export const ReEnrollmentWizard: React.FC<{ onClose: () => void; onSubmitted?: (
     feeStructure,
     submitReenrollment,
   } = usePCM();
-  const term = openEnrollmentTerm(academicPeriods);
+  // The open term, live from Academic Terms (Philippine date).
+  const today = useToday();
+  const term = openEnrollmentTerm(academicPeriods, today);
   const eligibility = reenrollmentEligibility(studentProfile, term, enrollments);
   const rules = reenrollmentRules(enrollmentSystemConfig);
   const program = programForStudent(programs, studentProfile);
@@ -70,6 +73,21 @@ export const ReEnrollmentWizard: React.FC<{ onClose: () => void; onSubmitted?: (
     [academicSubjects, term, programSubjects, program, studentProfile, yearLevel]
   );
   const offered: StudentTermSubject[] = termSubjects.subjects;
+  // When the Registrar changes the open term, start the subject choice over for the new term.
+  const termId = term?.id || '';
+  useEffect(() => {
+    setSelected([]);
+    setStep((s) => Math.min(s, 1));
+  }, [termId]);
+  // Subjects the Registrar closes, fills or removes while this is open drop out of the selection.
+  const offeredKey = offered.filter((s) => !s.closed && !s.full).map((s) => s.id).join('|');
+  useEffect(() => {
+    const ok = new Set(offeredKey.split('|'));
+    setSelected((cur) => {
+      const next = cur.filter((x) => ok.has(String(x.id)));
+      return next.length === cur.length ? cur : next;
+    });
+  }, [offeredKey]);
   const fromCurriculum = programSubjects.some((s) => s.status !== 'Inactive');
 
   const units = selected.reduce((t, s) => t + (Number(s.units) || 0), 0);

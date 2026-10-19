@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { usePCM } from '@/lib/store';
+import { displayTerm, termBadge } from '@/lib/reenrollment';
+import { useToday } from '@/lib/useToday';
 import { Emblem } from './Emblem';
 import { NavSection } from '@/lib/types';
 import {
@@ -46,8 +48,12 @@ export const Header: React.FC = () => {
     currentAdminUser,
     studentProfile,
     setUserAccountModalOpen,
+    academicPeriods,
   } = usePCM();
 
+  // The term shown to students (open for enrollment, else the active term), live from Academic Terms.
+  const today = useToday();
+  const enrollmentBadge = termBadge(displayTerm(academicPeriods || [], today));
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileExpandedSection, setMobileExpandedSection] = useState<string | null>(null);
@@ -173,7 +179,7 @@ export const Header: React.FC = () => {
     {
       id: 'portal',
       label: 'ENROLLMENT',
-      badge: 'AY 26–27',
+      badge: enrollmentBadge || undefined,
       dropdown: [
         {
           label: 'Student Online Enrollment Hub',

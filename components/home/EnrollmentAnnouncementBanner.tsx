@@ -2,18 +2,31 @@
 
 import React from 'react';
 import { usePCM } from '@/lib/store';
+import { displayTerm, enrollmentWindowOpen, preEnlistmentTerm, preEnlistmentWindowOpen, termLabel, windowNote } from '@/lib/reenrollment';
+import { useToday } from '@/lib/useToday';
 import {
   GraduationCap,
   Sparkles,
   ArrowRight,
   ShieldCheck,
   CheckCircle2,
-  Calendar,
-  Clock,
+  Calendar,
 } from 'lucide-react';
 
 export const EnrollmentAnnouncementBanner: React.FC = () => {
-  const { navigateTo, setIsStudentLoggedIn } = usePCM();
+  const { navigateTo, academicPeriods } = usePCM();
+  // Live from Enrollment & Records → Academic Terms (and the date, in Philippine time).
+  const today = useToday();
+  const term = displayTerm(academicPeriods || [], today);
+  const open = !!term && enrollmentWindowOpen(term, today);
+  const preTerm = preEnlistmentTerm(academicPeriods || [], today);
+  const preOpen = preEnlistmentWindowOpen(preTerm, today);
+  const label = term ? termLabel(term.semester, term.academicYear) : '';
+  const headline = !term
+    ? 'Enrollment schedule to be announced'
+    : open
+      ? `Enrollment for ${label} is open`
+      : `Enrollment for ${label}: ${windowNote(term.enrollmentStatus, term.enrollmentStartDate, term.enrollmentEndDate, today).replace(/\.$/, '')}`;
 
   const handleOpenStudentHub = () => {
     navigateTo('portal');
@@ -31,7 +44,7 @@ export const EnrollmentAnnouncementBanner: React.FC = () => {
         <div className="space-y-2 text-center lg:text-left">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#A3D9C9]/20 text-[#A3D9C9] border border-[#A3D9C9]/30 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-            <span>Academic Year 2026–2027 Enrollment is Officially Open</span>
+            <span data-testid="enrollment-banner-status">{headline}</span>
           </div>
 
           <h3 className="font-serif text-xl sm:text-2xl font-bold tracking-tight text-white flex items-center justify-center lg:justify-start gap-2">
@@ -40,16 +53,20 @@ export const EnrollmentAnnouncementBanner: React.FC = () => {
           </h3>
 
           <p className="text-xs sm:text-sm text-slate-200 max-w-2xl leading-relaxed">
-            New & returning students may now process course pre-enlistment, subject selection, tuition assessment, and Certificate of Registration (COR) verification online.
+            {open
+              ? 'New & returning students may now process course pre-enlistment, subject selection, tuition assessment, and Certificate of Registration (COR) verification online.'
+              : 'Pre-enlistment, subject selection, tuition assessment and the Certificate of Registration (COR) are handled online once the Registrar opens enrollment.'}
           </p>
 
           <div className="flex flex-wrap items-center justify-center lg:justify-start gap-4 text-[11px] text-[#A3D9C9] pt-1">
             <span className="flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> Pre-Enlistment Active
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> {preOpen && preTerm ? `Pre-enlistment open (${termLabel(preTerm.semester, preTerm.academicYear)})` : 'Pre-enlistment closed'}
             </span>
-            <span className="flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5 text-emerald-400" /> 1st Semester AY 2026–2027
-            </span>
+            {label && (
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3.5 h-3.5 text-emerald-400" /> {label}
+              </span>
+            )}
             <span className="flex items-center gap-1">
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" /> CHED & DepEd Accredited
             </span>

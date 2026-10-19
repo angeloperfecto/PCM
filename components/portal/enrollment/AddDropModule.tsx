@@ -19,6 +19,8 @@ import { usePCM } from '@/lib/store';
 import { parseTerm } from '@/lib/studentLedger';
 import { programForStudent, subjectsForProgram } from '@/lib/curriculum';
 import { studentTermSubjects } from '@/lib/termSubjects';
+import { addDropWindowOpen, normAY, termLabel, windowNote } from '@/lib/reenrollment';
+import { useToday } from '@/lib/useToday';
 import { AddDropAction, StudentCourse } from '@/lib/types';
 
 export const AddDropModule: React.FC = () => {
@@ -45,8 +47,9 @@ export const AddDropModule: React.FC = () => {
 
   // The add/drop window of the student's current term (or the current term).
   const term = parseTerm(studentProfile.currentSemester);
+  const today = useToday();
   const period =
-    (academicPeriods || []).find((p) => p.semester === term.semester && p.academicYear.replace('-', '–') === term.academicYear) ||
+    (academicPeriods || []).find((p) => p.semester === term.semester && normAY(p.academicYear) === normAY(term.academicYear)) ||
     (academicPeriods || []).find((p) => p.isCurrent);
 
   // Subjects that can be added: that term's subjects for the student's program and year level
@@ -62,7 +65,9 @@ export const AddDropModule: React.FC = () => {
     [academicSubjects, period, programSubjects, program, studentProfile, enrolledCodes.join('|')]
   );
   const fmt = (d?: string) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' }) : '');
-  const windowOpen = period?.addDropStatus === 'Open';
+  // Status and dates from Academic Terms (Philippine time), live.
+  const windowOpen = addDropWindowOpen(period, today);
+  const windowStatusNote = period ? windowNote(period.addDropStatus, period.addDropStartDate, period.addDropEndDate, today) : '';
   const windowDates = period ? [fmt(period.addDropStartDate), fmt(period.addDropEndDate)].filter(Boolean).join(' – ') : '';
 
   // Modal state
@@ -130,6 +135,7 @@ export const AddDropModule: React.FC = () => {
               <span className={`text-[11px] font-mono font-bold px-2.5 py-0.5 rounded-md border flex items-center gap-1 ${windowOpen ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-700 border-slate-300'}`}>
                 <span className={`w-2 h-2 rounded-full ${windowOpen ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
                 Add/Drop Window: {windowOpen ? 'OPEN' : 'CLOSED'}
+                {windowStatusNote && !windowOpen ? ` — ${windowStatusNote}` : ''}
               </span>
               {(period || windowDates) && <span className="text-slate-300">•</span>}
               <span className="text-xs text-slate-500 font-mono">
@@ -232,7 +238,7 @@ export const AddDropModule: React.FC = () => {
                 <Plus className="w-4 h-4 text-emerald-600" />
                 Available Courses to Add
               </h4>
-              <p className="text-[11px] text-slate-500">Open subjects in the AY 26–27 catalog</p>
+              <p className="text-[11px] text-slate-500">{period ? `Open subjects offered in ${termLabel(period.semester, period.academicYear)}` : 'Open subjects offered this term'}</p>
             </div>
             <span className="text-xs font-mono text-slate-600 font-bold">
               {availableToAdd.length} Available
