@@ -413,3 +413,48 @@ export function termReadiness(input: { term: TermRef; programs: AcademicProgram[
   }
   return rows;
 }
+
+// ---------------------------------------------------------------------------
+// Enrolled students, counted from the student records
+// ---------------------------------------------------------------------------
+
+/** Students whose record says they are enrolled in this term. */
+export function studentsEnrolledInTerm(students: Partial<StudentProfile>[], term: TermRef): Partial<StudentProfile>[] {
+  const label = termLabel(term.semester, term.academicYear);
+  return (students || []).filter((s) => s && !s.isArchived && s.enrollmentStatus === 'Enrolled' && sameTerm(s.currentSemester, label));
+}
+
+/**
+ * Enrolled students per offering of a term: every subject (not dropped) of a student enrolled in the term
+ * counts toward its offering, found by id or else by the term's offering for its code (as at approval).
+ */
+export function termEnrollmentCounts(students: Partial<StudentProfile>[], catalog: AcademicSubject[], term: TermRef): Map<string, number> {
+  const counts = new Map<string, number>();
+  const inTerm = termOfferings(catalog, term);
+  for (const o of inTerm) counts.set(o.id, 0);
+  for (const s of studentsEnrolledInTerm(students, term)) {
+    const seen = new Set<string>();
+    for (const c of s.courses || []) {
+      if (!c || c.status === 'Dropped') continue;
+      const byId = inTerm.find((o) => o.id === c.id && normCode(o.code) === normCode(c.code));
+      const offering = byId || offeringForCode(catalog, term, c.code);
+      if (!offering || seen.has(offering.id)) continue;
+      seen.add(offering.id);
+      counts.set(offering.id, (counts.get(offering.id) || 0) + 1);
+    }
+  }
+  return counts;
+}
+
+/** Enrolled students for every offering of the terms that are still open (closed terms keep their recorded counts). */
+export function openTermEnrollmentCounts(
+  students: Partial<StudentProfile>[],
+  catalog: AcademicSubject[],
+  periods: { semester?: string; academicYear?: string; closedAt?: string }[]
+): Map<string, number> {
+  const all = new Map<string, number>();
+  for (const p of (periods || []).filter((x) => x && !x.closedAt)) {
+    termEnrollmentCounts(students, catalog, p).forEach((n, id) => all.set(id, n));
+  }
+  return all;
+}

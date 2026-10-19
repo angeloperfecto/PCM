@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { AlertTriangle, BookOpen, CheckCircle2, Copy, Eye, ListPlus, Lock, Pencil, Plus, RotateCcw, Trash2, Unlock, Wand2, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
 import { usePCM } from '@/lib/store';
@@ -15,7 +15,9 @@ import {
   offeringForProgram,
   studentTermSubjects,
   termOfferings,
+  termEnrollmentCounts,
   termReadiness,
+  studentsEnrolledInTerm,
   type OfferingDraft,
 } from '@/lib/termSubjects';
 import type { AcademicPeriod, AcademicProgram, AcademicSubject } from '@/lib/types';
@@ -94,6 +96,15 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
   // Readiness: program/year levels with no subjects, and active students who would see an empty list.
   const readiness = useMemo(() => (term ? termReadiness({ term, programs: programList, curriculumSubjects, catalog: academicSubjects }) : []), [term, programList, curriculumSubjects, academicSubjects]);
   const gaps = readiness.filter((r) => r.offered === 0);
+  // Enrolled students per subject, counted from the student records (open terms; a closed term keeps its recorded counts).
+  const liveCounts = useMemo(() => (term && !term.closedAt ? termEnrollmentCounts(students || [], academicSubjects, term) : null), [term, students, academicSubjects]);
+  const enrolledIn = (o: AcademicSubject) => (liveCounts ? liveCounts.get(o.id) || 0 : Number(o.enrolledCount) || 0);
+  const termEnrolled = term && !term.closedAt ? studentsEnrolledInTerm(students || [], term).length : null;
+  // Stored seat counts (used for "full" checks on student screens) that differ from the records.
+  const countFixes = liveCounts
+    ? termOfferings(academicSubjects, term!).filter((o) => (Number(o.enrolledCount) || 0) !== (liveCounts.get(o.id) || 0))
+    : [];
+  const termCountOff = termEnrolled != null && (Number(term?.enrolledCount) || 0) !== termEnrolled;
   const studentsWithout = useMemo(() => {
     if (!term || term.closedAt) return [];
     return (students || [])
@@ -219,7 +230,7 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
       if (!form.title.trim()) throw new Error('Enter the descriptive title.');
       if (!Number.isFinite(units) || units < 1 || units > 12) throw new Error('Units must be between 1 and 12.');
       if (!cap) throw new Error('Enter the class capacity (a whole number of at least 1).');
-      if (editing && cap < (editing.enrolledCount || 0)) throw new Error(`Capacity cannot be below the ${editing.enrolledCount} students already enrolled.`);
+      if (editing && cap < enrolledIn(editing)) throw new Error(`Capacity cannot be below the ${enrolledIn(editing)} students already enrolled.`);
       const fields = {
         code,
         title: form.title.trim(),
@@ -260,7 +271,7 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
     });
   const remove = (o: AcademicSubject) =>
     run(async () => {
-      if ((o.enrolledCount || 0) > 0) throw new Error(`${o.enrolledCount} student(s) are enrolled in ${o.code}. Close it instead so no one else can enroll.`);
+      if (enrolledIn(o) > 0) throw new Error(`${enrolledIn(o)} student(s) are enrolled in ${o.code}. Close it instead so no one else can enroll.`);
       await updateDoc(doc(db, 'academicSubjects', o.id), { isArchived: true, removedAt: new Date().toISOString(), removedBy: by });
       logActivity('UPDATE', 'Term Subjects', o.id, o.code, `Removed ${o.code} from ${tLabel} (can be restored).`);
       addToast('info', 'Subject removed', `${o.code} is no longer offered in ${tLabel}. You can restore it below.`);
@@ -388,6 +399,33 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                 </ul>
               </details>
             )}
+          </div>
+        )}
+        {!closed && (countFixes.length > 0 || termCountOff) && (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-950" data-testid="seat-count-fix">
+            <p>
+              Enrolled counts below are from the student records. The saved seat count{countFixes.length + (termCountOff ? 1 : 0) === 1 ? ' is' : 's are'} out of date for
+              {countFixes.length ? ` ${countFixes.length} subject${countFixes.length === 1 ? '' : 's'}` : ''}{countFixes.length && termCountOff ? ' and' : ''}{termCountOff ? ' the term' : ''}
+              , so students may see wrong “full” or remaining-slot numbers until updated.
+            </p>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                run(async () => {
+                  const batch = writeBatch(db);
+                  const now = new Date().toISOString();
+                  countFixes.forEach((o) => batch.update(doc(db, 'academicSubjects', o.id), { enrolledCount: liveCounts!.get(o.id) || 0, updatedAt: now, updatedBy: by }));
+                  if (termCountOff) batch.update(doc(db, 'academicPeriods', term.id), { enrolledCount: termEnrolled, updatedAt: now });
+                  await batch.commit();
+                  logActivity('UPDATE', 'Term Subjects', term.id, tLabel, `Updated seat counts from student records (${countFixes.length} subject(s)${termCountOff ? ' and the term' : ''}).`);
+                  addToast('success', 'Seat counts updated', `${tLabel} now matches the student records.`);
+                })
+              }
+              className={`${btn} bg-[#18392B] text-white hover:bg-[#588B76]`}
+            >
+              <RotateCcw className="h-3.5 w-3.5" /> Update seat counts
+            </button>
           </div>
         )}
         {error && <p className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-xs text-rose-800" role="alert">{error}</p>}
@@ -626,7 +664,7 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                   <td className="p-2.5">{o.section || '—'}</td>
                   <td className="p-2.5">{[o.schedule, o.room].filter(Boolean).join(' · ') || <span className="text-amber-700">Not set</span>}</td>
                   <td className="p-2.5">{o.instructor || <span className="text-amber-700">Not set</span>}</td>
-                  <td className="p-2.5 font-mono">{o.capacity ? `${o.enrolledCount || 0}/${o.capacity}` : `${o.enrolledCount || 0} (no limit)`}</td>
+                  <td className="p-2.5 font-mono">{o.capacity ? `${enrolledIn(o)}/${o.capacity}` : `${enrolledIn(o)} (no limit)`}</td>
                   <td className="p-2.5">
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${o.status === 'Closed' ? 'bg-slate-200 text-slate-700' : 'bg-emerald-100 text-emerald-800'}`}>{o.status || 'Open'}</span>
                   </td>
