@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { usePCM } from '@/lib/store';
 import { StudentAvatar } from '@/components/common/StudentAvatar';
-import { Emblem } from '@/components/common/Emblem';
+import { SignInScreen } from '@/components/common/SignInScreen';
 import {
   OnlineEnrollment,
   StudentDocument,
@@ -224,58 +224,51 @@ export const PortalView: React.FC = () => {
     }
 
     return (
-      <div className="w-full min-h-[85vh] bg-[#070e1c] py-16 px-4 flex items-center justify-center font-sans">
-        <div className="max-w-md w-full bg-[#18392B] rounded-2xl border border-slate-700 shadow-2xl p-8 space-y-6 text-white">
-          <div className="text-center space-y-3">
-            <div className="w-20 h-20 bg-white/10 p-2.5 rounded-2xl border border-[#588B76]/40 flex items-center justify-center mx-auto shadow-xl backdrop-blur-xs">
-              <Emblem id="student-portal-pcm-logo" size={64} className="w-16 h-16 drop-shadow-md" />
-            </div>
-            <h2 className="font-serif text-2xl font-bold text-white">MyPCM Student Portal</h2>
-            <p className="text-xs text-slate-300">
-              Applicants and students sign in with their Google account to see their application, enrollment and records.
+      <SignInScreen
+        emblemId="student-portal-pcm-logo"
+        eyebrow="Student Portal"
+        title="MyPCM Student Portal"
+        subtitle="Applicants and students sign in with their Google account to see their application, enrollment and records."
+        features={[
+          { icon: FileCheck, title: 'Application & enrollment', text: 'Track your application, pre-enlist and enroll each term.' },
+          { icon: BookOpen, title: 'Subjects & grades', text: 'Your curriculum, class schedule and published grades.' },
+          { icon: PhilippinePeso, title: 'Assessment & payments', text: 'Your assessment, balance and payment records.' },
+        ]}
+        heading="Welcome to MyPCM"
+        description="Sign in with your Google account to continue."
+        buttonLabel="Sign in with Google"
+        busyLabel="Opening Google sign-in…"
+        busy={isPortalSigningIn}
+        onSignIn={handlePortalSignIn}
+        notes={
+          <>
+            <p className="flex items-start gap-2">
+              <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#588B76]" />
+              <span>
+                <strong className="text-slate-800">Existing students:</strong> use the Google account with the email address on file at the
+                Registrar. Your Student ID and records open automatically.
+              </span>
             </p>
-          </div>
-
+            <p className="flex items-start gap-2">
+              <HelpCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#588B76]" />
+              <span>
+                <strong className="text-slate-800">Need help?</strong> Contact the Office of the Registrar at{' '}
+                <span className="font-mono text-[#18392B]">registrar@pcm.edu.ph</span>.
+              </span>
+            </p>
+          </>
+        }
+        secondary={
           <button
             type="button"
-            onClick={handlePortalSignIn}
-            disabled={isPortalSigningIn}
-            className="w-full bg-white hover:bg-slate-100 text-slate-900 font-bold py-3.5 rounded-lg text-sm transition cursor-pointer shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+            onClick={() => navigateTo('apply')}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#18392B]/20 bg-[#18392B]/5 px-4 py-3 text-sm font-semibold text-[#18392B] transition hover:bg-[#18392B]/10 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#588B76] focus-visible:ring-offset-2"
           >
-            <Lock className="w-4 h-4 text-[#18392B]" />
-            <span>{isPortalSigningIn ? 'Opening Google sign-in…' : 'Sign in with Google'}</span>
+            <ExternalLink className="h-4 w-4" />
+            New applicant? Apply for admission
           </button>
-
-          <div className="bg-black/20 border border-white/10 rounded-xl p-3.5 text-[11px] text-slate-300 space-y-1.5">
-            <p className="flex items-start gap-1.5">
-              <HelpCircle className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
-              <span>
-                <strong className="text-white">Existing students:</strong> use the Google account with the email address on file at
-                the Registrar. Your Student ID and records open automatically.
-              </span>
-            </p>
-            <p className="flex items-start gap-1.5">
-              <HelpCircle className="w-3.5 h-3.5 text-amber-300 shrink-0 mt-0.5" />
-              <span>
-                <strong className="text-white">Need help?</strong> Contact the Office of the Registrar at{' '}
-                <span className="text-emerald-400 font-mono">registrar@pcm.edu.ph</span>.
-              </span>
-            </p>
-          </div>
-
-          <div className="pt-4 border-t border-slate-700/60 text-center space-y-2">
-            <p className="text-[11px] text-slate-300">New applicant or incoming freshman?</p>
-            <button
-              type="button"
-              onClick={() => navigateTo('apply')}
-              className="w-full bg-white/10 hover:bg-white/20 text-white border border-[#588B76]/50 font-bold py-3 rounded-xl text-xs transition flex items-center justify-center gap-2 cursor-pointer shadow-sm"
-            >
-              <ExternalLink className="w-3.5 h-3.5 text-amber-300" />
-              <span>PCM Admissions & Application Portal</span>
-            </button>
-          </div>
-        </div>
-      </div>
+        }
+      />
     );
   }
 
