@@ -550,7 +550,7 @@ interface PCMContextType {
   updateDocumentVerification: (studentId: string, docId: string, status: DocumentVerificationStatus, adminFeedback?: string) => Promise<boolean>;
 
   // Student Profile & Academic Management (Admin / Registrar)
-  createStudentProfile: (profile: Omit<StudentProfile, 'id'>) => Promise<StudentProfile>;
+  createStudentProfile: (profile: Omit<StudentProfile, 'id'>) => Promise<StudentProfile | null>;
   updateStudentProfile: (studentId: string, updates: Partial<StudentProfile>) => Promise<boolean>;
   updateStudentAvatar: (avatarUrl: string, studentId?: string) => Promise<boolean>;
   deleteStudentProfile: (studentId: string) => Promise<boolean>;
@@ -6541,7 +6541,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Student Profile & Academic Record Management (Admin / Registrar)
-  const createStudentProfile = async (profileData: Omit<StudentProfile, 'id'>): Promise<StudentProfile> => {
+  const createStudentProfile = async (profileData: Omit<StudentProfile, 'id'>): Promise<StudentProfile | null> => {
     const id = `stu-${Date.now()}`;
     const newStudent: StudentProfile = cleanFirestoreData({
       ...profileData,
@@ -6553,7 +6553,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!saved) {
       // Not persisted (the "Not saved" alert explains why): don't leave a phantom record.
       setStudents((prev) => prev.filter((s) => s.id !== id));
-      return newStudent;
+      return null;
     }
 
     logActivity('CREATE', 'Student Profile', id, newStudent.fullName || newStudent.name || 'Student', `Created student account (${newStudent.studentId}).`);
