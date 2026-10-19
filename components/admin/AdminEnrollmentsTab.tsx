@@ -16,6 +16,7 @@ import {
   AcademicPeriod,
 } from '@/lib/types';
 import { AdminStudentDetailModal } from './AdminStudentDetailModal';
+import { NewStudentProfileModal } from './NewStudentProfileModal';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import { normalizeStatus } from '@/lib/enrollmentWorkflow';
 import { AcademicTermModal } from './AcademicTermModal';
@@ -117,7 +118,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
     returnEnrollmentForCorrection,
     rejectEnrollment,
     deleteEnrollment,
-    createStudentProfile,
     updateStudentProfile,
     deleteStudentProfile,
     addStudentGrade,
@@ -165,15 +165,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
 
   // Add Student Profile modal
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
-  // Starts blank: the Registrar types the real student ID (a preset one would be reused).
-  const [newStudentForm, setNewStudentForm] = useState({
-    name: '',
-    studentId: '',
-    email: '',
-    program: 'Bachelor of Theology',
-    yearLevel: '1st Year',
-  });
-
   // Add Fee Item Modal
   const [isFeeModalOpen, setIsFeeModalOpen] = useState(false);
   const [feeForm, setFeeForm] = useState({
@@ -349,40 +340,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
   const handleReturnPreEnlistment = async (id: string) => {
     await updatePreEnlistmentStatus(id, 'Returned for Revision', preEnlistmentRemarks || 'Please review elective units with advisor.');
     setSelectedPreEnlistment(null);
-  };
-
-  const handleNewStudentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newStudentForm.name.trim() || !newStudentForm.studentId.trim()) return;
-    await createStudentProfile({
-      studentId: newStudentForm.studentId.trim(),
-      name: newStudentForm.name.trim(),
-      fullName: newStudentForm.name.trim(),
-      email: newStudentForm.email.trim(),
-      degreeProgram: newStudentForm.program,
-      program: newStudentForm.program,
-      yearLevel: newStudentForm.yearLevel,
-      academicStatus: 'Regular',
-      // The active term from Academic Terms.
-      academicYear: currentPeriod ? normAY(currentPeriod.academicYear) : '',
-      currentSemester: currentPeriod ? termLabel(currentPeriod.semester, currentPeriod.academicYear) : '',
-      enrollmentStatus: 'Draft',
-      // No grades, subjects or assessment yet: GPA and fees start at 0 and the church/mentor
-      // stay blank until the student's real records are added.
-      gpa: 0,
-      totalUnitsEarned: 0,
-      tuitionTotal: 0,
-      tuitionPaid: 0,
-      tuitionBalance: 0,
-      homeChurch: '',
-      mentorName: '',
-      avatarUrl: '',
-      courses: [],
-      practicumEntries: [],
-      documents: [],
-      paymentHistory: [],
-    });
-    setIsNewStudentModalOpen(false);
   };
 
   const handleAddFeeSubmit = async (e: React.FormEvent) => {
@@ -1861,88 +1818,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       {/* MODAL 6: ADD STUDENT PROFILE MODAL */}
       {/* ========================================================================= */}
       {isNewStudentModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl p-6 space-y-4">
-            <h4 className="font-serif text-lg font-bold text-[#18392B]">Register Student Profile</h4>
-            <form onSubmit={handleNewStudentSubmit} className="space-y-3 text-xs">
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Full Name</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. Joshua Daniel Evangelista"
-                  value={newStudentForm.name}
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, name: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Permanent Student ID</label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 2026-PCM-0001"
-                  value={newStudentForm.studentId}
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, studentId: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg font-mono"
-                />
-              </div>
-              <div>
-                <label className="block text-slate-600 font-semibold mb-1">Email Address</label>
-                <input
-                  type="email"
-                  placeholder="student@pcm.edu.ph"
-                  value={newStudentForm.email}
-                  onChange={(e) => setNewStudentForm({ ...newStudentForm, email: e.target.value })}
-                  className="w-full p-2.5 border border-slate-300 rounded-lg"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Degree Program</label>
-                  <select
-                    value={newStudentForm.program}
-                    onChange={(e) => setNewStudentForm({ ...newStudentForm, program: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white"
-                  >
-                    <option value="Bachelor of Theology">Bachelor of Theology</option>
-                    <option value="Associate of Theology">Associate of Theology</option>
-                    <option value="Master of Divinity">Master of Divinity</option>
-                    <option value="Senior High School (GAS Strand)">Senior High School (GAS Strand)</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-slate-600 font-semibold mb-1">Year Level</label>
-                  <select
-                    value={newStudentForm.yearLevel}
-                    onChange={(e) => setNewStudentForm({ ...newStudentForm, yearLevel: e.target.value })}
-                    className="w-full p-2.5 border border-slate-300 rounded-lg bg-white"
-                  >
-                    <option value="1st Year">1st Year</option>
-                    <option value="2nd Year">2nd Year</option>
-                    <option value="3rd Year">3rd Year</option>
-                    <option value="4th Year">4th Year</option>
-                  </select>
-                </div>
-              </div>
-              <div className="pt-2 flex justify-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsNewStudentModalOpen(false)}
-                  className="px-4 py-2 text-slate-600 hover:text-slate-900"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="bg-[#18392B] hover:bg-[#588B76] text-white font-bold px-4 py-2 rounded-xl"
-                >
-                  Create Student
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+        <NewStudentProfileModal onClose={() => setIsNewStudentModalOpen(false)} onCreated={(s) => setSelectedStudentDossier(s)} />
       )}
 
       {/* ========================================================================= */}

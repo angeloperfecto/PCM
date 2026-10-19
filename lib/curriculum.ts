@@ -6,6 +6,15 @@ import type { AcademicProgram, CurriculumSubject, StudentProfile } from './types
 export const YEAR_LEVELS = ['1st Year', '2nd Year', '3rd Year', '4th Year', '5th Year'];
 export const SEMESTERS = ['1st Semester', '2nd Semester', 'Summer'];
 export const SUBJECT_TYPES = ['Core', 'Major', 'General Education', 'Elective', 'Practicum'];
+/** Majors offered on the New Student Registration Form and in Add Student Profile ("No Major" when not applicable). */
+export const MAJOR_OPTIONS: { value: string; label: string }[] = [
+  { value: 'General Pastoral Studies', label: 'General Pastoral Studies' },
+  { value: 'Christian Education', label: 'Christian Education & Family' },
+  { value: 'Intercultural & Missiology', label: 'Intercultural Studies & Missions' },
+  { value: 'Youth & Campus Ministry', label: 'Youth & Campus Ministry' },
+  { value: 'Institutional Chaplaincy', label: 'Institutional Chaplaincy' },
+  { value: 'No Major', label: 'No major (not applicable)' },
+];
 
 const norm = (s?: string) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 

@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase';
 import { deleteApplicationDraft, loadApplicationDraft, saveApplicationDraft } from '@/lib/admissionsService';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { MAJOR_OPTIONS } from '@/lib/curriculum';
 import { displayTerm, enrollmentWindowOpen, normAY, termLabel } from '@/lib/reenrollment';
 import { useToday } from '@/lib/useToday';
 import { admissionRequirementTemplates, sameRequirement } from '@/lib/enrollmentWorkflow';
@@ -1881,12 +1882,9 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76] bg-white"
                 >
                   <option value="">Select…</option>
-                  <option value="General Pastoral Studies">General Pastoral Studies</option>
-                  <option value="Christian Education">Christian Education & Family</option>
-                  <option value="Intercultural & Missiology">Intercultural Studies & Missions</option>
-                  <option value="Youth & Campus Ministry">Youth & Campus Ministry</option>
-                  <option value="Institutional Chaplaincy">Institutional Chaplaincy</option>
-                  <option value="No Major">No major (not applicable)</option>
+                  {MAJOR_OPTIONS.map((m) => (
+                    <option key={m.value} value={m.value}>{m.label}</option>
+                  ))}
                 </select>
                 {errors.major && <p className="text-[11px] text-rose-600 mt-1">{errors.major}</p>}
               </div>
