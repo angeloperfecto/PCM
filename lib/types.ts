@@ -663,6 +663,8 @@ export interface StudentProfile {
   yearsInMinistry?: number | string;
   dateStartedInMinistry?: string;
   ministryExperience?: string;
+  callingTestimony?: string; // "Testimony & calling" from the registration form
+  admissionRequirementsVerified?: boolean; // set when the Registrar finalizes enrollment
   churchRecommendationStatus?: 'Pending' | 'Received' | 'Verified' | 'Waived';
   pastorRecommendationStatus?: 'Pending' | 'Received' | 'Verified' | 'Waived';
   presbytery?: string;

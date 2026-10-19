@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { blobToDataUrl, compressImageFile } from './firebase';
 import { normCode, termKeyOf, termLabel, termStillOpen } from './reenrollment';
+import { profileDetailsFromApplication } from './profileFromApplication';
 import {
   ApplicationPayment,
   ApplicationRequirement,
@@ -1194,7 +1195,11 @@ export async function finalizeEnrollment(
     }));
   const subjectHistory = [...priorHistory, ...creditEntries];
 
+  const formDetails = profileDetailsFromApplication(app);
+  const fromForm = (k: string) => (typeof formDetails[k] === 'string' ? (formDetails[k] as string) : '');
   const profile = {
+    // Every answer from the registration form (personal, contact, family, education, church, ministry).
+    ...formDetails,
     id: recordId,
     applicantType: app.applicantType || prev.applicantType || 'New Student',
     studentId,
@@ -1204,13 +1209,13 @@ export async function finalizeEnrollment(
     fullName: app.fullName,
     name: app.fullName,
     email: (app.email || '').toLowerCase(),
-    phone: app.phone || existing?.data?.phone || '',
-    dateOfBirth: app.dateOfBirth || app.birthDate || existing?.data?.dateOfBirth || '',
-    gender: app.gender || existing?.data?.gender || '',
-    civilStatus: app.civilStatus || existing?.data?.civilStatus || '',
-    address: app.address || existing?.data?.address || '',
-    homeChurch: app.churchName || app.churchAffiliation || existing?.data?.homeChurch || '',
-    pastorName: app.pastorName || existing?.data?.pastorName || '',
+    phone: app.phone || fromForm('phone') || existing?.data?.phone || '',
+    dateOfBirth: app.dateOfBirth || app.birthDate || fromForm('dateOfBirth') || existing?.data?.dateOfBirth || '',
+    gender: app.gender || fromForm('gender') || existing?.data?.gender || '',
+    civilStatus: app.civilStatus || fromForm('civilStatus') || existing?.data?.civilStatus || '',
+    address: app.address || fromForm('address') || existing?.data?.address || '',
+    homeChurch: app.churchName || fromForm('homeChurch') || app.churchAffiliation || existing?.data?.homeChurch || '',
+    pastorName: app.pastorName || fromForm('pastorName') || existing?.data?.pastorName || '',
     mentorName: existing?.data?.mentorName || '',
     avatarUrl: existing?.data?.avatarUrl || '',
     program: app.registration?.programName || app.programName || app.program || '',

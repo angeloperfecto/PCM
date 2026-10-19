@@ -6,6 +6,8 @@ import { usePCM } from '@/lib/store';
 import { AdmissionDocumentsPanel, toStudentRequirementItems, useStudentAdmissionDocuments } from '@/components/enrollment/AdmissionDocumentsPanel';
 import { EnrollmentStandingPanel } from './EnrollmentStandingPanel';
 import { EditStudentInfoForm } from '@/components/portal/enrollment/EditStudentInfoForm';
+import { ProfileDossier } from '@/components/common/ProfileDossier';
+import { FillFromRegistrationForm } from './FillFromRegistrationForm';
 import { ledgerPayments } from '@/lib/studentLedger';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
@@ -312,7 +314,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                     Comprehensive Student Information
                   </h4>
                   <p className="text-[11px] text-slate-500">
-                    Complete demographic, family, and church background as recorded in Cloud Firestore.
+                    Every detail from the registration form and later updates, as saved on the student record.
                   </p>
                 </div>
 
@@ -328,142 +330,9 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
               </div>
 
               {!isEditingProfile ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Card: Personal Information */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
-                    <span className="font-bold text-slate-900 uppercase tracking-wider block text-[11px] border-b border-slate-200 pb-1.5">
-                      1. Personal Information
-                    </span>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Full Legal Name:</span>
-                        <strong className="text-slate-900">{student.fullName}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Date of Birth:</span>
-                        <strong className="text-slate-900">{student.dateOfBirth || student.birthDate || '—'} ({student.age || '—'} yrs)</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Place of Birth:</span>
-                        <strong className="text-slate-900">{student.placeOfBirth || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Sex / Gender:</span>
-                        <strong className="text-slate-900">{student.sex || student.gender || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Civil Status:</span>
-                        <strong className="text-slate-900">{student.civilStatus || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Nationality:</span>
-                        <strong className="text-slate-900">{student.nationality || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Religion:</span>
-                        <strong className="text-slate-900">{student.religion || '—'}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card: Contact Information */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
-                    <span className="font-bold text-slate-900 uppercase tracking-wider block text-[11px] border-b border-slate-200 pb-1.5">
-                      2. Contact Information
-                    </span>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Primary Mobile:</span>
-                        <strong className="text-slate-900 font-mono">{student.mobileNumber || student.phone || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Email Address:</span>
-                        <strong className="text-slate-900 font-mono">{student.email}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Facebook Profile:</span>
-                        <strong className="text-slate-900">{student.facebookAccount || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Current Address:</span>
-                        <strong className="text-slate-900 text-right max-w-[200px] truncate">{student.currentAddress || student.address || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Permanent Address:</span>
-                        <strong className="text-slate-900 text-right max-w-[200px] truncate">{student.permanentAddress || student.address || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">City / Municipality:</span>
-                        <strong className="text-slate-900">{student.city || '—'}, {student.province || '—'}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card: Family Information */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
-                    <span className="font-bold text-slate-900 uppercase tracking-wider block text-[11px] border-b border-slate-200 pb-1.5">
-                      3. Family & Emergency Contact
-                    </span>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Father&apos;s Name:</span>
-                        <strong className="text-slate-900">{student.fatherName || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Mother&apos;s Maiden Name:</span>
-                        <strong className="text-slate-900">{student.motherName || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Guardian Name:</span>
-                        <strong className="text-slate-900">{student.guardianName || student.emergencyContactName || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Emergency Contact Person:</span>
-                        <strong className="text-slate-900">{student.emergencyContactPerson || student.emergencyContactName || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Emergency Number:</span>
-                        <strong className="text-slate-900 font-mono">{student.emergencyContactNumber || student.emergencyContactPhone || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Relationship:</span>
-                        <strong className="text-slate-900">{student.emergencyContactRelationship || student.emergencyContactRelation || '—'}</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card: Church & Ministry */}
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2.5">
-                    <span className="font-bold text-slate-900 uppercase tracking-wider block text-[11px] border-b border-slate-200 pb-1.5">
-                      4. Church & Ministry Background
-                    </span>
-                    <div className="space-y-1.5">
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Home Church:</span>
-                        <strong className="text-slate-900">{student.homeChurch || student.churchName || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Pastor / Overseer:</span>
-                        <strong className="text-slate-900">{student.pastorName || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Pastor Contact:</span>
-                        <strong className="text-slate-900 font-mono">{student.pastorContactNumber || student.pastorPhone || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Ministry Role:</span>
-                        <strong className="text-slate-900">{student.ministryRole || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Ministry Department:</span>
-                        <strong className="text-slate-900">{student.ministryDepartment || '—'}</strong>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Spiritual Mentor:</span>
-                        <strong className="text-slate-900">{student.mentorName || student.spiritualMentor || '—'}</strong>
-                      </div>
-                    </div>
-                  </div>
+                <div className="space-y-4">
+                  <FillFromRegistrationForm student={student} />
+                  <ProfileDossier student={student} staff />
                 </div>
               ) : (
                 <EditStudentInfoForm student={student} staff onClose={() => setIsEditingProfile(false)} />
@@ -970,10 +839,13 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                     </label>
                     <input
                       type="text"
-                      defaultValue={student.section || 'Section A'}
+                      defaultValue={student.section || ''}
+                      placeholder="Not assigned"
                       onBlur={async (e) => {
-                        await updateStudentProfile(student.id, { section: e.target.value });
-                        addToast('info', 'Section Updated', `Cohort set to ${e.target.value}.`);
+                        const section = e.target.value.trim();
+                        if (section === (student.section || '')) return;
+                        await updateStudentProfile(student.id, { section });
+                        addToast('info', 'Section Updated', section ? `Cohort set to ${section}.` : 'Section cleared.');
                       }}
                       className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg bg-white"
                     />

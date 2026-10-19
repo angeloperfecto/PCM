@@ -37,6 +37,7 @@ import { programForStudent, subjectsForProgram } from '@/lib/curriculum';
 import { AdmissionDocumentsPanel, toStudentRequirementItems, useStudentAdmissionDocuments } from '@/components/enrollment/AdmissionDocumentsPanel';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { EditStudentInfoForm } from './EditStudentInfoForm';
+import { ProfileDossier } from '@/components/common/ProfileDossier';
 import { accountSummary, ledgerPayments, parseTerm } from '@/lib/studentLedger';
 import { StudentProfile, StudentRequirementItem } from '@/lib/types';
 import { ChangeAvatarModal } from '@/components/modals/ChangeAvatarModal';
@@ -207,14 +208,26 @@ export const StudentProfileModule: React.FC = () => {
               <p className="text-sm font-medium text-slate-600 flex flex-wrap items-center gap-2">
                 <GraduationCap className="w-4 h-4 text-[#18392B]" />
                 <span className="font-bold text-slate-800">{studentProfile.degreeProgram || studentProfile.program}</span>
-                <span className="text-slate-300">•</span>
-                <span className="font-mono text-xs text-[#18392B] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold">
-                  {studentProfile.yearLevel || '1st Year'}
-                </span>
-                <span className="text-slate-300">•</span>
-                <span className="text-xs text-slate-600 font-medium">{studentProfile.section || 'Section A'}</span>
-                <span className="text-slate-300">•</span>
-                <span className="text-xs text-slate-600">{studentProfile.currentSemester || '1st Sem, AY 2026–2027'}</span>
+                {studentProfile.yearLevel && (
+                  <>
+                    <span className="text-slate-300">•</span>
+                    <span className="font-mono text-xs text-[#18392B] bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200 font-bold">
+                      {studentProfile.yearLevel}
+                    </span>
+                  </>
+                )}
+                {studentProfile.section && (
+                  <>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-xs text-slate-600 font-medium">{studentProfile.section}</span>
+                  </>
+                )}
+                {studentProfile.currentSemester && (
+                  <>
+                    <span className="text-slate-300">•</span>
+                    <span className="text-xs text-slate-600">{studentProfile.currentSemester}</span>
+                  </>
+                )}
               </p>
 
               {/* Student ID & Application Number Badges */}
@@ -333,267 +346,7 @@ export const StudentProfileModule: React.FC = () => {
       {/* ========================================================================= */}
       {/* SUB-VIEW 1: COMPLETE PROFILE DOSSIER (12 SECTIONS) */}
       {/* ========================================================================= */}
-      {activeSubView === 'dossier' && (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Section A: Personal Information */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <User className="w-4 h-4 text-[#18392B]" />
-                <h3 className="font-serif text-sm font-bold text-[#18392B] uppercase tracking-wider">
-                  A. Personal Information
-                </h3>
-              </div>
-
-              <div className="space-y-2 text-xs divide-y divide-slate-100">
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Student ID Number:</span>
-                  <strong className="font-mono text-slate-900">{studentProfile.studentId}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Application Number:</span>
-                  <strong className="font-mono text-slate-800">{studentProfile.applicationNumber || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">First / Middle / Last Name:</span>
-                  <strong className="text-slate-900">
-                    {studentProfile.firstName || ''} {studentProfile.middleName || ''} {studentProfile.lastName || studentProfile.fullName} {studentProfile.suffix || ''}
-                  </strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Preferred Name / Alias:</span>
-                  <strong className="text-slate-800">{studentProfile.preferredName || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Date of Birth & Age:</span>
-                  <strong className="text-slate-900">
-                    {studentProfile.dateOfBirth || studentProfile.birthDate || '—'} ({studentProfile.age || '—'} yrs old)
-                  </strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Place of Birth:</span>
-                  <strong className="text-slate-900">{studentProfile.placeOfBirth || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Sex / Gender:</span>
-                  <strong className="text-slate-900">{studentProfile.sex || studentProfile.gender || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Civil Status:</span>
-                  <strong className="text-slate-900">{studentProfile.civilStatus || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Nationality & Religion:</span>
-                  <strong className="text-slate-900">
-                    {studentProfile.nationality || '—'} • {studentProfile.religion || '—'}
-                  </strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Section B: Contact Information */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <Phone className="w-4 h-4 text-[#18392B]" />
-                <h3 className="font-serif text-sm font-bold text-[#18392B] uppercase tracking-wider">
-                  B. Contact Information
-                </h3>
-              </div>
-
-              <div className="space-y-2 text-xs divide-y divide-slate-100">
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Primary Mobile Number:</span>
-                  <strong className="font-mono text-slate-900">{studentProfile.mobileNumber || studentProfile.phone || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Official Email:</span>
-                  <strong className="font-mono text-slate-900">{studentProfile.email}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Facebook Account / URL:</span>
-                  <strong className="text-slate-800">{studentProfile.facebookAccount || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Current Residence:</span>
-                  <strong className="text-slate-900 text-right max-w-[220px] truncate">
-                    {studentProfile.currentAddress || studentProfile.address || '—'}
-                  </strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Permanent Home Address:</span>
-                  <strong className="text-slate-900 text-right max-w-[220px] truncate">
-                    {studentProfile.permanentAddress || studentProfile.address || '—'}
-                  </strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">City / Municipality:</span>
-                  <strong className="text-slate-900">{studentProfile.city || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Province & ZIP Code:</span>
-                  <strong className="text-slate-900">
-                    {studentProfile.province || '—'} ({studentProfile.zipCode || '—'})
-                  </strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Section C: Family & Emergency Contact */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <HeartHandshake className="w-4 h-4 text-[#18392B]" />
-                <h3 className="font-serif text-sm font-bold text-[#18392B] uppercase tracking-wider">
-                  C. Family & Emergency Contact
-                </h3>
-              </div>
-
-              <div className="space-y-2 text-xs divide-y divide-slate-100">
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Father&apos;s Full Name:</span>
-                  <strong className="text-slate-900">{studentProfile.fatherName || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Mother&apos;s Maiden Name:</span>
-                  <strong className="text-slate-900">{studentProfile.motherName || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Guardian Name (if applicable):</span>
-                  <strong className="text-slate-900">{studentProfile.guardianName || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Emergency Contact Person:</span>
-                  <strong className="text-slate-900">
-                    {studentProfile.emergencyContactPerson || studentProfile.emergencyContactName || '—'}
-                  </strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Emergency Number:</span>
-                  <strong className="font-mono text-slate-900">
-                    {studentProfile.emergencyContactNumber || studentProfile.emergencyContactPhone || '—'}
-                  </strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Emergency Relationship:</span>
-                  <strong className="text-slate-900">
-                    {studentProfile.emergencyContactRelationship || studentProfile.emergencyContactRelation || '—'}
-                  </strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Section D: Educational Background */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <GraduationCap className="w-4 h-4 text-[#18392B]" />
-                <h3 className="font-serif text-sm font-bold text-[#18392B] uppercase tracking-wider">
-                  D. Educational Background
-                </h3>
-              </div>
-
-              <div className="space-y-2 text-xs divide-y divide-slate-100">
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Last School Attended:</span>
-                  <strong className="text-slate-900">{studentProfile.lastSchoolAttended || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Highest Attainment:</span>
-                  <strong className="text-slate-900">
-                    {studentProfile.highestEducationalAttainment || '—'}
-                  </strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Previous Course / Strand:</span>
-                  <strong className="text-slate-800">{studentProfile.previousCourse || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Year Graduated:</span>
-                  <strong className="font-mono text-slate-900">{studentProfile.yearGraduated || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">General Average / Honors:</span>
-                  <strong className="text-slate-900">{studentProfile.generalAverage || '—'}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Section E: Church & Ministry */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <Church className="w-4 h-4 text-[#18392B]" />
-                <h3 className="font-serif text-sm font-bold text-[#18392B] uppercase tracking-wider">
-                  E. Church & Ministry Information
-                </h3>
-              </div>
-
-              <div className="space-y-2 text-xs divide-y divide-slate-100">
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Home Church / Congregation:</span>
-                  <strong className="text-slate-900">{studentProfile.homeChurch || studentProfile.churchName || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Senior Pastor:</span>
-                  <strong className="text-slate-900">{studentProfile.pastorName || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Pastor Contact:</span>
-                  <strong className="font-mono text-slate-900">{studentProfile.pastorContactNumber || studentProfile.pastorPhone || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Ministry Role & Dept:</span>
-                  <strong className="text-slate-900">
-                    {studentProfile.ministryRole || '—'} ({studentProfile.ministryDepartment || '—'})
-                  </strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Water Baptism Status:</span>
-                  <strong className="text-emerald-700 font-bold">{studentProfile.isBaptized === true || studentProfile.waterBaptized === true ? 'Water baptized' : studentProfile.isBaptized === false || studentProfile.waterBaptized === false ? 'Not yet baptized' : '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Spiritual Mentor:</span>
-                  <strong className="text-slate-900">{studentProfile.mentorName || '—'}</strong>
-                </div>
-              </div>
-            </div>
-
-            {/* Section F: Institutional Governance & Advising */}
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs p-6 space-y-3">
-              <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
-                <ShieldCheck className="w-4 h-4 text-[#18392B]" />
-                <h3 className="font-serif text-sm font-bold text-[#18392B] uppercase tracking-wider">
-                  F. Institutional Standing & Advising
-                </h3>
-              </div>
-
-              <div className="space-y-2 text-xs divide-y divide-slate-100">
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Academic Standing:</span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                    {studentProfile.academicStatus || 'Regular'}
-                  </span>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Assigned Academic Adviser:</span>
-                  <strong className="text-slate-900">{studentProfile.assignedAdviser || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Cohort Section:</span>
-                  <strong className="text-slate-800">{studentProfile.section || '—'}</strong>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Clearance Status:</span>
-                  <span className="text-emerald-700 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Fully Cleared
-                  </span>
-                </div>
-                <div className="flex justify-between pt-1.5">
-                  <span className="text-slate-500">Profile Completion:</span>
-                  <strong className="font-mono text-[#18392B] font-bold">100% Verified</strong>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {activeSubView === 'dossier' && <ProfileDossier student={studentProfile} />}
 
       {/* ========================================================================= */}
       {/* SUB-VIEW 2: DOCUMENT REQUIREMENTS VAULT */}
