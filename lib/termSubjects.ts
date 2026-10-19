@@ -445,16 +445,3 @@ export function termEnrollmentCounts(students: Partial<StudentProfile>[], catalo
   }
   return counts;
 }
-
-/** Enrolled students for every offering of the terms that are still open (closed terms keep their recorded counts). */
-export function openTermEnrollmentCounts(
-  students: Partial<StudentProfile>[],
-  catalog: AcademicSubject[],
-  periods: { semester?: string; academicYear?: string; closedAt?: string }[]
-): Map<string, number> {
-  const all = new Map<string, number>();
-  for (const p of (periods || []).filter((x) => x && !x.closedAt)) {
-    termEnrollmentCounts(students, catalog, p).forEach((n, id) => all.set(id, n));
-  }
-  return all;
-}

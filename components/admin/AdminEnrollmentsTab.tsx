@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
@@ -20,7 +20,7 @@ import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import { normalizeStatus } from '@/lib/enrollmentWorkflow';
 import { AcademicTermModal } from './AcademicTermModal';
 import { TermSubjectsPanel } from './TermSubjectsPanel';
-import { isTermOffering, openTermEnrollmentCounts, studentsEnrolledInTerm } from '@/lib/termSubjects';
+import { isTermOffering, studentsEnrolledInTerm } from '@/lib/termSubjects';
 import { normAY, termLabel } from '@/lib/reenrollment';
 import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
@@ -32,7 +32,6 @@ import { ReenrollmentReviewPanel } from './ReenrollmentReviewPanel';
 import { TermEnrollmentOverview } from './TermEnrollmentOverview';
 import { ClassListModal, classListFor } from './ClassListModal';
 import { AdminCurriculumPanel } from './AdminCurriculumPanel';
-import { AcademicCourseModal } from './AcademicCourseModal';
 import {
   GraduationCap,
   FileCheck,
@@ -80,7 +79,6 @@ export type EnrollmentAdminSubTab =
   | 'add-drop'
   | 'academic-periods'
   | 'term-subjects'
-  | 'subjects'
   | 'curriculum'
   | 'sections'
   | 'instructors'
@@ -99,9 +97,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
     removeDeletedUserRecord,
     studentProfile,
     academicSubjects,
-    addAcademicSubject,
-    updateAcademicSubject,
-    deleteAcademicSubject,
     preEnlistments,
     submitPreEnlistment,
     updatePreEnlistmentStatus,
@@ -167,7 +162,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
   const [preEnlistmentRemarks, setPreEnlistmentRemarks] = useState('');
 
   // Add / Edit course window (course null = new course)
-  const [courseModal, setCourseModal] = useState<{ course: (typeof academicSubjects)[number] | null } | null>(null);
 
   // Add Student Profile modal
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
@@ -207,14 +201,12 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
     academicPeriods.find((p) => p.isCurrent) || academicPeriods.find((p) => p.enrollmentStatus === 'Open' && p.status !== 'Archived') || null;
   const fmtDate = (d?: string) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' }) : '');
   const enrollmentOpen = currentPeriod?.enrollmentStatus === 'Open';
-  // Enrolled students per subject from the student records (open terms; closed terms keep their recorded counts).
-  const liveCounts = useMemo(() => openTermEnrollmentCounts(students, academicSubjects, academicPeriods), [students, academicSubjects, academicPeriods]);
   const sortedAcademicPeriods = [...academicPeriods].sort(
     (a, b) => a.academicYear.localeCompare(b.academicYear) || semesterOrder(a.semester) - semesterOrder(b.semester) || a.semester.localeCompare(b.semester)
   );
 
   // Pending delete confirmation (shared by every list in this tab)
-  type DeleteKind = 'student' | 'preEnlistment' | 'enrollment' | 'addDrop' | 'term' | 'course' | 'registry';
+  type DeleteKind = 'student' | 'preEnlistment' | 'enrollment' | 'addDrop' | 'term' | 'registry';
   const [pendingDelete, setPendingDelete] = useState<{ kind: DeleteKind; id: string; label: string; message: string; title?: string; confirmLabel?: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -232,8 +224,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           ? await deleteEnrollment(id)
           : kind === 'addDrop'
           ? await deleteAddDropRequest(id)
-          : kind === 'course'
-          ? await deleteAcademicSubject(id)
+
           : kind === 'registry'
           ? await removeDeletedUserRecord(id)
           : await deleteAcademicPeriod(id);
@@ -443,13 +434,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
             <Plus className="w-4 h-4" />
             <span>Add Student Profile</span>
           </button>
-          <button
-            onClick={() => setCourseModal({ course: null })}
-            className="bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 font-semibold text-xs px-3.5 py-2.5 rounded-xl transition flex items-center gap-1.5 cursor-pointer shadow-xs"
-          >
-            <Plus className="w-4 h-4 text-[#588B76]" />
-            <span>Add Course</span>
-          </button>
         </div>
       </div>
 
@@ -463,7 +447,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           { id: 'add-drop', label: 'Adding & Dropping', icon: RotateCcw, count: pendingAddDrop, isPending: true },
           { id: 'academic-periods', label: 'Academic Terms', icon: Calendar },
           { id: 'term-subjects', label: 'Term Subjects', icon: BookOpen },
-          { id: 'subjects', label: 'Course Catalog (all terms)', icon: BookOpen, count: academicSubjects.filter((s) => !s.isArchived).length },
           { id: 'curriculum', label: 'Subjects per Year Level', icon: BookOpen },
           { id: 'sections', label: 'Class Schedules', icon: Layers },
           { id: 'instructors', label: 'Faculty Load', icon: User, count: faculty.length },
@@ -474,7 +457,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
         const groups: { label: string; ids: string[] }[] = [
           { label: 'Overview', ids: ['dashboard'] },
           { label: 'Students', ids: ['students', 'pre-enlistment', 'enrollments', 'add-drop', 'payments'] },
-          { label: 'Academics', ids: ['academic-periods', 'term-subjects', 'curriculum', 'subjects', 'sections', 'instructors'] },
+          { label: 'Academics', ids: ['academic-periods', 'term-subjects', 'curriculum', 'sections', 'instructors'] },
           { label: 'Finance & Settings', ids: ['fees', 'settings'] },
         ];
         return (
@@ -1383,98 +1366,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       )}
 
       {/* ========================================================================= */}
-      {/* SUBVIEW 7: CURRICULUM & SUBJECTS CATALOG */}
-      {/* ========================================================================= */}
-      {activeSubTab === 'subjects' && (
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
-            <div>
-              <h4 className="font-bold text-sm text-[#18392B]">Academic Course Catalog & Curricular Inventory</h4>
-              <p className="text-xs text-slate-500">
-                Every course offering across all terms. To set up what students can take in a term, use Term Subjects.
-              </p>
-            </div>
-            <button
-              onClick={() => setCourseModal({ course: null })}
-              className="bg-[#18392B] hover:bg-[#588B76] text-white text-xs font-bold px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 cursor-pointer shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add New Course</span>
-            </button>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="p-3.5">Code</th>
-                  <th className="p-3.5">Term</th>
-                  <th className="p-3.5">Descriptive Title</th>
-                  <th className="p-3.5">Units</th>
-                  <th className="p-3.5">Class Schedule</th>
-                  <th className="p-3.5">Room</th>
-                  <th className="p-3.5">Instructor</th>
-                  <th className="p-3.5">Capacity</th>
-                  <th className="p-3.5 text-right">Manage</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {academicSubjects.filter((subj) => !subj.isArchived).map((subj) => (
-                  <tr key={subj.id} className="hover:bg-slate-50 transition">
-                    <td className="p-3.5 font-mono font-bold text-[#18392B]">{subj.code}</td>
-                    <td className="p-3.5 text-slate-600">
-                      {subj.academicYear ? `${subj.semester}, AY ${subj.academicYear}` : <span className="text-amber-700">No term</span>}
-                      {subj.yearLevel ? <span className="block text-[10px] text-slate-500">{subj.yearLevel}</span> : null}
-                    </td>
-                    <td className="p-3.5 font-medium text-slate-900">{subj.title}</td>
-                    <td className="p-3.5 font-bold font-mono">{subj.units} units</td>
-                    <td className="p-3.5 text-slate-600">{subj.schedule}</td>
-                    <td className="p-3.5 font-mono text-slate-600">{subj.room}</td>
-                    <td className="p-3.5 text-slate-800">{subj.instructor}</td>
-                    <td className="p-3.5">
-                      <span className="font-mono text-[11px] text-slate-600">
-                        {liveCounts.has(subj.id) ? liveCounts.get(subj.id) : subj.enrolledCount || 0}/{subj.capacity}
-                      </span>
-                    </td>
-                    <td className="p-3.5 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          onClick={() => setCourseModal({ course: subj })}
-                          className="p-1.5 text-[#588B76] hover:bg-emerald-50 rounded-lg transition cursor-pointer"
-                          title="Edit course"
-                          aria-label={`Edit course ${subj.code}`}
-                        >
-                          <Edit2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() =>
-                            setPendingDelete({
-                              kind: 'course',
-                              id: subj.id,
-                              label: `${subj.code} · ${subj.title}`,
-                              message:
-                                (liveCounts.get(subj.id) ?? subj.enrolledCount ?? 0) > 0
-                                  ? `${liveCounts.get(subj.id) ?? subj.enrolledCount} student(s) are enrolled in this course. Deleting it removes it from the catalog only; their records and enrollments keep the course as it was.`
-                                  : 'This permanently removes the course from the catalog. Student records and enrollments that already list it are not changed.',
-                            })
-                          }
-                          className="p-1.5 text-rose-600 hover:bg-rose-50 rounded-lg transition cursor-pointer"
-                          title="Delete course"
-                          aria-label={`Delete course ${subj.code}`}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================================= */}
       {/* SUBVIEW 8: SECTIONS & CLASS SCHEDULES */}
       {/* ========================================================================= */}
       {activeSubTab === 'sections' && (
@@ -1964,30 +1855,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
             </div>
           </div>
         </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* MODAL 5: ADD SUBJECT MODAL */}
-      {/* ========================================================================= */}
-      {courseModal && (
-        <AcademicCourseModal
-          course={courseModal.course}
-          existing={academicSubjects}
-          instructorOptions={[...new Set([...faculty.map((m) => m.name), ...academicSubjects.map((s) => s.instructor)].filter(Boolean))].sort()}
-          semesterOptions={[...new Set(['1st Semester', '2nd Semester', 'Summer Term', ...academicPeriods.map((p) => p.semester)])]}
-          academicYearOptions={[...new Set(academicPeriods.map((p) => p.academicYear))].sort()}
-          programOptions={[...new Set(programs.map((p) => p.title || p.name).filter(Boolean))] as string[]}
-          defaultSemester={academicPeriods.find((p) => p.isCurrent)?.semester || '1st Semester'}
-          defaultAcademicYear={academicPeriods.find((p) => p.isCurrent)?.academicYear || ''}
-          onCancel={() => setCourseModal(null)}
-          onSave={async (draft) => {
-            const ok = courseModal.course
-              ? await updateAcademicSubject(courseModal.course.id, draft)
-              : !!(await addAcademicSubject({ ...draft, enrolledCount: 0 }));
-            if (ok) setCourseModal(null);
-            return ok;
-          }}
-        />
       )}
 
       {/* ========================================================================= */}
