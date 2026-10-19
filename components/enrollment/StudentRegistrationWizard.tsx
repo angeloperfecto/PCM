@@ -161,8 +161,8 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
       mobileNumber: app.phone || '',
       dateOfBirth: app.dateOfBirth || app.birthDate || '',
       age: calculatedAge !== undefined ? String(calculatedAge) : '',
-      sex: (app.gender === 'Female' ? 'Female' : 'Male') as string,
-      civilStatus: (app.civilStatus || 'Single') as string,
+      sex: (app.gender === 'Female' || app.gender === 'Male' ? app.gender : '') as string,
+      civilStatus: (app.civilStatus || '') as string,
       currentAddress: app.address || '',
       permanentAddress: app.address || '',
       churchName: app.churchAffiliation || app.churchName || app.church || app.homeChurch || '',
@@ -176,7 +176,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
         '',
       lastSchoolAttended:
         app.highSchool || app.previousCollege || app.previousSchool || '',
-      highestEducationalAttainment: app.highestEducation || 'Senior High School Graduate',
+      highestEducationalAttainment: app.highestEducation || '',
       programId: matchedProgram?.id || programs[0]?.id || 'prog-bth',
       programTitle: matchedProgram?.name || app.program || programs[0]?.name || 'Bachelor of Arts in Theology',
     };
@@ -200,10 +200,10 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     dateOfBirth: initialFields?.dateOfBirth || '',
     placeOfBirth: '',
     age: initialFields?.age || '',
-    sex: (initialFields?.sex || 'Male') as string,
-    civilStatus: (initialFields?.civilStatus || 'Single') as string,
-    nationality: 'Filipino',
-    religion: 'Christian (Evangelical / Church of Christ)',
+    sex: (initialFields?.sex || '') as string,
+    civilStatus: (initialFields?.civilStatus || '') as string,
+    nationality: '',
+    religion: '',
 
     // Step 2: Contact Information
     mobileNumber: initialFields?.mobileNumber || '',
@@ -212,28 +212,28 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     currentAddress: initialFields?.currentAddress || '',
     permanentAddress: initialFields?.permanentAddress || '',
     sameAsCurrentAddress: true,
-    city: 'Baguio City',
-    province: 'Benguet',
-    zipCode: '2600',
+    city: '',
+    province: '',
+    zipCode: '',
 
     // Step 3: Family & Emergency Contact
     fatherName: '',
     motherName: '',
     guardianName: '',
-    guardianRelationship: 'Father',
+    guardianRelationship: '',
     guardianContactNumber: '',
     guardianEmail: '',
     guardianAddress: '',
     emergencyContactPerson: '',
     emergencyContactNumber: '',
-    emergencyContactRelationship: 'Parent',
+    emergencyContactRelationship: '',
 
     // Step 4: Educational Background
     lastSchoolAttended: initialFields?.lastSchoolAttended || '',
     schoolAddress: '',
-    highestEducationalAttainment: initialFields?.highestEducationalAttainment || 'Senior High School Graduate',
-    previousCourse: 'GAS (General Academic Strand)',
-    yearGraduated: '2025',
+    highestEducationalAttainment: initialFields?.highestEducationalAttainment || '',
+    previousCourse: '',
+    yearGraduated: '',
     graduationDate: '',
     previousSchoolId: '',
     honorsAwards: '',
@@ -244,9 +244,9 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     churchContactNumber: '',
     pastorName: initialFields?.pastorName || '',
     pastorContactNumber: initialFields?.pastorContactNumber || '',
-    ministryDepartment: 'Youth Ministry',
-    ministryRole: 'Youth Leader / Musician',
-    yearsInMinistry: '2',
+    ministryDepartment: '',
+    ministryRole: '',
+    yearsInMinistry: '',
     dateStartedInMinistry: '',
     ministryExperience: '',
     callingTestimony: initialFields?.callingTestimony || '',
@@ -256,7 +256,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     semester: '1st Semester',
     programId: initialFields?.programId || programs[0]?.id || 'prog-bth',
     programTitle: initialFields?.programTitle || programs[0]?.name || 'Bachelor of Arts in Theology',
-    major: 'General Pastoral Studies',
+    major: '',
     yearLevel: '1st Year',
     section: 'Section A',
 
@@ -444,6 +444,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     } else if (step === 6) {
       if (!formData.programTitle) newErrors.programTitle = 'Please choose a program.';
       if (!formData.yearLevel) newErrors.yearLevel = 'Please choose your year level.';
+      if (!formData.major) newErrors.major = 'Please choose a major, or “No major” if none applies.';
     } else if (step === 7) {
       const missingRequired = requirements.filter((r) => r.required && (!r.file || !r.file.url));
       if (missingRequired.length > 0) {
@@ -1117,9 +1118,11 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   onChange={(e) => setFormData((prev) => ({ ...prev, sex: e.target.value }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76] bg-white"
                 >
+                  <option value="">Select…</option>
                   <option value="Male">Male</option>
                   <option value="Female">Female</option>
                 </select>
+                {errors.sex && <p className="text-[11px] text-rose-600 mt-1">{errors.sex}</p>}
               </div>
 
               <div>
@@ -1131,11 +1134,13 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   onChange={(e) => setFormData((prev) => ({ ...prev, civilStatus: e.target.value }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76] bg-white"
                 >
+                  <option value="">Select…</option>
                   <option value="Single">Single</option>
                   <option value="Married">Married</option>
                   <option value="Widowed">Widowed</option>
                   <option value="Separated">Separated</option>
                 </select>
+                {errors.civilStatus && <p className="text-[11px] text-rose-600 mt-1">{errors.civilStatus}</p>}
               </div>
 
               <div>
@@ -1144,6 +1149,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                 </label>
                 <input
                   type="text"
+                  placeholder="e.g. Filipino"
                   value={formData.nationality}
                   onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76]"
@@ -1553,12 +1559,14 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   onChange={(e) => setFormData((prev) => ({ ...prev, highestEducationalAttainment: e.target.value }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76] bg-white"
                 >
+                  <option value="">Select…</option>
                   <option value="Senior High School Graduate">Senior High School Graduate</option>
                   <option value="College Undergraduate">College Undergraduate</option>
                   <option value="Associate / Vocational Degree">Associate / Vocational Degree</option>
                   <option value="Bachelor&apos;s Degree Holder">Bachelor&apos;s Degree Holder</option>
                   <option value="Master&apos;s Degree Holder">Master&apos;s Degree Holder</option>
                 </select>
+                {errors.highestEducationalAttainment && <p className="text-[11px] text-rose-600 mt-1">{errors.highestEducationalAttainment}</p>}
               </div>
 
               <div>
@@ -1850,13 +1858,14 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Major / Specialization
+                  Major / Specialization *
                 </label>
                 <select
                   value={formData.major}
                   onChange={(e) => setFormData((prev) => ({ ...prev, major: e.target.value }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76] bg-white"
                 >
+                  <option value="">Select…</option>
                   <option value="General Pastoral Studies">General Pastoral Studies</option>
                   <option value="Christian Education">Christian Education & Family</option>
                   <option value="Intercultural & Missiology">Intercultural Studies & Missions</option>
@@ -1864,6 +1873,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   <option value="Institutional Chaplaincy">Institutional Chaplaincy</option>
                   <option value="No Major">No major (not applicable)</option>
                 </select>
+                {errors.major && <p className="text-[11px] text-rose-600 mt-1">{errors.major}</p>}
               </div>
 
               <div>
