@@ -38,11 +38,14 @@ export function unassignedOfferings(catalog: AcademicSubject[]): AcademicSubject
   return (catalog || []).filter((o) => o && !o.isArchived && !o.academicYear);
 }
 
-/** Offerings with no program are open to every program. */
+/**
+ * Offerings with no program are open to every program. Otherwise the same program by id, or by name
+ * (as the curriculum is matched), so two program records with the same name share their subjects.
+ */
 export function offeringForProgram(o: Partial<AcademicSubject> & { programId?: string }, program: Partial<AcademicProgram> | null | undefined): boolean {
   if (!o.programId && !o.program) return true;
   if (!program) return true;
-  if (o.programId && program.id) return o.programId === program.id;
+  if (o.programId && program.id && o.programId === program.id) return true;
   const names = [program.name, (program as any).title, program.code].map(squash).filter(Boolean);
   return names.includes(squash(o.program));
 }
