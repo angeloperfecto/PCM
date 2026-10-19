@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   ListPlus,
   Search,
@@ -18,7 +18,9 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
-import { AcademicSubject, PreEnlistmentRecord } from '@/lib/types';
+import { PreEnlistmentRecord } from '@/lib/types';
+import { programForStudent, subjectsForProgram } from '@/lib/curriculum';
+import { studentTermSubjects } from '@/lib/termSubjects';
 
 export const PreEnlistmentModule: React.FC = () => {
   const {
@@ -28,6 +30,9 @@ export const PreEnlistmentModule: React.FC = () => {
     submitPreEnlistment,
     studentProfile,
     addToast,
+    programs,
+    curriculumSubjects,
+    enrollmentSystemConfig,
   } = usePCM();
 
   // Pre-enlistment is for the term whose pre-enlistment is open (else the current term),
@@ -46,32 +51,48 @@ export const PreEnlistmentModule: React.FC = () => {
     (p) => p && p.studentId === studentProfile?.studentId && !!preTerm && p.semester === preTerm.semester && (p.academicYear || '').replace('-', '–') === preTerm.academicYear.replace('-', '–')
   );
 
-  // Selected subject IDs in current working draft
+  // The subjects set up for that term (Term Subjects), for the student's program and year level,
+  // plus back subjects not yet passed — the same list as enrollment and re-enrollment.
+  const program = programForStudent(programs, studentProfile || {});
+  const programSubjects = useMemo(() => subjectsForProgram(curriculumSubjects, program), [curriculumSubjects, program]);
+  const termSubjects = useMemo(
+    () => studentTermSubjects({ catalog: academicSubjects || [], term: preTerm, programSubjects, program, student: studentProfile || {} }),
+    [academicSubjects, preTerm, programSubjects, program, studentProfile]
+  );
+  const offeredList = termSubjects.subjects;
+
+  // Selected subjects: the student's saved pre-enlistment for this term (the chosen sections), otherwise none.
+  const savedIds = (existingRecord?.selectedSubjects || []).map((x) => x.id || '').join('|');
+  const savedCodes = (existingRecord?.selectedSubjectCodes || []).join('|');
   const initialSelectedIds = useMemo(() => {
-    if (existingRecord?.selectedSubjectCodes && existingRecord.selectedSubjectCodes.length > 0) {
-      const codes = existingRecord.selectedSubjectCodes;
-      return (academicSubjects || [])
-        .filter((s) => s && s.code && codes.includes(s.code))
-        .map((s) => s.id);
-    }
-    // Default to currently enrolled or standard 1st sem subjects
-    const enrolledCodes = ((studentProfile && studentProfile.courses) || []).map((c) => c?.code).filter(Boolean);
-    const matched = (academicSubjects || []).filter((s) => s && s.code && enrolledCodes.includes(s.code));
-    return matched.length > 0 ? matched.map((s) => s.id) : (academicSubjects || []).slice(0, 5).map((s) => s.id);
-  }, [existingRecord, academicSubjects, studentProfile]);
+    const ids = (savedIds ? savedIds.split('|') : []).filter((id) => offeredList.some((s) => s.id === id));
+    (savedCodes ? savedCodes.split('|') : []).forEach((code) => {
+      if (ids.some((id) => offeredList.find((s) => s.id === id)?.code === code)) return;
+      const match = offeredList.find((s) => s.code === code);
+      if (match) ids.push(match.id);
+    });
+    return ids;
+  }, [savedIds, savedCodes, offeredList]);
 
   const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>(initialSelectedIds);
+  // Load the saved selection once the record and the subjects have loaded.
+  const initialKey = initialSelectedIds.join('|');
+  useEffect(() => {
+    setSelectedSubjectIds(initialKey ? initialKey.split('|') : []);
+  }, [initialKey]);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 
-  const MAX_UNITS = 21;
+  // Unit load from System Governance (0 = no limit set).
+  const MAX_UNITS = Number(enrollmentSystemConfig?.maxUnitsAllowed) || 0;
+  const MIN_UNITS = Number(enrollmentSystemConfig?.minUnitsAllowed) || 0;
 
   // Filter subjects safely without throwing if fields are missing or undefined
   const filteredSubjects = useMemo(() => {
     const q = (searchQuery || '').trim().toLowerCase();
-    return (academicSubjects || []).filter((subj) => {
+    return offeredList.filter((subj) => {
       if (!subj) return false;
       const code = (subj.code || '').toLowerCase();
       const title = (subj.title || '').toLowerCase();
@@ -91,12 +112,12 @@ export const PreEnlistmentModule: React.FC = () => {
         selectedCategory === 'All' || (subj.category || '') === selectedCategory;
       return matchSearch && matchCategory;
     });
-  }, [academicSubjects, searchQuery, selectedCategory]);
+  }, [offeredList, searchQuery, selectedCategory]);
 
   // Selected subjects objects
   const selectedSubjects = useMemo(() => {
-    return (academicSubjects || []).filter((s) => s && selectedSubjectIds.includes(s.id));
-  }, [academicSubjects, selectedSubjectIds]);
+    return offeredList.filter((s) => s && selectedSubjectIds.includes(s.id));
+  }, [offeredList, selectedSubjectIds]);
 
   const totalSelectedUnits = useMemo(() => {
     return selectedSubjects.reduce((sum, s) => sum + (s.units || 0), 0);
@@ -104,18 +125,23 @@ export const PreEnlistmentModule: React.FC = () => {
 
   const toggleSubject = (subjectId: string) => {
     const isSelected = selectedSubjectIds.includes(subjectId);
-    const targetSubject = (academicSubjects || []).find((s) => s && s.id === subjectId);
+    const targetSubject = offeredList.find((s) => s && s.id === subjectId);
 
     if (!isSelected && targetSubject) {
-      if (totalSelectedUnits + (targetSubject.units || 0) > MAX_UNITS) {
+      if (targetSubject.closed || targetSubject.full) {
+        addToast('warning', targetSubject.closed ? 'Subject closed' : 'Subject full', `${targetSubject.code}${targetSubject.section ? ` (${targetSubject.section})` : ''} is ${targetSubject.closed ? 'closed' : 'full'} for this term.`);
+        return;
+      }
+      if (MAX_UNITS && totalSelectedUnits + (targetSubject.units || 0) > MAX_UNITS) {
         addToast(
           'warning',
           'Unit Limit Exceeded',
-          `Cannot exceed ${MAX_UNITS} units for regular standing. Please drop a course first.`
+          `The maximum load is ${MAX_UNITS} units. Please remove a subject first.`
         );
         return;
       }
-      setSelectedSubjectIds([...selectedSubjectIds, subjectId]);
+      // One section per subject.
+      setSelectedSubjectIds([...selectedSubjectIds.filter((id) => offeredList.find((s) => s.id === id)?.code !== targetSubject.code), subjectId]);
     } else {
       setSelectedSubjectIds(selectedSubjectIds.filter((id) => id !== subjectId));
     }
@@ -141,6 +167,17 @@ export const PreEnlistmentModule: React.FC = () => {
       academicYear: preTerm.academicYear,
       semester: preTerm.semester,
       selectedSubjectCodes: selectedSubjects.map((s) => s.code).filter(Boolean) as string[],
+      // The chosen offerings (sections) of this term's subjects.
+      selectedSubjects: selectedSubjects.map((s) => ({
+        id: s.id,
+        code: s.code,
+        title: s.title,
+        units: s.units,
+        schedule: s.schedule,
+        room: s.room,
+        instructor: s.instructor,
+        section: s.section,
+      })) as any,
       totalUnits: totalSelectedUnits,
       status: 'Submitted',
       submittedAt: new Date().toISOString(),
@@ -154,7 +191,7 @@ export const PreEnlistmentModule: React.FC = () => {
     }
   };
 
-  const categories = ['All', 'Biblical Studies', 'Theology', 'Pastoral Ministry', 'General Education'];
+  const categories = ['All', ...Array.from(new Set(offeredList.map((s) => s.category || '').filter(Boolean))).sort()];
 
   return (
     <div id="pcm-pre-enlistment-module" className="space-y-6">
@@ -269,24 +306,25 @@ export const PreEnlistmentModule: React.FC = () => {
               Semester Academic Load
             </span>
             <span className="font-mono font-bold text-slate-900">
-              <span className="text-purple-700 text-sm font-extrabold">{totalSelectedUnits}</span> / {MAX_UNITS} Units Maximum
+              <span className="text-purple-700 text-sm font-extrabold">{totalSelectedUnits}</span>
+              {MAX_UNITS ? ` / ${MAX_UNITS} units maximum` : ' units'}
             </span>
           </div>
           <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden">
             <div
               className={`h-3 rounded-full transition-all duration-300 ${
-                totalSelectedUnits > MAX_UNITS
+                MAX_UNITS && totalSelectedUnits > MAX_UNITS
                   ? 'bg-rose-600'
-                  : totalSelectedUnits >= 18
+                  : MIN_UNITS && totalSelectedUnits >= MIN_UNITS
                   ? 'bg-emerald-600'
                   : 'bg-purple-600'
               }`}
-              style={{ width: `${Math.min(100, (totalSelectedUnits / MAX_UNITS) * 100)}%` }}
+              style={{ width: `${MAX_UNITS ? Math.min(100, (totalSelectedUnits / MAX_UNITS) * 100) : totalSelectedUnits ? 100 : 0}%` }}
             />
           </div>
           <div className="flex justify-between text-[11px] text-slate-500 font-mono">
-            <span>Minimum Full-time: 12 Units</span>
-            <span>Regular Capacity: 18–21 Units</span>
+            <span>{MIN_UNITS ? `Minimum load: ${MIN_UNITS} units` : ''}</span>
+            <span>{MAX_UNITS ? `Maximum load: ${MAX_UNITS} units` : ''}</span>
           </div>
         </div>
       </div>
@@ -322,6 +360,12 @@ export const PreEnlistmentModule: React.FC = () => {
           </div>
         </div>
 
+        {termSubjects.notOffered.length > 0 && (
+          <p className="text-[11px] text-slate-500">
+            In your curriculum but not offered this term: {termSubjects.notOffered.map((x) => x.code).join(', ')}.
+          </p>
+        )}
+
         {/* Subjects Table */}
         <div className="border border-slate-200 rounded-xl overflow-hidden shadow-xs">
           <div className="overflow-x-auto">
@@ -338,10 +382,17 @@ export const PreEnlistmentModule: React.FC = () => {
                   <th className="p-3.5 font-bold text-center">Slots</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-200 text-slate-700">
+              <tbody className="divide-y divide-slate-200 text-slate-700" data-testid="pre-enlistment-subjects">
+                {filteredSubjects.length === 0 && (
+                  <tr>
+                    <td colSpan={8} className="p-6 text-center text-slate-500">
+                      {preTerm ? `No subjects are offered for your year level in ${preTerm.semester}, AY ${preTerm.academicYear} yet. Please check with the Registrar.` : 'No term is open for pre-enlistment.'}
+                    </td>
+                  </tr>
+                )}
                 {filteredSubjects.map((subject) => {
                   const isChecked = selectedSubjectIds.includes(subject.id);
-                  const isFull = (subject.enrolledCount || 0) >= (subject.capacity || 40);
+                  const isFull = subject.full || subject.closed;
 
                   return (
                     <tr
@@ -366,15 +417,24 @@ export const PreEnlistmentModule: React.FC = () => {
                       </td>
                       <td className="p-3.5">
                         <div className="font-semibold text-slate-900">{subject.title || 'Untitled Course'}</div>
-                        <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
-                          {subject.category || 'General'}
+                        <span className="flex flex-wrap gap-1">
+                          {subject.category && (
+                            <span className="text-[10px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">{subject.category}</span>
+                          )}
+                          {subject.yearLevel && (
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${subject.backSubject ? 'bg-amber-50 text-amber-900 border-amber-200' : 'bg-slate-50 text-slate-600 border-slate-200'}`}>
+                              {subject.backSubject ? `Back subject • ${subject.yearLevel}` : subject.yearLevel}
+                            </span>
+                          )}
+                          {subject.section && <span className="text-[10px] bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">{subject.section}</span>}
+                          {subject.closed && <span className="text-[10px] bg-slate-200 text-slate-700 px-1.5 py-0.5 rounded">Closed</span>}
                         </span>
                       </td>
                       <td className="p-3.5 font-mono font-bold text-slate-900">
                         {subject.units || 0} Units
                       </td>
                       <td className="p-3.5 text-slate-500 font-mono text-[11px]">
-                        {subject.prerequisite || 'None'}
+                        {subject.prerequisites || 'None'}
                       </td>
                       <td className="p-3.5">
                         <div className="font-medium text-slate-900">{subject.schedule || 'TBA'}</div>
@@ -391,7 +451,7 @@ export const PreEnlistmentModule: React.FC = () => {
                               : 'bg-emerald-50 text-emerald-800'
                           }`}
                         >
-                          {subject.enrolledCount || 0}/{subject.capacity || 40}
+                          {subject.capacity ? `${subject.enrolledCount || 0}/${subject.capacity}` : '—'}
                         </span>
                       </td>
                     </tr>

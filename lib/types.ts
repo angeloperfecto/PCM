@@ -813,7 +813,12 @@ export interface AcademicSubject {
   isArchived?: boolean;
   remarks?: string;
   program?: string;
+  programId?: string; // the program this offering is for (blank: every program)
   yearLevel?: string;
+  createdAt?: string;
+  createdBy?: string;
+  removedAt?: string;
+  removedBy?: string;
 }
 
 export interface AcademicPeriod {
@@ -974,6 +979,7 @@ export type EnrollmentAdminSubTab =
   | 'add-drop'
   | 'students'
   | 'academic-periods'
+  | 'term-subjects'
   | 'subjects'
   | 'sections'
   | 'instructors'

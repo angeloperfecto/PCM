@@ -19,6 +19,8 @@ import { AdminStudentDetailModal } from './AdminStudentDetailModal';
 import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import { normalizeStatus } from '@/lib/enrollmentWorkflow';
 import { AcademicTermModal } from './AcademicTermModal';
+import { TermSubjectsPanel } from './TermSubjectsPanel';
+import { isTermOffering } from '@/lib/termSubjects';
 import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
 import { AdmissionRequirementsCard } from './AdmissionRequirementsCard';
@@ -76,6 +78,7 @@ export type EnrollmentAdminSubTab =
   | 'enrollments'
   | 'add-drop'
   | 'academic-periods'
+  | 'term-subjects'
   | 'subjects'
   | 'curriculum'
   | 'sections'
@@ -134,6 +137,8 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
 
   // Active Subtab
   const [activeSubTab, setActiveSubTab] = useState<EnrollmentAdminSubTab>('dashboard');
+  // The term shown in Term Subjects (set when a term is created or its "Subjects" button is used).
+  const [subjectsTermId, setSubjectsTermId] = useState('');
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
@@ -452,7 +457,8 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           { id: 'enrollments', label: 'Enrollment Queue', icon: GraduationCap, count: pendingEnrollments, isPending: true },
           { id: 'add-drop', label: 'Adding & Dropping', icon: RotateCcw, count: pendingAddDrop, isPending: true },
           { id: 'academic-periods', label: 'Academic Terms', icon: Calendar },
-          { id: 'subjects', label: 'Curriculum Catalog', icon: BookOpen, count: academicSubjects.length },
+          { id: 'term-subjects', label: 'Term Subjects', icon: BookOpen },
+          { id: 'subjects', label: 'Course Catalog (all terms)', icon: BookOpen, count: academicSubjects.filter((s) => !s.isArchived).length },
           { id: 'curriculum', label: 'Subjects per Year Level', icon: BookOpen },
           { id: 'sections', label: 'Class Schedules', icon: Layers },
           { id: 'instructors', label: 'Faculty Load', icon: User, count: faculty.length },
@@ -463,7 +469,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
         const groups: { label: string; ids: string[] }[] = [
           { label: 'Overview', ids: ['dashboard'] },
           { label: 'Students', ids: ['students', 'pre-enlistment', 'enrollments', 'add-drop', 'payments'] },
-          { label: 'Academics', ids: ['academic-periods', 'subjects', 'curriculum', 'sections', 'instructors'] },
+          { label: 'Academics', ids: ['academic-periods', 'term-subjects', 'curriculum', 'subjects', 'sections', 'instructors'] },
           { label: 'Finance & Settings', ids: ['fees', 'settings'] },
         ];
         return (
@@ -1251,6 +1257,17 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                         {statusLabel}
                       </span>
                       <button
+                        onClick={() => {
+                          setSubjectsTermId(period.id);
+                          setActiveSubTab('term-subjects');
+                        }}
+                        className="px-2 py-0.5 text-[11px] font-bold text-[#588B76] hover:bg-emerald-50 rounded-lg transition cursor-pointer"
+                        title="Subjects offered in this term"
+                        aria-label={`Subjects for ${period.semester} ${period.academicYear}`}
+                      >
+                        Subjects ({academicSubjects.filter((s) => !s.isArchived && isTermOffering(s, period)).length})
+                      </button>
+                      <button
                         onClick={() => setTermModal({ term: period })}
                         className="p-1 text-[#588B76] hover:bg-emerald-50 rounded-lg transition cursor-pointer"
                         title="Edit academic term"
@@ -1369,7 +1386,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
             <div>
               <h4 className="font-bold text-sm text-[#18392B]">Academic Course Catalog & Curricular Inventory</h4>
               <p className="text-xs text-slate-500">
-                Authorized Seminary & College courses available for student selection and degree fulfillment.
+                Every course offering across all terms. To set up what students can take in a term, use Term Subjects.
               </p>
             </div>
             <button
@@ -1386,6 +1403,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
               <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                 <tr>
                   <th className="p-3.5">Code</th>
+                  <th className="p-3.5">Term</th>
                   <th className="p-3.5">Descriptive Title</th>
                   <th className="p-3.5">Units</th>
                   <th className="p-3.5">Class Schedule</th>
@@ -1396,9 +1414,13 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {academicSubjects.map((subj) => (
+                {academicSubjects.filter((subj) => !subj.isArchived).map((subj) => (
                   <tr key={subj.id} className="hover:bg-slate-50 transition">
                     <td className="p-3.5 font-mono font-bold text-[#18392B]">{subj.code}</td>
+                    <td className="p-3.5 text-slate-600">
+                      {subj.academicYear ? `${subj.semester}, AY ${subj.academicYear}` : <span className="text-amber-700">No term</span>}
+                      {subj.yearLevel ? <span className="block text-[10px] text-slate-500">{subj.yearLevel}</span> : null}
+                    </td>
                     <td className="p-3.5 font-medium text-slate-900">{subj.title}</td>
                     <td className="p-3.5 font-bold font-mono">{subj.units} units</td>
                     <td className="p-3.5 text-slate-600">{subj.schedule}</td>
@@ -1522,6 +1544,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       )}
 
       {activeSubTab === 'curriculum' && <AdminCurriculumPanel />}
+      {activeSubTab === 'term-subjects' && <TermSubjectsPanel initialTermId={subjectsTermId} />}
 
       {classListSubjectId && academicSubjects.find((x) => x.id === classListSubjectId) && (
         <ClassListModal
@@ -2106,9 +2129,19 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           existing={academicPeriods}
           onCancel={() => setTermModal(null)}
           onSave={async (draft) => {
-            const ok = termModal.term ? await updateAcademicPeriod(termModal.term.id, draft) : !!(await addAcademicPeriod({ ...draft, isCurrent: false }));
-            if (ok) setTermModal(null);
-            return ok;
+            if (termModal.term) {
+              const ok = await updateAcademicPeriod(termModal.term.id, draft);
+              if (ok) setTermModal(null);
+              return ok;
+            }
+            const created = await addAcademicPeriod({ ...draft, isCurrent: false });
+            if (created) {
+              setTermModal(null);
+              // Next step for a new term: choose the subjects offered per year level.
+              setSubjectsTermId(created.id);
+              setActiveSubTab('term-subjects');
+            }
+            return !!created;
           }}
         />
       )}

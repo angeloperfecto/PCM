@@ -3,7 +3,8 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, ClipboardList, Printer, Undo2 } from 'lucide-react';
 import { usePCM } from '@/lib/store';
-import { normAY, normCode, offeredSubjects, openEnrollmentTerm, semesterKind } from '@/lib/reenrollment';
+import { normCode, openEnrollmentTerm } from '@/lib/reenrollment';
+import { studentTermSubjects } from '@/lib/termSubjects';
 import { subjectsForProgram } from '@/lib/curriculum';
 import { db, auth } from '@/lib/firebase';
 import {
@@ -54,34 +55,37 @@ export const RegistrationForm: React.FC<{ app: App }> = ({ app }) => {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
 
-  const catalogForTerm = useMemo(
-    () =>
-      academicSubjects
-        .filter((s: any) => !s.isArchived && (s.status || 'Open') === 'Open')
-        .filter((s: any) => !term || ((!s.semester || semesterKind(s.semester) === semesterKind(term.semester)) && (!s.academicYear || normAY(s.academicYear) === normAY(term.academicYear))))
-        .sort((a: any, b: any) => a.code.localeCompare(b.code)),
-    [academicSubjects, term]
-  );
-  // The program's curriculum (Subjects per Year Level) decides which offerings apply: subjects of the
-  // chosen year level and earlier ones not yet taken, minus subjects credited from a previous school.
+  // The program's subjects the Registrar set up for this term (Term Subjects), for the chosen year level
+  // and earlier ones not yet taken, minus subjects credited from a previous school. Same list as re-enrollment.
   const credits: { code: string; title: string; units: number }[] = Array.isArray(app.creditedSubjects) ? app.creditedSubjects : [];
   const selectedProgram = programs.find((p: any) => (p.name || p.title) === programName) || null;
   const programSubjects = useMemo(() => subjectsForProgram(curriculumSubjects, selectedProgram).filter((s) => s.status !== 'Inactive'), [curriculumSubjects, selectedProgram]);
-  const curriculumOffered = useMemo(
+  const termSubjects = useMemo(
     () =>
-      programSubjects.length && yearLevel && term
-        ? offeredSubjects(programSubjects, academicSubjects, yearLevel, term.semester, { subjectHistory: credits.map((c) => ({ code: c.code, title: c.title, units: c.units, grade: '', semester: '', academicYear: '', status: 'Credited' })) } as any)
-        : null,
+      studentTermSubjects({
+        catalog: academicSubjects,
+        term,
+        programSubjects,
+        program: selectedProgram,
+        student: { subjectHistory: credits.map((c) => ({ code: c.code, title: c.title, units: c.units, grade: '', semester: '', academicYear: '', status: 'Credited' })) } as any,
+        yearLevel,
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [programSubjects, academicSubjects, yearLevel, term, JSON.stringify(credits)]
+    [academicSubjects, term, programSubjects, selectedProgram, yearLevel, JSON.stringify(credits)]
   );
+  // Only real offerings (with a schedule and capacity) can be registered; open ones only.
+  const catalogById = useMemo(() => new Map(academicSubjects.map((s: any) => [s.id, s])), [academicSubjects]);
   const offered = useMemo(
-    () => (curriculumOffered ? catalogForTerm.filter((s: any) => curriculumOffered.some((c) => normCode(c.code) === normCode(s.code))) : catalogForTerm),
-    [catalogForTerm, curriculumOffered]
+    () => termSubjects.subjects.filter((s) => s.offeringId && !s.closed).map((s) => catalogById.get(s.offeringId)).filter(Boolean) as any[],
+    [termSubjects, catalogById]
   );
-  const notOfferedThisTerm = (curriculumOffered || []).filter((c) => !catalogForTerm.some((s: any) => normCode(s.code) === normCode(c.code)));
+  const notOfferedThisTerm = [
+    ...termSubjects.notOffered,
+    ...termSubjects.subjects.filter((s) => !s.offeringId),
+  ];
+  const curriculumOffered = programSubjects.length ? termSubjects.subjects : null;
+  const curriculumInfo = (code: string) => termSubjects.subjects.find((c) => normCode(c.code) === normCode(code));
   const enforcePrereq = !!enrollmentSystemConfig?.enforcePrerequisites;
-  const curriculumInfo = (code: string) => (curriculumOffered || []).find((c) => normCode(c.code) === normCode(code));
   const policy = {
     minUnits: Number(enrollmentSystemConfig?.minUnitsAllowed) || 0,
     maxUnits: Number(enrollmentSystemConfig?.maxUnitsAllowed) || 0,
