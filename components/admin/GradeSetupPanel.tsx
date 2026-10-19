@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronUp, Circle } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import { assignableProfessors, linkFacultyMember, resolveSectionProfessor } from '@/lib/professors';
-import { gradingScaleOf, normEmail, subjectsWithoutSection } from '@/lib/grades';
+import { gradingScaleOf, normEmail, subjectsWithoutSection, sheetForSection } from '@/lib/grades';
 import { termLabel } from '@/lib/reenrollment';
 import { GradingScaleCard } from './GradingScaleCard';
 import type { AcademicPeriod, ClassSection, GradeSheet } from '@/lib/types';
@@ -42,7 +42,7 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
   // Ready when the professor has a sign-in email (their Faculty & Trustees email counts; the grading
   // record is linked automatically when the grade sheets are prepared).
   const readySections = rows.filter((r) => (r.instructor || r.member) && r.email);
-  const toCreate = readySections.filter((r) => !sheets.some((x) => x.sectionId === r.section.id)).length;
+  const toCreate = readySections.filter((r) => !sheetForSection(r.section, sheets)).length;
 
   const steps = {
     scale: !!scale,
