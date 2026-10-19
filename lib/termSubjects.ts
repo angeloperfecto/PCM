@@ -256,19 +256,29 @@ export async function createOfferings(drafts: OfferingDraft[], existing: Academi
     seen.add(id);
     toWrite.push({ id, data: { ...d, id, enrolledCount: 0, createdAt: now, createdBy: by } as any });
   }
-  // A removed offering with the same id is restored instead of overwritten by a new one.
+  // A removed offering with the same id is brought back with the new details (its seat count is kept);
+  // one that is still offered is skipped.
   const fresh: typeof toWrite = [];
+  const back: typeof toWrite = [];
   for (const w of toWrite) {
     const snap = await getDoc(doc(db, 'academicSubjects', w.id));
-    if (snap.exists()) skipped += 1;
-    else fresh.push(w);
+    if (!snap.exists()) fresh.push(w);
+    else if ((snap.data() as AcademicSubject).isArchived) back.push(w);
+    else skipped += 1;
   }
-  for (let i = 0; i < fresh.length; i += 400) {
+  const writes = [
+    ...fresh.map((w) => (b: ReturnType<typeof writeBatch>) => b.set(doc(db, 'academicSubjects', w.id), JSON.parse(JSON.stringify(w.data)))),
+    ...back.map((w) => (b: ReturnType<typeof writeBatch>) => {
+      const { enrolledCount, createdAt, createdBy, ...details } = w.data as any;
+      b.update(doc(db, 'academicSubjects', w.id), { ...JSON.parse(JSON.stringify(details)), isArchived: false, removedAt: '', removedBy: '', restoredAt: now, restoredBy: by });
+    }),
+  ];
+  for (let i = 0; i < writes.length; i += 400) {
     const batch = writeBatch(db);
-    fresh.slice(i, i + 400).forEach((w) => batch.set(doc(db, 'academicSubjects', w.id), JSON.parse(JSON.stringify(w.data))));
+    writes.slice(i, i + 400).forEach((w) => w(batch));
     await batch.commit();
   }
-  return { created: fresh.length, skipped };
+  return { created: fresh.length + back.length, skipped };
 }
 
 // ---------------------------------------------------------------------------
