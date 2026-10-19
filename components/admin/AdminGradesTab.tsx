@@ -24,8 +24,7 @@ import {
   sheetStageLabel,
   useGradeAmendments,
   useGradeSheets,
-  type SheetIssues,
-} from '@/lib/grades';
+  type SheetIssues, sheetForSection } from '@/lib/grades';
 import { termKeyOf, termLabel } from '@/lib/reenrollment';
 import { GradeSheetDocument } from '@/components/grades/GradeSheetDocument';
 import { GradeSheetEditor } from '@/components/grades/GradeSheetEditor';
@@ -134,7 +133,7 @@ export const AdminGradesTab: React.FC = () => {
     for (const section of termSections) {
       // Same professor lookup as Enrollment & Records; a Faculty & Trustees email counts (linked on refresh).
       const p = resolveSectionProfessor(section, instructors, faculty || []);
-      const sheet = sheets.find((x) => x.sectionId === section.id);
+      const sheet = sheetForSection(section, sheets);
       if (!p.email) {
         // Professor changed to someone without a sign-in email (or removed): hand the draft sheet over.
         if (sheet && ['Draft', 'Returned for Correction'].includes(sheet.status) && (sheet.instructorEmail || (sheet.instructorName || '') !== p.name))
@@ -300,7 +299,14 @@ export const AdminGradesTab: React.FC = () => {
                 const stage = sheetStageLabel(s);
                 return (
                   <tr key={s.id} className="hover:bg-slate-50">
-                    <td className="p-2.5"><strong className="font-mono text-[#18392B]">{s.subjectCode}</strong> {s.subjectTitle}</td>
+                    <td className="p-2.5">
+                      <strong className="font-mono text-[#18392B]">{s.subjectCode}</strong> {s.subjectTitle}
+                      {!termSections.some((c) => sheetForSection(c, [s])) && (
+                        <span className="mt-0.5 block text-[10px] font-semibold text-amber-800" title="Made for a class that is not among this semester’s Term Subjects. It is kept; add the subject in Term Subjects or leave it.">
+                          Not in this semester’s Term Subjects
+                        </span>
+                      )}
+                    </td>
                     <td className="p-2.5">{s.sectionName || '—'}</td>
                     <td className="p-2.5">{s.instructorName}</td>
                     <td className="p-2.5 font-mono">{enteredCount(s)} / {s.roster.length}</td>

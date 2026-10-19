@@ -11,8 +11,7 @@ import {
   sheetStageLabel,
   subjectsWithoutSection,
   useGradeAmendments,
-  useGradeSheets,
-} from '@/lib/grades';
+  useGradeSheets, sheetForSection } from '@/lib/grades';
 import type { AcademicPeriod } from '@/lib/types';
 
 // Closing a term: preview what moves into each student's academic history, confirm, then
@@ -39,7 +38,7 @@ export const CloseTermModal: React.FC<{ period: AcademicPeriod; onClose: () => v
   const termSections = termClassSections(period, classSections, academicSubjects, students);
   const gradeItems: string[] = [
     ...termSheets.filter((x) => !(x.status === 'Finalized' && x.publishedAt)).map((x) => `${x.subjectCode} ${x.sectionName} (${x.instructorName}): ${sheetStageLabel(x)}`),
-    ...termSections.filter((x) => !termSheets.some((g) => g.sectionId === x.id)).map((x) => `${x.subjectCode} ${x.sectionName}: no grade sheet`),
+    ...termSections.filter((x) => !sheetForSection(x, termSheets)).map((x) => `${x.subjectCode} ${x.sectionName}: no grade sheet`),
     ...subjectsWithoutSection(students, period, termSections).map((x) => `${x.code}: ${x.students} student(s) with no class section or grade sheet`),
     ...termAmendments.filter((a) => a.status === 'Pending').map((a) => `Pending grade change: ${a.studentName}, ${a.subjectCode}`),
   ];

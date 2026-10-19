@@ -860,6 +860,8 @@ export interface AcademicPeriod {
 }
 
 export interface ClassSection {
+  /** Older stored class sections (same subject and section) this Term Subjects class replaces; their grade sheets stay with it. */
+  legacySectionIds?: string[];
   id: string;
   sectionName: string; // e.g. "Section A", "BTH-3A"
   sectionCode: string; // e.g. "SEC-HOM301-A"

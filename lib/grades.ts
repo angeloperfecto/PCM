@@ -139,22 +139,22 @@ export function sectionsForTerm(sections: ClassSection[], term: AcademicPeriod):
 }
 
 /**
- * The classes of a term for grading: the term's subjects from Enrollment & Records → Term Subjects (each
- * offering is a class, with the students enrolled in it), plus stored class sections not covered by an offering.
- * Changes made in Enrollment & Records (subjects, sections, professors, enrollments, drops) show up here.
+ * The classes of a term for grading: the subjects set for that semester in Enrollment & Records → Term Subjects
+ * (each offering is a class, with the students enrolled in it). Older stored class sections are used only for a
+ * term with no Term Subjects; a stored section for the same subject and section is replaced by the Term Subjects
+ * class (its grade sheet stays with it). Changes made in Enrollment & Records show up here.
  */
 export function termClassSections(term: AcademicPeriod, sections: ClassSection[], offerings: AcademicSubject[], students: StudentProfile[]): ClassSection[] {
   const stored = sectionsForTerm(sections, term);
+  const offered = termOfferings(offerings, term);
+  if (offered.length === 0) return stored;
   const rosters = termEnrollmentRosters(students, offerings, term);
-  const fromOfferings = termOfferings(offerings, term)
-    .filter(
-      (o) =>
-        !stored.some(
-          (x) => normCode(x.subjectCode) === normCode(o.code) && [x.sectionName, x.sectionCode].some((n) => squash(n) && squash(n) === squash(o.section || ''))
-        )
-    )
-    .map(
+  const sameClass = (x: ClassSection, o: AcademicSubject) =>
+    normCode(x.subjectCode) === normCode(o.code) &&
+    (squash(o.section) ? [x.sectionName, x.sectionCode].some((n) => squash(n) === squash(o.section)) : !offered.some((p) => p.id !== o.id && normCode(p.code) === normCode(o.code)));
+  return offered.map(
       (o): ClassSection => ({
+        legacySectionIds: stored.filter((x) => sameClass(x, o)).map((x) => x.id),
         id: o.id,
         offeringId: o.id,
         sectionName: o.section || '',
@@ -174,7 +174,11 @@ export function termClassSections(term: AcademicPeriod, sections: ClassSection[]
         enrolledStudentIds: rosters.get(o.id) || [],
       })
     );
-  return [...stored, ...fromOfferings];
+}
+
+/** The grade sheet of a class: its own, or one made earlier for the stored section it replaces. */
+export function sheetForSection<T extends { sectionId: string }>(section: ClassSection, sheets: T[]): T | undefined {
+  return sheets.find((s) => s.sectionId === section.id) || sheets.find((s) => (section.legacySectionIds || []).includes(s.sectionId));
 }
 
 /** The grading record of a class's professor (stale links ignored, names matched with or without titles). */
@@ -335,9 +339,9 @@ export async function prepareGradeSheets(
     if (!instructor || !normEmail(instructor.email)) {
       // The class's professor changed (in Enrollment & Records) to someone without a sign-in email yet, or was
       // removed: a sheet still being filled in moves to them, so the previous professor no longer has it.
-      const open = existing.find((s) => s.id === gradeSheetId(key, section.id));
+      const open = sheetForSection(section, existing);
       if (open && ['Draft', 'Returned for Correction'].includes(open.status) && (open.instructorEmail || (open.instructorName || '') !== professor.name)) {
-        batch.update(doc(db, 'gradeSheets', open.id), { instructorId: instructor?.id || '', instructorName: professor.name, instructorEmail: '', updatedAt: now, refreshedBy: actor });
+        batch.update(doc(db, 'gradeSheets', open.id), { sectionId: section.id, instructorId: instructor?.id || '', instructorName: professor.name, instructorEmail: '', updatedAt: now, refreshedBy: actor });
         result.updated += 1;
         writes += 1;
       }
@@ -348,7 +352,7 @@ export async function prepareGradeSheets(
     if (list.warning) result.warnings.push(list.warning);
     const roster = list.students.map((s) => s.id);
     const id = gradeSheetId(key, section.id);
-    const prev = existing.find((s) => s.id === id);
+    const prev = sheetForSection(section, existing);
     const teacher = {
       instructorId: instructor.id,
       instructorName: professorDisplayName(instructor),
@@ -377,7 +381,13 @@ export async function prepareGradeSheets(
       batch.set(doc(db, 'gradeSheets', id), sheet);
       result.created += 1;
       writes += 1;
-    } else if (['Draft', 'Returned for Correction'].includes(prev.status)) {
+    } else if (!['Draft', 'Returned for Correction'].includes(prev.status)) {
+      if (prev.sectionId !== section.id && prev.status !== 'Finalized') {
+        batch.update(doc(db, 'gradeSheets', prev.id), { sectionId: section.id, updatedAt: now, refreshedBy: actor });
+        result.updated += 1;
+        writes += 1;
+      }
+    } else {
       // Keep grades already entered for students still on the list.
       const grades: Record<string, GradeEntry> = {};
       roster.forEach((sid) => {
@@ -385,12 +395,14 @@ export async function prepareGradeSheets(
       });
       // The class details from Enrollment & Records (Term Subjects) as they are now.
       const details = {
+        sectionId: section.id,
         sectionName: section.sectionName || section.sectionCode || '',
         subjectCode: section.subjectCode,
         subjectTitle: section.subjectTitle,
         units: Number(section.units) || 0,
       };
       const changed =
+        prev.sectionId !== section.id ||
         prev.instructorEmail !== teacher.instructorEmail ||
         prev.subjectTitle !== details.subjectTitle ||
         Number(prev.units) !== details.units ||
@@ -398,7 +410,7 @@ export async function prepareGradeSheets(
         prev.roster.length !== roster.length ||
         prev.roster.some((r) => !roster.includes(r));
       if (changed) {
-        batch.update(doc(db, 'gradeSheets', id), { ...teacher, ...details, roster, students: list.students.map(rosterEntry), grades, updatedAt: now, refreshedBy: actor });
+        batch.update(doc(db, 'gradeSheets', prev.id), { ...teacher, ...details, roster, students: list.students.map(rosterEntry), grades, updatedAt: now, refreshedBy: actor });
         result.updated += 1;
         writes += 1;
       }
