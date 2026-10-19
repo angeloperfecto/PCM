@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
@@ -20,7 +20,7 @@ import { ConfirmDeleteModal } from '@/components/common/ConfirmDeleteModal';
 import { normalizeStatus } from '@/lib/enrollmentWorkflow';
 import { AcademicTermModal } from './AcademicTermModal';
 import { TermSubjectsPanel } from './TermSubjectsPanel';
-import { isTermOffering } from '@/lib/termSubjects';
+import { isTermOffering, openTermEnrollmentCounts, studentsEnrolledInTerm } from '@/lib/termSubjects';
 import { normAY, termLabel } from '@/lib/reenrollment';
 import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
@@ -207,6 +207,8 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
     academicPeriods.find((p) => p.isCurrent) || academicPeriods.find((p) => p.enrollmentStatus === 'Open' && p.status !== 'Archived') || null;
   const fmtDate = (d?: string) => (d ? new Date(d + 'T00:00:00').toLocaleDateString('en-PH', { month: 'long', day: 'numeric', year: 'numeric' }) : '');
   const enrollmentOpen = currentPeriod?.enrollmentStatus === 'Open';
+  // Enrolled students per subject from the student records (open terms; closed terms keep their recorded counts).
+  const liveCounts = useMemo(() => openTermEnrollmentCounts(students, academicSubjects, academicPeriods), [students, academicSubjects, academicPeriods]);
   const sortedAcademicPeriods = [...academicPeriods].sort(
     (a, b) => a.academicYear.localeCompare(b.academicYear) || semesterOrder(a.semester) - semesterOrder(b.semester) || a.semester.localeCompare(b.semester)
   );
@@ -1325,7 +1327,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                     <div className="flex justify-between gap-2">
                       <span className="text-slate-400">Enrolled:</span>
                       <span className="font-medium font-mono">
-                        {period.enrolledCount || 0}
+                        {period.closedAt ? period.enrolledCount || 0 : studentsEnrolledInTerm(students, period).length}
                         {period.capacity ? ` / ${period.capacity}` : ' (no limit)'}
                       </span>
                     </div>
@@ -1431,7 +1433,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                     <td className="p-3.5 text-slate-800">{subj.instructor}</td>
                     <td className="p-3.5">
                       <span className="font-mono text-[11px] text-slate-600">
-                        {subj.enrolledCount || 0}/{subj.capacity}
+                        {liveCounts.has(subj.id) ? liveCounts.get(subj.id) : subj.enrolledCount || 0}/{subj.capacity}
                       </span>
                     </td>
                     <td className="p-3.5 text-right">
@@ -1451,8 +1453,8 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
                               id: subj.id,
                               label: `${subj.code} · ${subj.title}`,
                               message:
-                                (subj.enrolledCount || 0) > 0
-                                  ? `${subj.enrolledCount} student(s) are enrolled in this course. Deleting it removes it from the catalog only; their records and enrollments keep the course as it was.`
+                                (liveCounts.get(subj.id) ?? subj.enrolledCount ?? 0) > 0
+                                  ? `${liveCounts.get(subj.id) ?? subj.enrolledCount} student(s) are enrolled in this course. Deleting it removes it from the catalog only; their records and enrollments keep the course as it was.`
                                   : 'This permanently removes the course from the catalog. Student records and enrollments that already list it are not changed.',
                             })
                           }
