@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronUp, Circle } from 'lucide-react';
+import { doc, updateDoc } from 'firebase/firestore';
+import { CheckCircle2, ChevronDown, ChevronUp, Circle, Trash2, X } from 'lucide-react';
+import { db } from '@/lib/firebase';
 import { usePCM } from '@/lib/store';
 import { assignableProfessors, linkFacultyMember, resolveSectionProfessor } from '@/lib/professors';
 import { gradingScaleOf, normEmail, subjectsWithoutSection, sheetForSection } from '@/lib/grades';
@@ -32,7 +34,7 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
   onPrepare,
   preparing,
 }) => {
-  const { enrollmentSystemConfig, instructors, faculty, students, updateClassSection, updateAcademicSubject, updateInstructor, addInstructor, updateAcademicPeriod, canManageCurriculum, addToast } = usePCM();
+  const { enrollmentSystemConfig, instructors, faculty, students, updateClassSection, updateAcademicSubject, updateInstructor, addInstructor, updateAcademicPeriod, canManageCurriculum, addToast, logActivity, currentAdminUser } = usePCM();
   // Professors come from Faculty & Trustees, as the Admin set them up.
   const { teaching, others } = assignableProfessors(faculty || []);
   const scale = gradingScaleOf(enrollmentSystemConfig);
@@ -91,6 +93,28 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
       // A Term Subjects class is updated in Term Subjects, so Enrollment & Records shows the same professor.
       if (section?.offeringId) await updateAcademicSubject(section.offeringId, { instructorId: ins?.id || '', instructor: name });
       else await updateClassSection(sectionId, { instructorId: ins?.id || '', instructorName: name });
+    });
+
+  // Take the professor off a class (their record and email are kept).
+  const clearProfessor = (section: ClassSection, name: string) => {
+    if (!window.confirm(`Remove ${name || 'the professor'} from ${section.subjectCode}${section.sectionName ? ` ${section.sectionName}` : ''}? You can choose a professor again at any time.`)) return;
+    return assign(section.id, '');
+  };
+
+  // Take a class off this term, the same way as Term Subjects (archived, not deleted). Not allowed once students
+  // are enrolled or it has a grade sheet.
+  const removeClass = (section: ClassSection) =>
+    run(`rm-${section.id}`, async () => {
+      const label = `${section.subjectCode}${section.sectionName ? ` (${section.sectionName})` : ''}`;
+      if (!section.offeringId) return addToast('warning', 'Can’t remove here', `${label} is an older class section. Remove it in Enrollment & Records.`);
+      if ((section.enrolledStudentIds || []).length > 0)
+        return addToast('warning', 'Students are enrolled', `${section.enrolledStudentIds!.length} student(s) are enrolled in ${label}. Close it in Term Subjects instead.`);
+      if (sheetForSection(section, sheets)) return addToast('warning', 'Grade sheet exists', `${label} already has a grade sheet, so it can’t be removed.`);
+      const tLabel = termLabel(term.semester, term.academicYear);
+      if (!window.confirm(`Remove ${label} from ${tLabel}? It is also removed from Term Subjects, so students will no longer see it. To offer it again, add it again in Term Subjects.`)) return;
+      await updateDoc(doc(db, 'academicSubjects', section.offeringId), { isArchived: true, removedAt: new Date().toISOString(), removedBy: currentAdminUser?.name || currentAdminUser?.email || 'Admin' });
+      logActivity('UPDATE', 'Term Subjects', section.offeringId, section.subjectCode, `Removed ${section.subjectCode} from ${tLabel} (Grade Management).`);
+      addToast('info', 'Class removed', `${label} is no longer offered in ${tLabel}.`);
     });
 
   // Save a professor's sign-in email (on their grading record, created from Faculty & Trustees if needed).
@@ -154,7 +178,7 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[560px] text-left">
                   <thead className="text-[10px] uppercase text-slate-500">
-                    <tr><th className="p-1.5">Class</th><th className="p-1.5">Professor</th><th className="p-1.5">Sign-in email</th></tr>
+                    <tr><th className="p-1.5">Class</th><th className="p-1.5">Professor</th><th className="p-1.5">Sign-in email</th>{!ro && <th className="p-1.5"><span className="sr-only">Actions</span></th>}</tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map(({ section, instructor, member, email, name }) => (
@@ -220,6 +244,34 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
                             })()
                           )}
                         </td>
+                        {!ro && (
+                          <td className="whitespace-nowrap p-1.5 text-right">
+                            {(instructor || member) && (
+                              <button
+                                type="button"
+                                aria-label={`Remove professor from ${section.subjectCode} ${section.sectionName}`.trim()}
+                                title="Remove professor"
+                                disabled={!!busy}
+                                onClick={() => clearProfessor(section, name)}
+                                className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 hover:text-slate-800 disabled:opacity-50"
+                              >
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                            {section.offeringId && (
+                              <button
+                                type="button"
+                                aria-label={`Remove ${section.subjectCode}${section.sectionName ? ` ${section.sectionName}` : ''} from this term`}
+                                title="Remove class from this term"
+                                disabled={!!busy}
+                                onClick={() => removeClass(section)}
+                                className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
