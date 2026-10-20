@@ -40,7 +40,9 @@ export const GradeSetupPanel: React.FC<{ term: AcademicPeriod; sheets: GradeShee
   const scale = gradingScaleOf(enrollmentSystemConfig);
   const noSection = subjectsWithoutSection(students, term, termSections);
   // The professor set in Enrollment & Records (Term Subjects) or here, read the same way in both places.
-  const rows = termSections.map((s) => ({ section: s, ...resolveSectionProfessor(s, instructors, faculty || []) }));
+  const rows = [...termSections]
+    .sort((a, b) => a.subjectCode.localeCompare(b.subjectCode) || (a.sectionName || '').localeCompare(b.sectionName || ''))
+    .map((s) => ({ section: s, ...resolveSectionProfessor(s, instructors, faculty || []) }));
   // Ready when the professor has a sign-in email (their Faculty & Trustees email counts; the grading
   // record is linked automatically when the grade sheets are prepared).
   const readySections = rows.filter((r) => (r.instructor || r.member) && r.email);
