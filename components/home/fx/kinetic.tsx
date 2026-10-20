@@ -1,17 +1,7 @@
 'use client';
 
-import React, { useId, useRef } from 'react';
-import {
-  motion,
-  useAnimationFrame,
-  useInView,
-  useMotionValue,
-  useReducedMotion,
-  useScroll,
-  useSpring,
-  useTransform,
-  useVelocity,
-} from 'motion/react';
+import React, { useId } from 'react';
+import { motion, useMotionValue, useReducedMotion, useSpring, useTransform } from 'motion/react';
 
 /**
  * Seamless horizontal marquee: the children are rendered twice and slide left forever (CSS, compositor-only).
@@ -33,47 +23,6 @@ export const Marquee: React.FC<{ children: React.ReactNode; duration?: number; r
     </div>
   </div>
 );
-
-const wrap = (min: number, max: number, v: number) => {
-  const r = max - min;
-  return ((((v - min) % r) + r) % r) + min;
-};
-
-/** Giant text that drifts sideways and speeds up (or reverses) with the reader's scroll velocity. */
-export const VelocityText: React.FC<{ children: React.ReactNode; baseVelocity?: number; className?: string }> = ({ children, baseVelocity = -2, className = '' }) => {
-  const reduce = useReducedMotion();
-  const box = useRef<HTMLDivElement | null>(null);
-  const inView = useInView(box, { margin: '20% 0px 20% 0px' });
-  const baseX = useMotionValue(0);
-  const { scrollY } = useScroll();
-  const scrollVelocity = useVelocity(scrollY);
-  const smooth = useSpring(scrollVelocity, { damping: 50, stiffness: 400 });
-  const factor = useTransform(smooth, [0, 1000], [0, 5], { clamp: false });
-  const x = useTransform(baseX, (v) => `${wrap(-25, -50, v)}%`);
-  const dir = useRef(1);
-
-  useAnimationFrame((_, delta) => {
-    if (reduce || !inView) return; // idle while off-screen
-    let move = dir.current * baseVelocity * (delta / 1000);
-    const f = factor.get();
-    if (f < 0) dir.current = -1;
-    else if (f > 0) dir.current = 1;
-    move += dir.current * move * f;
-    baseX.set(baseX.get() + move);
-  });
-
-  return (
-    <div ref={box} className={`flex flex-nowrap overflow-hidden whitespace-nowrap ${className}`}>
-      <motion.div className="flex flex-nowrap whitespace-nowrap" style={{ x: reduce ? '-25%' : x }}>
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} aria-hidden={i > 0} className="block pr-10">
-            {children}
-          </span>
-        ))}
-      </motion.div>
-    </div>
-  );
-};
 
 /** A card that tilts toward the cursor in 3D with a moving glare (mouse only; still for touch / reduced motion). */
 export const TiltCard: React.FC<{ children: React.ReactNode; className?: string; max?: number }> = ({ children, className = '', max = 8 }) => {
