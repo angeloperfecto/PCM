@@ -487,66 +487,118 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
               The {programLabel(program)} curriculum has no subjects for the {term.semester}. Set them up in Subjects per Year Level, or use “Add a subject”.
             </p>
           ) : (
-            <>
-              {YEAR_LEVELS.map((y) => {
-                const rows = curriculum.filter((s) => (normalizeYearLevel(s.yearLevel) || s.yearLevel) === y);
-                if (!rows.length) return null;
-                const selectable = rows.filter((s) => !offeredCodes.has(normCode(s.code)));
-                return (
-                  <div key={y} className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">{y}</span>
-                      {selectable.length > 0 && (
-                        <button
-                          type="button"
-                          className="text-[11px] font-bold text-[#588B76] hover:underline"
-                          onClick={() => setPicked(Array.from(new Set([...pickedSet, ...selectable.map((s) => s.id)])))}
-                        >
-                          Select all {y}
-                        </button>
-                      )}
-                    </div>
-                    {rows.map((s) => {
-                      const already = offeredCodes.has(normCode(s.code));
-                      return (
-                        <label key={s.id} className={`flex items-center gap-2 rounded-lg bg-white p-2 text-xs ${already ? 'text-slate-400' : 'text-slate-800'}`}>
-                          <input
-                            type="checkbox"
-                            disabled={already}
-                            checked={already || pickedSet.has(s.id)}
-                            onChange={(e) => {
-                              const next = new Set(pickedSet);
-                              if (e.target.checked) next.add(s.id);
-                              else next.delete(s.id);
-                              setPicked([...next]);
-                            }}
-                          />
-                          <span className="font-mono font-bold">{s.code}</span> {s.title} · {s.units} units
-                          {s.prerequisites ? <span className="text-slate-500"> · prereq {s.prerequisites}</span> : null}
-                          {already && <span className="ml-auto text-[10px] font-bold uppercase">Already offered</span>}
+            (() => {
+              // What's offered already (with its class details) and what can still be added.
+              const offeringOf = (code: string) => forProgram.filter((o) => normCode(o.code) === normCode(code));
+              const addable = curriculum.filter((c) => !offeredCodes.has(normCode(c.code)));
+              const offeredCount = curriculum.length - addable.length;
+              return (
+                <>
+                  <p
+                    data-testid="curriculum-summary"
+                    className={`flex items-center gap-1.5 rounded-lg border p-2.5 text-xs ${addable.length === 0 ? 'border-emerald-200 bg-white text-emerald-900' : 'border-amber-200 bg-amber-50 text-amber-950'}`}
+                  >
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
+                    {addable.length === 0
+                      ? `All ${curriculum.length} ${programLabel(program)} curriculum subjects for the ${term.semester} are already offered in ${tLabel}. Edit them in the list below (schedule, room, instructor, capacity).`
+                      : `${offeredCount} of ${curriculum.length} curriculum subjects for the ${term.semester} are offered; ${addable.length} can still be added.`}
+                  </p>
+                  {YEAR_LEVELS.map((y) => {
+                    const rows = curriculum.filter((c) => (normalizeYearLevel(c.yearLevel) || c.yearLevel) === y);
+                    if (!rows.length) return null;
+                    const selectable = rows.filter((c) => !offeredCodes.has(normCode(c.code)));
+                    const offeredRows = rows.filter((c) => offeredCodes.has(normCode(c.code)));
+                    const offeredList = (
+                      <ul className="space-y-1">
+                        {offeredRows.map((c) => {
+                          const classes = offeringOf(c.code);
+                          return (
+                            <li key={c.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg bg-white p-2 text-xs text-slate-700">
+                              <span className="font-mono font-bold text-[#18392B]">{c.code}</span>
+                              <span>{c.title} · {c.units} units</span>
+                              <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
+                                <CheckCircle2 className="h-3 w-3" /> Offered
+                              </span>
+                              <span className="w-full text-[11px] text-slate-500">
+                                {classes
+                                  .map((o) => [o.section ? `Section ${o.section}` : '', o.instructor || 'no instructor yet', o.status === 'Closed' ? 'closed' : ''].filter(Boolean).join(' · '))
+                                  .join('; ')}
+                              </span>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    );
+                    return (
+                      <div key={y} className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600">
+                            {y} <span className="font-normal normal-case tracking-normal text-slate-500">· {offeredRows.length} of {rows.length} offered</span>
+                          </span>
+                          {selectable.length > 1 && (
+                            <button
+                              type="button"
+                              className="text-[11px] font-bold text-[#588B76] hover:underline"
+                              onClick={() => setPicked(Array.from(new Set([...pickedSet, ...selectable.map((c) => c.id)])))}
+                            >
+                              Select all {selectable.length}
+                            </button>
+                          )}
+                        </div>
+                        {selectable.map((c) => (
+                          <label key={c.id} className="flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-amber-300 bg-white p-2 text-xs text-slate-800">
+                            <input
+                              type="checkbox"
+                              checked={pickedSet.has(c.id)}
+                              onChange={(e) => {
+                                const next = new Set(pickedSet);
+                                if (e.target.checked) next.add(c.id);
+                                else next.delete(c.id);
+                                setPicked([...next]);
+                              }}
+                            />
+                            <span className="font-mono font-bold">{c.code}</span> {c.title} · {c.units} units
+                            {c.prerequisites ? <span className="text-slate-500"> · prereq {c.prerequisites}</span> : null}
+                            <span className="ml-auto text-[10px] font-bold uppercase text-amber-800">Not offered yet</span>
+                          </label>
+                        ))}
+                        {offeredRows.length > 0 &&
+                          (selectable.length === 0 ? (
+                            <details className="group">
+                              <summary className="cursor-pointer list-none rounded-lg bg-white/70 p-2 text-[11px] text-emerald-800 hover:bg-white">
+                                <span className="font-bold">All {offeredRows.length} offered</span> — show subjects
+                              </summary>
+                              <div className="mt-1">{offeredList}</div>
+                            </details>
+                          ) : (
+                            offeredList
+                          ))}
+                      </div>
+                    );
+                  })}
+                  {addable.length > 0 && (
+                    <>
+                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                        <label className="text-[11px] font-bold text-slate-600">
+                          Class capacity *
+                          <input type="number" min={1} value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} className={input} />
                         </label>
-                      );
-                    })}
-                  </div>
-                );
-              })}
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                <label className="text-[11px] font-bold text-slate-600">
-                  Class capacity *
-                  <input type="number" min={1} value={form.capacity} onChange={(e) => setForm((f) => ({ ...f, capacity: e.target.value }))} className={input} />
-                </label>
-                <label className="text-[11px] font-bold text-slate-600">
-                  Section (optional)
-                  <input value={form.section} onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))} className={input} />
-                </label>
-                <div className="flex items-end">
-                  <button type="button" disabled={busy || pickedSet.size === 0} onClick={addFromCurriculum} className={`${btn} w-full justify-center bg-[#18392B] text-white`}>
-                    {busy ? 'Adding…' : `Add ${pickedSet.size} subject${pickedSet.size === 1 ? '' : 's'} to ${term.semester}`}
-                  </button>
-                </div>
-              </div>
-              <p className="text-[11px] text-slate-500">Schedule, room and instructor can be filled in afterwards with Edit. Subjects already offered are skipped.</p>
-            </>
+                        <label className="text-[11px] font-bold text-slate-600">
+                          Section (optional)
+                          <input value={form.section} onChange={(e) => setForm((f) => ({ ...f, section: e.target.value }))} className={input} />
+                        </label>
+                        <div className="flex items-end">
+                          <button type="button" disabled={busy || pickedSet.size === 0} onClick={addFromCurriculum} className={`${btn} w-full justify-center bg-[#18392B] text-white`}>
+                            {busy ? 'Adding…' : pickedSet.size === 0 ? 'Choose subjects to add' : `Add ${pickedSet.size} subject${pickedSet.size === 1 ? '' : 's'} to ${term.semester}`}
+                          </button>
+                        </div>
+                      </div>
+                      <p className="text-[11px] text-slate-500">Schedule, room and instructor can be filled in afterwards with Edit.</p>
+                    </>
+                  )}
+                </>
+              );
+            })()
           )}
         </div>
       )}
