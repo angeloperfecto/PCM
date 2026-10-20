@@ -7658,6 +7658,16 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         throw popupErr;
       }
 
+      // An account in the Deletion Registry is signed out by the auth listener; say so here and stop,
+      // so the page doesn't go on showing it as signed in.
+      if (isUserDeleted((fbUser.email || '').toLowerCase()) || isUserDeleted(fbUser.uid)) {
+        await signOut(auth).catch(() => {});
+        setFirebaseAuthUser(null);
+        const message = `${fbUser.email || 'This Google account'} was removed by a PCM administrator, so it can't sign in. Contact the school office, or sign in with a different Google account.`;
+        addToast({ type: 'error', title: 'Account removed', message });
+        return { success: false, message };
+      }
+
       const emailLower = fbUser.email?.toLowerCase() || '';
       const isEmailVerified = fbUser.emailVerified === true;
       const isSuperAdminEmail = isEmailVerified && SUPER_ADMIN_EMAILS.includes(emailLower);
@@ -7789,6 +7799,7 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         console.warn('Firestore setDoc notice:', e);
       }
 
+      if (auth.currentUser?.uid !== fbUser.uid) return { success: false, message: 'You were signed out. Please sign in again.' };
       setCurrentUserAccount(accountData);
       setFirebaseAuthUser(fbUser as any);
       setUserAccounts((prev) => [accountData, ...prev.filter((u) => u.uid !== accountData.uid && u.id !== accountData.uid)]);
