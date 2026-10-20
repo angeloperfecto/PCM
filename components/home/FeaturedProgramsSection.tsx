@@ -1,163 +1,168 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { usePCM } from '@/lib/store';
 import { programDescription, programUnits } from '@/lib/programFacts';
-import { AcademicProgram, ProgramLevel } from '@/lib/types';
-import {
-  GraduationCap,
-  Clock,
-  BookOpen,
-  ArrowRight,
-  Sparkles,
-  CheckCircle,
-  FileText,
-} from 'lucide-react';
+import { ProgramLevel } from '@/lib/types';
+import { ArrowRight, BookOpen, Clock, FileText, GraduationCap, Layers } from 'lucide-react';
+import { Reveal } from './fx/motion';
+import { TiltCard } from './fx/kinetic';
 
+const TABS: { id: 'all' | ProgramLevel; label: string }[] = [
+  { id: 'all', label: 'All degrees' },
+  { id: 'undergraduate', label: 'Undergraduate' },
+  { id: 'graduate', label: 'Graduate' },
+  { id: 'certificate', label: 'Certificate' },
+  { id: 'diploma', label: 'Diploma' },
+];
+
+// Programs from Admin → Academic Programs: tilt cards with an outlined code watermark, filtered by level.
 export const FeaturedProgramsSection: React.FC = () => {
   const { programs, setSelectedProgram, navigateTo } = usePCM();
+  const reduce = useReducedMotion();
   const [activeTab, setActiveTab] = useState<'all' | ProgramLevel>('all');
-
-  const filteredPrograms = programs.filter((p) => {
-    if (activeTab === 'all') return true;
-    return p.level === activeTab;
-  });
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: programs.length };
+    programs.forEach((p) => {
+      if (p.level) c[p.level] = (c[p.level] || 0) + 1;
+    });
+    return c;
+  }, [programs]);
+  const tabs = TABS.filter((t) => t.id === 'all' || counts[t.id]);
+  const filtered = programs.filter((p) => activeTab === 'all' || p.level === activeTab);
 
   return (
-    <section className="w-full bg-[#D0DED8]/25 py-12 lg:py-16 border-b border-[#D0DED8]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Heading with High Density Deep Sage Indicator */}
-        <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 mb-8 pb-4 border-b border-[#D0DED8]">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <div className="w-2 h-6 bg-[#588B76]" />
-              <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#18392B]">
-                ACADEMIC PROGRAMS
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-[#18392B]/80 pl-4">
+    <section className="font-text relative w-full overflow-hidden bg-white py-20 lg:py-28">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(24,57,43,0.045)_1px,transparent_1px),linear-gradient(90deg,rgba(24,57,43,0.045)_1px,transparent_1px)] bg-[size:56px_56px] [mask-image:radial-gradient(ellipse_at_top,#000_30%,transparent_75%)]" />
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Reveal className="mb-10 flex flex-col gap-6 lg:mb-14">
+          <div className="max-w-2xl">
+            <span className="inline-flex items-center gap-2 rounded-full border border-[#588b76]/30 bg-[#f7f5ef] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#588b76]">
+              <GraduationCap className="h-3.5 w-3.5" /> Academic Programs
+            </span>
+            <h2 className="font-display mt-5 text-4xl font-semibold leading-[1.05] text-[#10261d] sm:text-5xl lg:text-6xl">
+              Degrees that form <em className="italic text-[#588b76]">shepherds</em>, scholars and servant-leaders
+            </h2>
+            <p className="mt-4 text-sm text-[#18392b]/70 sm:text-base">
               Rigorous, Christ-centered theological degrees designed to prepare shepherds, scholars, and servant-leaders.
             </p>
           </div>
 
-          {/* Level Filter Tabs */}
-          <div className="flex flex-wrap items-center gap-1 bg-white p-1 rounded-sm border border-[#D0DED8] text-xs font-semibold shadow-xs">
-            {(
-              [
-                { id: 'all', label: 'All Degrees' },
-                { id: 'undergraduate', label: 'Undergraduate' },
-                { id: 'graduate', label: 'Graduate' },
-                { id: 'certificate', label: 'Certificate' },
-                { id: 'diploma', label: 'Diploma' },
-              ] as const
-            ).map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`px-3 py-1 rounded-sm transition cursor-pointer text-xs ${
-                  activeTab === tab.id
-                    ? 'bg-[#18392B] text-white shadow-xs font-bold'
-                    : 'text-[#18392B]/70 hover:text-[#18392B] hover:bg-[#D0DED8]/40'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Programs Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-          {filteredPrograms.map((prog) => (
-            <div
-              key={prog.id}
-              className="bg-white rounded-sm border border-[#D0DED8] border-l-4 border-l-[#18392B] hover:border-l-[#588B76] p-5 shadow-xs hover:shadow-md transition-all duration-200 flex flex-col justify-between group"
-            >
-              <div>
-                {/* Header Tag */}
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#18392B] bg-[#D0DED8]/30 px-2 py-0.5 rounded-sm border border-[#588B76]/40">
-                    {prog.code}
-                  </span>
-                  <span className="text-[11px] font-semibold text-[#588B76] uppercase tracking-wider">
-                    {prog.level}
-                  </span>
-                </div>
-
-                <h3 className="font-serif text-base font-bold text-[#18392B] group-hover:text-[#588B76] transition-colors leading-snug mb-2">
-                  {prog.name}
-                </h3>
-
-                <p className="text-xs text-[#18392B]/75 line-clamp-3 leading-relaxed mb-3">
-                  {programDescription(prog)}
-                </p>
-
-                {/* Key Metrics */}
-                <div className="space-y-1.5 py-2.5 border-y border-[#D0DED8]/60 text-xs text-[#18392B]/75">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#18392B]/60">Duration:</span>
-                    <strong className="text-[#18392B]">{prog.duration || '—'}</strong>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#18392B]/60">Units:</span>
-                    <strong className="text-[#18392B]">{programUnits(prog) ? `${programUnits(prog)} Units` : '—'}</strong>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[#18392B]/60">Format:</span>
-                    <strong className="text-[#18392B]">{prog.studyMode || '—'}</strong>
-                  </div>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="pt-3 flex items-center justify-between gap-2">
-                <button
-                  id={`prog-btn-learn-${prog.id}`}
-                  onClick={() => setSelectedProgram(prog)}
-                  className="w-full bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-semibold py-2 px-3 rounded-sm shadow-xs transition flex items-center justify-center gap-1 cursor-pointer"
-                >
-                  <span>Curriculum</span>
-                  <ArrowRight className="w-3.5 h-3.5 text-[#85AA9B]" />
-                </button>
-                <button
-                  id={`prog-btn-apply-${prog.id}`}
-                  onClick={() => navigateTo('apply')}
-                  className="bg-[#588B76] hover:bg-[#46705F] text-white text-xs font-bold py-2 px-3 rounded-sm transition shrink-0 cursor-pointer uppercase tracking-wider"
-                  title="Apply for this program"
-                >
-                  Apply
-                </button>
-              </div>
+          <div role="tablist" aria-label="Program level" className="no-scrollbar -mx-4 flex gap-1 overflow-x-auto px-4 sm:mx-0 sm:px-0">
+            <div className="flex gap-1 rounded-full border border-[#18392b]/10 bg-[#f7f5ef] p-1">
+              {tabs.map((t) => {
+                const on = activeTab === t.id;
+                return (
+                  <button
+                    key={t.id}
+                    role="tab"
+                    aria-selected={on}
+                    onClick={() => setActiveTab(t.id)}
+                    className={`relative whitespace-nowrap rounded-full px-4 py-2 text-xs font-semibold transition-colors ${on ? 'text-white' : 'text-[#18392b]/70 hover:text-[#10261d]'}`}
+                  >
+                    {on && <motion.span layoutId="program-tab" className="absolute inset-0 rounded-full bg-[#18392b]" transition={{ type: 'spring', stiffness: 380, damping: 32 }} />}
+                    <span className="relative">
+                      {t.label} <span className={on ? 'text-[#f6e3b4]' : 'text-[#18392b]/40'}>{counts[t.id] || 0}</span>
+                    </span>
+                  </button>
+                );
+              })}
             </div>
-          ))}
-        </div>
+          </div>
+        </Reveal>
 
-        {/* Bottom High Density Banner */}
-        <div className="mt-8 bg-[#18392B] text-white rounded-sm p-5 sm:p-6 flex flex-col md:flex-row items-center justify-between gap-4 border-l-4 border-[#588B76] shadow-sm">
-          <div className="space-y-1">
-            <h4 className="font-serif text-base sm:text-lg font-bold text-white">
-              Need Guidance on Which Theological Track is Right For You?
-            </h4>
-            <p className="text-xs text-[#D0DED8]">
-              Download our complete 2026–2027 Academic Prospectus or speak directly with an admissions mentor.
-            </p>
+        <motion.div layout={!reduce} className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
+          <AnimatePresence mode="popLayout" initial={false}>
+            {filtered.map((prog, i) => {
+              const units = programUnits(prog);
+              return (
+                <motion.div
+                  key={prog.id}
+                  layout={!reduce}
+                  initial={reduce ? false : { opacity: 0, y: 30, scale: 0.97 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  viewport={{ once: true, margin: '0px 0px -10% 0px' }}
+                  transition={{ duration: 0.6, delay: (i % 3) * 0.08, ease: [0.22, 1, 0.36, 1] }}
+                  className="h-full"
+                >
+                  <TiltCard className="h-full rounded-[1.75rem]">
+                    <article className="relative flex h-full flex-col overflow-hidden rounded-[1.75rem] border border-[#18392b]/10 bg-gradient-to-b from-white to-[#f7f5ef] p-6 shadow-[0_1px_0_rgba(16,38,29,0.04)] transition-shadow duration-500 hover:shadow-[0_40px_70px_-40px_rgba(16,38,29,0.5)] sm:p-7">
+                      <span aria-hidden="true" className="font-display text-outline-strong pointer-events-none absolute -right-1 top-2 select-none text-[5.5rem] font-bold leading-none [--outline:rgba(88,139,118,0.32)]">
+                        {prog.code}
+                      </span>
+                      <div className="relative flex items-center gap-2">
+                        <span className="rounded-full bg-[#18392b] px-2.5 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-[#f6e3b4]">{prog.code}</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#588b76]">{prog.level}</span>
+                      </div>
+                      <h3 className="font-display relative mt-5 text-2xl font-semibold leading-tight text-[#10261d]">{prog.name}</h3>
+                      <p className="relative mt-3 line-clamp-3 text-sm leading-relaxed text-[#18392b]/70">{programDescription(prog)}</p>
+
+                      <dl className="relative mt-6 grid grid-cols-3 gap-2 text-center">
+                        {[
+                          { icon: Clock, k: 'Duration', v: prog.duration || '—' },
+                          { icon: Layers, k: 'Units', v: units ? String(units) : '—' },
+                          { icon: BookOpen, k: 'Format', v: prog.studyMode || '—' },
+                        ].map(({ icon: Icon, k, v }) => (
+                          <div key={k} className="rounded-2xl border border-[#18392b]/8 bg-white/80 px-2 py-3">
+                            <Icon className="mx-auto h-4 w-4 text-[#588b76]" />
+                            <dt className="mt-1.5 text-[10px] uppercase tracking-[0.12em] text-[#18392b]/50">{k}</dt>
+                            <dd className="mt-0.5 overflow-hidden text-ellipsis text-[11px] font-semibold leading-tight text-[#10261d]" title={v}>
+                              {v}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+
+                      <div className="relative mt-auto flex items-center gap-2 pt-6">
+                        <button
+                          id={`prog-btn-learn-${prog.id}`}
+                          onClick={() => setSelectedProgram(prog)}
+                          className="group/btn inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-[#18392b] px-4 py-3 text-xs font-semibold text-white transition hover:bg-[#10261d]"
+                        >
+                          Curriculum <ArrowRight className="h-3.5 w-3.5 text-[#e8c77a] transition-transform group-hover/btn:translate-x-0.5" />
+                        </button>
+                        <button
+                          id={`prog-btn-apply-${prog.id}`}
+                          onClick={() => navigateTo('apply')}
+                          className="rounded-full border border-[#18392b]/15 px-5 py-3 text-xs font-semibold text-[#18392b] transition hover:border-[#e8c77a] hover:bg-[#e8c77a]/15"
+                          title="Apply for this program"
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </article>
+                  </TiltCard>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </motion.div>
+
+        <Reveal className="mt-10">
+          <div className="grain relative isolate flex flex-col items-start justify-between gap-5 overflow-hidden rounded-[1.75rem] bg-[#10261d] p-6 text-white sm:p-8 md:flex-row md:items-center">
+            <span aria-hidden="true" className="aurora-blob pointer-events-none absolute -right-16 -top-20 -z-10 h-64 w-64 rounded-full bg-[#e8c77a]/25 blur-3xl" />
+            <div>
+              <h3 className="font-display text-2xl font-semibold leading-tight sm:text-3xl">Not sure which track is yours?</h3>
+              <p className="mt-2 max-w-xl text-sm text-white/70">Download our Academic Prospectus or speak directly with an admissions mentor.</p>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <button
+                onClick={() => navigateTo('resources', 'downloads')}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.06] px-5 py-3 text-xs font-semibold transition hover:bg-white/15"
+              >
+                <FileText className="h-4 w-4 text-[#e8c77a]" /> Prospectus (PDF)
+              </button>
+              <button
+                onClick={() => navigateTo('admissions', 'tuition')}
+                className="btn-shimmer inline-flex items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#e8c77a] to-[#f6e3b4] px-5 py-3 text-xs font-bold text-[#10261d]"
+              >
+                Tuition &amp; scholarships <ArrowRight className="h-4 w-4" />
+              </button>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
-            <button
-              onClick={() => navigateTo('resources', 'downloads')}
-              className="bg-[#10261D] hover:bg-black text-[#D0DED8] text-xs font-semibold px-4 py-2 rounded-sm border border-[#588B76]/50 transition flex items-center gap-2 cursor-pointer"
-            >
-              <FileText className="w-3.5 h-3.5 text-[#85AA9B]" />
-              <span>Prospectus (PDF)</span>
-            </button>
-            <button
-              onClick={() => navigateTo('admissions', 'tuition')}
-              className="bg-[#588B76] hover:bg-[#46705F] text-white text-xs font-bold px-4 py-2 rounded-sm transition uppercase cursor-pointer"
-            >
-              Tuition & Scholarships
-            </button>
-          </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );

@@ -153,3 +153,51 @@ body {
   font-variation-settings: 'SOFT' 50, 'opsz' 72;
   letter-spacing: -0.01em;
 }
+
+/* Seamless marquee (Home): two copies slide left; pauses on hover/focus */
+@keyframes pcm-marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(-50%, 0, 0); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: pcm-marquee var(--dur, 40s) linear infinite;
+  will-change: transform;
+}
+.marquee-reverse {
+  animation-direction: reverse;
+}
+.marquee:hover .marquee-track,
+.marquee:focus-within .marquee-track {
+  animation-play-state: paused;
+}
+.marquee {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+
+/* Outlined display text */
+/* Set the stroke colour with --outline (the fill is transparent, so currentColor cannot be used). */
+.text-outline {
+  color: transparent;
+  -webkit-text-stroke: 1px var(--outline, rgba(208, 222, 216, 0.7));
+}
+.text-outline-strong {
+  color: transparent;
+  -webkit-text-stroke: 1.5px var(--outline, rgba(88, 139, 118, 0.3));
+}
+
+/* Chapel-window arch frame */
+.arch {
+  border-radius: 999px 999px 1.25rem 1.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none;
+  }
+  .marquee {
+    overflow-x: auto;
+  }
+}

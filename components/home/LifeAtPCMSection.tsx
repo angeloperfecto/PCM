@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { getSafeImageSrc } from '@/lib/utils';
 import { INITIAL_LIFE_AT_PCM_CONFIG } from '@/lib/initialData';
+import { Reveal, Stagger, displayCase } from './fx/motion';
 import {
   Flame,
   BookOpen,
@@ -144,103 +145,84 @@ export const LifeAtPCMSection: React.FC = () => {
     return null;
   }
 
+  // Bento rhythm on large screens: a big feature tile, then singles, then a wide tile.
+  const span = (i: number) => (i % 6 === 0 ? 'sm:col-span-2 lg:row-span-2' : i % 6 === 5 ? 'sm:col-span-2' : '');
+
   return (
-    <section className="w-full bg-white py-16 lg:py-24 border-b border-[#D0DED8] relative">
+    <section className="font-text relative w-full bg-white py-20 lg:py-28">
       {/* Admin Quick Edit Shortcut Button */}
       {isAdminLoggedIn && (
-        <div className="absolute top-4 right-4 sm:top-6 sm:right-8 z-20">
+        <div className="absolute right-4 top-4 z-20 sm:right-8 sm:top-6">
           <button
             onClick={() => {
               navigateTo('admin', 'studentLife');
             }}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-[#18392B] hover:bg-[#588B76] text-white text-xs font-semibold rounded-full shadow-md transition-all duration-200 cursor-pointer"
+            className="flex items-center gap-1.5 rounded-full bg-[#18392B] px-3 py-1.5 text-xs font-semibold text-white shadow-md transition-all duration-200 hover:bg-[#588B76]"
             title="Update Life at PCM Details in Admin CMS"
           >
-            <Edit className="w-3.5 h-3.5 text-emerald-300" />
+            <Edit className="h-3.5 w-3.5 text-emerald-300" />
             <span>Edit Life at PCM</span>
           </button>
         </div>
       )}
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-14 space-y-3">
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#588B76] uppercase tracking-widest font-mono">
-            <span>{badgeText}</span>
-          </div>
-          <h2 className="font-serif text-3xl sm:text-4xl font-extrabold text-[#18392B] tracking-tight">
-            {titleText}
-          </h2>
-          <p className="text-xs sm:text-sm text-[#18392B]/80 leading-relaxed max-w-2xl mx-auto">
-            {subtitleText}
-          </p>
-        </div>
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Reveal className="mx-auto mb-12 max-w-3xl text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#588b76]/30 bg-[#f7f5ef] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#588b76]">
+            <Sparkles className="h-3.5 w-3.5" /> {badgeText}
+          </span>
+          <h2 className="font-display mt-5 text-4xl font-semibold leading-[1.05] text-[#10261d] sm:text-5xl lg:text-6xl">{displayCase(titleText)}</h2>
+          <p className="mx-auto mt-4 max-w-2xl text-sm leading-relaxed text-[#18392b]/70 sm:text-base">{subtitleText}</p>
+        </Reveal>
 
-        {/* Bento Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Stagger className="grid auto-rows-[230px] grid-cols-1 gap-4 sm:auto-rows-[260px] sm:grid-cols-2 lg:auto-rows-[240px] lg:grid-cols-4 lg:gap-5">
           {displayItems.map((item, idx) => {
             const Icon = getLifeIcon(item.iconName);
             const imageSrc = getSafeImageSrc(
               item.image,
               'https://images.unsplash.com/photo-1523240795612-9a054b0db644?q=80&w=600&auto=format&fit=crop'
             );
-
+            const big = idx % 6 === 0;
             return (
-              <div
-                key={item.id || idx}
-                className="group relative bg-[#D0DED8]/20 rounded-xl overflow-hidden border border-[#D0DED8] hover:border-[#588B76] shadow-xs hover:shadow-xl transition-all duration-300 flex flex-col"
-              >
-                {/* Image & Gradient Banner */}
-                <div className="h-44 sm:h-40 overflow-hidden relative">
+              <Stagger.Item key={item.id || idx} className={`h-full ${span(idx)}`}>
+                <div className="group relative h-full overflow-hidden rounded-[1.75rem] bg-[#10261d]">
                   <Image
                     src={imageSrc}
                     alt={item.title}
                     fill
-                    className="object-cover group-hover:scale-105 transition-transform duration-500"
-                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    className="object-cover transition-transform duration-[1400ms] ease-out group-hover:scale-110"
+                    sizes={big ? '(max-width: 1024px) 100vw, 50vw' : '(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw'}
                     referrerPolicy="no-referrer"
-                    unoptimized={Boolean(
-                      typeof imageSrc === 'string' &&
-                      (imageSrc.startsWith('data:') || imageSrc.startsWith('blob:'))
-                    )}
+                    unoptimized={Boolean(typeof imageSrc === 'string' && (imageSrc.startsWith('data:') || imageSrc.startsWith('blob:')))}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[#18392B]/95 via-[#18392B]/35 to-transparent" />
-                  
-                  {/* Floating Icon Badge */}
-                  <div className="absolute bottom-3 left-3 flex items-center gap-2">
-                    <div className="w-8 h-8 rounded-lg bg-[#588B76] text-white flex items-center justify-center font-bold shadow-md ring-2 ring-white/20">
-                      <Icon className="w-4 h-4" />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Content Details */}
-                <div className="p-4 flex-1 flex flex-col justify-between space-y-2 bg-white/60">
-                  <div>
-                    <h3 className="font-serif text-sm sm:text-base font-bold text-[#18392B] group-hover:text-[#588B76] transition-colors leading-snug">
-                      {item.title}
-                    </h3>
-                    <p className="text-xs text-[#18392B]/75 mt-1.5 leading-relaxed line-clamp-3">
+                  <div className="absolute inset-0 bg-gradient-to-t from-[#0b1d16] via-[#0b1d16]/40 to-transparent transition-opacity duration-500 group-hover:opacity-95" />
+                  <div className="absolute inset-x-5 bottom-5 text-white sm:inset-x-6 sm:bottom-6">
+                    <span className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/15 backdrop-blur-md ring-1 ring-white/20 transition-transform duration-500 group-hover:-rotate-6 group-hover:scale-110">
+                      <Icon className="h-5 w-5 text-[#f6e3b4]" />
+                    </span>
+                    <h3 className={`font-display font-semibold leading-tight ${big ? 'text-3xl sm:text-4xl' : 'text-xl'}`}>{item.title}</h3>
+                    <p
+                      className={`mt-2 text-sm leading-relaxed text-white/80 ${big ? 'line-clamp-3 max-w-md' : 'line-clamp-3'} pointer-fine:max-h-0 pointer-fine:opacity-0 pointer-fine:transition-all pointer-fine:duration-500 pointer-fine:group-hover:max-h-24 pointer-fine:group-hover:opacity-100`}
+                    >
                       {item.desc}
                     </p>
                   </div>
                 </div>
-              </div>
+              </Stagger.Item>
             );
           })}
-        </div>
+        </Stagger>
 
-        {/* Bottom CTA */}
         {ctaBtnText && (
-          <div className="mt-12 text-center">
+          <Reveal className="mt-12 text-center">
             <button
-              onClick={() => navigateTo(ctaBtnLink as any || 'student-life')}
-              className="inline-flex items-center gap-2 bg-[#18392B] hover:bg-[#10261D] text-white text-xs font-bold px-6 py-3 rounded-lg shadow-md hover:shadow-lg transition-all duration-200 uppercase tracking-wider cursor-pointer group"
+              onClick={() => navigateTo((ctaBtnLink as any) || 'student-life')}
+              className="group inline-flex items-center gap-2 rounded-full bg-[#18392b] px-7 py-4 text-sm font-semibold text-white transition hover:bg-[#10261d]"
             >
-              <span>{ctaBtnText}</span>
-              <ArrowRight className="w-4 h-4 text-[#85AA9B] group-hover:translate-x-1 transition-transform" />
+              {displayCase(ctaBtnText)}
+              <ArrowRight className="h-4 w-4 text-[#e8c77a] transition-transform group-hover:translate-x-1" />
             </button>
-          </div>
+          </Reveal>
         )}
       </div>
     </section>

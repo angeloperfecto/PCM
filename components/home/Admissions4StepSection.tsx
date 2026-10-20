@@ -1,158 +1,122 @@
 'use client';
 
-import React from 'react';
+import React, { useRef } from 'react';
+import { motion, useReducedMotion, useScroll, useSpring, useTransform, type MotionValue } from 'motion/react';
 import { usePCM } from '@/lib/store';
-import {
-  Compass,
-  FileEdit,
-  UserCheck,
-  GraduationCap,
-  ArrowRight,
-  Calculator,
-  HelpCircle,
-  Sparkles,
-} from 'lucide-react';
+import { openEnrollmentTerm, termLabel } from '@/lib/reenrollment';
+import { ArrowRight, Calculator, Compass, FileEdit, GraduationCap, HelpCircle, Mountain, UserCheck } from 'lucide-react';
+import { Magnetic, Reveal } from './fx/motion';
 
+/** A waypoint that lights up once the trail's progress passes it. */
+const Waypoint: React.FC<{ progress: MotionValue<number>; at: number; icon: React.ElementType; reduce: boolean | null }> = ({ progress, at, icon: Icon, reduce }) => {
+  const lit = useTransform(progress, [at - 0.08, at], [0, 1]);
+  const scale = useTransform(lit, [0, 1], [0.85, 1]);
+  return (
+    <span className="relative flex h-14 w-14 items-center justify-center">
+      <span className="absolute inset-0 rounded-full border border-white/15 bg-[#10261d]" />
+      <Icon className="absolute h-5 w-5 text-white/60" />
+      <motion.span
+        className="absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-[#e8c77a] to-[#f6e3b4] shadow-[0_0_30px_rgba(232,199,122,0.65)]"
+        style={reduce ? { opacity: 1 } : { opacity: lit, scale }}
+      >
+        <Icon className="h-5 w-5 text-[#10261d]" />
+      </motion.span>
+    </span>
+  );
+};
+
+// The admissions path: four waypoints along a trail that is drawn as you scroll.
 export const Admissions4StepSection: React.FC = () => {
-  const { navigateTo, setTuitionCalculatorModalOpen } = usePCM();
+  const { navigateTo, setTuitionCalculatorModalOpen, academicPeriods } = usePCM();
+  const reduce = useReducedMotion();
+  const term = openEnrollmentTerm(academicPeriods || []);
+  const trail = useRef<HTMLDivElement | null>(null);
+  const { scrollYProgress } = useScroll({ target: trail, offset: ['start 0.85', 'end 0.55'] });
+  const progress = useSpring(scrollYProgress, { stiffness: 90, damping: 24 });
 
   const steps = [
-    {
-      num: '01',
-      title: 'EXPLORE',
-      subtitle: 'Choose Your Program',
-      desc: 'Browse our undergraduate, graduate, and certificate programs to find the curriculum aligned with your ministry calling.',
-      icon: Compass,
-      actionText: 'View Programs',
-      action: () => navigateTo('academics'),
-    },
-    {
-      num: '02',
-      title: 'APPLY',
-      subtitle: 'Submit Online Application',
-      desc: 'Fill out the digital application form, share your Christian testimony, and upload required pastoral recommendations.',
-      icon: FileEdit,
-      actionText: 'Start Application',
-      action: () => navigateTo('apply'),
-    },
-    {
-      num: '03',
-      title: 'REVIEW',
-      subtitle: 'Admissions Evaluation & Interview',
-      desc: 'Our faculty committee evaluates your spiritual calling and conducts a warm, constructive admissions interview.',
-      icon: UserCheck,
-      actionText: 'Track Status',
-      action: () => navigateTo('apply'),
-    },
-    {
-      num: '04',
-      title: 'ENROLL',
-      subtitle: 'Begin Your PCM Journey',
-      desc: 'Receive your acceptance letter, process financial grants or scholarships, and join the convocation commissioning.',
-      icon: GraduationCap,
-      actionText: 'Enrollment Info',
-      action: () => navigateTo('admissions', 'tuition'),
-    },
+    { num: '01', title: 'Explore', subtitle: 'Choose your program', desc: 'Browse our undergraduate, graduate, and certificate programs to find the curriculum aligned with your ministry calling.', icon: Compass, actionText: 'View programs', action: () => navigateTo('academics') },
+    { num: '02', title: 'Apply', subtitle: 'Submit the online application', desc: 'Fill out the digital application form, share your Christian testimony, and upload required pastoral recommendations.', icon: FileEdit, actionText: 'Start application', action: () => navigateTo('apply') },
+    { num: '03', title: 'Review', subtitle: 'Evaluation & interview', desc: 'Our faculty committee evaluates your spiritual calling and conducts a warm, constructive admissions interview.', icon: UserCheck, actionText: 'Track status', action: () => navigateTo('apply') },
+    { num: '04', title: 'Enroll', subtitle: 'Begin your PCM journey', desc: 'Receive your acceptance letter, process financial grants or scholarships, and join the convocation commissioning.', icon: GraduationCap, actionText: 'Enrollment info', action: () => navigateTo('admissions', 'tuition') },
   ];
 
   return (
-    <section className="w-full bg-[#18392B] text-white py-16 lg:py-24 border-b border-[#10261D]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-14 space-y-3">
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#85AA9B] uppercase tracking-widest font-mono">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Admissions AY 2026–2027</span>
-          </div>
-          <h2 className="font-serif text-3xl sm:text-4xl font-extrabold text-white">
-            START YOUR JOURNEY AT PCM
+    <section className="font-text grain relative isolate w-full overflow-hidden bg-gradient-to-b from-[#18392b] to-[#0b1d16] py-20 text-white lg:py-28">
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Reveal className="mx-auto mb-14 max-w-3xl text-center lg:mb-20">
+          <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#f6e3b4]">
+            <Mountain className="h-3.5 w-3.5" /> {term ? `Admissions · ${termLabel(term.semester, term.academicYear)}` : 'Admissions'}
+          </span>
+          <h2 className="font-display mt-5 text-4xl font-semibold leading-[1.05] sm:text-5xl lg:text-6xl">
+            Start your <span className="text-dawn italic">journey</span> at PCM
           </h2>
-          <p className="text-xs sm:text-sm text-[#D0DED8]">
-            A clear, transparent 4-step path from prayerful exploration to enrolled ministerial student.
-          </p>
-        </div>
+          <p className="mt-4 text-sm text-white/70 sm:text-base">A clear, transparent 4-step path from prayerful exploration to enrolled ministerial student.</p>
+        </Reveal>
 
-        {/* 4 Steps Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {steps.map((step, idx) => {
-            const Icon = step.icon;
-            return (
-              <div
-                key={idx}
-                className="bg-[#10261D] rounded-xl p-6 border border-[#588B76]/50 hover:border-[#85AA9B] shadow-xl transition-all duration-300 flex flex-col justify-between group relative"
-              >
-                {/* Step Number Top Pill */}
-                <div className="flex items-center justify-between mb-4">
-                  <div className="w-12 h-12 rounded-xl bg-[#18392B] text-[#85AA9B] border border-[#588B76]/40 flex items-center justify-center font-bold group-hover:bg-[#588B76] group-hover:text-white transition-colors shadow">
-                    <Icon className="w-6 h-6" />
+        <div ref={trail} className="relative">
+          {/* Trail: horizontal on large screens, vertical below */}
+          <div aria-hidden="true" className="absolute left-[12.5%] right-[12.5%] top-7 hidden h-[2px] lg:block">
+            <span className="absolute inset-0 border-t-2 border-dashed border-white/15" />
+            <motion.span className="absolute inset-0 origin-left bg-gradient-to-r from-[#e8c77a] to-[#f6e3b4] shadow-[0_0_14px_rgba(232,199,122,0.7)]" style={reduce ? { scaleX: 1 } : { scaleX: progress }} />
+          </div>
+          <div aria-hidden="true" className="absolute bottom-10 left-7 top-7 w-[2px] lg:hidden">
+            <span className="absolute inset-0 border-l-2 border-dashed border-white/15" />
+            <motion.span className="absolute inset-0 origin-top bg-gradient-to-b from-[#e8c77a] to-[#f6e3b4] shadow-[0_0_14px_rgba(232,199,122,0.7)]" style={reduce ? { scaleY: 1 } : { scaleY: progress }} />
+          </div>
+
+          <ol className="relative grid grid-cols-1 gap-8 lg:grid-cols-4 lg:gap-6">
+            {steps.map((s, k) => (
+              <li key={s.num} className="flex gap-5 lg:flex-col lg:items-center lg:text-center">
+                <Waypoint progress={progress} at={(k + 0.5) / steps.length} icon={s.icon} reduce={reduce} />
+                <Reveal delay={k * 0.08} className="min-w-0 flex-1 lg:w-full">
+                  <div className="group h-full rounded-[1.75rem] border border-white/10 bg-white/[0.04] p-6 backdrop-blur-md transition duration-500 hover:-translate-y-1 hover:border-[#e8c77a]/40 lg:mt-6">
+                    <span className="font-display text-sm text-[#e8c77a]">{s.num}</span>
+                    <h3 className="font-display mt-1 text-2xl font-semibold">{s.title}</h3>
+                    <p className="mt-1 text-sm font-medium text-[#85aa9b]">{s.subtitle}</p>
+                    <p className="mt-3 text-sm leading-relaxed text-white/70">{s.desc}</p>
+                    <button onClick={s.action} className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-[#f6e3b4] transition hover:text-white">
+                      {s.actionText} <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                    </button>
                   </div>
-                  <span className="font-mono text-xl font-extrabold text-[#D0DED8]/40 group-hover:text-[#D0DED8] transition-colors">
-                    {step.num}
-                  </span>
-                </div>
-
-                <div className="space-y-2">
-                  <h3 className="font-serif text-lg font-bold text-white group-hover:text-[#D0DED8] transition-colors">
-                    {step.title}
-                  </h3>
-                  <p className="text-xs font-semibold text-[#85AA9B]">
-                    {step.subtitle}
-                  </p>
-                  <p className="text-xs text-[#D0DED8]/90 leading-relaxed pt-1">
-                    {step.desc}
-                  </p>
-                </div>
-
-                <div className="pt-6 mt-4 border-t border-[#588B76]/40">
-                  <button
-                    onClick={step.action}
-                    className="w-full text-left text-xs font-semibold text-[#85AA9B] hover:text-white flex items-center justify-between cursor-pointer group-hover:underline"
-                  >
-                    <span>{step.actionText}</span>
-                    <ArrowRight className="w-3.5 h-3.5 transform group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+                </Reveal>
+              </li>
+            ))}
+          </ol>
         </div>
 
-        {/* Action Button Strip */}
-        <div className="mt-12 pt-8 border-t border-[#10261D] flex flex-wrap items-center justify-center gap-4 text-xs font-bold">
-          <button
-            id="admissions-btn-apply"
-            onClick={() => navigateTo('apply')}
-            className="bg-[#588B76] hover:bg-[#46705F] text-white px-6 py-3 rounded uppercase tracking-wider shadow transition cursor-pointer"
-          >
-            APPLY NOW (ONLINE FORM)
-          </button>
-
+        <Reveal className="mt-14 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <Magnetic>
+            <button
+              id="admissions-btn-apply"
+              onClick={() => navigateTo('apply')}
+              className="btn-shimmer inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#e8c77a] to-[#f6e3b4] px-7 py-4 text-sm font-bold text-[#10261d] shadow-[0_10px_40px_-8px_rgba(232,199,122,0.6)] sm:w-auto"
+            >
+              Apply now (online form) <ArrowRight className="h-4 w-4" />
+            </button>
+          </Magnetic>
           <button
             id="admissions-btn-requirements"
             onClick={() => navigateTo('admissions', 'requirements')}
-            className="bg-[#10261D] hover:bg-[#0A1812] text-[#D0DED8] px-5 py-3 rounded border border-[#588B76]/50 transition uppercase tracking-wider cursor-pointer"
+            className="rounded-full border border-white/20 bg-white/[0.06] px-6 py-4 text-sm font-semibold transition hover:bg-white/15"
           >
-            ADMISSION REQUIREMENTS
+            Admission requirements
           </button>
-
           <button
             id="admissions-btn-tuition"
             onClick={() => setTuitionCalculatorModalOpen(true)}
-            className="bg-[#10261D] hover:bg-[#0A1812] text-[#D0DED8] px-5 py-3 rounded border border-[#588B76]/50 transition flex items-center gap-2 uppercase tracking-wider cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.06] px-6 py-4 text-sm font-semibold transition hover:bg-white/15"
           >
-            <Calculator className="w-4 h-4 text-[#85AA9B]" />
-            <span>TUITION & FEE CALCULATOR</span>
+            <Calculator className="h-4 w-4 text-[#e8c77a]" /> Tuition &amp; fee calculator
           </button>
-
           <button
             id="admissions-btn-contact"
             onClick={() => navigateTo('contact')}
-            className="bg-[#10261D] hover:bg-[#0A1812] text-[#D0DED8] px-5 py-3 rounded border border-[#588B76]/50 transition flex items-center gap-2 uppercase tracking-wider cursor-pointer"
+            className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.06] px-6 py-4 text-sm font-semibold transition hover:bg-white/15"
           >
-            <HelpCircle className="w-4 h-4 text-[#85AA9B]" />
-            <span>CONTACT ADMISSIONS</span>
+            <HelpCircle className="h-4 w-4 text-[#85aa9b]" /> Contact admissions
           </button>
-        </div>
+        </Reveal>
       </div>
     </section>
   );

@@ -1,109 +1,148 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
+import { AnimatePresence, motion, useInView, useReducedMotion } from 'motion/react';
 import { usePCM } from '@/lib/store';
 import { isValidImageSrc } from '@/lib/utils';
 import { publicTestimonials } from '@/lib/testimonials';
-import { Quote, ChevronLeft, ChevronRight, Sparkles, GraduationCap } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Sparkles } from 'lucide-react';
+import { Reveal } from './fx/motion';
 
+const AUTOPLAY_MS = 9000;
+
+const Avatar: React.FC<{ src?: string; name: string; size: number; className?: string }> = ({ src, name, size, className = '' }) =>
+  isValidImageSrc(src) ? (
+    <span className={`relative block shrink-0 overflow-hidden rounded-full ${className}`} style={{ width: size, height: size }}>
+      <Image src={String(src).trim()} alt={name} fill className="object-cover" sizes={`${size}px`} referrerPolicy="no-referrer" unoptimized={Boolean(String(src).startsWith('data:') || String(src).startsWith('blob:'))} />
+    </span>
+  ) : (
+    <span
+      className={`font-display flex shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#18392b] to-[#588b76] font-semibold text-[#f6e3b4] ${className}`}
+      style={{ width: size, height: size, fontSize: size * 0.38 }}
+      aria-hidden="true"
+    >
+      {name
+        .split(/\s+/)
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((w) => w[0])
+        .join('')
+        .toUpperCase()}
+    </span>
+  );
+
+// Published testimonials (Admin → Testimonials, in the order set there) on a cinematic quote stage.
 export const TestimonialsSection: React.FC = () => {
   const { testimonials: allTestimonials } = usePCM();
-  // Only published testimonials, in the order set in the Admin Workspace.
   const testimonials = publicTestimonials(allTestimonials);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const reduce = useReducedMotion();
+  const [index, setIndex] = useState(0);
+  const [hover, setHover] = useState(false);
+  const ref = useRef<HTMLElement | null>(null);
+  const inView = useInView(ref, { margin: '-20% 0px -20% 0px' });
+  const count = testimonials.length;
+  const i = count ? index % count : 0;
 
-  if (testimonials.length === 0) return null;
+  useEffect(() => {
+    if (count <= 1 || hover || reduce || !inView) return;
+    const t = window.setTimeout(() => setIndex((p) => (p + 1) % count), AUTOPLAY_MS);
+    return () => window.clearTimeout(t);
+  }, [i, count, hover, reduce, inView]);
 
-  const current = testimonials[currentIndex % testimonials.length];
+  if (count === 0) return null;
+  const current = testimonials[i];
+  const go = (d: number) => setIndex((p) => (p + d + count) % count);
+  const size = current.quote.length < 150 ? 'lg:text-5xl sm:text-4xl' : current.quote.length < 280 ? 'lg:text-4xl sm:text-3xl' : 'lg:text-3xl sm:text-2xl';
 
   return (
-    <section className="w-full bg-[#D0DED8]/20 py-16 lg:py-24 border-b border-[#D0DED8]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-12 space-y-2">
-          <div className="inline-flex items-center gap-1.5 text-xs font-bold text-[#588B76] uppercase tracking-widest font-mono">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Transforming Lives</span>
-          </div>
-          <h2 className="font-serif text-3xl sm:text-4xl font-extrabold text-[#18392B]">
-            HEAR FROM OUR COMMUNITY
+    <section ref={ref} className="font-text relative w-full overflow-hidden bg-[#f7f5ef] py-20 lg:py-28">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_20%_10%,rgba(232,199,122,0.22),transparent_50%),radial-gradient(ellipse_at_90%_90%,rgba(133,170,155,0.25),transparent_50%)]" />
+      <div className="relative mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+        <Reveal className="mb-10 text-center">
+          <span className="inline-flex items-center gap-2 rounded-full border border-[#588b76]/30 bg-white/70 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#588b76]">
+            <Sparkles className="h-3.5 w-3.5" /> Transforming Lives
+          </span>
+          <h2 className="font-display mt-5 text-4xl font-semibold leading-[1.05] text-[#10261d] sm:text-5xl lg:text-6xl">
+            Hear from our <em className="italic text-[#588b76]">community</em>
           </h2>
-          <p className="text-xs sm:text-sm text-[#18392B]/75">
-            Stories of faith, spiritual growth, pastoral preparation, and kingdom impact from students, alumni, faculty, and ministry partners.
-          </p>
-        </div>
+        </Reveal>
 
-        {/* Big Testimonial Display Card */}
-        <div className="max-w-4xl mx-auto bg-white rounded-2xl border border-[#D0DED8] shadow-xl p-8 sm:p-12 relative overflow-hidden">
-          {/* Subtle Quote Watermark */}
-          <Quote className="absolute -top-4 -right-4 w-32 h-32 text-[#D0DED8]/40 rotate-180 pointer-events-none" />
+        <div className="relative" onPointerEnter={() => setHover(true)} onPointerLeave={() => setHover(false)}>
+          <span aria-hidden="true" className="font-display text-dawn pointer-events-none absolute -left-2 -top-16 select-none text-[12rem] leading-none sm:-left-6 sm:-top-24 sm:text-[16rem]">
+            &ldquo;
+          </span>
 
-          <div className="relative z-10 space-y-6">
-            {/* Category Tag */}
-            <div className="inline-flex items-center gap-2 bg-[#18392B] text-[#D0DED8] px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider">
-              <GraduationCap className="w-3.5 h-3.5" />
-              <span>{current.category} Spotlight</span>
-            </div>
-
-            {/* Main Quote Text */}
-            <blockquote className="font-serif text-lg sm:text-xl md:text-2xl text-[#18392B] leading-relaxed italic">
-              &ldquo;{current.quote}&rdquo;
-            </blockquote>
-
-            {/* Author Profile */}
-            <div className="pt-6 border-t border-[#D0DED8] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-4">
-                {isValidImageSrc(current.avatarUrl) ? (
-                  <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-[#588B76] shadow-sm shrink-0">
-                    <Image
-                      src={current.avatarUrl.trim()}
-                      alt={current.name}
-                      fill
-                      className="object-cover"
-                      sizes="56px"
-                      referrerPolicy="no-referrer"
-                      unoptimized={Boolean(current.avatarUrl.startsWith('data:') || current.avatarUrl.startsWith('blob:'))}
-                    />
-                  </div>
-                ) : null}
-                <div>
-                  <h4 className="font-serif text-base font-bold text-[#18392B]">
-                    {current.name}
-                  </h4>
-                  <p className="text-xs font-semibold text-[#588B76]">
-                    {current.role}
-                  </p>
-                  <p className="text-[11px] text-[#18392B]/70">
-                    {current.programOrMinistry}
-                  </p>
-                </div>
-              </div>
-
-              {/* Slider Navigation Buttons */}
-              <div className="flex items-center gap-2 self-end sm:self-center">
-                <button
-                  onClick={() =>
-                    setCurrentIndex((prev) => (prev === 0 ? testimonials.length - 1 : prev - 1))
-                  }
-                  className="w-10 h-10 rounded-full border border-[#D0DED8] hover:border-[#588B76] hover:bg-[#18392B] hover:text-white flex items-center justify-center text-[#18392B] transition cursor-pointer"
-                  aria-label="Previous Testimonial"
-                >
-                  <ChevronLeft className="w-5 h-5" />
-                </button>
-                <span className="text-xs font-mono font-semibold text-[#18392B]/70 px-1">
-                  {(currentIndex % testimonials.length) + 1} / {testimonials.length}
-                </span>
-                <button
-                  onClick={() => setCurrentIndex((prev) => (prev + 1) % testimonials.length)}
-                  className="w-10 h-10 rounded-full border border-[#D0DED8] hover:border-[#588B76] hover:bg-[#18392B] hover:text-white flex items-center justify-center text-[#18392B] transition cursor-pointer"
-                  aria-label="Next Testimonial"
-                >
-                  <ChevronRight className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
+          <div className="relative min-h-[320px] sm:min-h-[300px]">
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.figure
+                key={current.id || i}
+                drag={reduce || count <= 1 ? false : 'x'}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.25}
+                onDragEnd={(_, info) => {
+                  if (info.offset.x < -60) go(1);
+                  else if (info.offset.x > 60) go(-1);
+                }}
+                initial={reduce ? { opacity: 0 } : { opacity: 0, y: 24, filter: 'blur(10px)' }}
+                animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, y: -16, filter: 'blur(10px)' }}
+                transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+                className="relative cursor-grab active:cursor-grabbing"
+              >
+                <span className="inline-flex items-center gap-2 rounded-full bg-[#18392b] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.18em] text-[#f6e3b4]">{current.category} spotlight</span>
+                <blockquote className={`font-display mt-6 text-2xl font-medium leading-snug text-[#10261d] ${size}`}>{current.quote}</blockquote>
+                <figcaption className="mt-8 flex items-center gap-4">
+                  <span className="rounded-full bg-gradient-to-br from-[#e8c77a] to-[#588b76] p-[2px]">
+                    <Avatar src={current.avatarUrl} name={current.name} size={56} className="ring-2 ring-[#f7f5ef]" />
+                  </span>
+                  <span>
+                    <span className="font-display block text-lg font-semibold text-[#10261d]">{current.name}</span>
+                    <span className="block text-sm font-medium text-[#588b76]">{current.role}</span>
+                    {current.programOrMinistry && <span className="block text-xs text-[#18392b]/60">{current.programOrMinistry}</span>}
+                  </span>
+                </figcaption>
+              </motion.figure>
+            </AnimatePresence>
           </div>
+
+          {count > 1 && (
+            <div className="mt-10 flex flex-col gap-5 border-t border-[#18392b]/10 pt-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 py-1">
+                {testimonials.map((t, k) => (
+                  <button
+                    key={t.id || k}
+                    onClick={() => setIndex(k)}
+                    aria-label={`Testimonial from ${t.name}`}
+                    aria-current={k === i}
+                    className={`relative shrink-0 rounded-full p-[2px] transition ${k === i ? 'bg-gradient-to-br from-[#e8c77a] to-[#588b76]' : 'bg-transparent opacity-60 hover:opacity-100'}`}
+                  >
+                    <Avatar src={t.avatarUrl} name={t.name} size={40} className="ring-2 ring-[#f7f5ef]" />
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="h-[3px] w-28 overflow-hidden rounded-full bg-[#18392b]/10">
+                  <motion.div
+                    key={`p-${i}-${hover}-${inView}`}
+                    className="h-full origin-left bg-gradient-to-r from-[#e8c77a] to-[#588b76]"
+                    initial={{ scaleX: 0 }}
+                    animate={{ scaleX: hover || reduce || !inView ? 0 : 1 }}
+                    transition={{ duration: AUTOPLAY_MS / 1000, ease: 'linear' }}
+                  />
+                </div>
+                <span className="font-mono text-xs text-[#18392b]/60">
+                  {i + 1} / {count}
+                </span>
+                <button onClick={() => go(-1)} aria-label="Previous testimonial" className="flex h-11 w-11 items-center justify-center rounded-full border border-[#18392b]/15 text-[#10261d] transition hover:bg-[#18392b] hover:text-white">
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button onClick={() => go(1)} aria-label="Next testimonial" className="flex h-11 w-11 items-center justify-center rounded-full bg-[#18392b] text-white transition hover:bg-[#10261d]">
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>

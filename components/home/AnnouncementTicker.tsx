@@ -1,84 +1,47 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import { usePCM } from '@/lib/store';
-import { Megaphone, ChevronRight, Bell, ArrowRight } from 'lucide-react';
+import { ChevronRight, Megaphone } from 'lucide-react';
+import { Marquee } from './fx/kinetic';
 
+// Active announcements from Admin → Announcements, as a seamless ribbon (pauses on hover; each item opens its link).
 export const AnnouncementTicker: React.FC = () => {
   const { announcements, navigateTo } = usePCM();
-  const [activeIdx, setActiveIdx] = useState(0);
+  const active = announcements.filter((a) => a.active);
+  if (active.length === 0) return null;
 
-  const activeAnnouncements = announcements.filter((a) => a.active);
-
-  if (activeAnnouncements.length === 0) return null;
-
-  const current = activeAnnouncements[activeIdx % activeAnnouncements.length];
+  const open = (linkUrl?: string) => (linkUrl ? navigateTo(linkUrl as any) : navigateTo('news-events', 'announcements'));
+  const duration = Math.max(28, active.length * 14);
 
   return (
-    <div className="w-full bg-[#588B76] text-white py-2 px-4 sm:px-8 shadow-sm font-sans border-b border-[#18392B]/20">
-      <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-2.5 text-[12px] font-bold uppercase tracking-wider">
-        {/* Left Badge */}
-        <div className="flex items-center gap-2.5 w-full sm:w-auto sm:flex-1 min-w-0">
-          <div className="flex items-center gap-1.5 bg-[#18392B] text-white px-2.5 py-0.5 rounded-sm font-bold text-[10px] tracking-widest shrink-0 shadow-sm border border-[#85AA9B]/30">
-            <Megaphone className="w-3 h-3 text-[#D0DED8]" />
-            <span>ANNOUNCEMENTS</span>
-          </div>
-
-          <span className="hidden md:inline-block text-[11px] bg-white/20 text-white px-2 py-0.5 rounded-sm font-medium normal-case">
-            {current.category}
-          </span>
-
-          {/* Headline Message */}
-          <div className="flex-1 min-w-0 truncate">
-            <button
-              onClick={() => {
-                if (current.linkUrl) {
-                  navigateTo(current.linkUrl as any);
-                } else {
-                  navigateTo('news-events', 'announcements');
-                }
-              }}
-              className="text-left font-bold text-white hover:text-[#18392B] transition hover:underline cursor-pointer truncate max-w-full block normal-case text-xs"
-            >
-              {current.title}
-            </button>
-          </div>
-        </div>
-
-        {/* Right Navigation Controls */}
-        <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto text-[11px]">
-          <span className="text-[#D0DED8] font-mono text-[10px]">
-            {activeIdx + 1}/{activeAnnouncements.length}
-          </span>
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() =>
-                setActiveIdx((prev) => (prev === 0 ? activeAnnouncements.length - 1 : prev - 1))
-              }
-              aria-label="Previous Announcement"
-              className="px-2 py-0.5 rounded-sm bg-[#18392B] hover:bg-[#10261D] text-white text-[10px] transition cursor-pointer font-bold"
-            >
-              ‹
-            </button>
-            <button
-              onClick={() => setActiveIdx((prev) => (prev + 1) % activeAnnouncements.length)}
-              aria-label="Next Announcement"
-              className="px-2 py-0.5 rounded-sm bg-[#18392B] hover:bg-[#10261D] text-white text-[10px] transition cursor-pointer font-bold"
-            >
-              ›
-            </button>
-          </div>
-
-          <button
-            onClick={() => navigateTo('news-events', 'announcements')}
-            className="text-white hover:text-[#18392B] font-bold flex items-center gap-0.5 transition cursor-pointer text-[11px]"
-          >
-            <span>View All</span>
-            <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
+    <div className="font-text relative flex w-full items-stretch overflow-hidden border-y border-[#e8c77a]/20 bg-[#0b1d16] text-white">
+      <div className="relative z-10 flex shrink-0 items-center gap-2 bg-gradient-to-r from-[#e8c77a] to-[#f6e3b4] px-3 py-2.5 text-[10px] font-bold uppercase tracking-[0.2em] text-[#10261d] sm:px-5">
+        <Megaphone className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Announcements</span>
+        <span className="absolute -right-3 top-0 h-full w-6 skew-x-[-18deg] bg-[#f6e3b4]" aria-hidden="true" />
       </div>
+      <Marquee duration={duration} className="flex-1 py-2.5" label="Announcements">
+        {active.map((a) => (
+          <button
+            key={a.id}
+            type="button"
+            onClick={() => open(a.linkUrl)}
+            className="group mx-6 inline-flex items-center gap-3 whitespace-nowrap text-sm transition hover:text-[#f6e3b4]"
+          >
+            {a.category && <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[#85aa9b]">{a.category}</span>}
+            <span className="font-medium">{a.title}</span>
+            <span className="h-1.5 w-1.5 rounded-full bg-[#e8c77a]" aria-hidden="true" />
+          </button>
+        ))}
+      </Marquee>
+      <button
+        type="button"
+        onClick={() => navigateTo('news-events', 'announcements')}
+        className="relative z-10 hidden shrink-0 items-center gap-1 border-l border-white/10 bg-[#0b1d16] px-4 text-xs font-semibold text-[#f6e3b4] transition hover:text-white sm:inline-flex"
+      >
+        View all <ChevronRight className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 };

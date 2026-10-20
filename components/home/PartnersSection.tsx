@@ -1,83 +1,54 @@
 'use client';
 
 import React from 'react';
-import { ShieldCheck, Building2, Globe2, BookOpen, Church } from 'lucide-react';
+import { Building2, BookOpen, Church, Globe2 } from 'lucide-react';
+import { Reveal } from './fx/motion';
+import { Marquee } from './fx/kinetic';
 
-export const PartnersSection: React.FC = () => {
-  const partners = [
-    {
-      category: 'Theological Alliances',
-      name: 'Asia Theological Association (ATA)',
-      desc: 'Regional Accrediting Commission for Evangelical Theological Education',
-      icon: Globe2,
-    },
-    {
-      category: 'Philippine Churches',
-      name: 'Philippine Council of Evangelical Churches (PCEC)',
-      desc: 'National Network of Over 40,000 Evangelical Congregations',
-      icon: Church,
-    },
-    {
-      category: 'Academic Accreditation',
-      name: 'ACSCU Philippines',
-      desc: 'Association of Christian Schools, Colleges and Universities',
-      icon: Building2,
-    },
-    {
-      category: 'Theological Fellowship',
-      name: 'Philippine Association of Bible & Theological Colleges',
-      desc: 'Collaborative Forum for Biblical & Ministerial Formation',
-      icon: BookOpen,
-    },
-  ];
+const PARTNERS = [
+  { category: 'Theological Alliances', name: 'Asia Theological Association (ATA)', desc: 'Regional Accrediting Commission for Evangelical Theological Education', icon: Globe2 },
+  { category: 'Philippine Churches', name: 'Philippine Council of Evangelical Churches (PCEC)', desc: 'National Network of Over 40,000 Evangelical Congregations', icon: Church },
+  { category: 'Academic Accreditation', name: 'ACSCU Philippines', desc: 'Association of Christian Schools, Colleges and Universities', icon: Building2 },
+  { category: 'Theological Fellowship', name: 'Philippine Association of Bible & Theological Colleges', desc: 'Collaborative Forum for Biblical & Ministerial Formation', icon: BookOpen },
+];
 
-  return (
-    <section className="w-full bg-[#D0DED8]/25 py-14 lg:py-18 border-b border-[#D0DED8]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center max-w-2xl mx-auto mb-10 space-y-1">
-          <span className="text-[11px] font-mono font-bold uppercase tracking-widest text-[#588B76]">
-            Kingdom Alliances
-          </span>
-          <h2 className="font-serif text-2xl sm:text-3xl font-extrabold text-[#18392B]">
-            OUR PARTNERS & AFFILIATIONS
-          </h2>
-          <p className="text-xs text-[#18392B]/75">
-            Collaborating with recognized national and international accreditation bodies, denominations, and mission networks.
-          </p>
-        </div>
+/** "Asia Theological Association (ATA)" → "ATA"; otherwise the initials of the main words. */
+const monogram = (name: string) =>
+  (name.match(/\(([A-Z]{2,6})\)/)?.[1] ||
+    name.split(/\s+/)[0].match(/^[A-Z]{3,6}$/)?.[0] ||
+    name
+      .split(/\s+/)
+      .filter((w) => /^[A-Z]/.test(w))
+      .map((w) => w[0])
+      .join('')
+      .slice(0, 5));
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {partners.map((p, idx) => {
-            const Icon = p.icon;
-            return (
-              <div
-                key={idx}
-                className="bg-white rounded-xl p-5 border border-[#D0DED8] shadow-xs flex flex-col justify-between hover:border-[#588B76] transition-colors"
-              >
-                <div>
-                  <div className="w-10 h-10 rounded-lg bg-[#18392B] text-[#85AA9B] flex items-center justify-center mb-3">
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <span className="text-[10px] font-mono uppercase tracking-wider text-[#588B76] font-bold block mb-1">
-                    {p.category}
-                  </span>
-                  <h3 className="font-serif text-sm font-bold text-[#18392B] leading-snug">
-                    {p.name}
-                  </h3>
-                  <p className="text-[11px] text-[#18392B]/70 mt-2 leading-relaxed">
-                    {p.desc}
-                  </p>
-                </div>
-
-                <div className="mt-4 pt-3 border-t border-[#D0DED8] flex items-center gap-1.5 text-[10px] text-[#588B76] font-semibold">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>Recognized Member</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    </section>
-  );
-};
+// Partners & affiliations as a slow marquee of monogram seals (pauses on hover).
+export const PartnersSection: React.FC = () => (
+  <section className="font-text w-full overflow-hidden bg-[#f7f5ef] py-20 lg:py-24">
+    <Reveal className="mx-auto mb-10 max-w-2xl px-4 text-center">
+      <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#588b76]">Kingdom Alliances</span>
+      <h2 className="font-display mt-3 text-3xl font-semibold leading-tight text-[#10261d] sm:text-4xl lg:text-5xl">
+        Our partners <em className="italic text-[#588b76]">&amp; affiliations</em>
+      </h2>
+      <p className="mt-3 text-sm text-[#18392b]/70">Collaborating with recognized national and international accreditation bodies, denominations, and mission networks.</p>
+    </Reveal>
+    <Marquee duration={36} label="Partners and affiliations">
+      {PARTNERS.map((p) => {
+        const Icon = p.icon;
+        return (
+          <div key={p.name} title={p.desc} className="mx-3 flex w-[300px] items-center gap-4 rounded-full border border-[#18392b]/10 bg-white py-3 pl-3 pr-6 sm:w-[380px]">
+            <span className="relative flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#18392b] to-[#10261d] text-[#f6e3b4] ring-4 ring-[#e8c77a]/25">
+              <span className="font-display text-sm font-semibold tracking-wide">{monogram(p.name)}</span>
+              <Icon className="absolute -bottom-1 -right-1 h-6 w-6 rounded-full bg-[#e8c77a] p-1 text-[#10261d]" />
+            </span>
+            <span className="min-w-0">
+              <span className="block text-[10px] font-semibold uppercase tracking-[0.16em] text-[#588b76]">{p.category}</span>
+              <span className="font-display block text-sm font-semibold leading-snug text-[#10261d] sm:text-base">{p.name}</span>
+            </span>
+          </div>
+        );
+      })}
+    </Marquee>
+  </section>
+);
