@@ -20,6 +20,7 @@ import { Admissions4StepSection } from './Admissions4StepSection';
 import { ImpactStatsSection } from './ImpactStatsSection';
 import { PartnersSection } from './PartnersSection';
 import { NewsletterSection } from './NewsletterSection';
+import { PillarsBand } from './PillarsBand';
 import { Reveal, ScrollProgress } from './fx/motion';
 
 // Home: "Dawn over the Cordillera". All content comes from the Admin CMS; this file only arranges it and adds
@@ -32,20 +33,21 @@ export const HomeView: React.FC = () => {
       <EnrollmentAnnouncementBanner />
       <AnnouncementTicker />
       <QuickAccessSection />
-      <Reveal><FeaturedProgramsSection /></Reveal>
-      <Reveal><AboutSection /></Reveal>
-      <Reveal><MissionVisionValuesSection /></Reveal>
+      <FeaturedProgramsSection />
+      <AboutSection />
+      <PillarsBand />
+      <MissionVisionValuesSection />
       <Reveal><HomeVideoSection /></Reveal>
-      <Reveal><NewsSection /></Reveal>
-      <Reveal><EventsSection /></Reveal>
+      <NewsSection />
+      <EventsSection />
       <CTASection />
-      <Reveal><LifeAtPCMSection /></Reveal>
-      <Reveal><TestimonialsSection /></Reveal>
-      <Reveal><FacultySection /></Reveal>
-      <Reveal><Admissions4StepSection /></Reveal>
+      <LifeAtPCMSection />
+      <TestimonialsSection />
+      <FacultySection />
+      <Admissions4StepSection />
       <ImpactStatsSection />
-      <Reveal><PartnersSection /></Reveal>
-      <Reveal><NewsletterSection /></Reveal>
+      <PartnersSection />
+      <NewsletterSection />
     </div>
   );
 };
