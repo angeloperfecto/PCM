@@ -56,7 +56,8 @@ export const ApplicationView: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [firebaseAuthUser, mode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [firebaseAuthUser?.uid, mode]);
 
   // Shown wherever an applicant needs to be signed in.
   const signInCard = (purpose: string) => (

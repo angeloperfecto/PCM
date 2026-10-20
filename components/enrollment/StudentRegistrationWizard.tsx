@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useId, useEffect, useCallback, useRef } from 'react';
-import { db } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
 import { deleteApplicationDraft, loadApplicationDraft, saveApplicationDraft } from '@/lib/admissionsService';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
@@ -85,6 +85,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     addToast,
     logActivity,
     firebaseAuthUser,
+    signInWithGoogle,
     enrollmentSystemConfig,
     isStudentLoggedIn,
     academicPeriods,
@@ -105,6 +106,19 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
   // Current Step: 1 to 9
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+  // The page still shows the applicant as signed in, but their Google sign-in has ended (e.g. signed out in
+  // another tab or expired): they sign in again here without leaving the form.
+  const [needsSignIn, setNeedsSignIn] = useState(false);
+  const [reSigningIn, setReSigningIn] = useState(false);
+  const signInAgain = async () => {
+    setReSigningIn(true);
+    try {
+      await signInWithGoogle();
+    } finally {
+      setNeedsSignIn(!auth.currentUser);
+      setReSigningIn(false);
+    }
+  };
   const [copiedAppNo, setCopiedAppNo] = useState<boolean>(false);
   const [submittedReference, setSubmittedReference] = useState<string>('');
 
@@ -561,6 +575,14 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     if (!validateCurrentStep(8)) {
       return;
     }
+    // Submitting needs a live Google sign-in (wait for Firebase to finish restoring it first).
+    if (!auth.currentUser) await auth.authStateReady().catch(() => {});
+    if (!auth.currentUser) {
+      setNeedsSignIn(true);
+      addToast('warning', 'Sign in again to submit', 'Your Google sign-in has ended on this page. Use “Sign in again” next to the Submit button; your answers stay here.');
+      return;
+    }
+    setNeedsSignIn(false);
 
     setIsSubmitting(true);
 
@@ -2345,7 +2367,20 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
               )}
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center justify-end gap-3">
+              {currentStep === 8 && needsSignIn && (
+                <span className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-950" data-testid="resignin">
+                  Your Google sign-in ended. Sign in again with the same account, then submit.
+                  <button
+                    type="button"
+                    disabled={reSigningIn}
+                    onClick={signInAgain}
+                    className="rounded-lg bg-amber-500 px-3 py-1.5 font-bold text-slate-950 hover:bg-amber-400 disabled:opacity-50"
+                  >
+                    {reSigningIn ? 'Opening Google sign-in…' : 'Sign in again'}
+                  </button>
+                </span>
+              )}
               <span className="text-xs text-slate-400 font-mono hidden sm:inline">
                 Step {currentStep} of 8
               </span>
