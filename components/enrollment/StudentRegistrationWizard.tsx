@@ -651,6 +651,13 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
     }
   };
 
+  // Personal Information is kept in capital letters, including answers restored from a saved draft or filled in from a record.
+  useEffect(() => {
+    const keys = ['firstName', 'middleName', 'lastName', 'suffix', 'preferredName', 'placeOfBirth', 'nationality', 'religion'] as const;
+    if (!keys.some((k) => typeof formData[k] === 'string' && formData[k] !== formData[k].toUpperCase())) return;
+    setFormData((prev) => ({ ...prev, ...Object.fromEntries(keys.map((k) => [k, String(prev[k] ?? '').toUpperCase()])) }));
+  }, [formData]);
+
   // Draft: progress is saved to the applicant's account (applicationDrafts/{uid}) so the form
   // can be finished later or on another device. Uploaded files are not part of the draft.
   const [draftInfo, setDraftInfo] = useState<{ resumedFrom?: string; savedAt?: string }>({});
@@ -1038,7 +1045,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   type="text"
                   placeholder="e.g. Samuel"
                   value={formData.firstName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, firstName: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, firstName: e.target.value.toUpperCase() }))}
                   className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:border-[#588B76] ${
                     errors.firstName ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
                   }`}
@@ -1054,7 +1061,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   type="text"
                   placeholder="e.g. David"
                   value={formData.middleName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, middleName: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, middleName: e.target.value.toUpperCase() }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76]"
                 />
               </div>
@@ -1067,7 +1074,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   type="text"
                   placeholder="e.g. Ramos"
                   value={formData.lastName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, lastName: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, lastName: e.target.value.toUpperCase() }))}
                   className={`w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:border-[#588B76] ${
                     errors.lastName ? 'border-rose-400 bg-rose-50' : 'border-slate-300'
                   }`}
@@ -1083,7 +1090,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   type="text"
                   placeholder="e.g. Jr., III"
                   value={formData.suffix}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, suffix: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, suffix: e.target.value.toUpperCase() }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76]"
                 />
               </div>
@@ -1098,7 +1105,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   type="text"
                   placeholder="e.g. Sam"
                   value={formData.preferredName}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, preferredName: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, preferredName: e.target.value.toUpperCase() }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76]"
                 />
               </div>
@@ -1126,7 +1133,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   type="text"
                   placeholder="e.g. Baguio City, Benguet"
                   value={formData.placeOfBirth}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, placeOfBirth: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, placeOfBirth: e.target.value.toUpperCase() }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76]"
                 />
               </div>
@@ -1187,7 +1194,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   type="text"
                   placeholder="e.g. Filipino"
                   value={formData.nationality}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, nationality: e.target.value.toUpperCase() }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76]"
                 />
               </div>
@@ -1200,7 +1207,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                   type="text"
                   placeholder="e.g. Evangelical / Church of Christ"
                   value={formData.religion}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, religion: e.target.value }))}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, religion: e.target.value.toUpperCase() }))}
                   className="w-full px-3 py-2 text-xs border border-slate-300 rounded-lg focus:outline-none focus:border-[#588B76]"
                 />
               </div>
