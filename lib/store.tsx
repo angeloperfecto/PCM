@@ -4686,6 +4686,8 @@ export const PCMProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     appData: any,
     initialFiles: Record<string, { dataUrl: string; size: number; type: string; name: string }> = {}
   ): Promise<string> => {
+    // Wait for Firebase to finish restoring the sign-in (it can lag behind the page right after loading).
+    if (!auth.currentUser) await auth.authStateReady().catch(() => {});
     const user = auth.currentUser;
     if (!user) {
       addToast('warning', 'Sign In Required', 'Please sign in with your Google account before submitting your application.');
