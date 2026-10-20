@@ -20,7 +20,6 @@ import { Admissions4StepSection } from './Admissions4StepSection';
 import { ImpactStatsSection } from './ImpactStatsSection';
 import { PartnersSection } from './PartnersSection';
 import { NewsletterSection } from './NewsletterSection';
-import { PillarsBand } from './PillarsBand';
 import { Reveal, ScrollProgress } from './fx/motion';
 
 // Home: "Dawn over the Cordillera". All content comes from the Admin CMS; this file only arranges it and adds
@@ -35,7 +34,6 @@ export const HomeView: React.FC = () => {
       <QuickAccessSection />
       <FeaturedProgramsSection />
       <AboutSection />
-      <PillarsBand />
       <MissionVisionValuesSection />
       <Reveal><HomeVideoSection /></Reveal>
       <NewsSection />

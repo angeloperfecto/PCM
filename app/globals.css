@@ -179,10 +179,6 @@ body {
 
 /* Outlined display text */
 /* Set the stroke colour with --outline (the fill is transparent, so currentColor cannot be used). */
-.text-outline {
-  color: transparent;
-  -webkit-text-stroke: 1px var(--outline, rgba(208, 222, 216, 0.7));
-}
 .text-outline-strong {
   color: transparent;
   -webkit-text-stroke: 1.5px var(--outline, rgba(88, 139, 118, 0.3));
