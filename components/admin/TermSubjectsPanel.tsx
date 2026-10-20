@@ -41,6 +41,9 @@ type FormState = {
   capacity: string;
   prerequisites: string;
   status: AcademicSubject['status'];
+  /** A new section of an offered subject keeps that subject's program. */
+  program?: string;
+  programId?: string;
 };
 const emptyForm = (yearLevel = ''): FormState => ({
   code: '', title: '', units: '', yearLevel, section: '', schedule: '', room: '', instructor: '', professor: '', capacity: '', prerequisites: '', status: 'Open',
@@ -255,7 +258,7 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
       };
       const target = editing
         ? { ...fields, semester: editing.semester, academicYear: editing.academicYear, program: editing.program, programId: editing.programId }
-        : { ...base(form.yearLevel), ...fields };
+        : { ...base(form.yearLevel), ...(form.program || form.programId ? { program: form.program || '', programId: form.programId || '' } : {}), ...fields };
       if (duplicateOffering(academicSubjects, target, editing?.id)) throw new Error(`${code}${fields.section ? ` section ${fields.section}` : ''} is already offered in ${tLabel}.`);
       if (editing) {
         await updateDoc(doc(db, 'academicSubjects', editing.id), { ...fields, updatedAt: new Date().toISOString(), updatedBy: by });
@@ -339,6 +342,34 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
     setForm(f);
     setPanel(panel === p && !f.id ? '' : p);
   };
+
+  // ---------------------------------------------------------------- more than one section
+  // The term's classes (this program) of a subject, one per section.
+  const sectionsOf = (code: string) => forProgram.filter((o) => normCode(o.code) === normCode(code));
+  // The next free section letter (a class without a section name counts as A).
+  const nextSection = (code: string) => {
+    const used = new Set(sectionsOf(code).map((o) => (o.section || '').trim().toUpperCase() || 'A'));
+    return 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('').find((l) => !used.has(l)) || '';
+  };
+  // Another section of a subject already offered: same subject details, its own section, schedule, room and professor.
+  const addSection = (o: Pick<AcademicSubject, 'code' | 'title' | 'units' | 'yearLevel' | 'prerequisites' | 'capacity' | 'program' | 'programId'>) => {
+    setError('');
+    setPickedIds([]);
+    setSourceId('');
+    setForm({
+      ...emptyForm(normalizeYearLevel(o.yearLevel) || ''),
+      code: o.code,
+      title: o.title,
+      units: String(o.units ?? ''),
+      section: nextSection(o.code),
+      capacity: String(o.capacity ?? ''),
+      prerequisites: (o.prerequisites || []).join(', '),
+      program: o.program || '',
+      programId: o.programId || '',
+    });
+    setPanel('form');
+  };
+  const formSiblings = !editing && form.code.trim() ? sectionsOf(form.code) : [];
 
   return (
     <div className="space-y-4" data-testid="term-subjects">
@@ -519,10 +550,15 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                               <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800">
                                 <CheckCircle2 className="h-3 w-3" /> Offered
                               </span>
-                              <span className="w-full text-[11px] text-slate-500">
+                              <span className="flex w-full flex-wrap items-center gap-x-2 text-[11px] text-slate-500">
                                 {classes
                                   .map((o) => [o.section ? `Section ${o.section}` : '', o.instructor || 'no instructor yet', o.status === 'Closed' ? 'closed' : ''].filter(Boolean).join(' · '))
                                   .join('; ')}
+                                {!closed && classes[0] && (
+                                  <button type="button" disabled={busy} onClick={() => addSection(classes[0])} className="font-bold text-sky-700 hover:underline">
+                                    + Add another section
+                                  </button>
+                                )}
                               </span>
                             </li>
                           );
@@ -639,9 +675,18 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
       {panel === 'form' && (
         <div className="space-y-3 rounded-xl border border-slate-300 bg-white p-4" data-testid="offering-form">
           <div className="flex items-center justify-between">
-            <h5 className="text-xs font-bold text-[#18392B]">{editing ? `Edit ${editing.code}` : `Add a subject to ${tLabel}`}</h5>
+            <h5 className="text-xs font-bold text-[#18392B]">
+              {editing ? `Edit ${editing.code}` : formSiblings.length ? `Add another section of ${formSiblings[0].code} to ${tLabel}` : `Add a subject to ${tLabel}`}
+            </h5>
             <button type="button" aria-label="Close" onClick={() => { setPanel(''); setForm(emptyForm()); }}><X className="h-4 w-4 text-slate-500" /></button>
           </div>
+          {formSiblings.length > 0 && (
+            <div className="rounded-lg border border-sky-200 bg-sky-50 p-2.5 text-[11px] text-sky-950" data-testid="section-note">
+              Already offered: {formSiblings.map((o) => (o.section ? `Section ${o.section}` : 'a class with no section name')).join(', ')}. This adds another section with its own
+              schedule, room, professor and capacity; students choose one section. Give it a section name that is different from the others.
+              {formSiblings.some((o) => !o.section) && ' Tip: name the existing class’s section too (e.g. A) with Edit, so students can tell them apart.'}
+            </div>
+          )}
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
             {(
               [
@@ -819,6 +864,16 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
                           className="rounded-lg p-1.5 text-[#588B76] hover:bg-emerald-50"
                         >
                           <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`Add another section of ${o.code}`}
+                          title="Add another section"
+                          disabled={busy}
+                          onClick={() => addSection(o)}
+                          className="rounded-lg p-1.5 text-sky-700 hover:bg-sky-50"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
                         </button>
                         <button
                           type="button"

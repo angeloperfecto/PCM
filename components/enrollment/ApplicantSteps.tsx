@@ -195,10 +195,17 @@ export const RegistrationForm: React.FC<{ app: App }> = ({ app }) => {
                     <td className="p-2">
                       <input
                         type="checkbox"
-                        aria-label={`Select ${s.code}`}
+                        aria-label={`Select ${s.code}${s.section ? ` ${s.section}` : ''}`}
                         checked={checked}
                         disabled={(full || blocked) && !checked}
-                        onChange={(e) => setSelected((cur) => (e.target.checked ? [...cur, s.id] : cur.filter((x) => x !== s.id)))}
+                        // One section per subject: choosing another section of the same subject replaces it.
+                        onChange={(e) =>
+                          setSelected((cur) =>
+                            e.target.checked
+                              ? [...cur.filter((x) => offered.find((o: any) => o.id === x)?.code !== s.code), s.id]
+                              : cur.filter((x) => x !== s.id)
+                          )
+                        }
                       />
                     </td>
                     <td className="p-2">
