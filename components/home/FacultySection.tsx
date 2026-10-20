@@ -59,7 +59,7 @@ export const FacultySection: React.FC = () => {
                 <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#0b1d16] via-[#0b1d16]/40 to-transparent" />
 
                 {member.role && (
-                  <span className="absolute left-4 top-4 max-w-[calc(100%-5rem)] truncate rounded-full bg-[#e8c77a] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.16em] text-[#10261d]" title={member.role}>
+                  <span className="absolute left-4 top-4 max-w-[calc(100%-4.5rem)] truncate rounded-full bg-[#e8c77a] px-3 py-1 text-[10px] font-bold uppercase tracking-[0.08em] sm:tracking-[0.16em] text-[#10261d]" title={member.role}>
                     {member.role}
                   </span>
                 )}

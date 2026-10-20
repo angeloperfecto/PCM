@@ -159,7 +159,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   }
 
   // Get clean initials and honorific
-  const cleanName = name.replace(/^(Atty\.|Arch\.|Dr\.|Dra\.|Engr\.|Rev\.|Prof\.)\s+/i, '').replace(/["“”]/g, '');
+  const cleanName = name.replace(/^(?:(?:Atty|Arch|Dr|Dra|Engr|Rev|Prof)\.\s+)+/i, '').replace(/["“”]/g, '');
   const initials = cleanName
     .split(' ')
     .filter(Boolean)
