@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { displayFont, textFont } from '@/lib/fonts';
 import { HeroSection } from './HeroSection';
 import { EnrollmentAnnouncementBanner } from './EnrollmentAnnouncementBanner';
 import { AnnouncementTicker } from './AnnouncementTicker';
@@ -19,28 +20,32 @@ import { Admissions4StepSection } from './Admissions4StepSection';
 import { ImpactStatsSection } from './ImpactStatsSection';
 import { PartnersSection } from './PartnersSection';
 import { NewsletterSection } from './NewsletterSection';
+import { Reveal, ScrollProgress } from './fx/motion';
 
+// Home: "Dawn over the Cordillera". All content comes from the Admin CMS; this file only arranges it and adds
+// the type, reading-progress bar and scroll reveals shared by every section.
 export const HomeView: React.FC = () => {
   return (
-    <div className="w-full">
+    <div className={`home-scope w-full ${displayFont.variable} ${textFont.variable}`}>
+      <ScrollProgress />
       <HeroSection />
       <EnrollmentAnnouncementBanner />
       <AnnouncementTicker />
       <QuickAccessSection />
-      <FeaturedProgramsSection />
-      <AboutSection />
-      <MissionVisionValuesSection />
-      <HomeVideoSection />
-      <NewsSection />
-      <EventsSection />
+      <Reveal><FeaturedProgramsSection /></Reveal>
+      <Reveal><AboutSection /></Reveal>
+      <Reveal><MissionVisionValuesSection /></Reveal>
+      <Reveal><HomeVideoSection /></Reveal>
+      <Reveal><NewsSection /></Reveal>
+      <Reveal><EventsSection /></Reveal>
       <CTASection />
-      <LifeAtPCMSection />
-      <TestimonialsSection />
-      <FacultySection />
-      <Admissions4StepSection />
+      <Reveal><LifeAtPCMSection /></Reveal>
+      <Reveal><TestimonialsSection /></Reveal>
+      <Reveal><FacultySection /></Reveal>
+      <Reveal><Admissions4StepSection /></Reveal>
       <ImpactStatsSection />
-      <PartnersSection />
-      <NewsletterSection />
+      <Reveal><PartnersSection /></Reveal>
+      <Reveal><NewsletterSection /></Reveal>
     </div>
   );
 };

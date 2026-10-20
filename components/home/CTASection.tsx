@@ -2,68 +2,66 @@
 
 import React from 'react';
 import { usePCM } from '@/lib/store';
-import { ArrowRight, HelpCircle, Sparkles, Heart } from 'lucide-react';
+import { openEnrollmentTerm, termLabel } from '@/lib/reenrollment';
+import { ArrowRight, Heart, HelpCircle, Sparkles } from 'lucide-react';
+import { LightField } from './fx/LightField';
+import { CordilleraRidges } from './fx/CordilleraRidges';
+import { Magnetic, Reveal } from './fx/motion';
 
+// The call to ministry: dawn breaking over the ridges, with the apply button for the open term.
 export const CTASection: React.FC = () => {
-  const { navigateTo, setRequestInfoModalOpen } = usePCM();
+  const { navigateTo, setRequestInfoModalOpen, academicPeriods } = usePCM();
+  const term = openEnrollmentTerm(academicPeriods || []); // named only while its enrollment is open
 
   return (
-    <section className="relative w-full py-16 lg:py-20 bg-[#18392B] text-white overflow-hidden border-y-4 border-[#588B76]">
-      {/* Background Graphic & Texture */}
-      <div
-        className="absolute inset-0 opacity-15 bg-cover bg-center"
-        style={{
-          backgroundImage: `url('https://images.unsplash.com/photo-1544717305-2782549b5136?q=80&w=1600&auto=format&fit=crop')`,
-        }}
-      />
-      <div className="absolute inset-0 bg-gradient-to-r from-[#10261D] via-[#18392B]/95 to-[#10261D]" />
+    <section className="font-text grain relative isolate w-full overflow-hidden bg-gradient-to-b from-[#0b1d16] via-[#10261d] to-[#18392b] pb-44 pt-24 text-white sm:pb-52 lg:py-36 lg:pb-56">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-20 bg-[radial-gradient(ellipse_at_50%_100%,rgba(232,199,122,0.45),transparent_60%)]" />
+      <LightField className="-z-10 mix-blend-screen" intensity={0.8} origin={[0.5, 1.05]} />
+      <CordilleraRidges className="-z-10 h-[24%] opacity-90 sm:h-[38%] lg:h-[45%]" layers={4} />
 
-      {/* Decorative Sage Ambient Accent */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[250px] bg-[#588B76]/15 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-4 z-10">
-        <div className="inline-flex items-center gap-2 bg-[#10261D] border border-[#588B76]/50 px-3.5 py-1 rounded-sm text-xs font-mono uppercase tracking-widest text-[#85AA9B]">
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Equipping Servants for Kingdom Impact</span>
-        </div>
-
-        <h2 className="font-serif text-3xl sm:text-4xl md:text-5xl font-bold text-white tracking-tight leading-tight">
-          YOUR CALL TO MINISTRY STARTS HERE.
+      <Reveal className="relative mx-auto max-w-4xl px-4 text-center sm:px-6 lg:px-8">
+        <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#f6e3b4] backdrop-blur">
+          <Sparkles className="h-3.5 w-3.5" /> Equipping Servants for Kingdom Impact
+        </span>
+        <h2 className="font-display mt-6 text-5xl font-semibold leading-[0.98] sm:text-6xl lg:text-8xl">
+          Your call to ministry <span className="text-dawn italic">starts here.</span>
         </h2>
-
-        <p className="text-xs sm:text-base text-[#D0DED8] leading-relaxed font-sans max-w-2xl mx-auto">
-          Prepare your heart. Strengthen your biblical foundation. Develop the skills needed to serve God&apos;s people faithfully in the local church and the global harvest field.
+        <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-white/80 sm:text-lg">
+          Prepare your heart. Strengthen your biblical foundation. Develop the skills needed to serve God&apos;s people faithfully in the local church and the
+          global harvest field.
         </p>
 
-        <div className="pt-3 flex flex-wrap items-center justify-center gap-3.5">
-          <button
-            id="cta-btn-apply-main"
-            onClick={() => navigateTo('apply')}
-            className="flex items-center gap-2 bg-[#588B76] hover:bg-[#46705F] text-white font-bold px-7 py-3 rounded-sm shadow-md transition text-xs sm:text-sm tracking-wider uppercase cursor-pointer"
-          >
-            <span>APPLY NOW FOR AY 2026–2027</span>
-            <ArrowRight className="w-4 h-4" />
-          </button>
-
-          <button
-            id="cta-btn-give"
-            onClick={() => navigateTo('donation')}
-            className="flex items-center gap-2 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold px-6 py-3 rounded-sm border border-amber-500/50 transition text-xs sm:text-sm cursor-pointer"
-          >
-            <Heart className="w-4 h-4 fill-amber-300/40 text-amber-300" />
-            <span>SUPPORT & DONATE</span>
-          </button>
-
-          <button
-            id="cta-btn-request-info"
-            onClick={() => setRequestInfoModalOpen(true)}
-            className="flex items-center gap-2 bg-[#10261D] hover:bg-[#0A1812] text-[#D0DED8] font-semibold px-6 py-3 rounded-sm border border-[#588B76]/50 hover:border-[#85AA9B] transition text-xs sm:text-sm cursor-pointer"
-          >
-            <HelpCircle className="w-4 h-4 text-[#85AA9B]" />
-            <span>REQUEST INFO</span>
-          </button>
+        <div className="mt-10 flex flex-col items-stretch justify-center gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+          <Magnetic>
+            <button
+              id="cta-btn-apply-main"
+              onClick={() => navigateTo('apply')}
+              className="btn-shimmer group inline-flex w-full items-center justify-center gap-2 rounded-full bg-gradient-to-r from-[#e8c77a] to-[#f6e3b4] px-8 py-4 text-sm font-bold text-[#10261d] shadow-[0_10px_40px_-8px_rgba(232,199,122,0.7)] sm:w-auto"
+            >
+              {term ? `Apply for ${termLabel(term.semester, term.academicYear)}` : 'Apply now'}
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+            </button>
+          </Magnetic>
+          <Magnetic strength={0.18}>
+            <button
+              id="cta-btn-give"
+              onClick={() => navigateTo('donation')}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[#e8c77a]/40 bg-[#e8c77a]/10 px-6 py-4 text-sm font-semibold text-[#f6e3b4] backdrop-blur transition hover:bg-[#e8c77a]/20 sm:w-auto"
+            >
+              <Heart className="h-4 w-4" /> Support &amp; donate
+            </button>
+          </Magnetic>
+          <Magnetic strength={0.18}>
+            <button
+              id="cta-btn-request-info"
+              onClick={() => setRequestInfoModalOpen(true)}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.06] px-6 py-4 text-sm font-semibold text-white backdrop-blur transition hover:bg-white/15 sm:w-auto"
+            >
+              <HelpCircle className="h-4 w-4 text-[#85aa9b]" /> Request info
+            </button>
+          </Magnetic>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 };
