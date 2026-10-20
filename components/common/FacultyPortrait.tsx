@@ -11,6 +11,8 @@ interface FacultyPortraitProps {
   image?: string;
   id?: string;
   className?: string;
+  /** Placeholder without its own top/bottom labels, for cards that overlay their own text */
+  bare?: boolean;
   sizes?: string;
   fill?: boolean;
   priority?: boolean;
@@ -80,6 +82,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
   sizes = '120px',
   fill = true,
   priority = false,
+  bare = false,
 }) => {
   // Determine primary and fallback image candidates with robust validation
   const rawPrimary = (imageUrl || imageSrc || image || '').trim();
@@ -375,7 +378,7 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
 
   return (
     <div
-      className={`w-full h-full flex flex-col items-center justify-between bg-gradient-to-b ${style.bgGradient} p-3 text-center relative select-none overflow-hidden ${className}`}
+      className={`w-full h-full flex flex-col items-center ${bare ? 'justify-center pb-[38%]' : 'justify-between'} bg-gradient-to-b ${style.bgGradient} p-3 text-center relative select-none overflow-hidden ${className}`}
     >
       {/* Background Institutional Seal Watermark */}
       <svg
@@ -390,12 +393,14 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
       </svg>
 
       {/* Top Banner: Academic Affiliation */}
+      {!bare && (
       <div className="w-full flex items-center justify-between pt-1 px-1 z-10">
         <span className="text-[9px] font-mono font-bold tracking-widest text-[#85AA9B] uppercase">
           PCM • 1992
         </span>
         <div className="w-2 h-2 rounded-full" style={{ backgroundColor: style.accentColor }} />
       </div>
+      )}
 
       {/* Centerpiece: Academic Regalia & Silhouette Avatar */}
       <div className="relative flex flex-col items-center justify-center my-auto z-10">
@@ -506,11 +511,13 @@ export const FacultyPortrait: React.FC<FacultyPortraitProps> = ({
       </div>
 
       {/* Bottom Label: Discipline from PDF */}
+      {!bare && (
       <div className="w-full pt-1.5 border-t border-slate-700/50 z-10">
         <p className="text-[10px] font-medium text-slate-300 truncate max-w-full">
           {style.discipline}
         </p>
       </div>
+      )}
     </div>
   );
 };
