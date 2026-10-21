@@ -1104,6 +1104,53 @@ export async function acceptVerifiedPayment(
   return { ok: true, message: 'The applicant moved to Final Verification.' };
 }
 
+// An application sent back to "For Assessment" that already has its assessment (and possibly verified
+// payments) continues where it left off: to Final Verification when the downpayment is paid (or was
+// accepted or waived), otherwise to Payment. The assessment can't be re-saved once money is verified,
+// so without this such an application could not move forward.
+export async function continueAssessedApplication(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord,
+  payments: ApplicationPayment[]
+): Promise<{ ok: boolean; message: string }> {
+  if (normalizeStatus(app.status) !== 'For Assessment') return { ok: false, message: 'Only applications at "For Assessment" can continue this way.' };
+  if (!app.assessment) return { ok: false, message: 'There is no assessment yet. Save the assessment below first.' };
+  if (!app.registration?.subjects?.length) {
+    return { ok: false, message: 'The student has no academic registration on file. Send the application back to "For Registration" first.' };
+  }
+  const verified = verifiedPaymentTotal(payments);
+  const minimum = Number(app.assessment.minimumPayment) || 0;
+  const waived = app.paymentStatus === 'Waived';
+  const paid = waived || app.paymentStatus === 'Verified' || (minimum > 0 && verified >= minimum);
+  const pending = payments.some((p) => p.status === 'Submitted');
+  const to: WorkflowStatus = paid ? 'For Enrollment' : 'For Payment';
+  const timestamp = now();
+
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'applications', app.id), {
+    status: to,
+    paymentStatus: paid ? (waived ? 'Waived' : 'Verified') : verified > 0 ? (pending ? 'Submitted' : 'Partially Paid') : pending ? 'Submitted' : 'Awaiting Payment',
+    amountPaidVerified: verified,
+    updatedAt: timestamp,
+    lastDecisionBy: staff.name,
+    lastDecisionAt: timestamp,
+  });
+  addHistory(batch, db, app.id, {
+    status: to,
+    previousStatus: app.status,
+    actor: 'staff',
+    byName: staff.name,
+    byRole: staff.role,
+    note: paid
+      ? `Continued with the saved assessment; payment already ${waived ? 'waived' : `verified (₱${verified.toLocaleString()})`}.`
+      : `Continued with the saved assessment; ₱${verified.toLocaleString()} of the ₱${minimum.toLocaleString()} downpayment verified.`,
+  });
+  notifyApplicant(batch, db, app, paid ? 'Payment settled' : 'Enrollment assessment ready', nextStepsFor(to));
+  await batch.commit();
+  return { ok: true, message: paid ? 'The applicant moved to Final Verification.' : 'The applicant moved to Payment.' };
+}
+
 // Permanently deletes an application with its documents, payments and status history
 // (Firestore does not delete subcollections automatically, and uploaded documents are
 // private data). A linked official student record is NOT deleted. The deletion itself is

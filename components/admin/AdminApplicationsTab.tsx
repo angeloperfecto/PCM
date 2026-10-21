@@ -22,6 +22,7 @@ import {
   
   summarizeRequirements,
   transitionBlocker,
+  verifiedPaymentTotal,
   canFinalizeEnrollment,
   admissionRequirementTemplates,
   missingRequirements,
@@ -43,6 +44,7 @@ import {
   waivePayment,
   recordStaffPayment,
   acceptVerifiedPayment,
+  continueAssessedApplication,
 } from '@/lib/admissionsService';
 import { StaffPaymentSection } from '@/components/enrollment/PaymentSection';
 import { ApplicationProgress, StatusBadge } from '@/components/enrollment/ApplicationProgress';
@@ -832,7 +834,33 @@ const ApplicationDetail: React.FC<DetailProps> = ({
                   </button>
                 ) : null}
               </div>
-              {(status === 'For Assessment' || status === 'For Payment') && (
+              {status === 'For Assessment' && app.assessment && (
+                // Sent back to Assessment after the assessment was saved (and maybe paid): continue from there.
+                (() => {
+                  const verified = verifiedPaymentTotal(payments);
+                  const minimum = Number(app.assessment.minimumPayment) || 0;
+                  const paid = app.paymentStatus === 'Waived' || app.paymentStatus === 'Verified' || (minimum > 0 && verified >= minimum);
+                  return (
+                    <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs text-emerald-950" data-testid="continue-assessed">
+                      <p className="font-bold">This student already has an assessment{verified > 0 ? ` and ₱${verified.toLocaleString()} in verified payments` : ''}.</p>
+                      <p>
+                        {paid
+                          ? 'The downpayment is settled, so the application can go straight to Final Verification.'
+                          : `Continue to Payment so the student can pay the rest of the ₱${minimum.toLocaleString()} downpayment.`}
+                      </p>
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => run(paid ? 'Moved to Final Verification' : 'Moved to Payment', () => continueAssessedApplication(db, actor(), app as any, payments))}
+                        className="rounded-lg bg-[#18392B] px-3 py-2 font-bold text-white hover:bg-[#23533e] disabled:opacity-50"
+                      >
+                        {paid ? 'Continue to Final Verification' : 'Continue to Payment'}
+                      </button>
+                    </div>
+                  );
+                })()
+              )}
+              {((status === 'For Assessment' && !app.assessment) || status === 'For Payment') && (
                 // The next step is done in "Enrollment assessment & payment" below, not with a status button.
                 <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/60 p-3 text-xs text-sky-950" data-testid="next-step">
                   <p className="font-bold">
