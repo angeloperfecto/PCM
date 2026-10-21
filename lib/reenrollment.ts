@@ -258,6 +258,31 @@ export function suggestYearLevel(
   return { ...withUnits, yearLevel: next, advanced: true, reason: `You passed ${passedUnits} of ${totalUnits} units of ${current}, so you may enroll in ${next}.` };
 }
 
+/**
+ * The year level a student moves up to once they have completed (passed or been credited) every active
+ * subject of their current year level in their program's curriculum, e.g. all 1st Year subjects → 2nd Year.
+ * Moves past several levels if those are complete too, but never beyond the program's last year level with
+ * subjects. null when the student stays where they are (or the curriculum or year level isn't known).
+ */
+export function completedYearLevelPromotion(
+  student: Partial<StudentProfile>,
+  programSubjects: CurriculumSubject[]
+): { from: string; to: string } | null {
+  const from = normalizeYearLevel(student.yearLevel) || '';
+  if (yearIdx(from) < 0) return null;
+  const active = (programSubjects || []).filter((s) => s.status !== 'Inactive');
+  const ofLevel = (level: string) => active.filter((s) => normalizeYearLevel(s.yearLevel) === level);
+  const passed = passedCodes(student);
+  let level = from;
+  for (;;) {
+    const subjects = ofLevel(level);
+    const next = YEAR_LEVELS[yearIdx(level) + 1];
+    if (!subjects.length || !subjects.every((s) => passed.has(normCode(s.code))) || !next || !ofLevel(next).length) break;
+    level = next;
+  }
+  return level === from ? null : { from, to: level };
+}
+
 /** Year levels a student may choose: their current level and, if suggested, the next one. */
 export function yearLevelChoices(s: YearLevelSuggestion): string[] {
   return Array.from(new Set([s.current, s.yearLevel].filter(Boolean)));

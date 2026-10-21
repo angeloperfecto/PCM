@@ -29,6 +29,7 @@ import { termKeyOf, termLabel } from '@/lib/reenrollment';
 import { GradeSheetDocument } from '@/components/grades/GradeSheetDocument';
 import { GradeSheetEditor } from '@/components/grades/GradeSheetEditor';
 import { GradeSetupPanel } from './GradeSetupPanel';
+import { YearLevelPromotionCard, useCurriculumOf } from './YearLevelPromotionCard';
 import { printDocument } from '@/components/enrollment/CertificateOfRegistration';
 import type { AcademicPeriod, GradeAmendment, GradeSheet, GradingScale } from '@/lib/types';
 
@@ -254,6 +255,8 @@ export const AdminGradesTab: React.FC = () => {
         )}
       </div>
 
+      <YearLevelPromotionCard />
+
       {term && !term.closedAt && canManageCurriculum && <GradeSetupPanel term={term} sheets={sheets} termSections={termSections} onPrepare={() => prepare()} preparing={preparing} />}
 
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-xs space-y-3">
@@ -372,6 +375,7 @@ export const AdminGradesTab: React.FC = () => {
 // Pending grade changes: approve (applied with an audit entry) or reject.
 const AmendmentQueue: React.FC<{ amendments: GradeAmendment[]; sheets: GradeSheet[]; scale: GradingScale | null }> = ({ amendments, sheets, scale }) => {
   const { students, canManageCurriculum, currentAdminUser, firebaseAuthUser, addToast } = usePCM();
+  const curriculumOf = useCurriculumOf();
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState('');
   const decide = async (a: GradeAmendment, approve: boolean) => {
@@ -380,8 +384,9 @@ const AmendmentQueue: React.FC<{ amendments: GradeAmendment[]; sheets: GradeShee
     if (!approve && !(remarks[a.id] || '').trim()) return addToast('warning', 'Add a remark', 'Explain why the change is not approved.');
     setBusy(a.id);
     try {
-      await decideGradeAmendment(a, approve, sheet, scale, students.find((s) => s.id === a.studentRecordId), { name: currentAdminUser?.name || 'Registrar', uid: firebaseAuthUser?.uid || '' }, remarks[a.id] || '');
+      const promoted = await decideGradeAmendment(a, approve, sheet, scale, students.find((s) => s.id === a.studentRecordId), { name: currentAdminUser?.name || 'Registrar', uid: firebaseAuthUser?.uid || '' }, remarks[a.id] || '', curriculumOf);
       addToast('success', approve ? 'Grade change applied' : 'Grade change rejected', `${a.studentName} • ${a.subjectCode}`);
+      if (promoted) addToast('info', 'Year level updated', `${promoted.name}: ${promoted.from} → ${promoted.to} (all ${promoted.from} subjects completed).`);
     } catch (e: any) {
       addToast('error', 'Not saved', e?.code === 'permission-denied' ? 'You do not have permission to decide grade changes.' : 'Please try again.');
     } finally {
@@ -421,7 +426,11 @@ const AmendmentQueue: React.FC<{ amendments: GradeAmendment[]; sheets: GradeShee
 // Review of one grade sheet: issues, approve / return, finalize, publish, print, amendments.
 const GradeReviewModal: React.FC<{ sheet: GradeSheet; term: AcademicPeriod; scale: GradingScale | null; amendments: GradeAmendment[]; onClose: () => void }> = ({ sheet, term, scale, amendments, onClose }) => {
   const { classSections, academicSubjects, students, canManageCurriculum, currentAdminUser, firebaseAuthUser, addToast } = usePCM();
+  const curriculumOf = useCurriculumOf();
   const actor = currentAdminUser?.name || 'Registrar';
+  const showPromoted = (r: { promoted: { name: string; from: string; to: string }[] }) => {
+    if (r.promoted.length) addToast('info', 'Year levels updated', r.promoted.map((p) => `${p.name}: ${p.from} → ${p.to}`).join('; '));
+  };
   const termSections = termClassSections(term, classSections, academicSubjects, students);
   const section = termSections.find((s) => s.id === sheet.sectionId);
   const enrolledIds = section ? classListFor(section, termSections, students, term).students.map((s) => s.id) : undefined;
@@ -458,7 +467,8 @@ const GradeReviewModal: React.FC<{ sheet: GradeSheet; term: AcademicPeriod; scal
     act(async () => {
       if (!scale) throw new Error('Set the grading scale first.');
       if (scale.publishOnFinalize) {
-        const r = await publishGradeSheet(sheet, scale, students, actor, true);
+        const r = await publishGradeSheet(sheet, scale, students, actor, true, curriculumOf);
+        showPromoted(r);
         if (r.skipped.length) addToast('warning', 'Some grades not published', r.skipped.map((x) => `${x.name}: ${x.reason}`).join('; '));
       } else {
         await finalizeGradeSheet(sheet, actor);
@@ -469,7 +479,8 @@ const GradeReviewModal: React.FC<{ sheet: GradeSheet; term: AcademicPeriod; scal
   const publish = () =>
     act(async () => {
       if (!scale) throw new Error('Set the grading scale first.');
-      const r = await publishGradeSheet(sheet, scale, students, actor, false);
+      const r = await publishGradeSheet(sheet, scale, students, actor, false, curriculumOf);
+      showPromoted(r);
       if (r.skipped.length) addToast('warning', 'Some grades not published', r.skipped.map((x) => `${x.name}: ${x.reason}`).join('; '));
     }, 'Published to students');
 

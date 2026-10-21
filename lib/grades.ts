@@ -26,13 +26,14 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { calculateGPAFromGrades } from './studentDefaults';
-import { normAY, normCode, sameTerm, termKeyOf, termLabel } from './reenrollment';
+import { completedYearLevelPromotion, normAY, normCode, sameTerm, termKeyOf, termLabel } from './reenrollment';
 import { termEnrollmentRosters, termOfferings } from './termSubjects';
 import { professorDisplayName, resolveSectionProfessor } from './professors';
 import type {
   AcademicPeriod,
   AcademicSubject,
   ClassSection,
+  CurriculumSubject,
   EnrollmentSystemConfig,
   GradeAmendment,
   GradeEntry,
@@ -521,14 +522,48 @@ export function gradeUpdatesForStudent(student: StudentProfile, sheet: GradeShee
   };
 }
 
+/** A student's program curriculum (for moving them up a year level once a year level is complete). */
+export type CurriculumOf = (student: StudentProfile) => CurriculumSubject[];
+
+export interface YearLevelChange {
+  name: string;
+  from: string;
+  to: string;
+}
+
+/**
+ * Adds the year-level change to a student's grade updates when, with those grades, every subject of their
+ * year level is complete (e.g. all 1st Year subjects passed → 2nd Year). Returns the change, if any.
+ */
+export function withYearLevelPromotion(student: StudentProfile, updates: Partial<StudentProfile>, curriculumOf?: CurriculumOf): YearLevelChange | null {
+  if (!curriculumOf) return null;
+  const promotion = completedYearLevelPromotion({ ...student, ...updates }, curriculumOf(student));
+  if (!promotion) return null;
+  Object.assign(updates, {
+    yearLevel: promotion.to,
+    yearLevelUpdatedAt: new Date().toISOString(),
+    yearLevelNote: `Moved up from ${promotion.from} after completing all ${promotion.from} subjects.`,
+  });
+  return { name: student.fullName || student.name || student.studentId || '', ...promotion };
+}
+
 export interface PublishResult {
   published: number;
   skipped: { name: string; reason: string }[];
+  /** Students moved up a year level because these grades completed their year level. */
+  promoted: YearLevelChange[];
 }
 
 /** Writes a finalized sheet's grades to the students' records (what students see). */
-export async function publishGradeSheet(sheet: GradeSheet, scale: GradingScale, students: StudentProfile[], actor: string, finalize = false): Promise<PublishResult> {
-  const result: PublishResult = { published: 0, skipped: [] };
+export async function publishGradeSheet(
+  sheet: GradeSheet,
+  scale: GradingScale,
+  students: StudentProfile[],
+  actor: string,
+  finalize = false,
+  curriculumOf?: CurriculumOf
+): Promise<PublishResult> {
+  const result: PublishResult = { published: 0, skipped: [], promoted: [] };
   const batch = writeBatch(db);
   for (const r of sheet.students) {
     const student = students.find((s) => s.id === r.studentRecordId);
@@ -546,6 +581,8 @@ export async function publishGradeSheet(sheet: GradeSheet, scale: GradingScale, 
       result.skipped.push({ name: r.name, reason: `not enrolled in ${sheet.subjectCode} for this term` });
       continue;
     }
+    const promoted = withYearLevelPromotion(student, updates, curriculumOf);
+    if (promoted) result.promoted.push(promoted);
     batch.set(doc(db, 'studentProfiles', student.id), updates, { merge: true });
     result.published += 1;
   }
@@ -604,8 +641,10 @@ export async function decideGradeAmendment(
   scale: GradingScale,
   student: StudentProfile | undefined,
   actor: { name: string; uid: string },
-  remarks: string
-): Promise<void> {
+  remarks: string,
+  curriculumOf?: CurriculumOf
+): Promise<YearLevelChange | null> {
+  let promoted: YearLevelChange | null = null;
   const now = new Date().toISOString();
   const batch = writeBatch(db);
   batch.update(doc(db, 'gradeAmendments', a.id), {
@@ -634,7 +673,10 @@ export async function decideGradeAmendment(
     });
     if (sheet.publishedAt && student) {
       const updates = gradeUpdatesForStudent(student, sheet, a.newGrade, scale);
-      if (updates) batch.set(doc(db, 'studentProfiles', student.id), updates, { merge: true });
+      if (updates) {
+        promoted = withYearLevelPromotion(student, updates, curriculumOf);
+        batch.set(doc(db, 'studentProfiles', student.id), updates, { merge: true });
+      }
     }
   }
   await batch.commit();
@@ -643,6 +685,7 @@ export async function decideGradeAmendment(
     `Grade change ${approve ? 'approved' : 'not approved'}: ${a.subjectCode}`,
     `${a.studentName}: ${a.previousGrade || '—'} → ${a.newGrade}. ${approve ? 'Applied.' : 'Not applied.'}${remarks.trim() ? ` Note: ${remarks.trim()}` : ''}`
   );
+  return promoted;
 }
 
 // ---------------------------------------------------------------------------
