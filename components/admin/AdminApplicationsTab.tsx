@@ -832,6 +832,31 @@ const ApplicationDetail: React.FC<DetailProps> = ({
                   </button>
                 ) : null}
               </div>
+              {(status === 'For Assessment' || status === 'For Payment') && (
+                // The next step is done in "Enrollment assessment & payment" below, not with a status button.
+                <div className="space-y-2 rounded-xl border border-sky-200 bg-sky-50/60 p-3 text-xs text-sky-950" data-testid="next-step">
+                  <p className="font-bold">
+                    Next step: {status === 'For Assessment' ? 'Assessment → Payment' : 'Payment → Final Verification'}
+                  </p>
+                  <p>
+                    {status === 'For Assessment'
+                      ? 'Save the enrollment assessment (fees and downpayment) in "Enrollment assessment & payment" below to move the student to Payment, or choose "No payment required…" there to go straight to Final Verification.'
+                      : 'Verify the student’s reported payments in "Enrollment assessment & payment" below, record a payment made in person, or use "Move to Final Verification" / "Accept as downpayment" there.'}
+                  </p>
+                  {status === 'For Assessment' && !summary.allRequiredVerified && (
+                    <p className="font-semibold text-amber-900">
+                      First verify the required documents: {summary.missing.length} missing, {summary.rejected.length} to replace, {summary.awaitingReview.length} awaiting your review.
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => document.querySelector('[data-testid="staff-payment"]')?.scrollIntoView({ block: 'start' })}
+                    className="rounded-lg bg-[#18392B] px-3 py-2 font-bold text-white hover:bg-[#23533e]"
+                  >
+                    {status === 'For Assessment' ? 'Go to assessment & payment ↓' : 'Go to payments ↓'}
+                  </button>
+                </div>
+              )}
               {status === 'For Enrollment' && (
                 <div className="space-y-2 rounded-xl border border-teal-200 bg-teal-50/60 p-3" data-testid="final-verification">
                   <p className="text-xs font-bold text-teal-900">Final enrollment verification</p>
