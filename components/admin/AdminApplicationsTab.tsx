@@ -41,6 +41,8 @@ import {
   transitionApplication,
   updateApplicantDetails,
   waivePayment,
+  recordStaffPayment,
+  acceptVerifiedPayment,
 } from '@/lib/admissionsService';
 import { StaffPaymentSection } from '@/components/enrollment/PaymentSection';
 import { ApplicationProgress, StatusBadge } from '@/components/enrollment/ApplicationProgress';
@@ -1074,6 +1076,8 @@ const ApplicationDetail: React.FC<DetailProps> = ({
             onSaveAssessment={(input) => saveAssessment(db, actor(), app as any, requirements, input, payments)}
             onWaive={(reason) => waivePayment(db, actor(), app as any, requirements, reason)}
             onReviewPayment={(p, verdict, remarks) => reviewPayment(db, actor(), app as any, payments, p, verdict, remarks)}
+            onRecordPayment={(input) => recordStaffPayment(db, actor(), app as any, payments, input)}
+            onAcceptPayment={(reason) => acceptVerifiedPayment(db, actor(), app as any, payments, reason)}
           />
 
           {/* Enrolled: every payment, including balance payments and cashier receipts after enrollment */}

@@ -307,6 +307,16 @@ await check('applicant cannot verify own payment', false, () => updateDoc(doc(ap
 await check('another applicant cannot see the payment', false, () => getDoc(doc(otherApplicant, 'applications/appA/payments/p1')));
 await check('Editor cannot verify payments', false, () => updateDoc(doc(approvedEditor, 'applications/appA/payments/p1'), { status: 'Verified', reviewedBy: 'Editor' }));
 await check('Finance cannot change other application fields', false, () => updateDoc(doc(finance, 'applications/appA'), { fullName: 'Changed' }));
+await check('Finance records a payment made at the cashier (saved as verified)', true, () => {
+  const b = writeBatch(finance);
+  b.set(doc(finance, 'applications/appA/payments/pCash'), { applicantUid: 'appl1', amount: 1000, method: 'Over-the-Counter Cashier', referenceNo: 'OR-1', paidOn: '2026-10-01', status: 'Verified', submittedAt: 'now', reviewedBy: 'Finance', reviewedAt: 'now', remarks: 'Paid in person' });
+  b.update(doc(finance, 'applications/appA'), { paymentStatus: 'Submitted', amountPaidVerified: 1000, updatedAt: 'now' });
+  b.set(doc(finance, 'applications/appA/history/hCash'), { status: 'For Payment', actor: 'staff', byName: 'Finance' });
+  return b.commit();
+});
+await check('staff cannot record an unverified payment for the applicant', false, () => setDoc(doc(finance, 'applications/appA/payments/pX'), { applicantUid: 'appl1', amount: 1000, status: 'Submitted' }));
+await check('staff cannot record a zero payment', false, () => setDoc(doc(finance, 'applications/appA/payments/pZ'), { applicantUid: 'appl1', amount: 0, status: 'Verified' }));
+await check('Editor cannot record payments', false, () => setDoc(doc(approvedEditor, 'applications/appA/payments/pE'), { applicantUid: 'appl1', amount: 1000, status: 'Verified' }));
 await check('Finance verifies the payment and clears the applicant for enrollment', true, () => {
   const b = writeBatch(finance);
   b.update(doc(finance, 'applications/appA/payments/p1'), { status: 'Verified', reviewedBy: 'Finance', reviewedAt: 'now', remarks: '' });
@@ -315,6 +325,7 @@ await check('Finance verifies the payment and clears the applicant for enrollmen
   return b.commit();
 });
 await check('Finance cannot confirm enrollment', false, () => updateDoc(doc(finance, 'applications/appA'), { status: 'Enrolled' }));
+await check('staff cannot record a payment once the applicant is past Pending Payment', false, () => setDoc(doc(finance, 'applications/appA/payments/pLate'), { applicantUid: 'appl1', amount: 500, status: 'Verified' }));
 await check('a reviewed payment cannot be changed again', false, () => updateDoc(doc(finance, 'applications/appA/payments/p1'), { status: 'Rejected', remarks: 'oops' }));
 await check('Registrar allocates the next Student ID', true, () => setDoc(doc(registrar, 'systemConfig/studentIdCounter'), { '2026': 1 }, { merge: true }));
 await check('Registrar creates the official student record', true, () => setDoc(doc(registrar, 'studentProfiles/std-2026-PCM-0002'), { studentId: '2026-PCM-0002', authUid: 'appl1', email: 'appl1@gmail.com', enrollmentStatus: 'Enrolled', portalAccess: true }));

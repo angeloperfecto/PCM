@@ -983,6 +983,127 @@ export async function reviewPayment(
   };
 }
 
+// Step 6 (staff): record a payment made in person (e.g. at the cashier) that the applicant did not report
+// online. It is saved as verified and counts toward the downpayment like any verified payment.
+export async function recordStaffPayment(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord,
+  payments: ApplicationPayment[],
+  input: { amount: number; method: string; referenceNo: string; paidOn: string }
+): Promise<{ ok: boolean; message: string }> {
+  if (normalizeStatus(app.status) !== 'For Payment') {
+    return { ok: false, message: 'Payments are recorded while the application is "For Payment".' };
+  }
+  const amount = Math.round(Number(input.amount) * 100) / 100;
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, message: 'Enter the amount paid.' };
+  if (!input.method) return { ok: false, message: 'Choose how it was paid.' };
+  if (input.referenceNo.trim().length < 2) return { ok: false, message: 'Enter the official receipt or reference number.' };
+  if (!input.paidOn) return { ok: false, message: 'Enter the date it was paid.' };
+  if (input.paidOn > new Date().toISOString().slice(0, 10)) return { ok: false, message: 'The payment date cannot be in the future.' };
+
+  const timestamp = now();
+  const payment: ApplicationPayment = {
+    id: newId('pay'),
+    applicantUid: app.applicantUid || '',
+    amount,
+    method: input.method,
+    referenceNo: input.referenceNo.trim(),
+    paidOn: input.paidOn,
+    status: 'Verified',
+    submittedAt: timestamp,
+    reviewedBy: staff.name,
+    reviewedAt: timestamp,
+    remarks: 'Paid in person; recorded by staff.',
+  };
+  const verifiedTotal = verifiedPaymentTotal([...payments, payment]);
+  const minimum = Number(app.assessment?.minimumPayment) || 0;
+  const cleared = minimum > 0 && verifiedTotal >= minimum;
+  const stillPending = payments.some((p) => p.status === 'Submitted');
+
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'applications', app.id, 'payments', payment.id), payment);
+  batch.update(doc(db, 'applications', app.id), {
+    paymentStatus: cleared ? 'Verified' : stillPending ? 'Submitted' : 'Partially Paid',
+    amountPaidVerified: verifiedTotal,
+    updatedAt: timestamp,
+    ...(cleared
+      ? { status: 'For Enrollment', paymentVerifiedBy: staff.name, paymentVerifiedAt: timestamp, lastDecisionBy: staff.name, lastDecisionAt: timestamp }
+      : {}),
+  });
+  addHistory(batch, db, app.id, {
+    status: cleared ? 'For Enrollment' : 'For Payment',
+    previousStatus: app.status,
+    actor: 'staff',
+    byName: staff.name,
+    byRole: staff.role,
+    note: `Payment ₱${amount.toLocaleString()} paid in person (${input.method}, ref ${payment.referenceNo}) recorded. Verified total ₱${verifiedTotal.toLocaleString()} of ₱${minimum.toLocaleString()} minimum.`,
+  });
+  notifyApplicant(
+    batch,
+    db,
+    app,
+    'Payment recorded',
+    cleared
+      ? `Your payment of ₱${amount.toLocaleString()} was recorded. ${nextStepsFor('For Enrollment')}`
+      : `Your payment of ₱${amount.toLocaleString()} was recorded. ₱${Math.max(0, minimum - verifiedTotal).toLocaleString()} more is needed to reach the downpayment.`
+  );
+  await batch.commit();
+  return {
+    ok: true,
+    message: cleared ? 'Payment recorded. The downpayment is complete and the applicant moved to Final Verification.' : 'Payment recorded.',
+  };
+}
+
+// Step 6 (staff): move a paid applicant on to Final Verification. Used when the verified payments already
+// cover the downpayment but the application is still "For Payment", or (with a reason) to accept a smaller
+// initial payment as the downpayment.
+export async function acceptVerifiedPayment(
+  db: Firestore,
+  staff: Actor,
+  app: ApplicationRecord,
+  payments: ApplicationPayment[],
+  reason: string
+): Promise<{ ok: boolean; message: string }> {
+  if (normalizeStatus(app.status) !== 'For Payment') {
+    return { ok: false, message: 'Only applications at "Pending Payment" can be moved to Final Verification here.' };
+  }
+  if (payments.some((p) => p.status === 'Submitted')) {
+    return { ok: false, message: 'Verify or reject the payments waiting for verification first.' };
+  }
+  const verifiedTotal = verifiedPaymentTotal(payments);
+  if (verifiedTotal <= 0) return { ok: false, message: 'There is no verified payment yet. Verify a payment, record one paid in person, or use "No payment required".' };
+  const minimum = Number(app.assessment?.minimumPayment) || 0;
+  const below = verifiedTotal < minimum;
+  if (below && !reason.trim()) return { ok: false, message: 'Please record why this payment is accepted as the downpayment.' };
+
+  const timestamp = now();
+  const batch = writeBatch(db);
+  batch.update(doc(db, 'applications', app.id), {
+    status: 'For Enrollment',
+    paymentStatus: 'Verified',
+    amountPaidVerified: verifiedTotal,
+    paymentVerifiedBy: staff.name,
+    paymentVerifiedAt: timestamp,
+    updatedAt: timestamp,
+    lastDecisionBy: staff.name,
+    lastDecisionAt: timestamp,
+  });
+  addHistory(batch, db, app.id, {
+    status: 'For Enrollment',
+    previousStatus: app.status,
+    actor: 'staff',
+    byName: staff.name,
+    byRole: staff.role,
+    note: below
+      ? `Initial payment of ₱${verifiedTotal.toLocaleString()} accepted as the downpayment (minimum ₱${minimum.toLocaleString()}): ${reason.trim()}`
+      : `Verified payments of ₱${verifiedTotal.toLocaleString()} cover the ₱${minimum.toLocaleString()} downpayment; moved to Final Verification.`,
+  });
+  notifyApplicant(batch, db, app, 'Payment accepted', `Your payment was accepted. ${nextStepsFor('For Enrollment')}`);
+  await batch.commit();
+  return { ok: true, message: 'The applicant moved to Final Verification.' };
+}
+
 // Permanently deletes an application with its documents, payments and status history
 // (Firestore does not delete subcollections automatically, and uploaded documents are
 // private data). A linked official student record is NOT deleted. The deletion itself is

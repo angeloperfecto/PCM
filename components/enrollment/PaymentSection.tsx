@@ -266,6 +266,117 @@ export const ApplicantPaymentSection: React.FC<{
 // Staff view: build the assessment, waive payment, verify payments.
 // ---------------------------------------------------------------------------
 
+// While "Pending Payment": record a payment made in person, and move a paid applicant on to Final
+// Verification (when the verified payments cover the downpayment, or an initial payment is accepted).
+const StaffPaymentActions: React.FC<{
+  minimum: number;
+  payments: ApplicationPayment[];
+  busy: boolean;
+  run: (fn: () => Promise<Result>) => Promise<void>;
+  onRecordPayment?: (input: { amount: number; method: string; referenceNo: string; paidOn: string }) => Promise<Result>;
+  onAcceptPayment?: (reason: string) => Promise<Result>;
+}> = ({ minimum, payments, busy, run, onRecordPayment, onAcceptPayment }) => {
+  const verified = verifiedPaymentTotal(payments);
+  const pending = payments.some((p) => p.status === 'Submitted');
+  const covered = minimum > 0 && verified >= minimum;
+  const [reason, setReason] = useState('');
+  const [showRecord, setShowRecord] = useState(false);
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({ amount: '', method: 'Over-the-Counter Cashier', referenceNo: '', paidOn: today });
+
+  return (
+    <div className="space-y-2" data-testid="staff-payment-actions">
+      {onAcceptPayment && verified > 0 && !pending && (
+        <div className="space-y-2 rounded-xl border border-emerald-200 bg-emerald-50/60 p-3 text-xs text-emerald-950">
+          {covered ? (
+            <>
+              <p>
+                Verified payments of <strong>{peso(verified)}</strong> cover the {peso(minimum)} downpayment.
+              </p>
+              <button type="button" disabled={busy} onClick={() => run(() => onAcceptPayment(''))} className="rounded-lg bg-[#18392B] px-3 py-2 font-bold text-white hover:bg-[#23533e] disabled:opacity-50">
+                Move to Final Verification
+              </button>
+            </>
+          ) : (
+            <>
+              <p>
+                <strong>{peso(verified)}</strong> verified of the {peso(minimum)} downpayment. To let the student continue with this initial payment, record why
+                (the rest stays as their balance).
+              </p>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <input
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Reason (e.g. approved installment plan) — recorded in the history"
+                  className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white p-2"
+                />
+                <button type="button" disabled={busy || !reason.trim()} onClick={() => run(() => onAcceptPayment(reason))} className="rounded-lg bg-[#18392B] px-3 py-2 font-bold text-white hover:bg-[#23533e] disabled:opacity-40">
+                  Accept as downpayment
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+      {pending && verified > 0 && (
+        <p className="rounded-lg bg-amber-50 p-2 text-[11px] text-amber-900">Verify or reject the payments waiting above before moving the student on.</p>
+      )}
+
+      {onRecordPayment && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs">
+          <button type="button" onClick={() => setShowRecord((v) => !v)} className="inline-flex items-center gap-1 font-semibold text-[#18392B]">
+            <Plus className="h-3.5 w-3.5" /> Record a payment made in person
+          </button>
+          {showRecord && (
+            <div className="mt-2 space-y-2">
+              <p className="text-[11px] text-slate-600">For a payment the student made at the cashier and did not report online. It is saved as verified.</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
+                <label className="font-semibold text-slate-700">
+                  Amount (₱)
+                  <input type="number" min="1" step="0.01" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5" />
+                </label>
+                <label className="font-semibold text-slate-700">
+                  Method
+                  <select value={form.method} onChange={(e) => setForm({ ...form, method: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5">
+                    {PAYMENT_METHODS.filter((m) => m !== 'Scholarship Grant').map((m) => (
+                      <option key={m}>{m}</option>
+                    ))}
+                  </select>
+                </label>
+                <label className="font-semibold text-slate-700">
+                  OR / reference no.
+                  <input value={form.referenceNo} onChange={(e) => setForm({ ...form, referenceNo: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5" />
+                </label>
+                <label className="font-semibold text-slate-700">
+                  Date paid
+                  <input type="date" max={today} value={form.paidOn} onChange={(e) => setForm({ ...form, paidOn: e.target.value })} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-1.5" />
+                </label>
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  run(async () => {
+                    const r = await onRecordPayment({ amount: Number(form.amount), method: form.method, referenceNo: form.referenceNo, paidOn: form.paidOn });
+                    if (r.ok) {
+                      setForm({ ...form, amount: '', referenceNo: '' });
+                      setShowRecord(false);
+                    }
+                    return r;
+                  })
+                }
+                className="rounded-lg bg-[#18392B] px-3 py-2 font-bold text-white hover:bg-[#23533e] disabled:opacity-50"
+              >
+                {busy ? 'Saving…' : 'Record payment'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export const StaffPaymentSection: React.FC<{
   status?: string;
   assessment?: EnrollmentAssessment | null;
@@ -283,6 +394,10 @@ export const StaffPaymentSection: React.FC<{
   onSaveAssessment: (input: { units: number; items: FeeLine[]; minimumPayment: number; notes: string }) => Promise<Result>;
   onWaive: (reason: string) => Promise<Result>;
   onReviewPayment: (p: ApplicationPayment, verdict: 'Verified' | 'Rejected', remarks: string) => Promise<Result>;
+  /** Record a payment made in person (cashier) that the applicant did not report online. */
+  onRecordPayment?: (input: { amount: number; method: string; referenceNo: string; paidOn: string }) => Promise<Result>;
+  /** Move a paid applicant to Final Verification (a reason is needed when below the downpayment). */
+  onAcceptPayment?: (reason: string) => Promise<Result>;
 }> = (props) => {
   const s = normalizeStatus(props.status);
   const editable = props.canAssess && (s === 'For Assessment' || s === 'For Payment');
@@ -407,6 +522,17 @@ export const StaffPaymentSection: React.FC<{
           <p className="text-xs font-bold text-slate-700">Payments</p>
           <PaymentList payments={props.payments} onReview={props.canVerify && s === 'For Payment' ? props.onReviewPayment : undefined} />
         </div>
+      )}
+
+      {props.canVerify && s === 'For Payment' && props.assessment && (
+        <StaffPaymentActions
+          minimum={Number(props.assessment.minimumPayment) || 0}
+          payments={props.payments}
+          busy={busy}
+          run={run}
+          onRecordPayment={props.onRecordPayment}
+          onAcceptPayment={props.onAcceptPayment}
+        />
       )}
     </section>
   );

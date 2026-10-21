@@ -317,6 +317,12 @@ service cloud.firestore {
           && request.resource.data.get('amount', 0) is number
           && request.resource.data.get('amount', 0) > 0
           && !request.resource.data.keys().hasAny(['reviewedBy', 'reviewedAt', 'remarks']);
+        // Payment staff record a payment made in person (cashier); it is saved as verified.
+        allow create: if isPaymentStaff()
+          && get(applicationPath(appId)).data.get('status', '') == 'For Payment'
+          && request.resource.data.get('status', '') == 'Verified'
+          && request.resource.data.get('amount', 0) is number
+          && request.resource.data.get('amount', 0) > 0;
         allow update: if isPaymentStaff()
           && resource.data.get('status', '') == 'Submitted'
           && request.resource.data.get('status', '') in ['Verified', 'Rejected']
