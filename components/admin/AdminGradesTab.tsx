@@ -62,6 +62,13 @@ export const AdminGradesTab: React.FC = () => {
     [academicPeriods]
   );
   const [termId, setTermId] = useState('');
+  // When the active term changes in Academic Terms, follow it (a term picked here stays until then).
+  const activeTermId = academicPeriods.find((p) => p.isCurrent)?.id || '';
+  const lastActive = useRef(activeTermId);
+  useEffect(() => {
+    if (activeTermId && activeTermId !== lastActive.current) setTermId(activeTermId);
+    lastActive.current = activeTermId;
+  }, [activeTermId]);
   const term = sortedTerms.find((p) => p.id === termId) || sortedTerms[0];
   const termKey = term ? termKeyOf(term.semester, term.academicYear) : '';
   const { sheets, loaded, error, errorCode } = useGradeSheets({ termKey: termKey || undefined });

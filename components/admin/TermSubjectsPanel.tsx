@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { doc, updateDoc, writeBatch } from 'firebase/firestore';
 import { AlertTriangle, BookOpen, CheckCircle2, Copy, Eye, ListPlus, Lock, Pencil, Plus, RotateCcw, Trash2, Unlock, Wand2, X } from 'lucide-react';
 import { db } from '@/lib/firebase';
@@ -59,15 +59,24 @@ export const TermSubjectsPanel: React.FC<{ initialTermId?: string }> = ({ initia
   const by = currentAdminUser?.name || currentAdminUser?.email || "Admin";
 
   const openTerm = displayTerm(academicPeriods);
+  // The active term set in Academic Terms comes first and is selected by default (as in Grade Management), then
+  // the term open for enrollment, then the rest.
   const terms = useMemo(() => {
     const open = displayTerm(academicPeriods);
-    const rank = (p: AcademicPeriod) => (p.id === open?.id ? 0 : p.isCurrent ? 1 : p.closedAt ? 3 : 2);
+    const rank = (p: AcademicPeriod) => (p.isCurrent ? 0 : p.id === open?.id ? 1 : p.closedAt ? 3 : 2);
     return [...academicPeriods].sort((a, b) => rank(a) - rank(b) || termKeyOf(b.semester, b.academicYear).localeCompare(termKeyOf(a.semester, a.academicYear)));
   }, [academicPeriods]);
   const [termId, setTermId] = useState(initialTermId || '');
   useEffect(() => {
     if (initialTermId) setTermId(initialTermId);
   }, [initialTermId]);
+  // When the active term changes in Academic Terms, follow it (a term picked here stays until then).
+  const activeTermId = academicPeriods.find((p) => p.isCurrent)?.id || '';
+  const lastActive = useRef(activeTermId);
+  useEffect(() => {
+    if (activeTermId && activeTermId !== lastActive.current) setTermId(activeTermId);
+    lastActive.current = activeTermId;
+  }, [activeTermId]);
   const term = terms.find((p) => p.id === termId) || terms[0] || null;
 
   const programList = useMemo(() => (programs || []).filter((p: any) => programLabel(p)), [programs]);
