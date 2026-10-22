@@ -327,6 +327,13 @@ await check('Finance verifies the payment and clears the applicant for enrollmen
 await check('Finance cannot confirm enrollment', false, () => updateDoc(doc(finance, 'applications/appA'), { status: 'Enrolled' }));
 await check('staff cannot record a payment once the applicant is past Pending Payment', false, () => setDoc(doc(finance, 'applications/appA/payments/pLate'), { applicantUid: 'appl1', amount: 500, status: 'Verified' }));
 await check('a reviewed payment cannot be changed again', false, () => updateDoc(doc(finance, 'applications/appA/payments/p1'), { status: 'Rejected', remarks: 'oops' }));
+const fix = (extra = {}) => ({ amount: 4500, method: 'GCash', referenceNo: 'GC123457', paidOn: '2026-10-01', editedBy: 'Reg', editedAt: 'now', editReason: 'Wrong amount typed', ...extra });
+await check('Registrar corrects a payment (with a reason)', true, () => updateDoc(doc(registrar, 'applications/appA/payments/p1'), fix()));
+await check('a correction needs a reason', false, () => updateDoc(doc(registrar, 'applications/appA/payments/p1'), fix({ editReason: '' })));
+await check('a correction cannot set a zero amount', false, () => updateDoc(doc(registrar, 'applications/appA/payments/p1'), fix({ amount: 0 })));
+await check('a correction cannot change the verification', false, () => updateDoc(doc(registrar, 'applications/appA/payments/p1'), fix({ status: 'Rejected' })));
+await check('Finance cannot correct a payment', false, () => updateDoc(doc(finance, 'applications/appA/payments/p1'), fix({ editedBy: 'Fin' })));
+await check('applicant cannot correct own payment', false, () => updateDoc(doc(applicant, 'applications/appA/payments/p1'), fix({ editedBy: 'me' })));
 await check('Registrar allocates the next Student ID', true, () => setDoc(doc(registrar, 'systemConfig/studentIdCounter'), { '2026': 1 }, { merge: true }));
 await check('Registrar creates the official student record', true, () => setDoc(doc(registrar, 'studentProfiles/std-2026-PCM-0002'), { studentId: '2026-PCM-0002', authUid: 'appl1', email: 'appl1@gmail.com', enrollmentStatus: 'Enrolled', portalAccess: true }));
 await check('Editor cannot create official student records', false, () => setDoc(doc(approvedEditor, 'studentProfiles/std-x'), { studentId: 'X' }));
@@ -446,6 +453,12 @@ await check('payment staff cannot change the amount when verifying', false, () =
 await check('Registrar renames the term on a payment', true, () => updateDoc(doc(registrar, 'studentPayments/sp-1'), { term: '1st Semester, AY 2027–2028', updatedAt: 'now' }));
 await check('renaming cannot change a payment amount', false, () => updateDoc(doc(registrar, 'studentPayments/sp-1'), { term: 'x', amount: 1, updatedAt: 'now' }));
 await check('Finance cannot rename the term on a payment', false, () => updateDoc(doc(finance, 'studentPayments/sp-1'), { term: 'x', updatedAt: 'now' }));
+await check('Registrar corrects a balance payment', true, () =>
+  updateDoc(doc(registrar, 'studentPayments/sp-1'), { amount: 900, method: 'GCash', referenceNo: 'REF-FIX', paidOn: '2026-10-02', editedBy: 'Reg', editedAt: 'now', editReason: 'Reference typo' })
+);
+await check('student cannot correct own balance payment', false, () =>
+  updateDoc(doc(studentUser, 'studentPayments/sp-1'), { amount: 1, method: 'GCash', referenceNo: 'x', paidOn: '2026-10-02', editedBy: 'me', editedAt: 'now', editReason: 'lower it' })
+);
 await check('Finance verifies a payment and posts it to the student record', true, () => {
   const b = writeBatch(finance);
   b.update(doc(finance, 'studentPayments/sp-1'), { status: 'Verified', reviewedBy: 'Finance', reviewedAt: 'now', remarks: '' });

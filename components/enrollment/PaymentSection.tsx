@@ -3,6 +3,8 @@
 import React, { useMemo, useState } from 'react';
 import { CheckCircle2, Clock, Plus, Receipt, Trash2, XCircle } from 'lucide-react';
 import { PaymentGuide, PaymentInstructions } from './PaymentInstructions';
+import { PaymentCorrectionDialog, type PaymentToCorrect } from '@/components/admin/PaymentCorrectionDialog';
+import type { PaymentEdit } from '@/lib/paymentAdmin';
 import {
   ApplicationPayment,
   EnrollmentAssessment,
@@ -68,7 +70,9 @@ const AssessmentSummary: React.FC<{ assessment: EnrollmentAssessment; payments: 
 const PaymentList: React.FC<{
   payments: ApplicationPayment[];
   onReview?: (p: ApplicationPayment, verdict: 'Verified' | 'Rejected', remarks: string) => Promise<Result>;
-}> = ({ payments, onReview }) => {
+  /** Registrar / Admin: correct or delete a payment. */
+  onCorrect?: (p: ApplicationPayment, mode: 'edit' | 'delete') => void;
+}> = ({ payments, onReview, onCorrect }) => {
   const [remarks, setRemarks] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<Record<string, Result>>({});
@@ -117,6 +121,17 @@ const PaymentList: React.FC<{
                 View proof
               </button>
             )}
+            {onCorrect && (
+              <>
+                <button type="button" onClick={() => onCorrect(p, 'edit')} className="rounded-lg border border-slate-300 px-2.5 py-1 text-[11px] font-semibold text-[#18392B] hover:bg-emerald-50">
+                  Edit
+                </button>
+                <button type="button" onClick={() => onCorrect(p, 'delete')} className="rounded-lg border border-rose-200 px-2.5 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-50">
+                  Delete
+                </button>
+              </>
+            )}
+            {(p as any).editedBy && <span className="text-[10px] text-slate-500">Corrected by {(p as any).editedBy}{(p as any).editReason ? ` — ${(p as any).editReason}` : ''}</span>}
             {onReview && p.status === 'Submitted' && (
               <div className="flex w-full flex-col gap-2 sm:flex-row sm:items-center">
                 <input
@@ -394,6 +409,8 @@ export const StaffPaymentSection: React.FC<{
   onSaveAssessment: (input: { units: number; items: FeeLine[]; minimumPayment: number; notes: string }) => Promise<Result>;
   onWaive: (reason: string) => Promise<Result>;
   onReviewPayment: (p: ApplicationPayment, verdict: 'Verified' | 'Rejected', remarks: string) => Promise<Result>;
+  /** Registrar / Admin: correct (edit) or delete (null) a payment, with the reason. */
+  onCorrectPayment?: (p: ApplicationPayment, edit: PaymentEdit | null, reason: string) => Promise<Result>;
   /** Record a payment made in person (cashier) that the applicant did not report online. */
   onRecordPayment?: (input: { amount: number; method: string; referenceNo: string; paidOn: string }) => Promise<Result>;
   /** Move a paid applicant to Final Verification (a reason is needed when below the downpayment). */
@@ -413,6 +430,7 @@ export const StaffPaymentSection: React.FC<{
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<Result | null>(null);
   const [editing, setEditing] = useState(!props.assessment);
+  const [correcting, setCorrecting] = useState<{ payment: ApplicationPayment; mode: 'edit' | 'delete' } | null>(null);
 
   const run = async (fn: () => Promise<Result>) => {
     setBusy(true);
@@ -520,8 +538,26 @@ export const StaffPaymentSection: React.FC<{
       {(props.assessment || props.payments.length > 0) && (
         <div className="space-y-2">
           <p className="text-xs font-bold text-slate-700">Payments</p>
-          <PaymentList payments={props.payments} onReview={props.canVerify && s === 'For Payment' ? props.onReviewPayment : undefined} />
+          <PaymentList
+            payments={props.payments}
+            onReview={props.canVerify && s === 'For Payment' ? props.onReviewPayment : undefined}
+            onCorrect={props.onCorrectPayment && s !== 'Enrolled' ? (payment, mode) => setCorrecting({ payment, mode }) : undefined}
+          />
         </div>
+      )}
+
+      {correcting && props.onCorrectPayment && (
+        <PaymentCorrectionDialog
+          payment={{ id: correcting.payment.id, amount: Number(correcting.payment.amount) || 0, method: correcting.payment.method, reference: correcting.payment.referenceNo, date: correcting.payment.paidOn } as PaymentToCorrect}
+          mode={correcting.mode}
+          note="The application’s verified total and payment status are updated."
+          onClose={() => setCorrecting(null)}
+          onSave={async (edit, reason) => {
+            const r = await props.onCorrectPayment!(correcting.payment, edit, reason);
+            setResult(r);
+            return r;
+          }}
+        />
       )}
 
       {props.canVerify && s === 'For Payment' && props.assessment && (
