@@ -34,12 +34,11 @@ import { GradingScaleCard } from './GradingScaleCard';
 import { CloseTermModal } from './CloseTermModal';
 import { ReenrollmentReviewPanel } from './ReenrollmentReviewPanel';
 import { TermEnrollmentOverview } from './TermEnrollmentOverview';
-import { ClassListModal, classListFor } from './ClassListModal';
+import { ClassSchedulesPanel } from './ClassSchedulesPanel';
 import { AdminCurriculumPanel } from './AdminCurriculumPanel';
 import {
   GraduationCap,
   FileCheck,
-  Clock,
   CheckCircle2,
   AlertCircle,
   XCircle,
@@ -72,7 +71,6 @@ import {
   Sparkles,
   ToggleLeft,
   ToggleRight,
-  Building,
 } from 'lucide-react';
 
 export type EnrollmentAdminSubTab =
@@ -154,7 +152,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
   const [isCORModalOpen, setIsCORModalOpen] = useState(false);
   const [corStudentSnap, setCorStudent] = useState<StudentProfile | null>(null);
   // Subject whose master list (class list) is open.
-  const [classListSubjectId, setClassListSubjectId] = useState<string | null>(null);
   // Open dialogs follow the live records, so changes appear without reopening them.
   const selectedEnrollment = selectedEnrollmentSnap ? enrollments.find((e) => e.id === selectedEnrollmentSnap.id) || selectedEnrollmentSnap : null;
   const corStudent = corStudentSnap ? students.find((s) => s.id === corStudentSnap.id) || corStudentSnap : null;
@@ -1311,86 +1308,17 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       {/* SUBVIEW 8: SECTIONS & CLASS SCHEDULES */}
       {/* ========================================================================= */}
       {activeSubTab === 'sections' && (
-        <div className="space-y-4">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 flex items-center justify-between">
-            <div>
-              <h4 className="font-bold text-sm text-[#18392B]">Active Section Offerings & Class Schedules</h4>
-              <p className="text-xs text-slate-500">
-                Timetable matrix with room allotments, instructors, and student capacity counters.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {academicSubjects.filter((subj) => !subj.isArchived).map((subj) => {
-              // Counted from the student records (the same list the class list shows).
-              const enrolled = classListFor(subj, students).length;
-              const cap = Number(subj.capacity) || 0;
-              const pct = cap ? Math.min(100, Math.round((enrolled / cap) * 100)) : 0;
-
-              return (
-                <div key={subj.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-xs space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-mono text-[10px] font-bold">
-                      {subj.section || 'SEC-A'}
-                    </span>
-                    <span className="font-mono font-bold text-xs text-slate-700">{subj.code}</span>
-                  </div>
-
-                  <div>
-                    <h5 className="font-bold text-sm text-slate-900 leading-tight">{subj.title}</h5>
-                    <p className="text-xs text-slate-500 mt-1">{subj.instructor}</p>
-                  </div>
-
-                  <div className="bg-slate-50 p-2.5 rounded-lg text-xs space-y-1 text-slate-600 font-medium">
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-3.5 h-3.5 text-[#588B76]" />
-                      <span>{subj.schedule}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Building className="w-3.5 h-3.5 text-[#588B76]" />
-                      <span>{subj.room}</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <div className="flex justify-between text-[11px] font-medium text-slate-600">
-                      <span>Seat Capacity Fill</span>
-                      <span className="font-mono font-bold">{cap ? `${enrolled}/${cap} (${pct}%)` : `${enrolled} enrolled`}</span>
-                    </div>
-                    <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full transition-all ${
-                          pct >= 90 ? 'bg-rose-500' : pct >= 70 ? 'bg-amber-500' : 'bg-emerald-500'
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setClassListSubjectId(subj.id)}
-                    className="w-full rounded-lg border border-[#588B76]/40 bg-emerald-50/60 px-3 py-2 text-xs font-bold text-[#18392B] hover:bg-emerald-100"
-                  >
-                    View class list ({enrolled})
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <ClassSchedulesPanel
+          onOpenTermSubjects={(id) => {
+            setSubjectsTermId(id);
+            setActiveSubTab('term-subjects');
+          }}
+        />
       )}
 
       {activeSubTab === 'curriculum' && <AdminCurriculumPanel />}
       {activeSubTab === 'term-subjects' && <TermSubjectsPanel initialTermId={subjectsTermId} />}
 
-      {classListSubjectId && academicSubjects.find((x) => x.id === classListSubjectId) && (
-        <ClassListModal
-          subject={academicSubjects.find((x) => x.id === classListSubjectId)!}
-          students={students}
-          onClose={() => setClassListSubjectId(null)}
-        />
-      )}
 
       {/* ========================================================================= */}
       {/* SUBVIEW 9: FACULTY TEACHING LOAD */}
