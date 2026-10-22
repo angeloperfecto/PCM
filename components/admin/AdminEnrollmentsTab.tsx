@@ -25,6 +25,7 @@ import { isTermOffering, studentsEnrolledInTerm } from '@/lib/termSubjects';
 import { normAY, termLabel } from '@/lib/reenrollment';
 import { StudentPaymentsPanel } from './StudentPaymentsPanel';
 import { PaymentSettingsCard } from './PaymentSettingsCard';
+import { FeeScheduleCard } from './FeeScheduleCard';
 import { AdmissionRequirementsCard } from './AdmissionRequirementsCard';
 import { ReenrollmentRulesCard } from './ReenrollmentRulesCard';
 import { GradingScaleCard } from './GradingScaleCard';
@@ -110,10 +111,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
     updateAcademicPeriod,
     setCurrentAcademicPeriod,
     deleteAcademicPeriod,
-    feeStructure,
-    addFeeStructureItem,
-    updateFeeStructureItem,
-    deleteFeeStructureItem,
     approveEnrollment,
     returnEnrollmentForCorrection,
     rejectEnrollment,
@@ -165,15 +162,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
 
   // Add Student Profile modal
   const [isNewStudentModalOpen, setIsNewStudentModalOpen] = useState(false);
-  // Add Fee Item Modal
-  const [isFeeModalOpen, setIsFeeModalOpen] = useState(false);
-  const [feeForm, setFeeForm] = useState({
-    name: '',
-    category: 'Miscellaneous' as 'Tuition' | 'Miscellaneous' | 'Laboratory' | 'Other',
-    amount: 500,
-    isPerUnit: false,
-    required: true,
-  });
 
   // System Governance Switches state
   const [govSwitches, setGovSwitches] = useState({
@@ -340,19 +328,6 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
   const handleReturnPreEnlistment = async (id: string) => {
     await updatePreEnlistmentStatus(id, 'Returned for Revision', preEnlistmentRemarks || 'Please review elective units with advisor.');
     setSelectedPreEnlistment(null);
-  };
-
-  const handleAddFeeSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!feeForm.name) return;
-    await addFeeStructureItem({
-      name: feeForm.name.trim(),
-      category: feeForm.category,
-      amount: Number(feeForm.amount),
-      isPerUnit: feeForm.isPerUnit,
-      required: feeForm.required,
-    });
-    setIsFeeModalOpen(false);
   };
 
   const handlePrintCOR = (student: StudentProfile) => {
@@ -1466,84 +1441,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       {activeSubTab === 'fees' && (
         <div className="space-y-4">
           <PaymentSettingsCard />
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200">
-            <div>
-              <h4 className="font-bold text-sm text-[#18392B]">Tuition Schedule & Miscellaneous Fee Policy</h4>
-              <p className="text-xs text-slate-500">
-                Define per-unit rates, laboratory charges, and required registration fees for automatic student billing.
-              </p>
-            </div>
-            <button
-              onClick={() => setIsFeeModalOpen(true)}
-              className="bg-[#18392B] hover:bg-[#588B76] text-white text-xs font-bold px-3.5 py-2 rounded-lg transition flex items-center gap-1.5 cursor-pointer shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              <span>Add Fee Item</span>
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-mono text-slate-500 uppercase block">Undergraduate Rate</span>
-              <span className="font-serif text-2xl font-bold text-[#18392B]">₱850 / Unit</span>
-              <p className="text-[11px] text-slate-500 mt-1">Applicable to B.Th. & Associate programs</p>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-mono text-slate-500 uppercase block">Graduate Studies Rate</span>
-              <span className="font-serif text-2xl font-bold text-[#18392B]">₱1,200 / Unit</span>
-              <p className="text-[11px] text-slate-500 mt-1">M.Div. and MCL degree candidates</p>
-            </div>
-            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
-              <span className="text-[11px] font-mono text-slate-500 uppercase block">Downpayment Requirement</span>
-              <span className="font-serif text-2xl font-bold text-emerald-700">40% Minimum</span>
-              <p className="text-[11px] text-slate-500 mt-1">Required to release official COR</p>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-                <tr>
-                  <th className="p-3.5">Fee Name</th>
-                  <th className="p-3.5">Category</th>
-                  <th className="p-3.5">Amount</th>
-                  <th className="p-3.5">Assessment Type</th>
-                  <th className="p-3.5">Mandatory</th>
-                  <th className="p-3.5 text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {feeStructure.map((fee) => (
-                  <tr key={fee.id} className="hover:bg-slate-50 transition">
-                    <td className="p-3.5 font-bold text-slate-900">{fee.name}</td>
-                    <td className="p-3.5">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] bg-slate-100 text-slate-700 font-medium">
-                        {fee.category}
-                      </span>
-                    </td>
-                    <td className="p-3.5 font-mono font-bold text-slate-900">₱{(Number(fee.amount) || 0).toLocaleString()}</td>
-                    <td className="p-3.5 text-slate-600">{fee.isPerUnit ? 'Per Unit Course' : 'Fixed Per Term'}</td>
-                    <td className="p-3.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                        fee.required ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {fee.required ? 'Required' : 'Optional'}
-                      </span>
-                    </td>
-                    <td className="p-3.5 text-right">
-                      <button
-                        onClick={() => deleteFeeStructureItem(fee.id)}
-                        className="p-1 text-slate-400 hover:text-rose-600 transition cursor-pointer"
-                        title="Delete Fee Item"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <FeeScheduleCard />
         </div>
       )}
 
