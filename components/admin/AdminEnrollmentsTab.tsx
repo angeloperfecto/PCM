@@ -35,6 +35,7 @@ import { CloseTermModal } from './CloseTermModal';
 import { ReenrollmentReviewPanel } from './ReenrollmentReviewPanel';
 import { TermEnrollmentOverview } from './TermEnrollmentOverview';
 import { ClassSchedulesPanel } from './ClassSchedulesPanel';
+import { AlumniRecordsPanel } from './AlumniRecordsPanel';
 import { AdminCurriculumPanel } from './AdminCurriculumPanel';
 import {
   GraduationCap,
@@ -76,6 +77,7 @@ import {
 export type EnrollmentAdminSubTab =
   | 'dashboard'
   | 'students'
+  | 'alumni'
   | 'pre-enlistment'
   | 'enrollments'
   | 'add-drop'
@@ -390,12 +392,13 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           { id: 'sections', label: 'Class Schedules', icon: Layers },
           { id: 'instructors', label: 'Faculty Load', icon: User, count: faculty.length },
           { id: 'fees', label: 'Tuition & Fee Policy', icon: PhilippinePeso },
+          { id: 'alumni', label: 'Alumni & Historical Records', icon: GraduationCap },
           { id: 'payments', label: 'Student Payments', icon: PhilippinePeso, count: studentPayments.filter((p) => p.status === 'Submitted').length, isPending: true },
           { id: 'settings', label: 'System Governance', icon: Settings },
         ];
         const groups: { label: string; ids: string[] }[] = [
           { label: 'Overview', ids: ['dashboard'] },
-          { label: 'Students', ids: ['students', 'pre-enlistment', 'enrollments', 'add-drop', 'payments'] },
+          { label: 'Students', ids: ['students', 'pre-enlistment', 'enrollments', 'add-drop', 'payments', 'alumni'] },
           { label: 'Academics', ids: ['academic-periods', 'term-subjects', 'curriculum', 'sections', 'instructors'] },
           { label: 'Finance & Settings', ids: ['fees', 'settings'] },
         ];
@@ -1384,6 +1387,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
       )}
 
       {activeSubTab === 'payments' && <StudentPaymentsPanel />}
+      {activeSubTab === 'alumni' && <AlumniRecordsPanel />}
 
       {/* ========================================================================= */}
       {/* SUBVIEW 11: SYSTEM GOVERNANCE & SETTINGS */}

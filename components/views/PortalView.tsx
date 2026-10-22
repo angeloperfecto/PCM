@@ -23,6 +23,8 @@ import { CertificateOfRegistration, printCertificate } from '@/components/enroll
 import { PaymentInstructions } from '@/components/enrollment/PaymentInstructions';
 import { MyApplicationPanel } from '@/components/enrollment/MyApplicationPanel';
 import { AdmittedStudentPortal } from '@/components/portal/AdmittedStudentPortal';
+import { AlumniRecordView } from '@/components/portal/AlumniRecordView';
+import { isAlumniRecord } from '@/lib/alumni';
 import { ADMITTED_PORTAL_STATUSES, normalizeStatus } from '@/lib/enrollmentWorkflow';
 import {
   StudentPortalSidebar,
@@ -271,6 +273,9 @@ export const PortalView: React.FC = () => {
       />
     );
   }
+
+  // Graduates (including those from before the website) see their own record, read-only.
+  if (isAlumniRecord(studentProfile)) return <AlumniRecordView />;
 
   // Calculate Balances
   const remainingBalance =

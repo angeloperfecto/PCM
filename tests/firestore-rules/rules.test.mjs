@@ -603,6 +603,25 @@ await check('Registrar links the returnee to their record', true, () => updateDo
 await check('Registrar records transfer credits', true, () => updateDoc(doc(registrar, 'applications/cat-1'), { creditedSubjects: [{ code: 'BIB-101', title: 'OT Survey', units: 3, sourceSchool: 'Other College' }], creditsEvaluatedBy: 'Reg' }));
 await check('Finance cannot link student records', false, () => updateDoc(doc(finance, 'applications/cat-1'), { linkedStudentRecordId: 'std-x' }));
 
+section('Alumni and historical student records');
+const alumnus = as('alum1', 'graduate1998@gmail.com');
+const otherAlumnus = as('alum2', 'graduate2001@gmail.com');
+const alumRecord = { id: 'alum-1', studentId: '1998-PCM-0042', fullName: 'Old Graduate', email: 'graduate1998@gmail.com', authUid: '', academicStatus: 'Alumni', enrollmentStatus: 'Graduated',
+  subjectHistory: [{ code: 'BIB-101', title: 'OT Survey', units: 3, grade: 1.5, status: 'Passed', semester: '1st Semester', academicYear: '1995–1996' }],
+  alumni: { graduationYear: 1998, degreeConferred: 'Bachelor of Theology', honors: 'Cum Laude' } };
+await check('Registrar adds a graduate record', true, () => setDoc(doc(registrar, 'studentProfiles/alum-1'), alumRecord));
+await check('Finance cannot add graduate records', false, () => setDoc(doc(finance, 'studentProfiles/alum-x'), { ...alumRecord, id: 'alum-x' }));
+await check('another graduate cannot read the record before linking', false, () => getDoc(doc(otherAlumnus, 'studentProfiles/alum-1')));
+await check('the graduate reads the record by Gmail before linking', true, () => getDoc(doc(alumnus, 'studentProfiles/alum-1')));
+await check('the graduate links the record at first Gmail sign-in', true, () => updateDoc(doc(alumnus, 'studentProfiles/alum-1'), { authUid: 'alum1', linkedAt: 'now', updatedAt: 'now' }));
+await check('the graduate reads own linked record', true, () => getDoc(doc(alumnus, 'studentProfiles/alum-1')));
+await check('the graduate cannot change grades', false, () => updateDoc(doc(alumnus, 'studentProfiles/alum-1'), { subjectHistory: [] }));
+await check('the graduate cannot change graduation details', false, () => updateDoc(doc(alumnus, 'studentProfiles/alum-1'), { alumni: { graduationYear: 1998, degreeConferred: 'Master of Divinity', honors: 'Summa Cum Laude' } }));
+await check('the graduate cannot change the Student ID', false, () => updateDoc(doc(alumnus, 'studentProfiles/alum-1'), { studentId: 'X' }));
+await check('another graduate cannot read a linked record', false, () => getDoc(doc(otherAlumnus, 'studentProfiles/alum-1')));
+await check('another graduate cannot link a record to themselves', false, () => updateDoc(doc(otherAlumnus, 'studentProfiles/alum-1'), { authUid: 'alum2' }));
+await check('Registrar updates the graduate record', true, () => updateDoc(doc(registrar, 'studentProfiles/alum-1'), { 'alumni.honors': 'Magna Cum Laude', updatedAt: 'now' }));
+
 section('Batch writes stay within Firestore limits');
 await check('Editor commits a 40-document batch', true, () => {
   const b = writeBatch(editor);
