@@ -454,7 +454,15 @@ export function termEnrollmentRosters(students: Partial<StudentProfile>[], catal
     for (const c of s.courses || []) {
       if (!c || c.status === 'Dropped') continue;
       const byId = inTerm.find((o) => o.id === c.id && normCode(o.code) === normCode(c.code));
-      const offering = byId || offeringForCode(catalog, term, c.code);
+      // Several classes can share a code (e.g. two different BIB-101 subjects, or sections): an older
+      // subject record without the class id goes to the one with the same title (and schedule), not just the first.
+      const sameCode = byId ? [] : inTerm.filter((o) => normCode(o.code) === normCode(c.code));
+      const byTitle =
+        sameCode.length > 1
+          ? sameCode.find((o) => squash(o.title) === squash(c.title) && !!c.schedule && squash(o.schedule) === squash(c.schedule)) ||
+            sameCode.find((o) => squash(o.title) === squash(c.title))
+          : undefined;
+      const offering = byId || byTitle || offeringForCode(catalog, term, c.code);
       if (!offering || seen.has(offering.id)) continue;
       seen.add(offering.id);
       rosters.set(offering.id, [...(rosters.get(offering.id) || []), String(s.id || s.studentId || '')]);

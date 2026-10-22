@@ -212,6 +212,11 @@ export function classListFor(section: ClassSection, termSections: ClassSection[]
   const all = enrolledInSubject(students, term, section.subjectCode);
   const assigned = (section.enrolledStudentIds || []).filter(Boolean);
   if (assigned.length) return { students: all.filter((s) => assigned.includes(s.id) || assigned.includes(s.studentId)) };
+  // A Term Subjects class gets its students from the term's enrollment (each student in exactly one class); while
+  // those lists are in use, a class with none is empty rather than taking the students of another class with the code.
+  if (section.offeringId && termSections.some((s) => normCode(s.subjectCode) === normCode(section.subjectCode) && (s.enrolledStudentIds || []).length)) {
+    return { students: [] };
+  }
   const siblings = termSections.filter((s) => s.id !== section.id && normCode(s.subjectCode) === normCode(section.subjectCode));
   if (siblings.length) {
     return {
