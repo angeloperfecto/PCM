@@ -5,6 +5,7 @@ import { collection, doc, limit, onSnapshot, orderBy, query, updateDoc } from 'f
 import { usePCM } from '@/lib/store';
 import { StudentAvatar } from '@/components/common/StudentAvatar';
 import { StudentAccountPayments } from './StudentAccountPayments';
+import { downloadExcel, excelFileName } from '@/lib/excelExport';
 import { canEditPayments, correctApplicationPayment } from '@/lib/paymentAdmin';
 import { StudentRecordPanel } from './StudentRecordPanel';
 import type { StudentProfile } from '@/lib/types';
@@ -87,20 +88,6 @@ const needsStaffAction = (a: Application) =>
 
 const isPaymentToVerify = (a: Application) => normalizeStatus(a.status) === 'For Payment' && a.paymentStatus === 'Submitted';
 
-function csvCell(value: unknown): string {
-  const s = value === undefined || value === null ? '' : String(value);
-  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
-function downloadCsv(filename: string, rows: unknown[][]) {
-  const blob = new Blob([rows.map((r) => r.map(csvCell).join(',')).join('\n')], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 // Admissions & Enrollment dashboard: every application from submission to enrollment.
 // Decisions are limited to the Registrar, Admin and Super Admin (also enforced by
@@ -184,30 +171,73 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
   const selected = applications.find((a) => a.id === selectedId) || null;
   const unreadAlerts = staffNotes.filter((n) => !n.read).length;
 
-  const exportApplications = () => {
-    downloadCsv(`PCM_Admissions_${new Date().toISOString().slice(0, 10)}.csv`, [
-      ['Reference', 'Full Name', 'Email', 'Phone', 'Program', 'Status', 'Assessment Total', 'Minimum Payment', 'Verified Payments', 'Payment Status', 'Student ID', 'Submitted', 'Last Updated', 'Last Decision By'],
-      ...filtered.map((a) => [
-        a.referenceNumber,
-        a.fullName,
-        a.email,
-        a.phone,
-        a.programName || a.program,
-        normalizeStatus(a.status),
-        a.assessment?.total ?? '',
-        a.assessment?.minimumPayment ?? '',
-        a.amountPaidVerified ?? '',
-        a.paymentStatus || '',
-        a.studentId && normalizeStatus(a.status) === 'Enrolled' ? a.studentId : '',
-        a.submissionDate || a.createdAt,
-        a.updatedAt,
-        a.lastDecisionBy,
-      ]),
-    ]);
+  const [exporting, setExporting] = useState(false);
+  const runExport = async (fn: () => Promise<void>) => {
+    setExporting(true);
+    try {
+      await fn();
+    } catch (e) {
+      console.warn('Export notice:', e);
+      addToast('error', 'Export failed', 'The Excel file could not be created. Please try again.');
+    } finally {
+      setExporting(false);
+    }
   };
+  const filterLabel =
+    statusFilter === 'all' ? 'All statuses' : statusFilter === 'action' ? 'Needs action' : statusFilter === 'payments' ? 'Payments to verify' : STATUS_LABELS[statusFilter as WorkflowStatus];
+
+  const exportApplications = () =>
+    runExport(() =>
+      downloadExcel(
+        excelFileName('PCM_Admissions'),
+        [
+          {
+            name: 'Applications',
+            title: 'Admissions — Application List',
+            details: [
+              `Filter: ${filterLabel} · ${programFilter === 'all' ? 'All programs' : programFilter}${search.trim() ? ` · Search “${search.trim()}”` : ''}`,
+              `${filtered.length} application${filtered.length === 1 ? '' : 's'}`,
+            ],
+            columns: [
+              { header: 'Reference', key: 'ref' },
+              { header: 'Full name', key: 'name' },
+              { header: 'Email', key: 'email' },
+              { header: 'Phone', key: 'phone' },
+              { header: 'Program', key: 'program' },
+              { header: 'Status', key: 'status' },
+              { header: 'Assessment total', key: 'total', type: 'currency' },
+              { header: 'Downpayment', key: 'minimum', type: 'currency' },
+              { header: 'Verified payments', key: 'paid', type: 'currency' },
+              { header: 'Payment status', key: 'paymentStatus' },
+              { header: 'Student ID', key: 'studentId' },
+              { header: 'Submitted', key: 'submitted', type: 'datetime' },
+              { header: 'Last updated', key: 'updated', type: 'datetime' },
+              { header: 'Last decision by', key: 'decidedBy' },
+            ],
+            rows: filtered.map((a) => ({
+              ref: a.referenceNumber,
+              name: liveName(a),
+              email: a.email,
+              phone: a.phone,
+              program: a.programName || a.program,
+              status: STATUS_LABELS[normalizeStatus(a.status)],
+              total: a.assessment?.total,
+              minimum: a.assessment?.minimumPayment,
+              paid: a.amountPaidVerified,
+              paymentStatus: a.paymentStatus || '',
+              studentId: a.studentId && normalizeStatus(a.status) === 'Enrolled' ? a.studentId : '',
+              submitted: a.submissionDate || a.createdAt,
+              updated: a.updatedAt,
+              decidedBy: a.lastDecisionBy,
+            })),
+            totals: { ref: 'Total', total: 'sum', minimum: 'sum', paid: 'sum' },
+          },
+        ],
+        { generatedBy: admissionsActor().name }
+      )
+    );
 
   const exportSummary = () => {
-    const rows: unknown[][] = [['Program', ...ALL_STATUSES, 'Total']];
     const byProgram = new Map<string, Record<string, number>>();
     applications.forEach((a) => {
       const p = a.programName || a.program || 'Unspecified';
@@ -216,9 +246,30 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
       row[s] = (row[s] || 0) + 1;
       byProgram.set(p, row);
     });
-    byProgram.forEach((row, p) => rows.push([p, ...ALL_STATUSES.map((s) => row[s] || 0), ALL_STATUSES.reduce((t, s) => t + (row[s] || 0), 0)]));
-    rows.push(['All programs', ...ALL_STATUSES.map((s) => counts[s] || 0), applications.length]);
-    downloadCsv(`PCM_Enrollment_Report_${new Date().toISOString().slice(0, 10)}.csv`, rows);
+    const statusKey = (s: string) => `s_${s.replace(/[^a-z0-9]/gi, '_')}`;
+    const rows = [...byProgram.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([p, row]) => ({ program: p, ...Object.fromEntries(ALL_STATUSES.map((s) => [statusKey(s), row[s] || 0])), total: ALL_STATUSES.reduce((t, s) => t + (row[s] || 0), 0) }));
+    return runExport(() =>
+      downloadExcel(
+        excelFileName('PCM_Enrollment_Report'),
+        [
+          {
+            name: 'Enrollment Report',
+            title: 'Admissions & Enrollment Report — Applications by Program and Status',
+            details: [`${applications.length} application${applications.length === 1 ? '' : 's'} in ${byProgram.size} program${byProgram.size === 1 ? '' : 's'}`],
+            columns: [
+              { header: 'Program', key: 'program' },
+              ...ALL_STATUSES.map((s) => ({ header: STATUS_LABELS[s], key: statusKey(s), type: 'integer' as const })),
+              { header: 'Total', key: 'total', type: 'integer' as const },
+            ],
+            rows,
+            totals: { program: 'All programs', ...Object.fromEntries(ALL_STATUSES.map((s) => [statusKey(s), 'sum'])), total: 'sum' },
+          },
+        ],
+        { generatedBy: admissionsActor().name }
+      )
+    );
   };
 
   return (
@@ -235,10 +286,10 @@ export const AdminApplicationsTab: React.FC<{ onOpenEnrollment?: () => void }> =
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={exportApplications} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-            <Download className="h-3.5 w-3.5" /> Export list (CSV)
+            <Download className="h-3.5 w-3.5" /> {exporting ? 'Preparing…' : 'Export list (Excel)'}
           </button>
           <button type="button" onClick={exportSummary} className="inline-flex items-center gap-1.5 rounded-lg bg-[#18392B] px-3 py-2 text-xs font-semibold text-white hover:bg-[#23533e]">
-            <Download className="h-3.5 w-3.5" /> Enrollment report (CSV)
+            <Download className="h-3.5 w-3.5" /> {exporting ? 'Preparing…' : 'Enrollment report (Excel)'}
           </button>
         </div>
       </div>

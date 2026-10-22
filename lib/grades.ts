@@ -711,23 +711,39 @@ export function sheetStageLabel(sheet: GradeSheet): string {
   return sheet.status;
 }
 
-export function gradesCsv(sheet: GradeSheet, scale: GradingScale | null): string {
-  const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-  const rows = [['Student ID', 'Name', 'Program', 'Year level', 'Grade', 'Equivalent', 'Remark', 'Note']];
-  for (const s of sheet.students) {
+/** A grade sheet as an Excel workbook: class details on top, one row per student, and the result counts. */
+export async function downloadGradeSheetExcel(sheet: GradeSheet, scale: GradingScale | null): Promise<void> {
+  const { downloadExcel, excelFileName } = await import('./excelExport');
+  const rows = sheet.students.map((s, i) => {
     const g = sheet.grades?.[s.studentRecordId];
     const l = lookupGrade(scale, g?.grade);
-    rows.push([s.studentId, s.name, s.program, s.yearLevel, g?.grade || '', l.equivalent || '', l.kind === 'blank' ? 'Missing' : l.kind === 'invalid' ? 'Invalid' : l.remark, g?.note || '']);
-  }
-  return rows.map((r) => r.map(esc).join(',')).join('\n');
+    const remark = l.kind === 'blank' ? 'Missing' : l.kind === 'invalid' ? 'Not on the grading scale' : l.remark;
+    return { n: i + 1, id: s.studentId, name: s.name, program: s.program, year: s.yearLevel, grade: g?.grade || '', equivalent: l.equivalent || '', remark, note: g?.note || '' };
+  });
+  const count = (re: RegExp) => rows.filter((r) => re.test(String(r.remark))).length;
+  await downloadExcel(excelFileName(`Grades_${sheet.subjectCode}${sheet.sectionName ? `_${sheet.sectionName}` : ''}_${termLabel(sheet.semester, sheet.academicYear)}`), [
+    {
+      name: 'Grade Sheet',
+      title: `Grade Sheet — ${sheet.subjectCode} ${sheet.subjectTitle || ''}`.trim(),
+      details: [
+        [sheet.sectionName ? (/^section\b/i.test(sheet.sectionName) ? sheet.sectionName : `Section ${sheet.sectionName}`) : '', termLabel(sheet.semester, sheet.academicYear), `${Number(sheet.units) || 0} units`].filter(Boolean).join(' · '),
+        `Professor: ${sheet.instructorName || '—'} · Status: ${sheetStageLabel(sheet)}`,
+        `${rows.length} student${rows.length === 1 ? '' : 's'} · ${count(/^passed$/i)} passed · ${count(/^failed$/i)} failed · ${count(/^missing$/i)} without a grade`,
+      ],
+      columns: [
+        { header: '#', key: 'n', type: 'integer' },
+        { header: 'Student ID', key: 'id' },
+        { header: 'Name', key: 'name' },
+        { header: 'Program', key: 'program' },
+        { header: 'Year level', key: 'year' },
+        { header: 'Grade', key: 'grade' },
+        { header: 'Equivalent', key: 'equivalent' },
+        { header: 'Remark', key: 'remark' },
+        { header: 'Note', key: 'note' },
+      ],
+      rows,
+      notes: scale ? [`Grading scale: ${scale.values.map((v) => `${v.value}${v.equivalent ? ` (${v.equivalent})` : ''} ${v.remark}`).join(' · ')}`] : undefined,
+    },
+  ]);
 }
 
-export function downloadText(name: string, text: string, type = 'text/csv') {
-  const blob = new Blob([text], { type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
