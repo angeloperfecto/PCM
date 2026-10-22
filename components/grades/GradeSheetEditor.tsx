@@ -4,9 +4,8 @@ import React, { useState } from 'react';
 import { AlertTriangle, BookOpen, CheckCircle2, ChevronLeft, Clock, Download, Printer, Send, X } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import {
-  downloadText,
+  downloadGradeSheetExcel,
   enteredCount,
-  gradesCsv,
   isOverdue,
   lookupGrade,
   requestGradeAmendment,
@@ -130,7 +129,7 @@ export const GradeSheetEditor: React.FC<{
             <button type="button" onClick={() => printDocument('pcm-grade-sheet-print', `Grade Sheet ${sheet.subjectCode}`)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 font-semibold hover:bg-slate-50">
               <Printer className="h-3.5 w-3.5" /> Print
             </button>
-            <button type="button" onClick={() => downloadText(`${sheet.subjectCode}-${sheet.termKey}.csv`.replace(/[|\s]/g, '_'), gradesCsv({ ...sheet, grades }, scale))} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 font-semibold hover:bg-slate-50">
+            <button type="button" onClick={() => void downloadGradeSheetExcel({ ...sheet, grades }, scale)} className="inline-flex items-center gap-1 rounded-lg border border-slate-300 px-2.5 py-1.5 font-semibold hover:bg-slate-50">
               <Download className="h-3.5 w-3.5" /> CSV
             </button>
           </div>

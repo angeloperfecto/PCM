@@ -305,32 +305,70 @@ export const AdminDonationsTab: React.FC = () => {
     await updateDonationSettings(settingsForm);
   };
 
-  const handleExportCsv = () => {
-    const headers = ['Tracking Code', 'Date', 'Donor Name', 'Email', 'Phone', 'Amount', 'Currency', 'Method', 'Purpose', 'Ref Number', 'Status', 'Receipt Requested'];
-    const rows = (donations || []).map((d) => [
-      `"${d?.trackingCode || ''}"`,
-      `"${d?.createdAt || ''}"`,
-      `"${d?.donorName || 'Anonymous'}"`,
-      `"${d?.donorEmail || ''}"`,
-      `"${d?.donorPhone || ''}"`,
-      Number(d?.amount) || 0,
-      `"${d?.currency || 'PHP'}"`,
-      `"${d?.paymentMethodName || ''}"`,
-      `"${d?.purpose || ''}"`,
-      `"${d?.transactionRef || ''}"`,
-      `"${d?.status || ''}"`,
-      (d?.receiptRequested || (d as any)?.requestOfficialReceipt) ? 'Yes' : 'No',
-    ]);
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `PCM_Donations_Export_${new Date().toISOString().split('T')[0]}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    addToast('success', 'CSV Exported', 'Downloaded donation ledger CSV.');
+  // Donation ledger as an Excel workbook: every donation, plus totals by status and by purpose.
+  const handleExportCsv = async () => {
+    const list = [...(donations || [])].sort((a, b) => String(b?.createdAt || '').localeCompare(String(a?.createdAt || '')));
+    const group = (key: (d: any) => string) => {
+      const m = new Map<string, { count: number; amount: number }>();
+      list.forEach((d) => {
+        const k = key(d) || 'Unspecified';
+        const g = m.get(k) || { count: 0, amount: 0 };
+        g.count += 1;
+        g.amount += Number(d?.amount) || 0;
+        m.set(k, g);
+      });
+      return [...m.entries()].sort((a, b) => b[1].amount - a[1].amount).map(([label, g]) => ({ label, count: g.count, amount: g.amount }));
+    };
+    const summaryColumns = (first: string) => [
+      { header: first, key: 'label' },
+      { header: 'Donations', key: 'count', type: 'integer' as const },
+      { header: 'Amount', key: 'amount', type: 'currency' as const },
+    ];
+    try {
+      const { downloadExcel, excelFileName } = await import('@/lib/excelExport');
+      await downloadExcel(excelFileName('PCM_Donations'), [
+        {
+          name: 'Donations',
+          title: 'Donations & Giving — Donation Ledger',
+          details: [`${list.length} donation${list.length === 1 ? '' : 's'}`],
+          columns: [
+            { header: 'Tracking code', key: 'code' },
+            { header: 'Date', key: 'date', type: 'datetime' },
+            { header: 'Donor', key: 'donor' },
+            { header: 'Email', key: 'email' },
+            { header: 'Phone', key: 'phone' },
+            { header: 'Amount', key: 'amount', type: 'currency' },
+            { header: 'Currency', key: 'currency' },
+            { header: 'Method', key: 'method' },
+            { header: 'Purpose', key: 'purpose' },
+            { header: 'Reference no.', key: 'ref' },
+            { header: 'Status', key: 'status' },
+            { header: 'Receipt requested', key: 'receipt' },
+          ],
+          rows: list.map((d) => ({
+            code: d?.trackingCode,
+            date: d?.createdAt,
+            donor: d?.donorName || 'Anonymous',
+            email: d?.donorEmail,
+            phone: d?.donorPhone,
+            amount: Number(d?.amount) || 0,
+            currency: d?.currency || 'PHP',
+            method: d?.paymentMethodName,
+            purpose: d?.purpose,
+            ref: d?.transactionRef,
+            status: d?.status,
+            receipt: d?.receiptRequested || (d as any)?.requestOfficialReceipt ? 'Yes' : 'No',
+          })),
+          totals: { code: 'Total', amount: 'sum' },
+        },
+        { name: 'By status', title: 'Donations by Status', columns: summaryColumns('Status'), rows: group((d) => d?.status), totals: { label: 'Total', count: 'sum', amount: 'sum' } },
+        { name: 'By purpose', title: 'Donations by Purpose', columns: summaryColumns('Purpose'), rows: group((d) => d?.purpose), totals: { label: 'Total', count: 'sum', amount: 'sum' } },
+      ]);
+      addToast('success', 'Excel exported', 'Downloaded the donation ledger.');
+    } catch (e) {
+      console.warn('Export notice:', e);
+      addToast('error', 'Export failed', 'The Excel file could not be created. Please try again.');
+    }
   };
 
   return (
@@ -422,7 +460,7 @@ export const AdminDonationsTab: React.FC = () => {
             className="px-3.5 py-1.5 text-xs font-semibold text-slate-700 bg-white border border-slate-300 rounded-md hover:bg-slate-50 transition cursor-pointer flex items-center gap-1.5"
           >
             <Download className="w-3.5 h-3.5" />
-            <span>Export CSV</span>
+            <span>Export Excel</span>
           </button>
         )}
 

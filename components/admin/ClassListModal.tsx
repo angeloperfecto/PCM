@@ -54,19 +54,31 @@ export const ClassListModal: React.FC<{
   const term = [subject.semester, subject.academicYear ? `AY ${subject.academicYear}` : ''].filter(Boolean).join(', ');
   const docId = `class-list-${subject.id}`;
 
-  const downloadCsv = () => {
-    const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = [
-      ['#', 'Student ID', 'Name', 'Program', 'Year level', 'Section', 'Email', 'Mobile'],
-      ...list.map((s, i) => [i + 1, s.studentId, sortName(s), s.degreeProgram || s.program, s.yearLevel, s.section, s.email, s.mobileNumber || s.phone]),
-    ];
-    const blob = new Blob(['﻿' + rows.map((r) => r.map(esc).join(',')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `class-list-${subject.code}-${subject.section || 'section'}.csv`.replace(/\s+/g, '-');
-    a.click();
-    URL.revokeObjectURL(url);
+  // The official class list as an Excel workbook, with the class details on top.
+  const downloadCsv = async () => {
+    const { downloadExcel, excelFileName } = await import('@/lib/excelExport');
+    await downloadExcel(excelFileName(`Class_List_${subject.code}${subject.section ? `_${subject.section}` : ''}`), [
+      {
+        name: 'Class List',
+        title: `Official Class List — ${subject.code} ${subject.title || ''}`.trim(),
+        details: [
+          [subject.section ? (/^section\b/i.test(subject.section) ? subject.section : `Section ${subject.section}`) : '', term, subject.yearLevel || ''].filter(Boolean).join(' · ') || 'Class',
+          [subject.schedule ? `Schedule: ${subject.schedule}` : '', subject.room ? `Room: ${subject.room}` : '', subject.instructor ? `Professor: ${subject.instructor}` : ''].filter(Boolean).join(' · ') || 'Schedule, room and professor not set',
+          `${list.length} student${list.length === 1 ? '' : 's'}${capacity ? ` of ${capacity} seats` : ''} · ${Number(subject.units) || 0} units`,
+        ],
+        columns: [
+          { header: '#', key: 'n', type: 'integer' },
+          { header: 'Student ID', key: 'id' },
+          { header: 'Name', key: 'name' },
+          { header: 'Program', key: 'program' },
+          { header: 'Year level', key: 'year' },
+          { header: 'Section', key: 'section' },
+          { header: 'Email', key: 'email' },
+          { header: 'Mobile', key: 'mobile' },
+        ],
+        rows: list.map((s, i) => ({ n: i + 1, id: s.studentId, name: sortName(s), program: s.degreeProgram || s.program, year: s.yearLevel, section: s.section, email: s.email, mobile: s.mobileNumber || s.phone })),
+      },
+    ]);
   };
 
   return (
@@ -78,7 +90,7 @@ export const ClassListModal: React.FC<{
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, Student ID, email…" aria-label="Search class list" className="w-full rounded-lg border border-slate-300 py-2 pl-8 pr-2 text-xs" />
           </div>
           <button type="button" onClick={downloadCsv} disabled={list.length === 0} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-40">
-            <Download className="h-3.5 w-3.5" /> Download CSV
+            <Download className="h-3.5 w-3.5" /> Download Excel
           </button>
           <button type="button" onClick={() => printDocument(docId, `Class List ${subject.code}`)} className="inline-flex items-center gap-1.5 rounded-lg bg-[#18392B] px-3 py-2 text-xs font-bold text-white hover:bg-[#588B76]">
             <Printer className="h-3.5 w-3.5" /> Print
