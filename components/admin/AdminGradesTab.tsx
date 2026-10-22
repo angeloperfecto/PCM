@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileEdit, FileSpreadsheet, Printer, RefreshCcw, X } from 'lucide-react';
+import { doc, writeBatch } from 'firebase/firestore';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Download, ExternalLink, FileEdit, FileSpreadsheet, Printer, RefreshCcw, Trash2, X } from 'lucide-react';
+import { db } from '@/lib/firebase';
 import { usePCM } from '@/lib/store';
 import { linkFacultyMember, resolveSectionProfessor } from '@/lib/professors';
 import {
@@ -49,7 +51,7 @@ const STAGE_STYLE: Record<string, string> = {
 
 // Admin → Grade Management: every class's grade sheet for a term, from preparation to publication.
 export const AdminGradesTab: React.FC = () => {
-  const { academicPeriods, academicSubjects, classSections, instructors, students, enrollmentSystemConfig, canManageCurriculum, currentAdminUser, addToast, navigateTo, faculty, addInstructor, updateInstructor } = usePCM();
+  const { academicPeriods, academicSubjects, classSections, instructors, students, enrollmentSystemConfig, canManageCurriculum, currentAdminUser, addToast, navigateTo, faculty, addInstructor, updateInstructor, logActivity } = usePCM();
   const scale = gradingScaleOf(enrollmentSystemConfig);
   const sortedTerms = useMemo(
     // Current term first, then active, then closed (most recent first); upcoming terms last.
@@ -96,6 +98,47 @@ export const AdminGradesTab: React.FC = () => {
     const i = sheetIssues(s, scale);
     return [...i.missing.map((id) => ({ s, id, issue: 'No grade' })), ...i.incomplete.map((id) => ({ s, id, issue: `Incomplete (${s.grades[id]?.grade})` })), ...i.invalid.map((id) => ({ s, id, issue: 'Not on the scale' }))];
   });
+
+  // An empty grade sheet (no grades entered, not yet submitted) can be deleted. Sheets are made for every class
+  // offered this term, so when its class is still offered the class is taken off the term too (archived in Term
+  // Subjects, like removing it there), or the sheet would be created again.
+  const [deletingId, setDeletingId] = useState('');
+  const canDeleteSheet = (s: GradeSheet) => enteredCount(s) === 0 && ['Draft', 'Returned for Correction'].includes(s.status) && !s.publishedAt;
+  const deleteSheet = async (s: GradeSheet) => {
+    const label = `${s.subjectCode}${s.sectionName ? ` ${s.sectionName}` : ''}`;
+    if (!canDeleteSheet(s)) return addToast('warning', 'Can’t delete', `${label} already has grades or has been submitted, so it is kept.`);
+    const section = termSections.find((c) => sheetForSection(c, [s]));
+    const enrolled = (section?.enrolledStudentIds || []).length;
+    if (section && enrolled) {
+      return addToast('warning', 'Students are enrolled', `${enrolled} student(s) are enrolled in ${label}, so its grade sheet is needed. Close the class in Term Subjects instead if no one else should enroll.`);
+    }
+    if (section && !section.offeringId) {
+      return addToast('warning', 'Remove the class first', `${label} is an older class section. Remove it in Enrollment & Records; otherwise its grade sheet is created again.`);
+    }
+    const tLabel = term ? termLabel(term.semester, term.academicYear) : 'this term';
+    if (
+      !window.confirm(
+        section
+          ? `Delete the grade sheet for ${label}? No grades have been entered. ${label} is still offered in ${tLabel}, so it will also be removed from Term Subjects (it can be added again there).`
+          : `Delete the empty grade sheet for ${label}? No grades have been entered.`
+      )
+    )
+      return;
+    setDeletingId(s.id);
+    try {
+      const now = new Date().toISOString();
+      const batch = writeBatch(db);
+      batch.delete(doc(db, 'gradeSheets', s.id));
+      if (section?.offeringId) batch.update(doc(db, 'academicSubjects', section.offeringId), { isArchived: true, removedAt: now, removedBy: actor });
+      await batch.commit();
+      logActivity('DELETE', 'Grade Management', s.id, s.subjectCode, `Deleted the empty grade sheet for ${label} (${tLabel})${section ? ' and removed the class from Term Subjects' : ''}.`);
+      addToast('info', 'Grade sheet deleted', section ? `${label} was also removed from ${tLabel}.` : label);
+    } catch (e: any) {
+      addToast('error', 'Not deleted', e?.code === 'permission-denied' ? 'Only the Registrar, Academic Admin or an Admin can delete grade sheets.' : 'Please try again.');
+    } finally {
+      setDeletingId('');
+    }
+  };
 
   const prepare = async (auto = false) => {
     if (!term) return;
@@ -335,6 +378,18 @@ export const AdminGradesTab: React.FC = () => {
                           </button>
                         )}
                         <button type="button" onClick={() => setReviewId(s.id)} className="rounded-lg bg-slate-100 px-2.5 py-1 font-semibold hover:bg-slate-200">Review</button>
+                        {canManageCurriculum && canDeleteSheet(s) && (
+                          <button
+                            type="button"
+                            aria-label={`Delete grade sheet ${s.subjectCode} ${s.sectionName || ''}`.trim()}
+                            title="Delete this empty grade sheet"
+                            disabled={!!deletingId}
+                            onClick={() => deleteSheet(s)}
+                            className="rounded-lg p-1.5 text-rose-600 hover:bg-rose-50 disabled:opacity-50"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
                       </span>
                     </td>
                   </tr>
