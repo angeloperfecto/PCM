@@ -30,9 +30,21 @@ export function classListFor(subject: AcademicSubject, students: StudentProfile[
 const sortName = (s: StudentProfile) =>
   s.lastName ? `${s.lastName}, ${[s.firstName, s.middleName].filter(Boolean).join(' ')}` : s.fullName || s.name || '';
 
-export const ClassListModal: React.FC<{ subject: AcademicSubject; students: StudentProfile[]; onClose: () => void }> = ({ subject, students, onClose }) => {
+export const ClassListModal: React.FC<{
+  subject: AcademicSubject;
+  students: StudentProfile[];
+  /** The class's own students (record ids) when known, e.g. from the term's enrollment lists; otherwise matched by subject code. */
+  studentIds?: string[];
+  onClose: () => void;
+}> = ({ subject, students, studentIds, onClose }) => {
   const [q, setQ] = useState('');
-  const list = useMemo(() => classListFor(subject, students), [subject, students]);
+  const list = useMemo(
+    () =>
+      studentIds
+        ? students.filter((s) => studentIds.includes(s.id) || studentIds.includes(s.studentId)).sort((a, b) => sortName(a).localeCompare(sortName(b)))
+        : classListFor(subject, students),
+    [subject, students, studentIds]
+  );
   const shown = useMemo(() => {
     const needle = q.trim().toLowerCase();
     if (!needle) return list;
