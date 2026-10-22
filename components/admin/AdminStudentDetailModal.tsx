@@ -9,6 +9,9 @@ import { EditStudentInfoForm } from '@/components/portal/enrollment/EditStudentI
 import { ProfileDossier } from '@/components/common/ProfileDossier';
 import { FillFromRegistrationForm } from './FillFromRegistrationForm';
 import { ledgerPayments } from '@/lib/studentLedger';
+import { db } from '@/lib/firebase';
+import { canEditPayments, correctStudentPayment } from '@/lib/paymentAdmin';
+import { PaymentCorrectionDialog, type PaymentToCorrect } from './PaymentCorrectionDialog';
 import { admissionRequirementTemplates } from '@/lib/enrollmentWorkflow';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { isValidImageSrc } from '@/lib/utils';
@@ -79,7 +82,12 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
     programs,
     faculty,
     academicPeriods,
+    currentAdminUser,
+    firebaseAuthUser,
   } = usePCM();
+  // Payment corrections (Super Admin, Admin, Registrar).
+  const [correcting, setCorrecting] = useState<{ payment: PaymentToCorrect; mode: 'edit' | 'delete' } | null>(null);
+  const mayCorrectPayments = canEditPayments(currentAdminUser?.role);
   const activeTerm = (academicPeriods || []).find((p) => p.isCurrent) || null;
   // Always show the live record (real-time list), not the copy taken when the dossier was opened.
   const student = selectedStudent ? liveStudents.find((s) => s.id === selectedStudent.id) || selectedStudent : null;
@@ -207,6 +215,8 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
   // Payment history list
   // Cashier, enrollment and verified balance payments together.
   const paymentList = ledgerPayments(student as any);
+  // Entries saved with an id can be corrected (older entries without one are listed only).
+  const paymentIds = new Set([...(((student as any).paymentHistory || []) as any[]), ...(((student as any).paymentRecords || []) as any[])].map((p) => p?.id).filter(Boolean));
 
   return (
     <div id="pcm-admin-student-modal" className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6">
@@ -702,6 +712,7 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                       <th className="p-3">Reference / Remarks</th>
                       <th className="p-3 text-right">Amount Paid</th>
                       <th className="p-3 text-center">Status</th>
+                      {mayCorrectPayments && <th className="p-3 text-right">Actions</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -722,11 +733,35 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                               {pay.status || 'Verified'}
                             </span>
                           </td>
+                          {mayCorrectPayments && (
+                            <td className="p-3 text-right whitespace-nowrap">
+                              {paymentIds.has(pay.id) ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCorrecting({ mode: 'edit', payment: { id: pay.id, amount: pay.amount, method: pay.method, reference: pay.receipt || pay.reference, date: pay.date } })}
+                                    className="rounded px-2 py-1 text-[11px] font-bold text-[#18392B] hover:bg-emerald-50"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCorrecting({ mode: 'delete', payment: { id: pay.id, amount: pay.amount, method: pay.method, reference: pay.receipt || pay.reference, date: pay.date } })}
+                                    className="rounded px-2 py-1 text-[11px] font-bold text-rose-600 hover:bg-rose-50"
+                                  >
+                                    Delete
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="text-[10px] text-slate-400">—</span>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td colSpan={6} className="p-6 text-center text-slate-400">
+                        <td colSpan={mayCorrectPayments ? 7 : 6} className="p-6 text-center text-slate-400">
                           No payment transactions recorded yet. Click &quot;Issue Official Receipt&quot; to credit tuition.
                         </td>
                       </tr>
@@ -734,6 +769,23 @@ export const AdminStudentDetailModal: React.FC<AdminStudentDetailModalProps> = (
                   </tbody>
                 </table>
               </div>
+
+              {correcting && (
+                <PaymentCorrectionDialog
+                  payment={correcting.payment}
+                  mode={correcting.mode}
+                  note="The student’s paid total and balance are updated, along with the same payment in Admissions or Student Payments."
+                  onClose={() => setCorrecting(null)}
+                  onSave={async (edit, reason) => {
+                    const r = await correctStudentPayment(db, { uid: firebaseAuthUser?.uid || '', name: currentAdminUser?.name || 'Registrar', role: currentAdminUser?.role }, student.id, correcting.payment.id, edit, reason);
+                    if (r.ok) {
+                      logActivity(edit ? 'UPDATE' : 'DELETE', 'Student Payment', correcting.payment.id, student.fullName || student.name || 'Student', r.summary || r.message);
+                      addToast('success', edit ? 'Payment corrected' : 'Payment deleted', r.message);
+                    }
+                    return r;
+                  }}
+                />
+              )}
 
               {/* Record Payment Form */}
               {isRecordPaymentOpen && (

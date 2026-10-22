@@ -5,6 +5,7 @@ import { collection, doc, limit, onSnapshot, orderBy, query, updateDoc } from 'f
 import { usePCM } from '@/lib/store';
 import { StudentAvatar } from '@/components/common/StudentAvatar';
 import { StudentAccountPayments } from './StudentAccountPayments';
+import { canEditPayments, correctApplicationPayment } from '@/lib/paymentAdmin';
 import { StudentRecordPanel } from './StudentRecordPanel';
 import type { StudentProfile } from '@/lib/types';
 import { accountSummary } from '@/lib/studentLedger';
@@ -635,7 +636,7 @@ const ApplicationDetail: React.FC<DetailProps> = ({
   onOpenEnrollment,
 }) => {
   const { requirements, history, payments, loading } = useApplicationDetails(app.id);
-  const { enrollmentSystemConfig: paymentConfig, students, currentAcademicPeriod } = usePCM();
+  const { enrollmentSystemConfig: paymentConfig, students, currentAcademicPeriod, currentAdminUser, logActivity } = usePCM();
   const student = normalizeStatus(app.status) === 'Enrolled' ? linkedStudent(app as any, students) : null;
   const account = student ? accountSummary(student as any) : null;
   const [editingDetails, setEditingDetails] = useState(false);
@@ -1131,6 +1132,15 @@ const ApplicationDetail: React.FC<DetailProps> = ({
             onReviewPayment={(p, verdict, remarks) => reviewPayment(db, actor(), app as any, payments, p, verdict, remarks)}
             onRecordPayment={(input) => recordStaffPayment(db, actor(), app as any, payments, input)}
             onAcceptPayment={(reason) => acceptVerifiedPayment(db, actor(), app as any, payments, reason)}
+            onCorrectPayment={
+              canEditPayments(currentAdminUser?.role)
+                ? async (p, edit, reason) => {
+                    const r = await correctApplicationPayment(db, actor(), app as any, payments, p.id, edit, reason);
+                    if (r.ok) logActivity(edit ? 'UPDATE' : 'DELETE', 'Application Payment', p.id, app.fullName || app.referenceNumber || 'Applicant', `${r.message} Reason: ${reason.trim()}`);
+                    return r;
+                  }
+                : undefined
+            }
           />
 
           {/* Enrolled: every payment, including balance payments and cashier receipts after enrollment */}

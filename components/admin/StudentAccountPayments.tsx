@@ -1,11 +1,14 @@
 'use client';
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { CheckCircle2, Clock, XCircle } from 'lucide-react';
 import { usePCM } from '@/lib/store';
 import { accountSummary, ledgerPayments } from '@/lib/studentLedger';
 import type { ApplicationPayment } from '@/lib/enrollmentWorkflow';
 import type { StudentProfile } from '@/lib/types';
+import { db } from '@/lib/firebase';
+import { canEditPayments, correctStudentPayment } from '@/lib/paymentAdmin';
+import { PaymentCorrectionDialog } from './PaymentCorrectionDialog';
 
 const peso = (n: number) => `₱${(Number(n) || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const day = (d?: string) => (d ? String(d).slice(0, 10) : '');
@@ -26,7 +29,9 @@ interface Row {
 // balance payments reported in the Student Portal (any status) and cashier receipts recorded by
 // staff — with the account totals from the student record.
 export const StudentAccountPayments: React.FC<{ student: StudentProfile; applicationPayments: ApplicationPayment[] }> = ({ student, applicationPayments }) => {
-  const { studentPayments } = usePCM();
+  const { studentPayments, currentAdminUser, firebaseAuthUser, logActivity, addToast } = usePCM();
+  const mayCorrect = canEditPayments(currentAdminUser?.role);
+  const [correcting, setCorrecting] = useState<{ row: Row; mode: 'edit' | 'delete' } | null>(null);
   const account = accountSummary(student as any);
 
   const rows = useMemo(() => {
@@ -124,6 +129,16 @@ export const StudentAccountPayments: React.FC<{ student: StudentProfile; applica
                 </p>
                 {r.by && <p className="text-[11px] text-slate-500">{r.status === 'Rejected' ? 'Returned' : 'Verified'} by {r.by}</p>}
                 {r.status === 'Rejected' && r.remarks && <p className="text-[11px] text-rose-700">{r.remarks}</p>}
+                {mayCorrect && (
+                  <span className="mt-1 flex gap-1">
+                    <button type="button" onClick={() => setCorrecting({ row: r, mode: 'edit' })} className="rounded px-1.5 py-0.5 text-[11px] font-bold text-[#18392B] hover:bg-emerald-50">
+                      Edit
+                    </button>
+                    <button type="button" onClick={() => setCorrecting({ row: r, mode: 'delete' })} className="rounded px-1.5 py-0.5 text-[11px] font-bold text-rose-600 hover:bg-rose-50">
+                      Delete
+                    </button>
+                  </span>
+                )}
               </div>
               <span
                 className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold ${
@@ -139,6 +154,22 @@ export const StudentAccountPayments: React.FC<{ student: StudentProfile; applica
       )}
       {pending.length > 0 && (
         <p className="text-[11px] text-slate-500">Balance payments waiting for verification are verified in Enrollment &amp; Records → Student Payments.</p>
+      )}
+      {correcting && (
+        <PaymentCorrectionDialog
+          payment={{ id: correcting.row.id, amount: correcting.row.amount, method: correcting.row.method, reference: correcting.row.reference.replace(/^Receipt /, ''), date: correcting.row.date }}
+          mode={correcting.mode}
+          note="The student’s paid total and balance are updated, along with the same payment in Admissions or Student Payments."
+          onClose={() => setCorrecting(null)}
+          onSave={async (edit, reason) => {
+            const r = await correctStudentPayment(db, { uid: firebaseAuthUser?.uid || '', name: currentAdminUser?.name || 'Registrar', role: currentAdminUser?.role }, student.id, correcting.row.id, edit, reason);
+            if (r.ok) {
+              logActivity(edit ? 'UPDATE' : 'DELETE', 'Student Payment', correcting.row.id, student.fullName || student.name || 'Student', r.summary || r.message);
+              addToast('success', edit ? 'Payment corrected' : 'Payment deleted', r.message);
+            }
+            return r;
+          }}
+        />
       )}
     </section>
   );
