@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
 import { db } from '@/lib/firebase';
@@ -135,6 +135,13 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
   const [activeSubTab, setActiveSubTab] = useState<EnrollmentAdminSubTab>('dashboard');
   // The term shown in Term Subjects (set when a term is created or its "Subjects" button is used).
   const [subjectsTermId, setSubjectsTermId] = useState('');
+  // A newly set active term (Academic Terms) is what Term Subjects shows next.
+  const activeTermId = academicPeriods.find((p) => p.isCurrent)?.id || '';
+  const lastActiveTerm = useRef(activeTermId);
+  useEffect(() => {
+    if (activeTermId && activeTermId !== lastActiveTerm.current) setSubjectsTermId(activeTermId);
+    lastActiveTerm.current = activeTermId;
+  }, [activeTermId]);
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState('');
