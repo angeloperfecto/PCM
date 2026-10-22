@@ -6,7 +6,6 @@ import {
   GraduationCap,
   ShieldCheck,
   Globe,
-  ChevronUp,
   ChevronDown,
   Sparkles,
 } from 'lucide-react';
@@ -20,12 +19,19 @@ export const QuickViewSwitcher: React.FC = () => {
     isAdminLoggedIn,
   } = usePCM();
 
-  const [isOpen, setIsOpen] = useState(true);
-
-  // Start collapsed on phones so the floating panel doesn't cover page content and buttons.
+  // Collapsed to a small round button by default so it doesn't cover page content; the choice is remembered.
+  const [isOpen, setIsOpenState] = useState(false);
   useEffect(() => {
-    if (window.matchMedia('(max-width: 767px)').matches) setIsOpen(false);
+    try {
+      if (localStorage.getItem('pcm_quick_nav_open') === '1') setIsOpenState(true);
+    } catch {}
   }, []);
+  const setIsOpen = (open: boolean) => {
+    setIsOpenState(open);
+    try {
+      localStorage.setItem('pcm_quick_nav_open', open ? '1' : '0');
+    } catch {}
+  };
 
   const handleGoToPublic = () => {
     navigateTo('home');
@@ -40,7 +46,29 @@ export const QuickViewSwitcher: React.FC = () => {
     navigateTo('admin');
   };
 
+  // Room at the end of every page so its last content can scroll clear of the floating button.
+  const spacer = <div aria-hidden="true" className="h-20 shrink-0" />;
+
+  if (!isOpen) {
+    return (
+      <>
+        {spacer}
+        <button
+          type="button"
+          onClick={() => setIsOpen(true)}
+          aria-label="Open Portal Quick Navigator"
+          title="Portal Quick Navigator"
+          className="fixed bottom-4 right-4 z-40 flex h-11 w-11 items-center justify-center rounded-full border border-slate-700/60 bg-[#10261D]/95 text-amber-300 shadow-2xl backdrop-blur-md transition hover:scale-105 hover:bg-[#18392B]"
+        >
+          <Sparkles className="h-5 w-5" />
+        </button>
+      </>
+    );
+  }
+
   return (
+    <>
+    {spacer}
     <aside aria-label="Portal Quick Navigator" className="fixed bottom-4 right-4 z-40 font-sans shadow-2xl rounded-2xl border border-slate-700/60 bg-[#10261D]/95 backdrop-blur-md text-white p-2.5 transition-all max-w-[92vw] sm:max-w-xs">
       <div className="flex items-center justify-between gap-3 px-1 pb-1">
         <div className="flex items-center gap-1.5 text-xs font-bold text-[#A3D9C9]">
@@ -48,15 +76,16 @@ export const QuickViewSwitcher: React.FC = () => {
           <span>Portal Quick Navigator</span>
         </div>
         <button
-          onClick={() => setIsOpen(!isOpen)}
+          onClick={() => setIsOpen(false)}
           className="text-slate-400 hover:text-white p-0.5 rounded cursor-pointer transition"
-          title={isOpen ? 'Collapse' : 'Expand'}
+          title="Collapse"
+          aria-label="Collapse Portal Quick Navigator"
         >
-          {isOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+          <ChevronDown className="w-4 h-4" />
         </button>
       </div>
 
-      {isOpen && (
+      {(
         <div className="pt-2 space-y-1.5 border-t border-[#588B76]/30 text-xs">
           <button
             onClick={handleGoToPublic}
@@ -117,5 +146,6 @@ export const QuickViewSwitcher: React.FC = () => {
         </div>
       )}
     </aside>
+    </>
   );
 };
