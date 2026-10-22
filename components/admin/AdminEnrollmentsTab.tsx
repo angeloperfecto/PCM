@@ -3,6 +3,8 @@
 import React, { useState } from 'react';
 import Image from 'next/image';
 import { usePCM } from '@/lib/store';
+import { db } from '@/lib/firebase';
+import { applyTermRename, describeRenameCounts, planTermRename, termNameChanged } from '@/lib/termRename';
 import { CertificateOfRegistration, printCertificate } from '@/components/enrollment/CertificateOfRegistration';
 import { getSafeImageSrc } from '@/lib/utils';
 import {
@@ -120,6 +122,7 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
     addStudentGrade,
     recordStudentPayment,
     addToast,
+    logActivity,
     programs,
     faculty,
     exportDatabaseJson,
@@ -1777,7 +1780,30 @@ export const AdminEnrollmentsTab: React.FC<{ onOpenAdmissions?: () => void }> = 
           onCancel={() => setTermModal(null)}
           onSave={async (draft) => {
             if (termModal.term) {
-              const ok = await updateAcademicPeriod(termModal.term.id, draft);
+              const before = termModal.term;
+              // A new academic year or semester is written onto every record that names the term (Term Subjects,
+              // class schedules, grade sheets, students, enrollment requests, …) so all sections stay together.
+              if (termNameChanged(before, draft)) {
+                const to = { academicYear: draft.academicYear ?? before.academicYear, semester: draft.semester ?? before.semester };
+                const fromLabel = termLabel(before.semester, before.academicYear);
+                const toLabel = termLabel(to.semester, to.academicYear);
+                try {
+                  const plan = await planTermRename(db, before, to);
+                  if (!window.confirm(`Rename ${fromLabel} to ${toLabel}? This also updates ${describeRenameCounts(plan.counts)} so they stay with this term.`)) return false;
+                  const updated = await applyTermRename(db, plan.updates);
+                  logActivity('UPDATE', 'Academic Period', before.id, toLabel, `Renamed ${fromLabel} to ${toLabel}; updated ${updated} related record(s): ${describeRenameCounts(plan.counts)}.`);
+                } catch (e: any) {
+                  addToast(
+                    'error',
+                    'Term not renamed',
+                    e?.code === 'permission-denied'
+                      ? 'Your account cannot update all records that name this term. Ask the Registrar or an Admin.'
+                      : 'Some records could not be updated. Please try again; records already updated are kept.'
+                  );
+                  return false;
+                }
+              }
+              const ok = await updateAcademicPeriod(before.id, draft);
               if (ok) setTermModal(null);
               return ok;
             }

@@ -492,7 +492,9 @@ service cloud.firestore {
       allow update: if
         // Staff run the workflow. A finalized sheet is locked: it is only published, or changed by an
         // approved amendment (the grade change and its audit entry, written together).
-        (isGradeStaff()
+        // Renaming the term (Academic Terms): only the term fields change, on any sheet.
+        (isGradeStaff() && changedKeys().hasOnly(['termKey', 'academicYear', 'semester', 'updatedAt']))
+        || (isGradeStaff()
           && (resource.data.get('status', '') != 'Finalized'
             || changedKeys().hasOnly(['publishedAt', 'publishedBy', 'updatedAt'])
             || (changedKeys().hasOnly(['grades', 'amendmentLog', 'updatedAt'])
@@ -524,7 +526,8 @@ service cloud.firestore {
         && resource.data.get('status', '') == 'Pending'
         && request.resource.data.get('status', '') in ['Approved', 'Rejected']
         && changedKeys().hasOnly(['status', 'decidedBy', 'decidedByUid', 'decidedAt', 'decisionRemarks'])
-        && request.resource.data.get('decidedByUid', '') == request.auth.uid;
+        && request.resource.data.get('decidedByUid', '') == request.auth.uid
+        || (isEnrollmentStaff() && changedKeys().hasOnly(['termKey', 'updatedAt']));
       allow delete: if false;
     }
 
@@ -568,10 +571,12 @@ service cloud.firestore {
         && request.resource.data.get('amount', 0) > 0
         && !request.resource.data.keys().hasAny(['reviewedBy', 'reviewedAt', 'remarks'])
         && get(/databases/$(database)/documents/studentProfiles/$(request.resource.data.get('studentRecordId', 'none'))).data.get('authUid', '') == request.auth.uid;
-      allow update: if isPaymentStaff()
+      allow update: if (isPaymentStaff()
         && resource.data.get('status', '') == 'Submitted'
         && request.resource.data.get('status', '') in ['Verified', 'Rejected']
-        && changedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt', 'remarks']);
+        && changedKeys().hasOnly(['status', 'reviewedBy', 'reviewedAt', 'remarks']))
+        // Renaming the term (Academic Terms): only the term label changes.
+        || (isEnrollmentStaff() && changedKeys().hasOnly(['term', 'updatedAt']));
       allow delete: if isEnrollmentStaff();
     }
 

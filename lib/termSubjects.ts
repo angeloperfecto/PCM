@@ -263,7 +263,11 @@ export async function createOfferings(drafts: OfferingDraft[], existing: Academi
   for (const w of toWrite) {
     const snap = await getDoc(doc(db, 'academicSubjects', w.id));
     if (!snap.exists()) fresh.push(w);
-    else if ((snap.data() as AcademicSubject).isArchived) back.push(w);
+    else if (!isTermOffering(snap.data() as AcademicSubject, w.data)) {
+      // The id belongs to an offering of a term that was renamed since; this one gets its own id.
+      const id = `${w.id}-${Date.now().toString(36)}`;
+      fresh.push({ id, data: { ...w.data, id } });
+    } else if ((snap.data() as AcademicSubject).isArchived) back.push(w);
     else skipped += 1;
   }
   const writes = [

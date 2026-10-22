@@ -443,6 +443,9 @@ await check('student cannot verify own payment', false, () => updateDoc(doc(stud
 await check("other student cannot read someone's payment", false, () => getDoc(doc(as('other', 'other@gmail.com'), 'studentPayments/sp-1')));
 await check('Editor cannot verify payments', false, () => updateDoc(doc(approvedEditor, 'studentPayments/sp-1'), { status: 'Verified', reviewedBy: 'ed', reviewedAt: 'now', remarks: '' }));
 await check('payment staff cannot change the amount when verifying', false, () => updateDoc(doc(finance, 'studentPayments/sp-1'), { status: 'Verified', amount: 5, reviewedBy: 'fin', reviewedAt: 'now', remarks: '' }));
+await check('Registrar renames the term on a payment', true, () => updateDoc(doc(registrar, 'studentPayments/sp-1'), { term: '1st Semester, AY 2027–2028', updatedAt: 'now' }));
+await check('renaming cannot change a payment amount', false, () => updateDoc(doc(registrar, 'studentPayments/sp-1'), { term: 'x', amount: 1, updatedAt: 'now' }));
+await check('Finance cannot rename the term on a payment', false, () => updateDoc(doc(finance, 'studentPayments/sp-1'), { term: 'x', updatedAt: 'now' }));
 await check('Finance verifies a payment and posts it to the student record', true, () => {
   const b = writeBatch(finance);
   b.update(doc(finance, 'studentPayments/sp-1'), { status: 'Verified', reviewedBy: 'Finance', reviewedAt: 'now', remarks: '' });
@@ -560,6 +563,16 @@ await check('Registrar approves and applies the grade change (with audit entry)'
   return b.commit();
 });
 await check('a decided grade change cannot be changed', false, () => updateDoc(doc(registrar, 'gradeAmendments/am-1'), { status: 'Rejected', decidedBy: 'Reg', decidedByUid: 'reg1', decidedAt: 'later' }));
+// Renaming a term (Academic Terms) moves its name onto finalized sheets, decided grade changes and reviewed payments.
+await check('Registrar renames the term on a finalized grade sheet', true, () =>
+  updateDoc(doc(registrar, 'gradeSheets/gs-other'), { termKey: '2027-2028|1st Semester', academicYear: '2027–2028', semester: '1st Semester', updatedAt: 'now' })
+);
+await check('renaming cannot change finalized grades', false, () =>
+  updateDoc(doc(registrar, 'gradeSheets/gs-other'), { termKey: '2027-2028|1st Semester', grades: { 'std-linked': { grade: '1.00' } }, updatedAt: 'now' })
+);
+await check('professor cannot rename the term on a sheet', false, () => updateDoc(doc(prof, 'gradeSheets/gs-other'), { termKey: 'x', updatedAt: 'now' }));
+await check('Registrar renames the term on a decided grade change', true, () => updateDoc(doc(registrar, 'gradeAmendments/am-1'), { termKey: '2027-2028|1st Semester', updatedAt: 'now' }));
+await check('renaming cannot change a grade change decision', false, () => updateDoc(doc(registrar, 'gradeAmendments/am-1'), { termKey: 'y', status: 'Rejected', updatedAt: 'now' }));
 await check('grade changes cannot be deleted', false, () => deleteDoc(doc(registrar, 'gradeAmendments/am-1')));
 await check('professor reads own grade change requests', true, () => getDocs(query(collection(prof, 'gradeAmendments'), where('requestedByUid', '==', 'prof1uid'))));
 await check('Registrar notifies the professor', true, () => setDoc(doc(registrar, 'studentNotifications/n-prof'), { recipientUid: 'prof1uid', title: 'Grades approved', read: false }));
