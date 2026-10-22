@@ -200,6 +200,16 @@ service cloud.firestore {
       return request.resource.data.diff(resource.data).affectedKeys();
     }
 
+    // The applicant cancels or defers and deletes their own application (with its documents and history) while
+    // no money is involved: not at Payment or later, not Deferred, no verified payment, not enrolled.
+    function applicantMayDelete(data) {
+      return isSignedIn()
+        && data.get('applicantUid', '') == request.auth.uid
+        && !(data.get('status', '') in ['For Payment', 'For Enrollment', 'Enrolled', 'Deferred'])
+        && data.get('amountPaidVerified', 0) == 0
+        && data.get('studentRecordId', '') == '';
+    }
+
     function ownsApplication(data) {
       return isSignedIn()
         && (data.get('applicantUid', '') == request.auth.uid
@@ -325,7 +335,7 @@ service cloud.firestore {
           'applicantMessage', 'assessment', 'paymentStatus', 'amountPaidVerified', 'paymentVerifiedBy', 'paymentVerifiedAt',
           'linkedStudentRecordId', 'noPriorRecordConfirmed', 'recordLinkedBy', 'creditedSubjects', 'creditsEvaluatedBy']);
       allow update: if applicationUpdateAllowed(adminRole());
-      allow delete: if isEnrollmentStaff();
+      allow delete: if isEnrollmentStaff() || applicantMayDelete(resource.data);
 
       // Payments reported by the applicant; verified by Registrar/Admin/Super Admin/Finance.
       match /payments/{paymentId} {
@@ -344,7 +354,7 @@ service cloud.firestore {
           && request.resource.data.get('amount', 0) is number
           && request.resource.data.get('amount', 0) > 0;
         allow update: if paymentUpdateAllowed(adminRole(), false);
-        allow delete: if isEnrollmentStaff();
+        allow delete: if isEnrollmentStaff() || (applicantMayDelete(get(applicationPath(appId)).data) && !existsAfter(applicationPath(appId)));
       }
 
       match /requirements/{reqId} {
@@ -360,13 +370,13 @@ service cloud.firestore {
             && resource.data.get('status', '') != 'Verified'
             && request.resource.data.get('status', '') == 'Submitted'
             && changedKeys().hasOnly(['status', 'fileName', 'fileType', 'fileSize', 'fileDataUrl', 'uploadedAt']));
-        allow delete: if isEnrollmentStaff();
+        allow delete: if isEnrollmentStaff() || (applicantMayDelete(get(applicationPath(appId)).data) && !existsAfter(applicationPath(appId)));
       }
 
       match /history/{entryId} {
         allow read: if isAdmin() || ownsApplication(get(applicationPath(appId)).data);
-        // Removed only together with its application (deleteApplicationCompletely).
-        allow delete: if isEnrollmentStaff();
+        // Removed only together with its application (deleteApplicationCompletely, or the applicant cancelling).
+        allow delete: if isEnrollmentStaff() || (applicantMayDelete(get(applicationPath(appId)).data) && !existsAfter(applicationPath(appId)));
         allow create: if isPaymentStaff()
           || (ownsApplication(getAfter(applicationPath(appId)).data)
             && request.resource.data.get('actor', '') == 'applicant'
@@ -554,7 +564,7 @@ service cloud.firestore {
       allow create: if isAdmin() || (isSignedIn() && request.resource.data.get('recipientUid', '') == request.auth.uid);
       allow update: if isAdmin()
         || (isSignedIn() && resource.data.get('recipientUid', '') == request.auth.uid && changedKeys().hasOnly(['read']));
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() || (isSignedIn() && resource.data.get('recipientUid', '') == request.auth.uid);
     }
 
     // Balance payments reported by enrolled students. Reports never change the balance; payment
@@ -692,7 +702,10 @@ service cloud.firestore {
       allow read: if true;
       allow create: if userCreateAllowed(userId, adminLevel(), directoryRole());
       allow update: if userUpdateAllowed(userId, adminLevel(), directoryRole());
-      allow delete: if canDeleteAccount(adminLevel(), resource.data);
+      allow delete: if canDeleteAccount(adminLevel(), resource.data)
+        || (isSignedIn() && request.auth.uid == userId
+          && resource.data.get('role', '') in ['Student/User', 'Student', 'User', '']
+          && resource.data.get('adminRole', '') == '');
     }
 
     function canDeleteAccount(level, data) {

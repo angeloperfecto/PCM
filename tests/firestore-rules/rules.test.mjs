@@ -244,7 +244,7 @@ await check('applicant cannot admit themselves', false, () => updateDoc(doc(appl
 await check('applicant cannot move a Submitted application to Under Review', false, () => updateDoc(doc(applicant, 'applications/appA'), { status: 'Under Review' }));
 await check('applicant cannot change decision fields', false, () => updateDoc(doc(applicant, 'applications/appA'), { lastDecisionBy: 'me' }));
 await check('applicant cannot record a staff history entry', false, () => setDoc(doc(applicant, 'applications/appA/history/h2'), { status: 'Admitted', actor: 'staff', byName: 'x' }));
-await check('applicant cannot delete an application', false, () => deleteDoc(doc(applicant, 'applications/appA')));
+await check("another applicant cannot delete someone's application", false, () => deleteDoc(doc(otherApplicant, 'applications/appA')));
 
 section('Admission workflow: staff decisions');
 await check('Editor can view applications', true, () => getDoc(doc(approvedEditor, 'applications/appA')));
@@ -385,8 +385,8 @@ await env.withSecurityRulesDisabled(async (ctx) => {
   await setDoc(doc(db, 'applications/appDel/payments/p1'), { applicantUid: 'appl2', status: 'Submitted', amount: 10 });
   await setDoc(doc(db, 'applications/appDel/history/h1'), { status: 'Rejected', actor: 'staff' });
 });
-await check('applicant cannot delete own application history', false, () => deleteDoc(doc(otherApplicant, 'applications/appDel/history/h1')));
-await check('applicant cannot delete own application', false, () => deleteDoc(doc(otherApplicant, 'applications/appDel')));
+await check('applicant cannot delete the history of an application they keep', false, () => deleteDoc(doc(otherApplicant, 'applications/appDel/history/h1')));
+await check("applicant cannot delete someone else's application", false, () => deleteDoc(doc(applicant, 'applications/appDel')));
 await check('Editor cannot delete an application', false, () => deleteDoc(doc(approvedEditor, 'applications/appDel')));
 await check('Finance cannot delete an application', false, () => deleteDoc(doc(finance, 'applications/appDel')));
 await check('Registrar deletes an application with its documents, payments and history', true, () => {
@@ -621,6 +621,43 @@ await check('the graduate cannot change the Student ID', false, () => updateDoc(
 await check('another graduate cannot read a linked record', false, () => getDoc(doc(otherAlumnus, 'studentProfiles/alum-1')));
 await check('another graduate cannot link a record to themselves', false, () => updateDoc(doc(otherAlumnus, 'studentProfiles/alum-1'), { authUid: 'alum2' }));
 await check('Registrar updates the graduate record', true, () => updateDoc(doc(registrar, 'studentProfiles/alum-1'), { 'alumni.honors': 'Magna Cum Laude', updatedAt: 'now' }));
+
+section('Applicants cancel or defer and delete their own application');
+const quitter = as('quit1', 'quitter@gmail.com');
+const cancelApp = { applicantUid: 'quit1', status: 'Submitted', fullName: 'Quitter', email: 'quitter@gmail.com', referenceNumber: 'PCM-2026-QUIT01' };
+await check('applicant submits an application to cancel later', true, () => {
+  const b = writeBatch(quitter);
+  b.set(doc(quitter, 'applications/appQ'), cancelApp);
+  b.set(doc(quitter, 'applications/appQ/requirements/id-photo'), { applicantUid: 'quit1', status: 'Submitted', name: 'Photo' });
+  b.set(doc(quitter, 'applications/appQ/history/h1'), { status: 'Submitted', actor: 'applicant', byName: 'Quitter' });
+  b.set(doc(quitter, 'studentNotifications/nQ'), { recipientUid: 'quit1', title: 'Received', read: false });
+  return b.commit();
+});
+await check('another applicant cannot delete the application', false, () => deleteDoc(doc(otherApplicant, 'applications/appQ')));
+await check('applicant deletes own application with its documents and history', true, () => {
+  const b = writeBatch(quitter);
+  b.delete(doc(quitter, 'applications/appQ/requirements/id-photo'));
+  b.delete(doc(quitter, 'applications/appQ/history/h1'));
+  b.delete(doc(quitter, 'applications/appQ'));
+  return b.commit();
+});
+await check('applicant deletes own notification', true, () => deleteDoc(doc(quitter, 'studentNotifications/nQ')));
+await check('applicant cannot delete someone else’s notification', false, () => deleteDoc(doc(quitter, 'studentNotifications/n-prof')));
+await check('applicant leaves an anonymous note for Admissions', true, () =>
+  setDoc(doc(quitter, 'staffNotifications/sQ'), { id: 'sQ', applicationId: '', referenceNumber: 'PCM-2026-QUIT01', title: 'Application cancelled by the applicant', message: 'x', createdByUid: 'quit1', read: false, createdAt: 'now' })
+);
+await env.withSecurityRulesDisabled(async (ctx) => {
+  const sdb = ctx.firestore();
+  await setDoc(doc(sdb, 'users/quit1'), { role: 'Student/User', status: 'Active', email: 'quitter@gmail.com' });
+  await setDoc(doc(sdb, 'applications/appPaid'), { applicantUid: 'quit1', status: 'For Payment', email: 'quitter@gmail.com' });
+  await setDoc(doc(sdb, 'applications/appBack'), { applicantUid: 'quit1', status: 'For Assessment', amountPaidVerified: 4000, email: 'quitter@gmail.com' });
+  await setDoc(doc(sdb, 'users/stafftest'), { role: 'Editor', adminRole: 'Editor', status: 'Active' });
+});
+await check('applicant cannot delete an application at Payment', false, () => deleteDoc(doc(quitter, 'applications/appPaid')));
+await check('applicant cannot delete an application with verified payments', false, () => deleteDoc(doc(quitter, 'applications/appBack')));
+await check('applicant deletes own Users & Roles entry', true, () => deleteDoc(doc(quitter, 'users/quit1')));
+await check('a staff account cannot delete itself this way', false, () => deleteDoc(doc(as('stafftest', 'stafftest@gmail.com'), 'users/stafftest')));
+await check('applicant cannot delete another user', false, () => deleteDoc(doc(quitter, 'users/s1')));
 
 section('Batch writes stay within Firestore limits');
 await check('Editor commits a 40-document batch', true, () => {

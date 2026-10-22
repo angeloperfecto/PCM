@@ -22,6 +22,7 @@ import {
   generateApplicationNumber,
 } from '@/lib/studentDefaults';
 import { uploadStudentFile, formatFileSize } from '@/lib/storageService';
+import { CancelApplication } from './CancelApplication';
 import {
   User,
   Mail,
@@ -807,6 +808,7 @@ export const StudentRegistrationWizard: React.FC<StudentRegistrationWizardProps>
                 Start over
               </button>
             )}
+            <CancelApplication compact />
           </div>
         )}
 

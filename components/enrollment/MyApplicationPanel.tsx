@@ -11,6 +11,7 @@ import { ApplicationProgress, StatusBadge } from './ApplicationProgress';
 import { RequirementsChecklist } from './RequirementsChecklist';
 import { useApplicationDetails } from './useApplicationDetails';
 import { CorrectionForm, EnrollmentConfirmationCard, RegistrationForm, RegistrationSummary, WithdrawApplication } from './ApplicantSteps';
+import { CancelApplication } from './CancelApplication';
 
 // The signed-in applicant's own application(s): progress tracker, next steps, documents
 // to upload, notifications and status history.
@@ -210,6 +211,9 @@ export const MyApplicationPanel: React.FC<{ onStartApplication?: () => void }> =
       </div>
 
       <WithdrawApplication app={app as any} />
+      <div className="rounded-2xl border border-slate-200 bg-white p-4">
+        <CancelApplication app={app as any} />
+      </div>
     </div>
   );
 };
