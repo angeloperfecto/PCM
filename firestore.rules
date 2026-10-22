@@ -387,7 +387,7 @@ service cloud.firestore {
         'tuitionTotal', 'tuitionPaid', 'tuitionBalance', 'paymentStatus', 'paymentRecords', 'paymentHistory',
         'termAssessment', 'previousBalance', 'termAssessmentLines',
         'verificationStatus', 'accountStatus', 'portalAccess', 'admissionRequirementsVerified',
-        'verifiedAdmissionDocuments', 'enrolledAt', 'enrolledBy', 'termHistory', 'lastEnrolledTerm', 'enrollmentHold'];
+        'verifiedAdmissionDocuments', 'enrolledAt', 'enrolledBy', 'termHistory', 'lastEnrolledTerm', 'enrollmentHold', 'alumni', 'recordSource'];
     }
 
     function ownsStudentRecord(data) {

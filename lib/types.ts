@@ -410,6 +410,19 @@ export interface StudentSubjectHistory {
   instructor?: string;
 }
 
+/** A graduate's PCM graduation (PCM was founded in 1992). */
+export interface AlumniInfo {
+  graduationYear: number;
+  graduationDate?: string;
+  degreeConferred: string;
+  honors?: string;
+  yearEntered?: string;
+  notes?: string;
+  addedBy?: string;
+  addedAt?: string;
+  updatedBy?: string;
+}
+
 export interface StudentTermRecord {
   term: string; // "1st Semester, AY 2026–2027"
   semester: string;
@@ -731,6 +744,8 @@ export interface StudentProfile {
   subjectHistory?: StudentSubjectHistory[];
   /** One entry per closed term the student was enrolled in. */
   termHistory?: StudentTermRecord[];
+  /** PCM graduation details of an alumni / historical record (Enrollment & Records → Alumni & Historical Records). */
+  alumni?: AlumniInfo;
   /** Last term the student was officially enrolled in (e.g. "1st Semester, AY 2026–2027"). */
   lastEnrolledTerm?: string;
   /** Set by the Registrar to stop re-enrollment until it is lifted (e.g. on leave, disciplinary hold). */
